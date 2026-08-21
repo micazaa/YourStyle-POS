@@ -1,0 +1,1008 @@
+<div
+  id="transactionHistoryModal"
+  class="generic-overlay-blur"
+  style="display:none;"
+>
+
+  <div
+    class="custom-popup-card"
+    style="
+      max-width:1100px;
+      width:95%;
+      max-height:90vh;
+    "
+  >
+
+    <!-- HEADER -->
+
+    <div
+      class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom"
+    >
+
+      <div>
+
+        <h5 class="fw-bold mb-1">
+          Transaction History
+        </h5>
+
+        <p
+          id="transactionHistorySubtitle"
+          class="text-muted small mb-0"
+        >
+          Today's transactions
+        </p>
+
+      </div>
+
+
+      <button
+        type="button"
+        class="btn-close"
+        onclick="closeTransactionHistoryModal()"
+      ></button>
+
+    </div>
+
+
+    <!-- FILTER BAR -->
+
+    <!-- SUMMARY - MANAGER ONLY -->
+
+    <div
+      id="transactionHistorySummary"
+      class="row g-2 mb-3"
+    >
+
+      <!-- DATE - MANAGER ONLY -->
+
+      <div
+        id="transactionDateFilterBox"
+        class="col-md-4"
+        style="display:none;"
+      >
+
+        <label class="form-label small">
+          Transaction Date
+        </label>
+
+        <input
+          type="date"
+          id="transactionHistoryDate"
+          class="form-control"
+          onchange="loadTransactionHistory()"
+        >
+
+      </div>
+
+
+      <!-- SEARCH -->
+
+      <div class="col">
+
+        <label class="form-label small">
+          Search
+        </label>
+
+        <input
+          type="text"
+          id="transactionHistorySearch"
+          class="form-control"
+          placeholder="Receipt, cashier, item, payment..."
+          oninput="filterTransactionHistoryTable()"
+        >
+
+      </div>
+
+      <!-- PAYMENT METHOD -->
+
+      <div class="col-md-3">
+
+        <label class="form-label small">
+          Payment Method
+        </label>
+
+        <select
+          id="transactionHistoryPaymentFilter"
+          class="form-select"
+          onchange="filterTransactionHistoryTable()"
+        >
+
+          <option value="">
+            All Payment Methods
+          </option>
+
+        </select>
+
+      </div>
+
+    </div>
+
+
+    <!-- ================= MANAGER SUMMARY ONLY ================= -->
+
+<div
+  id="managerTransactionSummary"
+  class="row g-2 mb-3"
+  style="display:none;"
+>
+
+  <div class="col-md-4">
+
+    <div class="border rounded p-2">
+
+      <div class="small text-muted">
+        Transactions
+      </div>
+
+      <div
+        id="transactionHistoryCount"
+        class="fw-bold"
+      >
+        0
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <div class="col-md-4">
+
+    <div class="border rounded p-2">
+
+      <div class="small text-muted">
+        Items Sold
+      </div>
+
+      <div
+        id="transactionHistoryItems"
+        class="fw-bold"
+      >
+        0
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <div class="col-md-4">
+
+    <div class="border rounded p-2">
+
+      <div class="small text-muted">
+        Net Sales
+      </div>
+
+      <div
+        id="transactionHistorySales"
+        class="fw-bold"
+      >
+        ₱0.00
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+    <!-- TABLE -->
+
+    <div
+      class="table-responsive border rounded"
+      style="max-height:55vh;"
+    >
+
+      <table
+        class="table table-hover align-middle mb-0"
+      >
+
+        <thead
+          class="table-light"
+          style="
+            position:sticky;
+            top:0;
+            z-index:1;
+          "
+        >
+
+          <tr>
+
+            <th>
+              Time
+            </th>
+
+            <th>
+              Receipt
+            </th>
+
+            <th>
+              Cashier
+            </th>
+
+            <th class="text-center">
+              Items
+            </th>
+
+            <th>
+              Payment
+            </th>
+
+            <th class="text-end">
+              Total
+            </th>
+
+            <th class="text-center">
+              Status
+            </th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody id="transactionHistoryRows">
+
+          <tr>
+
+            <td
+              colspan="7"
+              class="text-center text-muted py-5"
+            >
+              Loading transactions...
+            </td>
+
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+var transactionHistoryData = [];
+
+
+/* ==========================================================
+   OPEN
+========================================================== */
+
+function openTransactionHistoryModal() {
+
+  if (!currentEmployee) {
+
+    showNotificationToast(
+      "Employee session not found.",
+      true
+    );
+
+    return;
+  }
+
+
+  /* ================= TODAY ================= */
+
+  const now =
+    new Date();
+
+  const today =
+    new Date(
+      now.getTime() -
+      now.getTimezoneOffset() * 60000
+    )
+      .toISOString()
+      .split("T")[0];
+
+
+  const dateInput =
+    document.getElementById(
+      "transactionHistoryDate"
+    );
+
+
+  dateInput.value =
+    today;
+
+  dateInput.max =
+    today;
+
+
+  document.getElementById(
+    "transactionHistorySearch"
+  ).value = "";
+
+  const paymentFilter =
+  document.getElementById(
+    "transactionHistoryPaymentFilter"
+  );
+
+
+if (paymentFilter) {
+
+  paymentFilter.innerHTML = `
+    <option value="">
+      All Payment Methods
+    </option>
+  `;
+
+}
+
+
+  /* ================= ROLE ================= */
+
+  const isManager =
+    Number(
+      currentEmployee.accessLevel
+    ) <= 1;
+
+
+  /* ================= DATE PICKER ================= */
+
+  document.getElementById(
+    "transactionDateFilterBox"
+  ).style.display =
+    isManager
+      ? "block"
+      : "none";
+
+
+  /* ================= SUMMARY ================= */
+
+const managerSummary =
+  document.getElementById(
+    "managerTransactionSummary"
+  );
+
+if (managerSummary) {
+
+  managerSummary.style.display =
+    isManager
+      ? "flex"
+      : "none";
+
+}
+
+
+  /* ================= SUBTITLE ================= */
+
+  document.getElementById(
+    "transactionHistorySubtitle"
+  ).textContent =
+    isManager
+      ? "All transactions for selected date"
+      : "Your transactions for today";
+
+
+  /* ================= SHOW ================= */
+
+  document.getElementById(
+    "transactionHistoryModal"
+  ).style.display =
+    "flex";
+
+
+  /* ================= LOAD ================= */
+
+  loadTransactionHistory();
+
+}
+
+
+/* ==========================================================
+   CLOSE
+========================================================== */
+
+function closeTransactionHistoryModal() {
+
+  document.getElementById(
+    "transactionHistoryModal"
+  ).style.display =
+    "none";
+
+}
+
+
+/* ==========================================================
+   LOAD
+========================================================== */
+
+function loadTransactionHistory() {
+
+  const tbody =
+    document.getElementById(
+      "transactionHistoryRows"
+    );
+
+  if (!tbody) {
+
+    console.error(
+      "transactionHistoryRows not found"
+    );
+
+    return;
+  }
+
+
+  tbody.innerHTML = `
+    <tr>
+      <td
+        colspan="7"
+        class="text-center text-muted py-5"
+      >
+        Loading transactions...
+      </td>
+    </tr>
+  `;
+
+
+  const selectedDate =
+    document.getElementById(
+      "transactionHistoryDate"
+    ).value;
+
+
+  const isManager =
+    Number(
+      currentEmployee.accessLevel
+    ) <= 1;
+
+
+  console.log(
+    "TRANSACTION HISTORY REQUEST:",
+    {
+      cashier: currentCashier,
+      date: selectedDate,
+      isManager: isManager
+    }
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(function(result) {
+
+      console.log(
+        "TRANSACTION HISTORY RESPONSE:",
+        result
+      );
+
+
+      if (
+        !result ||
+        result.success !== true
+      ) {
+
+        const message =
+          result && result.message
+            ? result.message
+            : "Unknown backend response";
+
+
+        console.error(
+          "Transaction history failed:",
+          message
+        );
+
+
+        tbody.innerHTML = `
+          <tr>
+            <td
+              colspan="7"
+              class="text-center text-danger py-5"
+            >
+              ${escapeTransactionHtml(message)}
+            </td>
+          </tr>
+        `;
+
+        return;
+      }
+
+
+      transactionHistoryData =
+        Array.isArray(
+          result.transactions
+        )
+          ? result.transactions
+          : [];
+
+      populateTransactionPaymentFilter(
+        transactionHistoryData
+      );
+
+
+      console.log(
+        "TRANSACTIONS RECEIVED:",
+        transactionHistoryData.length,
+        transactionHistoryData
+      );
+
+
+      renderTransactionHistory(
+        transactionHistoryData
+      );
+
+    })
+
+
+    .withFailureHandler(function(err) {
+
+      console.error(
+        "TRANSACTION HISTORY SERVER ERROR:",
+        err
+      );
+
+
+      tbody.innerHTML = `
+        <tr>
+
+          <td
+            colspan="7"
+            class="text-center text-danger py-5"
+          >
+
+            ${
+              escapeTransactionHtml(
+                err && err.message
+                  ? err.message
+                  : "Server error"
+              )
+            }
+
+          </td>
+
+        </tr>
+      `;
+
+    })
+
+
+    .getTransactionHistory(
+      currentCashier,
+      selectedDate,
+      isManager
+    );
+
+}
+
+/* ==========================================================
+   PAYMENT METHOD FILTER OPTIONS
+========================================================== */
+
+function populateTransactionPaymentFilter(
+  transactions
+) {
+
+  const select =
+    document.getElementById(
+      "transactionHistoryPaymentFilter"
+    );
+
+
+  if (!select) {
+
+    return;
+
+  }
+
+
+  const previousValue =
+    select.value;
+
+
+  const paymentMethods =
+    Array.from(
+      new Set(
+        transactions
+          .map(
+            function(tx) {
+
+              return String(
+                tx.paymentMethod || ""
+              ).trim();
+
+            }
+          )
+          .filter(Boolean)
+      )
+    )
+      .sort(
+        function(a, b) {
+
+          return a.localeCompare(b);
+
+        }
+      );
+
+
+  select.innerHTML = `
+    <option value="">
+      All Payment Methods
+    </option>
+  `;
+
+
+  paymentMethods.forEach(
+    function(method) {
+
+      const option =
+        document.createElement(
+          "option"
+        );
+
+
+      option.value =
+        method;
+
+
+      option.textContent =
+        method;
+
+
+      select.appendChild(
+        option
+      );
+
+    }
+  );
+
+
+  if (
+    paymentMethods.includes(
+      previousValue
+    )
+  ) {
+
+    select.value =
+      previousValue;
+
+  }
+
+}
+/* ==========================================================
+   RENDER
+========================================================== */
+
+function renderTransactionHistory(items) {
+
+  console.log(
+  "RENDER TRANSACTION HISTORY:",
+  items
+);
+
+  const tbody =
+    document.getElementById(
+      "transactionHistoryRows"
+    );
+
+
+  tbody.innerHTML = "";
+
+
+  if (
+    !Array.isArray(items) ||
+    items.length === 0
+  ) {
+
+    tbody.innerHTML = `
+      <tr>
+        <td
+          colspan="7"
+          class="text-center text-muted py-5"
+        >
+          No transactions found.
+        </td>
+      </tr>
+    `;
+
+
+    updateTransactionHistorySummary(
+      []
+    );
+
+    return;
+
+  }
+
+
+  items.forEach(function(tx) {
+
+    const row =
+      document.createElement("tr");
+
+        row.style.cursor = "pointer";
+
+    row.onclick = function() {
+
+      openTransactionDetails(
+        tx.receiptId
+      );
+
+    };
+
+    row.innerHTML = `
+
+      <td>
+        ${escapeTransactionHtml(tx.time)}
+      </td>
+
+      <td>
+        <span class="font-monospace small">
+          ${escapeTransactionHtml(tx.receiptId)}
+        </span>
+      </td>
+
+      <td>
+        ${escapeTransactionHtml(tx.cashier)}
+      </td>
+
+      <td class="text-center">
+        ${Number(tx.items) || 0}
+      </td>
+
+      <td>
+        ${escapeTransactionHtml(tx.paymentMethod)}
+      </td>
+
+      <td class="text-end fw-bold">
+        ₱${Number(tx.total || 0).toFixed(2)}
+      </td>
+
+      <td class="text-center">
+        ${buildTransactionStatusBadge(tx.status)}
+      </td>
+
+    `;
+
+
+    tbody.appendChild(row);
+
+  });
+
+
+  updateTransactionHistorySummary(
+    items
+  );
+
+}
+
+
+/* ==========================================================
+   SUMMARY
+========================================================== */
+
+function updateTransactionHistorySummary(items) {
+
+  let completedTransactions = 0;
+  let itemCount = 0;
+  let netSales = 0;
+
+
+  items.forEach(function(tx) {
+
+    const status =
+      String(tx.status || "")
+        .trim()
+        .toUpperCase();
+
+
+    /*
+      Only COMPLETED transactions count
+      toward sales statistics.
+    */
+
+    if (status !== "COMPLETED") {
+      return;
+    }
+
+
+    completedTransactions++;
+
+
+    itemCount +=
+      Number(tx.items) || 0;
+
+
+    netSales +=
+      Number(tx.total) || 0;
+
+  });
+
+
+  /*
+    Transaction count:
+    I recommend showing ALL transactions,
+    including voided ones.
+
+    This means the table has 2 receipts,
+    even if one is voided.
+  */
+
+  document.getElementById(
+    "transactionHistoryCount"
+  ).textContent =
+    items.length;
+
+
+  /*
+    Items Sold:
+    COMPLETED only
+  */
+
+  document.getElementById(
+    "transactionHistoryItems"
+  ).textContent =
+    itemCount;
+
+
+  /*
+    Net Sales:
+    COMPLETED only
+  */
+
+  document.getElementById(
+    "transactionHistorySales"
+  ).textContent =
+    "₱" +
+    netSales.toFixed(2);
+
+}
+
+/* ==========================================================
+   STATUS
+========================================================== */
+
+function buildTransactionStatusBadge(status) {
+
+  const value =
+    String(status || "")
+      .trim()
+      .toUpperCase();
+
+
+  if (value === "VOIDED") {
+
+    return `
+      <span class="badge bg-danger">
+        Voided
+      </span>
+    `;
+
+  }
+
+
+  return `
+    <span class="badge bg-success">
+      Completed
+    </span>
+  `;
+
+}
+
+
+/* ==========================================================
+   SEARCH
+========================================================== */
+
+/* ==========================================================
+   FILTER TRANSACTION HISTORY
+
+   Search + Payment Method
+========================================================== */
+
+function filterTransactionHistoryTable() {
+
+  const query =
+    document.getElementById(
+      "transactionHistorySearch"
+    )
+      .value
+      .trim()
+      .toLowerCase();
+
+
+  const paymentMethod =
+    document.getElementById(
+      "transactionHistoryPaymentFilter"
+    )
+      .value
+      .trim()
+      .toLowerCase();
+
+
+  const filtered =
+    transactionHistoryData.filter(
+      function(tx) {
+
+        /* ================= SEARCH ================= */
+
+        const searchable =
+          [
+
+            tx.receiptId,
+            tx.cashier,
+            tx.paymentMethod,
+            tx.status,
+            tx.itemNames
+
+          ]
+            .map(
+              function(value) {
+
+                return String(
+                  value || ""
+                );
+
+              }
+            )
+            .join(" ")
+            .toLowerCase();
+
+
+        const matchesSearch =
+          !query ||
+          searchable.includes(
+            query
+          );
+
+
+        /* ================= PAYMENT ================= */
+
+        const transactionPayment =
+          String(
+            tx.paymentMethod || ""
+          )
+            .trim()
+            .toLowerCase();
+
+
+        const matchesPayment =
+          !paymentMethod ||
+          transactionPayment ===
+            paymentMethod;
+
+
+        return (
+          matchesSearch &&
+          matchesPayment
+        );
+
+      }
+    );
+
+
+  renderTransactionHistory(
+    filtered
+  );
+
+}
+
+/* ==========================================================
+   SAFE TRANSACTION HTML
+========================================================== */
+
+function escapeTransactionHtml(value) {
+
+  return String(
+    value === null ||
+    value === undefined
+      ? ""
+      : value
+  )
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+</script>

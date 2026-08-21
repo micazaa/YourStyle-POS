@@ -1,0 +1,1170 @@
+<!-- =========================================================
+     DELIVERIES PAGE
+========================================================== -->
+
+<div
+  id="deliveriesPage"
+  style="display:none;"
+>
+
+  <div class="container-fluid px-5 py-4">
+
+
+    <!-- =====================================================
+         HEADER
+    ====================================================== -->
+
+    <div
+      class="d-flex justify-content-between align-items-center mb-4"
+    >
+
+      <div>
+
+        <h4 class="fw-bold mb-1">
+          Deliveries
+        </h4>
+
+        <div class="small text-muted">
+          YourFinds delivery history
+        </div>
+
+      </div>
+
+
+      <button
+        type="button"
+        class="btn btn-pink"
+        onclick="openAcceptDeliveryModal()"
+      >
+        + Accept Delivery
+      </button>
+
+    </div>
+
+
+    <!-- =====================================================
+         SUMMARY
+    ====================================================== -->
+
+    <div class="row g-3 mb-4">
+
+
+      <!-- TOTAL DELIVERIES -->
+
+      <div class="col-md-4">
+
+        <div class="card border-0 shadow-sm h-100">
+
+          <div class="card-body">
+
+            <div class="small text-muted">
+              Total Deliveries
+            </div>
+
+            <div
+              id="deliveriesTotalCount"
+              class="fs-4 fw-bold"
+            >
+              0
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- TOTAL PIECES -->
+
+      <div class="col-md-4">
+
+        <div class="card border-0 shadow-sm h-100">
+
+          <div class="card-body">
+
+            <div class="small text-muted">
+              Total Pieces Received
+            </div>
+
+            <div
+              id="deliveriesTotalPieces"
+              class="fs-4 fw-bold"
+            >
+              0
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ACCEPTED -->
+
+      <div class="col-md-4">
+
+        <div class="card border-0 shadow-sm h-100">
+
+          <div class="card-body">
+
+            <div class="small text-muted">
+              Accepted Deliveries
+            </div>
+
+            <div
+              id="deliveriesAcceptedCount"
+              class="fs-4 fw-bold"
+            >
+              0
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  <!-- =====================================================
+      FILTERS
+  ====================================================== -->
+
+  <div class="card border-0 shadow-sm mb-3">
+
+    <div class="card-body">
+
+      <div class="row g-2">
+
+
+        <!-- SEARCH -->
+
+        <div class="col-md-4">
+
+          <input
+            type="text"
+            id="deliveriesSearch"
+            class="form-control"
+            placeholder="Search delivery, driver, plate..."
+            oninput="filterDeliveriesPage()"
+          >
+
+        </div>
+
+
+        <!-- FROM DATE -->
+
+        <div class="col-md-2">
+
+          <input
+            type="date"
+            id="deliveriesFromDate"
+            class="form-control"
+            onchange="filterDeliveriesPage()"
+          >
+
+        </div>
+
+
+        <!-- TO DATE -->
+
+        <div class="col-md-2">
+
+          <input
+            type="date"
+            id="deliveriesToDate"
+            class="form-control"
+            onchange="filterDeliveriesPage()"
+          >
+
+        </div>
+
+
+        <!-- STATUS -->
+
+        <div class="col-md-2">
+
+          <select
+            id="deliveriesStatusFilter"
+            class="form-select"
+            onchange="filterDeliveriesPage()"
+          >
+
+            <option value="">
+              All Status
+            </option>
+
+            <option value="ACCEPTED">
+              Accepted
+            </option>
+
+            <option value="PARTIAL RETURN">
+              Partial Return
+            </option>
+
+            <option value="RETURNED">
+              Returned
+            </option>
+
+          </select>
+
+        </div>
+
+
+        <!-- CLEAR -->
+
+        <div class="col-md-2">
+
+          <button
+            type="button"
+            class="btn btn-outline-secondary w-100"
+            onclick="clearDeliveriesFilters()"
+          >
+            Clear
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+    <!-- =====================================================
+         TABLE
+    ====================================================== -->
+
+    <div class="card border-0 shadow-sm">
+
+      <div class="card-body p-0">
+
+        <div class="table-responsive">
+
+          <table
+            class="table table-hover align-middle mb-0"
+          >
+
+            <thead class="table-light">
+
+              <tr>
+
+                <th class="ps-3">
+                  Delivery
+                </th>
+
+                <th>
+                  Date
+                </th>
+
+                <th>
+                  Driver / Plate
+                </th>
+
+                <th>
+                  Accepted By
+                </th>
+
+                <th class="text-center">
+                  S
+                </th>
+
+                <th class="text-center">
+                  M
+                </th>
+
+                <th class="text-center">
+                  L
+                </th>
+
+                <th class="text-center">
+                  XL
+                </th>
+
+                <th class="text-center">
+                  E
+                </th>
+
+                <th class="text-center">
+                  Total
+                </th>
+
+                <th class="text-center">
+                  Status
+                </th>
+
+                <th class="text-center">
+                  Actions
+                </th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody id="deliveriesTableBody">
+
+              <tr>
+
+                <td
+                  colspan="12"
+                  class="text-center text-muted py-5"
+                >
+                  Open Deliveries to load history.
+                </td>
+
+              </tr>
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+/* ==========================================================
+   DELIVERIES PAGE STATE
+========================================================== */
+
+var deliveriesPageData =
+  [];
+
+
+/* ==========================================================
+   LOAD DELIVERIES
+========================================================== */
+
+function loadDeliveriesPage() {
+
+  const tbody =
+    document.getElementById(
+      "deliveriesTableBody"
+    );
+
+
+  if (!tbody) {
+
+    console.error(
+      "deliveriesTableBody was not found."
+    );
+
+    return;
+
+  }
+
+
+  tbody.innerHTML = `
+
+    <tr>
+
+      <td
+        colspan="12"
+        class="text-center text-muted py-5"
+      >
+        Loading deliveries...
+      </td>
+
+    </tr>
+
+  `;
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          tbody.innerHTML = `
+
+            <tr>
+
+              <td
+                colspan="12"
+                class="text-center text-danger py-5"
+              >
+                ${
+                  escapeDeliveriesHtml(
+                    result &&
+                    result.message
+                      ? result.message
+                      : "Unable to load deliveries."
+                  )
+                }
+              </td>
+
+            </tr>
+
+          `;
+
+
+          return;
+
+        }
+
+
+        deliveriesPageData =
+          Array.isArray(
+            result.deliveries
+          )
+            ? result.deliveries
+            : [];
+
+
+        renderDeliveriesTable(
+          deliveriesPageData
+        );
+
+
+        updateDeliveriesSummary(
+          deliveriesPageData
+        );
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        console.error(
+          "DELIVERIES PAGE ERROR:",
+          err
+        );
+
+
+        const message =
+          err &&
+          err.message
+            ? err.message
+            : "Unable to load deliveries.";
+
+
+        tbody.innerHTML = `
+
+          <tr>
+
+            <td
+              colspan="12"
+              class="text-center text-danger py-5"
+            >
+              ${escapeDeliveriesHtml(message)}
+            </td>
+
+          </tr>
+
+        `;
+
+
+        showNotificationToast(
+          message,
+          true
+        );
+
+      }
+    )
+
+
+    .getYourFindsDeliveryHistory();
+
+}
+
+
+/* ==========================================================
+   RENDER DELIVERIES
+========================================================== */
+
+function renderDeliveriesTable(
+  deliveries
+) {
+
+  const tbody =
+    document.getElementById(
+      "deliveriesTableBody"
+    );
+
+
+  tbody.innerHTML =
+    "";
+
+
+  if (
+    !Array.isArray(deliveries) ||
+    deliveries.length === 0
+  ) {
+
+    tbody.innerHTML = `
+
+      <tr>
+
+        <td
+          colspan="12"
+          class="text-center text-muted py-5"
+        >
+          No deliveries found.
+        </td>
+
+      </tr>
+
+    `;
+
+
+    return;
+
+  }
+
+
+  deliveries.forEach(
+    function(delivery) {
+
+      const row =
+        document.createElement(
+          "tr"
+        );
+
+
+      const deliveryNo =
+        String(
+          delivery.deliveryNo || ""
+        ).trim();
+
+
+      const deliveryId =
+        String(
+          delivery.deliveryId || ""
+        ).trim();
+
+
+      const status =
+        String(
+          delivery.status || ""
+        )
+          .trim()
+          .toUpperCase();
+
+
+      row.innerHTML = `
+
+        <!-- DELIVERY -->
+
+        <td class="ps-3">
+
+          <div class="fw-bold">
+
+            ${
+              escapeDeliveriesHtml(
+                deliveryNo ||
+                deliveryId ||
+                "—"
+              )
+            }
+
+          </div>
+
+
+          ${
+            deliveryId &&
+            deliveryNo !== deliveryId
+              ? `
+
+                <div
+                  class="small text-muted font-monospace"
+                >
+                  ${escapeDeliveriesHtml(
+                    deliveryId
+                  )}
+                </div>
+
+              `
+              : ""
+          }
+
+        </td>
+
+
+        <!-- DATE -->
+
+        <td>
+
+          ${
+            escapeDeliveriesHtml(
+              delivery.deliveryDate ||
+              "—"
+            )
+          }
+
+        </td>
+
+
+        <!-- DRIVER / PLATE -->
+
+        <td>
+
+          <div>
+
+            ${
+              escapeDeliveriesHtml(
+                delivery.driverName ||
+                "—"
+              )
+            }
+
+          </div>
+
+
+          ${
+            delivery.plateNo
+              ? `
+
+                <div class="small text-muted">
+
+                  ${escapeDeliveriesHtml(
+                    delivery.plateNo
+                  )}
+
+                </div>
+
+              `
+              : ""
+          }
+
+        </td>
+
+
+        <!-- ACCEPTED BY -->
+
+        <td>
+
+          ${
+            escapeDeliveriesHtml(
+              delivery.acceptedBy ||
+              "—"
+            )
+          }
+
+        </td>
+
+
+        <!-- QUANTITIES -->
+
+        <td class="text-center">
+          ${Number(delivery.sQty) || 0}
+        </td>
+
+        <td class="text-center">
+          ${Number(delivery.mQty) || 0}
+        </td>
+
+        <td class="text-center">
+          ${Number(delivery.lQty) || 0}
+        </td>
+
+        <td class="text-center">
+          ${Number(delivery.xlQty) || 0}
+        </td>
+
+        <td class="text-center">
+          ${Number(delivery.eQty) || 0}
+        </td>
+
+
+        <!-- TOTAL -->
+
+        <td class="text-center fw-bold">
+
+          ${Number(delivery.totalQty) || 0}
+
+        </td>
+
+
+        <!-- STATUS -->
+
+        <td class="text-center">
+
+          ${buildDeliveryStatusBadge(status)}
+
+        </td>
+
+
+        <!-- ACTIONS -->
+
+        <td class="text-center">
+
+          <div
+            class="d-flex justify-content-center gap-1"
+          >
+
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-secondary"
+              onclick="viewYourFindsDeliveryDetails(
+                '${escapeDeliveriesHtml(deliveryId)}'
+              )"
+            >
+              View
+            </button>
+
+
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-dark"
+              onclick="openYourFindsLabelModal(
+                '${escapeDeliveriesHtml(deliveryId)}'
+              )"
+            >
+              Labels
+            </button>
+
+          </div>
+
+        </td>
+
+      `;
+
+
+      tbody.appendChild(
+        row
+      );
+
+    }
+  );
+
+}
+
+
+/* ==========================================================
+   SUMMARY
+========================================================== */
+
+function updateDeliveriesSummary(
+  deliveries
+) {
+
+  let totalPieces =
+    0;
+
+
+  let acceptedCount =
+    0;
+
+
+  deliveries.forEach(
+    function(delivery) {
+
+      totalPieces +=
+        Number(
+          delivery.totalQty
+        ) || 0;
+
+
+      if (
+        String(
+          delivery.status || ""
+        )
+          .trim()
+          .toUpperCase() ===
+        "ACCEPTED"
+      ) {
+
+        acceptedCount++;
+
+      }
+
+    }
+  );
+
+
+  document.getElementById(
+    "deliveriesTotalCount"
+  ).textContent =
+    String(
+      deliveries.length
+    );
+
+
+  document.getElementById(
+    "deliveriesTotalPieces"
+  ).textContent =
+    String(
+      totalPieces
+    );
+
+
+  document.getElementById(
+    "deliveriesAcceptedCount"
+  ).textContent =
+    String(
+      acceptedCount
+    );
+
+}
+
+
+/* ==========================================================
+   STATUS BADGE
+========================================================== */
+
+function buildDeliveryStatusBadge(
+  status
+) {
+
+  status =
+    String(
+      status || ""
+    )
+      .trim()
+      .toUpperCase();
+
+
+  if (
+    status === "ACCEPTED"
+  ) {
+
+    return `
+      <span class="badge bg-success">
+        Accepted
+      </span>
+    `;
+
+  }
+
+
+  if (
+    status === "PARTIAL RETURN"
+  ) {
+
+    return `
+      <span class="badge bg-warning text-dark">
+        Partial Return
+      </span>
+    `;
+
+  }
+
+
+  if (
+    status === "RETURNED"
+  ) {
+
+    return `
+      <span class="badge bg-secondary">
+        Returned
+      </span>
+    `;
+
+  }
+
+
+  return `
+    <span class="badge bg-light text-dark border">
+      ${escapeDeliveriesHtml(status || "UNKNOWN")}
+    </span>
+  `;
+
+}
+
+/* ==========================================================
+   SAFE HTML
+========================================================== */
+
+function escapeDeliveriesHtml(
+  value
+) {
+
+  return String(
+    value === null ||
+    value === undefined
+      ? ""
+      : value
+  )
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+}
+
+/* ==========================================================
+   FILTER DELIVERIES
+========================================================== */
+
+function filterDeliveriesPage() {
+
+  const search =
+    document.getElementById(
+      "deliveriesSearch"
+    )
+      .value
+      .trim()
+      .toLowerCase();
+
+
+  const fromDate =
+    document.getElementById(
+      "deliveriesFromDate"
+    ).value;
+
+
+  const toDate =
+    document.getElementById(
+      "deliveriesToDate"
+    ).value;
+
+
+  const status =
+    document.getElementById(
+      "deliveriesStatusFilter"
+    ).value;
+
+
+  const filtered =
+    deliveriesPageData.filter(
+      function(delivery) {
+
+        /* ================= SEARCH ================= */
+
+        const searchable =
+          [
+
+            delivery.deliveryNo,
+            delivery.deliveryId,
+            delivery.driverName,
+            delivery.plateNo,
+            delivery.acceptedBy
+
+          ]
+            .map(
+              function(value) {
+
+                return String(
+                  value || ""
+                );
+
+              }
+            )
+            .join(" ")
+            .toLowerCase();
+
+
+        const matchesSearch =
+          !search ||
+          searchable.includes(
+            search
+          );
+
+
+        /* ================= DATE ================= */
+
+        const deliveryDate =
+          normalizeDeliveryFilterDate(
+            delivery.deliveryDate
+          );
+
+
+        const matchesFrom =
+          !fromDate ||
+          (
+            deliveryDate &&
+            deliveryDate >=
+              fromDate
+          );
+
+
+        const matchesTo =
+          !toDate ||
+          (
+            deliveryDate &&
+            deliveryDate <=
+              toDate
+          );
+
+
+        /* ================= STATUS ================= */
+
+        const deliveryStatus =
+          String(
+            delivery.status || ""
+          )
+            .trim()
+            .toUpperCase();
+
+
+        const matchesStatus =
+          !status ||
+          deliveryStatus ===
+            status;
+
+
+        return (
+          matchesSearch &&
+          matchesFrom &&
+          matchesTo &&
+          matchesStatus
+        );
+
+      }
+    );
+
+
+  renderDeliveriesTable(
+    filtered
+  );
+
+
+  /*
+    Summary follows the currently visible/filter result.
+  */
+
+  updateDeliveriesSummary(
+    filtered
+  );
+
+}
+
+
+/* ==========================================================
+   NORMALIZE DELIVERY DATE FOR FILTERING
+
+   Handles:
+   yyyy-MM-dd
+   MM/dd/yyyy
+   M/d/yyyy
+========================================================== */
+
+function normalizeDeliveryFilterDate(
+  value
+) {
+
+  value =
+    String(
+      value || ""
+    ).trim();
+
+
+  if (!value) {
+
+    return "";
+
+  }
+
+
+  /* Already yyyy-MM-dd */
+
+  if (
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      value
+    )
+  ) {
+
+    return value;
+
+  }
+
+
+  /* MM/dd/yyyy or M/d/yyyy */
+
+  const slashMatch =
+    value.match(
+      /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/
+    );
+
+
+  if (slashMatch) {
+
+    const month =
+      String(
+        slashMatch[1]
+      ).padStart(
+        2,
+        "0"
+      );
+
+
+    const day =
+      String(
+        slashMatch[2]
+      ).padStart(
+        2,
+        "0"
+      );
+
+
+    const year =
+      slashMatch[3];
+
+
+    return (
+      year +
+      "-" +
+      month +
+      "-" +
+      day
+    );
+
+  }
+
+
+  return "";
+
+}
+
+
+/* ==========================================================
+   CLEAR FILTERS
+========================================================== */
+
+function clearDeliveriesFilters() {
+
+  document.getElementById(
+    "deliveriesSearch"
+  ).value =
+    "";
+
+
+  document.getElementById(
+    "deliveriesFromDate"
+  ).value =
+    "";
+
+
+  document.getElementById(
+    "deliveriesToDate"
+  ).value =
+    "";
+
+
+  document.getElementById(
+    "deliveriesStatusFilter"
+  ).value =
+    "";
+
+
+  renderDeliveriesTable(
+    deliveriesPageData
+  );
+
+
+  updateDeliveriesSummary(
+    deliveriesPageData
+  );
+
+}
+
+</script>

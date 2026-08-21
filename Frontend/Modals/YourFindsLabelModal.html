@@ -1,0 +1,1141 @@
+<!-- =========================================================
+     YOURFINDS LABEL SELECTION MODAL
+========================================================== -->
+
+<div
+  id="yourFindsLabelModal"
+  class="generic-overlay-blur"
+  style="display:none;"
+>
+
+  <div
+    class="custom-popup-card"
+    style="
+      max-width:650px;
+      width:95%;
+      max-height:90vh;
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+    "
+  >
+
+    <!-- =====================================================
+         HEADER
+    ====================================================== -->
+
+    <div
+      class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom"
+    >
+
+      <div>
+
+        <h5 class="fw-bold mb-1">
+          Select YourFinds Labels
+        </h5>
+
+        <div
+          id="yourFindsLabelDeliveryId"
+          class="small text-muted font-monospace"
+        >
+          —
+        </div>
+
+      </div>
+
+
+      <button
+        type="button"
+        class="btn-close"
+        onclick="closeYourFindsLabelModal()"
+      ></button>
+
+    </div>
+
+
+    <!-- =====================================================
+         SELECT ALL / SUMMARY
+    ====================================================== -->
+
+    <div
+      class="d-flex justify-content-between align-items-center mb-3"
+    >
+
+      <div class="form-check mb-0">
+
+        <input
+          type="checkbox"
+          class="form-check-input"
+          id="yourFindsLabelSelectAll"
+          onchange="toggleAllYourFindsLabels(this.checked)"
+        >
+
+        <label
+          class="form-check-label fw-semibold"
+          for="yourFindsLabelSelectAll"
+        >
+          Select All
+        </label>
+
+      </div>
+
+
+      <div class="small text-muted">
+
+        Selected:
+
+        <strong
+          id="yourFindsLabelSelectedCount"
+          class="text-dark"
+        >
+          0
+        </strong>
+
+        /
+
+        <span
+          id="yourFindsLabelTotalCount"
+        >
+          0
+        </span>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         LOADING
+    ====================================================== -->
+
+    <div
+      id="yourFindsLabelLoading"
+      class="text-center py-4"
+      style="display:none;"
+    >
+
+      <div
+        class="spinner-border spinner-border-sm text-secondary mb-2"
+        role="status"
+      ></div>
+
+      <div class="small text-muted">
+        Loading labels...
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         LABEL LIST
+    ====================================================== -->
+
+    <div
+      id="yourFindsLabelList"
+      style="
+        overflow-y:auto;
+        flex:1;
+        min-height:120px;
+        max-height:55vh;
+      "
+    ></div>
+
+
+    <!-- =====================================================
+         EMPTY / ERROR
+    ====================================================== -->
+
+    <div
+      id="yourFindsLabelEmpty"
+      class="text-center text-muted py-4"
+      style="display:none;"
+    >
+      No YourFinds labels found.
+    </div>
+
+
+    <!-- =====================================================
+         ACTIONS
+    ====================================================== -->
+
+    <div
+      class="d-flex gap-2 pt-3 mt-3 border-top"
+    >
+
+      <button
+        type="button"
+        class="btn btn-outline-secondary flex-fill"
+        onclick="closeYourFindsLabelModal()"
+      >
+        Cancel
+      </button>
+
+
+      <button
+        type="button"
+        id="yourFindsLabelPrintBtn"
+        class="btn btn-pink flex-fill fw-bold"
+        onclick="printSelectedYourFindsLabels()"
+        disabled
+      >
+        Print 0 Labels
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+/* ==========================================================
+   LABEL MODAL STATE
+========================================================== */
+
+let yourFindsLabelModalItems =
+  [];
+
+
+let yourFindsLabelCurrentDeliveryId =
+  "";
+
+
+/* ==========================================================
+   OPEN LABEL MODAL
+
+   Example:
+
+   openYourFindsLabelModal(
+     "YFD-20260816-001"
+   );
+========================================================== */
+
+function openYourFindsLabelModal(
+  deliveryId
+) {
+
+  deliveryId =
+    String(
+      deliveryId || ""
+    )
+      .trim()
+      .toUpperCase();
+
+
+  if (!deliveryId) {
+
+    showNotificationToast(
+      "Delivery ID is required.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  const modal =
+    document.getElementById(
+      "yourFindsLabelModal"
+    );
+
+
+  if (!modal) {
+
+    console.error(
+      "yourFindsLabelModal element not found."
+    );
+
+    return;
+
+  }
+
+
+  /* ================= RESET STATE ================= */
+
+  yourFindsLabelCurrentDeliveryId =
+    deliveryId;
+
+
+  yourFindsLabelModalItems =
+    [];
+
+
+  document.getElementById(
+    "yourFindsLabelDeliveryId"
+  ).textContent =
+    deliveryId;
+
+
+  document.getElementById(
+    "yourFindsLabelSelectAll"
+  ).checked =
+    false;
+
+
+  document.getElementById(
+    "yourFindsLabelSelectedCount"
+  ).textContent =
+    "0";
+
+
+  document.getElementById(
+    "yourFindsLabelTotalCount"
+  ).textContent =
+    "0";
+
+
+  document.getElementById(
+    "yourFindsLabelList"
+  ).innerHTML =
+    "";
+
+
+  document.getElementById(
+    "yourFindsLabelEmpty"
+  ).style.display =
+    "none";
+
+
+  document.getElementById(
+    "yourFindsLabelLoading"
+  ).style.display =
+    "block";
+
+
+  updateYourFindsLabelPrintButton();
+
+
+  /* ================= SHOW ================= */
+
+  modal.style.display =
+    "flex";
+
+
+  /* ================= LOAD ================= */
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        document.getElementById(
+          "yourFindsLabelLoading"
+        ).style.display =
+          "none";
+
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          document.getElementById(
+            "yourFindsLabelEmpty"
+          ).style.display =
+            "block";
+
+
+          document.getElementById(
+            "yourFindsLabelEmpty"
+          ).textContent =
+            result &&
+            result.message
+              ? result.message
+              : "Unable to load labels.";
+
+
+          return;
+
+        }
+
+
+        yourFindsLabelModalItems =
+          Array.isArray(
+            result.items
+          )
+            ? result.items
+            : [];
+
+
+        renderYourFindsLabelItems();
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        document.getElementById(
+          "yourFindsLabelLoading"
+        ).style.display =
+          "none";
+
+
+        console.error(
+          "LOAD YOURFINDS LABELS ERROR:",
+          err
+        );
+
+
+        const empty =
+          document.getElementById(
+            "yourFindsLabelEmpty"
+          );
+
+
+        empty.style.display =
+          "block";
+
+
+        empty.textContent =
+          err &&
+          err.message
+            ? err.message
+            : "Unable to load labels.";
+
+      }
+    )
+
+
+    .getYourFindsLabelItemsByDeliveryId(
+      deliveryId
+    );
+
+}
+
+
+/* ==========================================================
+   CLOSE LABEL MODAL
+========================================================== */
+
+function closeYourFindsLabelModal() {
+
+  const modal =
+    document.getElementById(
+      "yourFindsLabelModal"
+    );
+
+
+  if (modal) {
+
+    modal.style.display =
+      "none";
+
+  }
+
+
+  yourFindsLabelModalItems =
+    [];
+
+
+  yourFindsLabelCurrentDeliveryId =
+    "";
+
+}
+
+
+/* ==========================================================
+   ESCAPE FRONTEND HTML
+========================================================== */
+
+function escapeYourFindsLabelText(
+  value
+) {
+
+  return String(
+    value === null ||
+    value === undefined
+      ? ""
+      : value
+  )
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+}
+
+
+/* ==========================================================
+   RENDER ITEMS
+========================================================== */
+
+function renderYourFindsLabelItems() {
+
+  const container =
+    document.getElementById(
+      "yourFindsLabelList"
+    );
+
+
+  const empty =
+    document.getElementById(
+      "yourFindsLabelEmpty"
+    );
+
+
+  container.innerHTML =
+    "";
+
+
+  if (
+    !Array.isArray(
+      yourFindsLabelModalItems
+    ) ||
+    yourFindsLabelModalItems.length === 0
+  ) {
+
+    empty.style.display =
+      "block";
+
+
+    empty.textContent =
+      "No YourFinds labels found.";
+
+
+    updateYourFindsLabelSelection();
+
+    return;
+
+  }
+
+
+  empty.style.display =
+    "none";
+
+
+  document.getElementById(
+    "yourFindsLabelTotalCount"
+  ).textContent =
+    String(
+      yourFindsLabelModalItems.length
+    );
+
+
+  /* ========================================================
+     GROUP BY SIZE
+  ======================================================== */
+
+  const sizeOrder = [
+    "S",
+    "M",
+    "L",
+    "XL",
+    "E"
+  ];
+
+
+  const groups =
+    {};
+
+
+  sizeOrder.forEach(
+    function(size) {
+
+      groups[size] =
+        [];
+
+    }
+  );
+
+
+  yourFindsLabelModalItems.forEach(
+    function(item) {
+
+      const size =
+        String(
+          item.size || ""
+        )
+          .trim()
+          .toUpperCase();
+
+
+      if (
+        !groups[size]
+      ) {
+
+        groups[size] =
+          [];
+
+      }
+
+
+      groups[size].push(
+        item
+      );
+
+    }
+  );
+
+
+  /* ========================================================
+     BUILD GROUPS
+  ======================================================== */
+
+  Object.keys(groups)
+    .sort(
+      function(a, b) {
+
+        const aIndex =
+          sizeOrder.indexOf(a);
+
+
+        const bIndex =
+          sizeOrder.indexOf(b);
+
+
+        const safeA =
+          aIndex === -1
+            ? 999
+            : aIndex;
+
+
+        const safeB =
+          bIndex === -1
+            ? 999
+            : bIndex;
+
+
+        return (
+          safeA -
+          safeB
+        );
+
+      }
+    )
+    .forEach(
+      function(size) {
+
+        const items =
+          groups[size];
+
+
+        if (
+          !items ||
+          items.length === 0
+        ) {
+
+          return;
+
+        }
+
+
+        /* ================= SIZE HEADER ================= */
+
+        const header =
+          document.createElement(
+            "div"
+          );
+
+
+        header.className =
+          "d-flex justify-content-between align-items-center px-2 py-2 mt-2 mb-1 rounded bg-light";
+
+
+        header.innerHTML =
+          `
+            <span class="fw-bold">
+              ${escapeYourFindsLabelText(size)}
+            </span>
+
+            <span class="small text-muted">
+              ${items.length}
+              ${items.length === 1 ? "item" : "items"}
+            </span>
+          `;
+
+
+        container.appendChild(
+          header
+        );
+
+
+        /* ================= ITEMS ================= */
+
+        items.forEach(
+          function(item) {
+
+            const code =
+              String(
+                item.code || ""
+              ).trim();
+
+
+            const status =
+              String(
+                item.status || ""
+              )
+                .trim()
+                .toUpperCase();
+
+
+            const description =
+              String(
+                item.description || ""
+              ).trim();
+
+
+            const row =
+              document.createElement(
+                "label"
+              );
+
+
+            row.className =
+              "d-flex align-items-center gap-3 px-2 py-2 border-bottom";
+
+
+            row.style.cursor =
+              "pointer";
+
+
+            row.innerHTML =
+              `
+
+                <input
+                  type="checkbox"
+                  class="form-check-input yourfinds-label-checkbox"
+                  value="${escapeYourFindsLabelText(code)}"
+                  onchange="updateYourFindsLabelSelection()"
+                >
+
+
+                <div
+                  class="flex-grow-1"
+                  style="min-width:0;"
+                >
+
+                  <div
+                    class="fw-semibold font-monospace"
+                  >
+                    ${escapeYourFindsLabelText(code)}
+                  </div>
+
+
+                  ${
+                    description
+                      ? `
+                        <div
+                          class="small text-muted text-truncate"
+                        >
+                          ${escapeYourFindsLabelText(description)}
+                        </div>
+                      `
+                      : ""
+                  }
+
+                </div>
+
+
+                <div class="text-end">
+
+                  <span
+                    class="badge ${
+                      status === "ACTIVE"
+                        ? "bg-success"
+                        : status === "INCOMPLETE"
+                          ? "bg-warning text-dark"
+                          : "bg-secondary"
+                    }"
+                  >
+                    ${escapeYourFindsLabelText(status || "UNKNOWN")}
+                  </span>
+
+                </div>
+
+              `;
+
+
+            container.appendChild(
+              row
+            );
+
+          }
+        );
+
+      }
+    );
+
+
+  /*
+    For a newly-opened delivery selector,
+    select everything by default.
+
+    Staff can then uncheck labels they
+    don't want to print.
+  */
+
+  toggleAllYourFindsLabels(
+    true
+  );
+
+}
+
+
+/* ==========================================================
+   TOGGLE ALL
+========================================================== */
+
+function toggleAllYourFindsLabels(
+  checked
+) {
+
+  const checkboxes =
+    document.querySelectorAll(
+      "#yourFindsLabelModal .yourfinds-label-checkbox"
+    );
+
+
+  checkboxes.forEach(
+    function(checkbox) {
+
+      checkbox.checked =
+        checked;
+
+    }
+  );
+
+
+  updateYourFindsLabelSelection();
+
+}
+
+
+/* ==========================================================
+   UPDATE SELECTION
+========================================================== */
+
+function updateYourFindsLabelSelection() {
+
+  const checkboxes =
+    Array.from(
+      document.querySelectorAll(
+        "#yourFindsLabelModal .yourfinds-label-checkbox"
+      )
+    );
+
+
+  const selected =
+    checkboxes.filter(
+      function(checkbox) {
+
+        return checkbox.checked;
+
+      }
+    );
+
+
+  const selectedCount =
+    selected.length;
+
+
+  const totalCount =
+    checkboxes.length;
+
+
+  document.getElementById(
+    "yourFindsLabelSelectedCount"
+  ).textContent =
+    String(
+      selectedCount
+    );
+
+
+  document.getElementById(
+    "yourFindsLabelTotalCount"
+  ).textContent =
+    String(
+      totalCount
+    );
+
+
+  /* ================= SELECT ALL STATE ================= */
+
+  const selectAll =
+    document.getElementById(
+      "yourFindsLabelSelectAll"
+    );
+
+
+  if (
+    totalCount === 0
+  ) {
+
+    selectAll.checked =
+      false;
+
+
+    selectAll.indeterminate =
+      false;
+
+  } else if (
+    selectedCount === totalCount
+  ) {
+
+    selectAll.checked =
+      true;
+
+
+    selectAll.indeterminate =
+      false;
+
+  } else if (
+    selectedCount === 0
+  ) {
+
+    selectAll.checked =
+      false;
+
+
+    selectAll.indeterminate =
+      false;
+
+  } else {
+
+    selectAll.checked =
+      false;
+
+
+    selectAll.indeterminate =
+      true;
+
+  }
+
+
+  updateYourFindsLabelPrintButton();
+
+}
+
+
+/* ==========================================================
+   UPDATE PRINT BUTTON
+
+   Printing itself is intentionally NOT connected yet.
+========================================================== */
+
+function updateYourFindsLabelPrintButton() {
+
+  const button =
+    document.getElementById(
+      "yourFindsLabelPrintBtn"
+    );
+
+
+  if (!button) {
+
+    return;
+
+  }
+
+
+  const selectedCount =
+    document.querySelectorAll(
+      "#yourFindsLabelModal .yourfinds-label-checkbox:checked"
+    ).length;
+
+
+  button.disabled =
+    selectedCount === 0;
+
+
+  button.textContent =
+    selectedCount === 1
+      ? "Print 1 Label"
+      : "Print " +
+        selectedCount +
+        " Labels";
+
+}
+
+
+/* ==========================================================
+   PRINT SELECTED YOURFINDS LABELS
+========================================================== */
+
+function printSelectedYourFindsLabels() {
+
+  const selectedCodes =
+    Array.from(
+      document.querySelectorAll(
+        "#yourFindsLabelModal .yourfinds-label-checkbox:checked"
+      )
+    )
+      .map(
+        function(checkbox) {
+
+          return String(
+            checkbox.value || ""
+          ).trim();
+
+        }
+      )
+      .filter(Boolean);
+
+
+  /* ========================================================
+     VALIDATE
+  ======================================================== */
+
+  if (
+    selectedCodes.length === 0
+  ) {
+
+    showNotificationToast(
+      "Select at least one label.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  /* ========================================================
+     BUTTON
+  ======================================================== */
+
+  const button =
+    document.getElementById(
+      "yourFindsLabelPrintBtn"
+    );
+
+
+  button.disabled =
+    true;
+
+
+  button.textContent =
+    selectedCodes.length === 1
+      ? "Generating Label..."
+      : "Generating " +
+        selectedCodes.length +
+        " Labels...";
+
+
+  /* ========================================================
+     GENERATE PDF
+  ======================================================== */
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        /*
+          Restore button first.
+        */
+
+        button.disabled =
+          false;
+
+
+        updateYourFindsLabelPrintButton();
+
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          showNotificationToast(
+            result &&
+            result.message
+              ? result.message
+              : "Unable to generate labels.",
+            true
+          );
+
+          return;
+
+        }
+
+
+        if (
+          !result.downloadUrl
+        ) {
+
+          showNotificationToast(
+            "Label PDF was created but no download link was returned.",
+            true
+          );
+
+          return;
+
+        }
+
+
+        /* ====================================================
+           OPEN PDF
+
+           Keep the selection modal open.
+
+           This is useful if staff realizes another label
+           also needs to be printed.
+        ==================================================== */
+
+        window.open(
+          result.downloadUrl,
+          "_blank"
+        );
+
+
+        showNotificationToast(
+          result.labelCount === 1
+            ? "1 label generated."
+            : result.labelCount +
+              " labels generated."
+        );
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        button.disabled =
+          false;
+
+
+        updateYourFindsLabelPrintButton();
+
+
+        console.error(
+          "YOURFINDS LABEL PDF ERROR:",
+          err
+        );
+
+
+        const message =
+          err &&
+          err.message
+            ? err.message
+            : String(
+                err ||
+                "Unknown error"
+              );
+
+
+        showNotificationToast(
+          "Label Error: " +
+          message,
+          true
+        );
+
+      }
+    )
+
+
+    .createYourFindsLabelPDFByCodes(
+      selectedCodes
+    );
+
+}
+
+
+</script>

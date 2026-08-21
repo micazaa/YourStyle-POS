@@ -1,0 +1,481 @@
+<html>
+	<head></head>
+	<body>
+		<div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar(false)">
+		</div>
+		<div id="appSidebar" class="app-sidebar" style="display:none;">
+			
+			<!-- Header -->
+			<div class="sidebar-header">
+				<div class="sidebar-profile">
+					<div id="sidebarAvatar" class="sidebar-avatar">
+						--
+					</div>
+					<div>
+						<div id="sidebarEmployeeName" class="sidebar-name">
+							Not Logged In
+						</div>
+						<div id="sidebarEmployeeRole" class="sidebar-role">
+							Employee
+						</div>
+					</div>
+				</div>
+				<button class="btn-close" onclick="toggleSidebar(false)">
+				</button>
+			</div>
+      <!-- ================= MENU ================= -->
+
+<div class="sidebar-menu">
+
+
+  <!-- DASHBOARD -->
+
+  <button
+    class="sidebar-item active"
+    data-page="dashboardPage"
+    onclick="
+      activateMenu(this);
+      showPage('dashboardPage');
+      toggleSidebar(false);
+    "
+  >
+    <span>🏠 Dashboard</span>
+  </button>
+
+
+  <!-- CASHIER -->
+
+  <button
+    class="sidebar-item"
+    data-page="posPage"
+    onclick="
+      activateMenu(this);
+      showPage('posPage');
+      toggleSidebar(false);
+    "
+  >
+    <span>🛒 Cashier</span>
+  </button>
+
+
+<!-- ================= INVENTORY ================= -->
+
+<button
+  class="sidebar-item sidebar-parent"
+  onclick="
+    toggleSidebarGroup(
+      'inventoryMenu',
+      this
+    )
+  "
+>
+
+  <span>
+    📦 Inventory
+  </span>
+
+  <span class="sidebar-arrow">
+    ▸
+  </span>
+
+</button>
+
+
+<div
+  id="inventoryMenu"
+  class="sidebar-submenu"
+>
+
+  <!-- VIEW INVENTORY -->
+
+  <button
+    class="sidebar-subitem"
+    onclick="
+      showPage('inventoryPage');
+      loadInventoryPage();
+      toggleSidebar(false);
+    "
+  >
+    View Inventory
+  </button>
+
+  <!-- DELIVERIES -->
+
+  <button
+    class="sidebar-subitem"
+    onclick="
+      showPage('deliveriesPage');
+      loadDeliveriesPage();
+      toggleSidebar(false);
+    "
+  >
+    Deliveries
+  </button>
+
+
+  <!-- REPRINT LABELS -->
+
+  <button
+    class="sidebar-subitem"
+    onclick="
+      openYourFindsReprintModal();
+      toggleSidebar(false);
+    "
+  >
+    Reprint Labels
+  </button>
+
+
+<!-- ACCEPT DELIVERY -->
+
+<button
+  class="sidebar-subitem"
+  onclick="
+    openAcceptDeliveryTypeModal();
+    toggleSidebar(false);
+  "
+>
+  Accept Delivery
+</button>
+</div>
+
+  <!-- TRANSACTIONS -->
+
+  <button
+    class="sidebar-item sidebar-parent"
+    onclick="toggleSidebarGroup('transactionMenu', this)"
+  >
+    <span>💰 Transactions</span>
+
+    <span class="sidebar-arrow">
+      ▸
+    </span>
+  </button>
+
+
+  <div
+    id="transactionMenu"
+    class="sidebar-submenu"
+  >
+
+    <button
+      class="sidebar-subitem"
+      onclick="
+        toggleVoidModal(true);
+        toggleSidebar(false);
+      "
+    >
+      Void Receipt
+    </button>
+
+
+    <button
+      class="sidebar-subitem"
+      onclick="
+        openTransactionHistoryModal();
+        toggleSidebar(false);
+      "
+    >
+      Transaction History
+    </button>
+
+  </div>
+
+
+  <!-- REPORTS -->
+
+  <button
+    class="sidebar-item sidebar-parent"
+    onclick="toggleSidebarGroup('reportMenu', this)"
+  >
+    <span>📊 Reports</span>
+
+    <span class="sidebar-arrow">
+      ▸
+    </span>
+  </button>
+
+
+  <div
+    id="reportMenu"
+    class="sidebar-submenu"
+  >
+
+    <button
+      class="sidebar-subitem"
+      onclick="
+        toggleShiftReportModal(true);
+        toggleSidebar(false);
+      "
+    >
+      Cashier Shift Report
+    </button>
+
+
+    <button
+      id="sidebarManagerReportBtn"
+      class="sidebar-subitem"
+      style="display:none;"
+      onclick="
+        openManagerReportModal();
+        toggleSidebar(false);
+      "
+    >
+      Manager Daily Report
+    </button>
+
+  </div>
+
+
+  <hr>
+
+
+  <!-- SETTINGS -->
+
+  <button
+    class="sidebar-item"
+    disabled
+  >
+    ⚙ Settings
+  </button>
+
+
+  <!-- LOGOUT -->
+
+  <button
+    class="sidebar-item text-danger"
+    onclick="triggerCleanLogout()"
+  >
+    🚪 Logout
+  </button>
+
+
+</div>
+		</div>
+	</body>
+</html>
+
+<script>
+  function updateSidebarProfile(employee) {
+    if (!employee) return;
+
+    const nameEl = document.getElementById("sidebarEmployeeName");
+    const roleEl = document.getElementById("sidebarEmployeeRole");
+    const avatarEl = document.getElementById("sidebarAvatar");
+    const navbarEl = document.getElementById("navbarEmployeeName");
+
+    if (nameEl) {
+      nameEl.textContent = employee.fullName;
+    }
+
+    if (navbarEl) {
+      navbarEl.textContent = employee.fullName;
+    }
+
+    const role = employee.accessLevel <= 1 ? "Manager" : "Cashier";
+
+    if (roleEl) {
+      roleEl.textContent = role;
+    }
+
+    const initials = (employee.fullName || "")
+      .split(" ")
+      .filter(Boolean)
+      .map(name => name.charAt(0))
+      .join("")
+      .substring(0, 2)
+      .toUpperCase();
+
+    if (avatarEl) {
+      avatarEl.textContent = initials;
+    }
+  }
+
+  function toggleSidebar(show = true) {
+    document.getElementById("appSidebar").classList.toggle("show", show);
+    document.getElementById("sidebarOverlay").classList.toggle("show", show);
+  }
+
+  function toggleSidebarGroup(menuId, button) {
+    const menu = document.getElementById(menuId);
+    const arrow = button.querySelector(".sidebar-arrow");
+    const isOpen = menu.classList.contains("show");
+
+    document.querySelectorAll(".sidebar-submenu").forEach((sub) => {
+      sub.classList.remove("show");
+    });
+
+    document.querySelectorAll(".sidebar-arrow").forEach((a) => {
+      a.classList.remove("rotate");
+    });
+
+    if (!isOpen) {
+      menu.classList.add("show");
+
+      if (arrow) {
+        arrow.classList.add("rotate");
+      }
+    }
+  }
+function activateMenu(button) {
+
+  // Remove active state from all main sidebar items
+  document
+    .querySelectorAll(".sidebar-item")
+    .forEach(function(item) {
+      item.classList.remove("active");
+    });
+
+  // Activate clicked menu
+  if (button) {
+    button.classList.add("active");
+  }
+
+  // Save active menu
+  const pageId =
+    button?.dataset?.page;
+
+  if (pageId) {
+    localStorage.setItem(
+      "ys_pos_active_page",
+      pageId
+    );
+  }
+}
+
+function showPage(pageId) {
+
+  const pages = [
+    "dashboardPage",
+    "posPage",
+    "inventoryPage",
+    "deliveriesPage"
+  ];
+
+
+  // Hide every main page
+  pages.forEach(function(id) {
+
+    const page =
+      document.getElementById(id);
+
+
+    if (page) {
+
+      page.style.display =
+        "none";
+
+    }
+
+  });
+
+
+  // Show selected page
+  const selectedPage =
+    document.getElementById(
+      pageId
+    );
+
+
+  if (!selectedPage) {
+
+    console.error(
+      "Page not found:",
+      pageId
+    );
+
+    return;
+
+  }
+
+
+  selectedPage.style.display =
+    "block";
+
+}
+
+  function updateSidebarProfile(employee) {
+    if (!employee) return;
+
+    document.getElementById("sidebarEmployeeName").textContent = employee.fullName;
+    document.getElementById("navbarEmployeeName").textContent = employee.fullName;
+    document.getElementById("sidebarEmployeeRole").textContent = employee.accessLevel <= 1 ? "Manager" : "Cashier";
+
+    const initials = employee.fullName
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase();
+
+    document.getElementById("sidebarAvatar").textContent = initials;
+  }
+
+  function restoreActivePage() {
+
+  const savedPage =
+    localStorage.getItem(
+      "ys_pos_active_page"
+    );
+
+  const pageId =
+    savedPage || "posPage";
+
+  showPage(pageId);
+
+  const button =
+    document.querySelector(
+      `.sidebar-item[data-page="${pageId}"]`
+    );
+
+  if (button) {
+
+    document
+      .querySelectorAll(".sidebar-item")
+      .forEach(function(item) {
+        item.classList.remove("active");
+      });
+
+    button.classList.add("active");
+  }
+
+  // Inventory needs its data loaded
+  if (pageId === "inventoryPage") {
+    loadInventoryPage();
+  }
+}
+
+  function triggerCleanLogout() {
+    if (confirm("Are you sure you want to log out?")) {
+      clearSession();
+      currentCashier = "";
+      currentShiftPettyCash = 0;
+      cart = [];
+      document.getElementById("cashierSelect").value = "";
+      document.getElementById("cashierPin").value = "";
+      document.getElementById("sidebarManagerReportBtn").style.display = "none";
+      document.getElementById("navbarEmployeeName").textContent = "Offline";
+
+      document.getElementById("sidebarEmployeeName").textContent =
+        "Not Logged In";
+      document.getElementById("terminalWorkspace").style.display = "none";
+      document.getElementById("sidebarEmployeeName").textContent =
+        "Not Logged In";
+      document.getElementById("loginOverlay").style.display = "flex";
+      document.getElementById("appSidebar").style.display = "none";
+
+      document.getElementById("sidebarEmployeeRole").textContent = "Employee";
+
+      document.getElementById("sidebarManagerReportBtn").style.display = "none";
+
+      document.getElementById("appSidebar").style.display = "none";
+      renderCart();
+    }
+  }
+
+  window.addEventListener("click", function (e) {
+    if (e.target.classList.contains("sidebar-overlay")) {
+      toggleSidebar(false);
+    }
+  });
+</script>

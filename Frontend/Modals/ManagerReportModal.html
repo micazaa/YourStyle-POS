@@ -1,0 +1,562 @@
+<div id="managerDailyModal" class="generic-overlay-blur" style="display:none;">
+  <div class="custom-popup-card" style="max-width: 820px;">
+
+    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+      <h5 class="fw-bold m-0 text-dark">Manager Daily Report</h5>
+      <button type="button" class="btn-close"
+              onclick="document.getElementById('managerDailyModal').style.display='none';">
+      </button>
+    </div>
+
+    <div class="row g-2 mb-3">
+
+      <div class="denom-column">
+
+        <!-- Manager & Report Date -->
+        <div class="row g-3 mb-3">
+
+          <div class="col-md-6">
+            <label class="form-label">Manager</label>
+            <input
+              type="text"
+              id="managerDailyName"
+              class="form-control form-control-sm fw-bold"
+              readonly>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Choose Report Date</label>
+            <input
+              type="date"
+              id="managerReportDate"
+              class="form-control form-control-sm" max="">
+          </div>
+
+        </div>
+
+        <!-- Expected Cash -->
+        <div class="d-flex justify-content-between align-items-center p-2 mb-3 rounded"
+          style="background-color: var(--pink-light);">
+          <span class="small fw-bold text-muted">
+            EXPECTED CASH COUNT:
+          </span>
+          <span class="fw-bold text-dark"
+                id="managerExpectedCashCountDisplay">
+            ₱0.00
+          </span>
+        </div>
+
+        <!-- Cash Drawer Count -->
+        <p class="fw-bold small text-uppercase text-muted mb-2">
+          Cash Drawer Bill/Coin Count
+        </p>
+
+        <div class="row g-2 border p-3 rounded bg-light text-center mb-2" style="max-height:200px; overflow-y:auto;">
+
+          <div class="col-6 d-flex align-items-center justify-content-between mb-2">
+            <span>1,000</span>
+            <input type="number" id="mgrd1000" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+          </div>
+
+          <div class="col-6 d-flex align-items-center justify-content-between mb-2">
+            <span>500</span>
+            <input type="number" id="mgrd500" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+          </div>
+
+          <div class="col-6 d-flex align-items-center justify-content-between mb-2">
+            <span>200</span>
+            <input type="number" id="mgrd200" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+          </div>
+
+          <div class="col-6 d-flex align-items-center justify-content-between mb-2">
+            <span>100</span>
+            <input type="number" id="mgrd100" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+          </div>
+
+          <div class="col-6 d-flex align-items-center justify-content-between mb-2">
+            <span>50</span>
+            <input type="number" id="mgrd50" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+          </div>
+
+          <div class="col-6 d-flex align-items-center justify-content-between mb-2">
+            <span>20</span>
+            <input type="number" id="mgrd20" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+          </div>
+
+          <div class="col-6 d-flex align-items-center justify-content-between mb-2">
+            <span>10</span>
+            <input type="number" id="mgrd10" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+          </div>
+
+          <div class="col-6 d-flex align-items-center justify-content-between mb-2">
+            <span>5</span>
+            <input type="number" id="mgrd5" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+          </div>
+
+          <div class="col-6 d-flex align-items-center justify-content-between mb-2">
+            <span>1</span>
+            <input type="number" id="mgrd1" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+          </div>
+
+        </div>
+
+        <!-- Total Count -->
+        <div class="d-flex justify-content-between small fw-bold mb-3 px-1">
+          <span class="text-muted">Total Counted:</span>
+          <span id="managerCashDrawerCountTotalOut">₱0.00</span>
+        </div>
+
+        <!-- Variance -->
+        <div id="managerCashDrawerVarianceBox" class="variance-warning-box mb-3" style="display:none;">
+
+          <p class="small fw-bold text-danger mb-2">
+            Expected cash and drawer count do not match. Please log the drawer remark.
+          </p>
+
+          <label class="form-label">Cash Drawer Remark</label>
+
+          <input
+            type="text"
+            id="managerCashDrawerVarianceReason"
+            class="form-control form-control-sm"
+            placeholder="Explain the drawer variance">
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <button class="btn btn-dark w-100 py-2.5 fw-bold"
+            onclick="generateManagerDailyReport()">
+      Download Daily Report
+    </button>
+
+  </div>
+</div>
+
+<script>
+
+/* ==========================================================
+   MANAGER DAILY REPORT
+========================================================== */
+
+function openManagerReportModal() {
+
+  if (!currentEmployee) {
+    showNotificationToast("No employee is currently logged in.", true);
+    return;
+  }
+
+  if (
+    currentEmployee.role !== "Manager" &&
+    currentEmployee.accessLevel > 1
+  ) {
+    showNotificationToast(
+      "Only managers can access the Manager Daily Report.",
+      true
+    );
+    return;
+  }
+
+  // Always use the authenticated employee
+  document.getElementById("managerDailyName").value =
+    currentEmployee.fullName;
+
+  // Default business date to today
+  const today = new Date().toISOString().split("T")[0];
+
+  const dateInput =
+    document.getElementById("managerReportDate");
+
+  dateInput.value = today;
+  dateInput.max = today;
+
+  // Reset drawer inputs
+  PETTY_DENOMS.forEach((d) => {
+
+    const el =
+      document.getElementById("mgrd" + d);
+
+    if (el) {
+      el.value = "";
+    }
+
+  });
+
+  currentManagerExpectedCash = 0;
+
+  const expectedEl =
+    document.getElementById(
+      "managerExpectedCashCountDisplay"
+    );
+
+  expectedEl.textContent = "₱0.00";
+  expectedEl.dataset.expected = "0";
+
+  document.getElementById(
+    "managerCashDrawerCountTotalOut"
+  ).textContent = "₱0.00";
+
+  document.getElementById(
+    "managerCashDrawerVarianceReason"
+  ).value = "";
+
+  document.getElementById(
+    "managerCashDrawerVarianceBox"
+  ).style.display = "none";
+
+  // Update expected cash whenever date changes
+  dateInput.onchange = updateManagerExpectedCash;
+
+  // Open modal
+  document.getElementById(
+    "managerDailyModal"
+  ).style.display = "flex";
+
+  // Load expected cash
+  updateManagerExpectedCash();
+}
+
+
+/* ==========================================================
+   EXPECTED CASH
+========================================================== */
+
+function updateManagerExpectedCash() {
+
+  const expectedEl =
+    document.getElementById(
+      "managerExpectedCashCountDisplay"
+    );
+
+  const reportDate =
+    document.getElementById(
+      "managerReportDate"
+    ).value;
+
+  if (!reportDate) {
+
+    currentManagerExpectedCash = 0;
+
+    expectedEl.textContent = "₱0.00";
+    expectedEl.dataset.expected = "0";
+
+    return;
+  }
+
+  google.script.run
+
+    .withSuccessHandler(function(expectedCashData) {
+
+      console.log(
+        "MANAGER EXPECTED CASH RESPONSE:",
+        expectedCashData
+      );
+
+      const expectedCash =
+        expectedCashData &&
+        typeof expectedCashData === "object"
+          ? expectedCashData.expectedCashDrawer || 0
+          : parseFloat(expectedCashData) || 0;
+
+      currentManagerExpectedCash =
+      Math.round(
+        (Number(expectedCash) || 0) * 100
+      ) / 100;
+
+      expectedEl.textContent =
+        "₱" +
+        currentManagerExpectedCash.toFixed(2);
+
+      expectedEl.dataset.expected =
+        currentManagerExpectedCash.toFixed(2);
+
+      updateManagerCashDrawerTotal();
+
+    })
+
+    .withFailureHandler(function(err) {
+
+      console.error(err);
+
+      currentManagerExpectedCash = 0;
+
+      expectedEl.textContent = "₱0.00";
+      expectedEl.dataset.expected = "0";
+
+      showNotificationToast(
+        err.message || "Unable to calculate expected cash.",
+        true
+      );
+
+    })
+
+    .getExpectedCashForManager(reportDate);
+}
+
+
+/* ==========================================================
+   DRAWER COUNT
+========================================================== */
+
+function updateManagerCashDrawerTotal() {
+
+  let total = 0;
+
+  PETTY_DENOMS.forEach((d) => {
+
+    const el =
+      document.getElementById("mgrd" + d);
+
+    const qty =
+      el ? parseInt(el.value) || 0 : 0;
+
+    total += d * qty;
+
+  });
+
+  document.getElementById(
+    "managerCashDrawerCountTotalOut"
+  ).textContent =
+    "₱" + total.toFixed(2);
+
+
+  const expectedEl =
+    document.getElementById(
+      "managerExpectedCashCountDisplay"
+    );
+
+  const expected =
+    currentManagerExpectedCash ||
+    parseFloat(expectedEl.dataset.expected) ||
+    0;
+
+  const variance =
+    Math.round(
+      (total - expected) * 100
+    ) / 100;
+
+  document.getElementById(
+    "managerCashDrawerVarianceBox"
+  ).style.display =
+    Math.abs(variance) > 0.001
+      ? "block"
+      : "none";
+
+  return total;
+}
+
+
+/* ==========================================================
+   GENERATE REPORT
+========================================================== */
+
+function generateManagerDailyReport() {
+
+  if (!currentEmployee) {
+
+    showNotificationToast(
+      "No employee is currently logged in.",
+      true
+    );
+
+    return;
+  }
+
+  if (
+    currentEmployee.role !== "Manager" &&
+    currentEmployee.accessLevel > 1
+  ) {
+
+    showNotificationToast(
+      "Only managers can generate this report.",
+      true
+    );
+
+    return;
+  }
+
+  const managerName =
+    currentEmployee.fullName;
+
+  const reportDate =
+    document.getElementById(
+      "managerReportDate"
+    ).value;
+
+  if (!reportDate) {
+
+    showNotificationToast(
+      "Please select a report date.",
+      true
+    );
+
+    return;
+  }
+
+  requestManagerPin(
+    "Enter Manager PIN to download the PDF",
+    function(pin) {
+
+      if (pin === null) {
+        return;
+      }
+
+      google.script.run
+
+        .withSuccessHandler(function(result) {
+
+          if (!result.success) {
+
+            showNotificationToast(
+              result.message,
+              true
+            );
+
+            return;
+          }
+
+          proceedWithManagerDailyReport(
+            managerName,
+            reportDate
+          );
+
+        })
+
+        .withFailureHandler(function(err) {
+
+          showNotificationToast(
+            err.message || "Authorization failed.",
+            true
+          );
+
+        })
+
+        .verifyManagerPin(pin);
+
+    }
+  );
+}
+
+
+/* ==========================================================
+   COMPILE REPORT DATA
+========================================================== */
+
+function proceedWithManagerDailyReport(
+  managerName,
+  reportDate
+) {
+
+  const cashBreakdown = {};
+
+  PETTY_DENOMS.forEach((d) => {
+
+    const el =
+      document.getElementById("mgrd" + d);
+
+    cashBreakdown[d] =
+      el ? parseInt(el.value) || 0 : 0;
+
+  });
+
+
+  const cashDrawerTotal =
+    updateManagerCashDrawerTotal();
+
+
+  const expectedCash =
+    currentManagerExpectedCash ||
+    parseFloat(
+      document.getElementById(
+        "managerExpectedCashCountDisplay"
+      ).dataset.expected
+    ) ||
+    0;
+
+
+  const cashDrawerVariance =
+    Math.round(
+      (cashDrawerTotal - expectedCash) * 100
+    ) / 100;
+
+
+  const cashDrawerReason =
+    document.getElementById(
+      "managerCashDrawerVarianceReason"
+    ).value.trim();
+
+
+  if (
+    Math.abs(cashDrawerVariance) > 0.001 &&
+    !cashDrawerReason
+  ) {
+
+    showNotificationToast(
+      "Expected cash and drawer count do not match. Please provide a drawer remark.",
+      true
+    );
+
+    return;
+  }
+
+
+  const cashOnHandObj = {
+    breakdown: cashBreakdown
+  };
+
+
+  showNotificationToast(
+    "Generating Manager Daily Report PDF..."
+  );
+
+
+  google.script.run
+
+    .withSuccessHandler(function(result) {
+
+      if (result.success) {
+
+        window.open(result.downloadUrl);
+
+        document.getElementById(
+          "managerDailyModal"
+        ).style.display = "none";
+
+        showNotificationToast(
+          "Manager daily report generated."
+        );
+
+      } else {
+
+        showNotificationToast(
+          result.message ||
+          "Failed to generate report.",
+          true
+        );
+
+      }
+
+    })
+
+    .withFailureHandler(function(err) {
+
+      showNotificationToast(
+        err.message ||
+        "Failed to generate report.",
+        true
+      );
+
+    })
+
+    .generateManagerDailyReportPDF(
+      managerName,
+      reportDate,
+      cashOnHandObj,
+      cashDrawerReason
+    );
+
+}
+
+</script>

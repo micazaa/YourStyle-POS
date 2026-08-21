@@ -1,0 +1,722 @@
+<div
+  id="transactionDetailsModal"
+  class="generic-overlay-blur"
+  style="display:none; z-index:10050;"
+>
+
+  <div
+    class="custom-popup-card"
+    style="
+      max-width:750px;
+      width:95%;
+      max-height:90vh;
+      overflow-y:auto;
+    "
+  >
+
+    <!-- HEADER -->
+
+    <div
+      class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom"
+    >
+
+      <div>
+
+        <h5 class="fw-bold mb-1">
+          Transaction Details
+        </h5>
+
+        <div
+          id="transactionDetailsReceipt"
+          class="text-muted small font-monospace"
+        >
+          —
+        </div>
+
+      </div>
+
+
+      <button
+        type="button"
+        class="btn-close"
+        onclick="closeTransactionDetailsModal()"
+      ></button>
+
+    </div>
+
+
+    <!-- INFO -->
+
+    <div class="row g-2 mb-3">
+
+      <div class="col-md-4">
+
+        <div class="border rounded p-2 h-100">
+
+          <div class="small text-muted">
+            Date / Time
+          </div>
+
+          <div
+            id="transactionDetailsDate"
+            class="fw-semibold"
+          >
+            —
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="col-md-4">
+
+        <div class="border rounded p-2 h-100">
+
+          <div class="small text-muted">
+            Cashier
+          </div>
+
+          <div
+            id="transactionDetailsCashier"
+            class="fw-semibold"
+          >
+            —
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="col-md-4">
+
+        <div class="border rounded p-2 h-100">
+
+          <div class="small text-muted">
+            Status
+          </div>
+
+          <div
+            id="transactionDetailsStatus"
+            class="mt-1"
+          >
+            —
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ITEMS -->
+
+    <div class="table-responsive border rounded mb-3">
+
+      <table class="table align-middle mb-0">
+
+        <thead class="table-light">
+
+          <tr>
+
+            <th>
+              Item
+            </th>
+
+            <th class="text-center">
+              Size
+            </th>
+
+            <th class="text-center">
+              Qty
+            </th>
+
+            <th class="text-end">
+              Price
+            </th>
+
+            <th class="text-end">
+              Discount
+            </th>
+
+            <th class="text-end">
+              Net
+            </th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody id="transactionDetailsItems">
+
+          <tr>
+
+            <td
+              colspan="6"
+              class="text-center text-muted py-4"
+            >
+              Loading...
+            </td>
+
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+
+    <!-- PAYMENT -->
+
+    <div class="border rounded p-3 mb-3">
+
+      <div
+        class="d-flex justify-content-between mb-2"
+      >
+
+        <span class="text-muted">
+          Payment Method
+        </span>
+
+        <strong id="transactionDetailsPayment">
+          —
+        </strong>
+
+      </div>
+
+
+      <div
+        id="transactionDetailsReferenceRow"
+        class="d-flex justify-content-between mb-2"
+        style="display:none !important;"
+      >
+
+        <span class="text-muted">
+          Reference
+        </span>
+
+        <strong id="transactionDetailsReference">
+          —
+        </strong>
+
+      </div>
+
+
+      <hr>
+
+
+      <div
+        class="d-flex justify-content-between"
+      >
+
+        <span class="fw-bold">
+          Transaction Total
+        </span>
+
+        <strong
+          id="transactionDetailsTotal"
+          class="fs-5"
+        >
+          ₱0.00
+        </strong>
+
+      </div>
+
+    </div>
+
+
+    <!-- CASH INFO -->
+
+    <div
+      id="transactionDetailsCashBox"
+      class="border rounded p-3 mb-3"
+      style="display:none;"
+    >
+
+      <div
+        class="d-flex justify-content-between mb-2"
+      >
+
+        <span class="text-muted">
+          Cash Received
+        </span>
+
+        <strong id="transactionDetailsCashReceived">
+          ₱0.00
+        </strong>
+
+      </div>
+
+
+      <div
+        class="d-flex justify-content-between"
+      >
+
+        <span class="text-muted">
+          Change Given
+        </span>
+
+        <strong id="transactionDetailsChange">
+          ₱0.00
+        </strong>
+
+      </div>
+
+    </div>
+
+
+    <!-- VOID INFO -->
+
+    <div
+      id="transactionDetailsVoidBox"
+      class="alert alert-danger"
+      style="display:none;"
+    >
+
+      <strong>
+        Transaction Voided
+      </strong>
+
+      <div class="small mt-1">
+
+        Authorized by:
+
+        <span
+          id="transactionDetailsAuthorizedBy"
+          class="fw-bold"
+        >
+          —
+        </span>
+
+      </div>
+
+    </div>
+
+
+    <!-- ACTIONS -->
+
+    <div class="d-flex gap-2">
+
+      <button
+        type="button"
+        class="btn btn-outline-secondary flex-fill"
+        disabled
+      >
+        Reprint Receipt
+      </button>
+
+
+      <button
+        type="button"
+        id="transactionDetailsVoidBtn"
+        class="btn btn-outline-danger flex-fill"
+        onclick="voidTransactionFromHistory()"
+      >
+        Void Transaction
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+var selectedTransactionReceiptId = "";
+
+
+/* ==========================================================
+   OPEN
+========================================================== */
+
+function openTransactionDetails(
+  receiptId
+) {
+
+  selectedTransactionReceiptId =
+    receiptId;
+
+
+  document.getElementById(
+    "transactionDetailsModal"
+  ).style.display =
+    "flex";
+
+
+  document.getElementById(
+    "transactionDetailsReceipt"
+  ).textContent =
+    receiptId;
+
+
+  document.getElementById(
+    "transactionDetailsItems"
+  ).innerHTML = `
+    <tr>
+      <td
+        colspan="6"
+        class="text-center text-muted py-4"
+      >
+        Loading transaction...
+      </td>
+    </tr>
+  `;
+
+
+  google.script.run
+
+    .withSuccessHandler(function(result) {
+
+      if (
+        !result ||
+        !result.success
+      ) {
+
+        showNotificationToast(
+          result && result.message
+            ? result.message
+            : "Unable to load transaction.",
+          true
+        );
+
+        closeTransactionDetailsModal();
+
+        return;
+
+      }
+
+
+      renderTransactionDetails(
+        result.transaction
+      );
+
+    })
+
+
+    .withFailureHandler(function(err) {
+
+      showNotificationToast(
+        err.message ||
+        "Unable to load transaction.",
+        true
+      );
+
+      closeTransactionDetailsModal();
+
+    })
+
+
+    .getTransactionDetails(
+      receiptId
+    );
+
+}
+
+
+/* ==========================================================
+   CLOSE
+========================================================== */
+
+function closeTransactionDetailsModal() {
+
+  document.getElementById(
+    "transactionDetailsModal"
+  ).style.display =
+    "none";
+
+  selectedTransactionReceiptId =
+    "";
+
+}
+
+
+/* ==========================================================
+   RENDER
+========================================================== */
+
+function renderTransactionDetails(tx) {
+
+  document.getElementById(
+    "transactionDetailsReceipt"
+  ).textContent =
+    tx.receiptId || "—";
+
+
+  document.getElementById(
+    "transactionDetailsDate"
+  ).textContent =
+    tx.dateTime || "—";
+
+
+  document.getElementById(
+    "transactionDetailsCashier"
+  ).textContent =
+    tx.cashier || "—";
+
+
+  document.getElementById(
+    "transactionDetailsStatus"
+  ).innerHTML =
+    buildTransactionStatusBadge(
+      tx.status
+    );
+
+
+  /* ================= ITEMS ================= */
+
+  const tbody =
+    document.getElementById(
+      "transactionDetailsItems"
+    );
+
+
+  tbody.innerHTML = "";
+
+
+  tx.items.forEach(function(item) {
+
+    const row =
+      document.createElement("tr");
+
+
+    row.innerHTML = `
+
+      <td>
+
+        <div class="fw-semibold">
+          ${escapeTransactionHtml(item.name)}
+        </div>
+
+        <div class="small text-muted font-monospace">
+          ${escapeTransactionHtml(item.code)}
+        </div>
+
+      </td>
+
+
+      <td class="text-center">
+        ${escapeTransactionHtml(item.size)}
+      </td>
+
+
+      <td class="text-center">
+        ${Number(item.quantity) || 0}
+      </td>
+
+
+      <td class="text-end">
+        ₱${Number(item.price || 0).toFixed(2)}
+      </td>
+
+
+      <td class="text-end">
+        ₱${Number(item.discount || 0).toFixed(2)}
+      </td>
+
+
+      <td class="text-end fw-bold">
+        ₱${Number(item.netTotal || 0).toFixed(2)}
+      </td>
+
+    `;
+
+
+    tbody.appendChild(row);
+
+  });
+
+
+  /* ================= PAYMENT ================= */
+
+  document.getElementById(
+    "transactionDetailsPayment"
+  ).textContent =
+    tx.paymentMethod || "—";
+
+
+  const referenceRow =
+    document.getElementById(
+      "transactionDetailsReferenceRow"
+    );
+
+
+  if (
+    tx.paymentMethod !== "Cash" &&
+    tx.referenceNumber &&
+    tx.referenceNumber !== "N/A"
+  ) {
+
+    referenceRow.style.setProperty(
+      "display",
+      "flex",
+      "important"
+    );
+
+    document.getElementById(
+      "transactionDetailsReference"
+    ).textContent =
+      tx.referenceNumber;
+
+  } else {
+
+    referenceRow.style.setProperty(
+      "display",
+      "none",
+      "important"
+    );
+
+  }
+
+
+  document.getElementById(
+    "transactionDetailsTotal"
+  ).textContent =
+    "₱" +
+    Number(
+      tx.total || 0
+    ).toFixed(2);
+
+
+  /* ================= CASH ================= */
+
+  const cashBox =
+    document.getElementById(
+      "transactionDetailsCashBox"
+    );
+
+
+  if (
+    tx.paymentMethod === "Cash"
+  ) {
+
+    cashBox.style.display =
+      "block";
+
+
+    document.getElementById(
+      "transactionDetailsCashReceived"
+    ).textContent =
+      "₱" +
+      Number(
+        tx.cashReceived || 0
+      ).toFixed(2);
+
+
+    document.getElementById(
+      "transactionDetailsChange"
+    ).textContent =
+      "₱" +
+      Number(
+        tx.changeGiven || 0
+      ).toFixed(2);
+
+  } else {
+
+    cashBox.style.display =
+      "none";
+
+  }
+
+
+  /* ================= VOID ================= */
+
+  const voidBox =
+    document.getElementById(
+      "transactionDetailsVoidBox"
+    );
+
+
+  const voidButton =
+    document.getElementById(
+      "transactionDetailsVoidBtn"
+    );
+
+
+  if (
+    String(tx.status)
+      .toUpperCase() ===
+      "VOIDED"
+  ) {
+
+    voidBox.style.display =
+      "block";
+
+
+    document.getElementById(
+      "transactionDetailsAuthorizedBy"
+    ).textContent =
+      tx.authorizedBy || "—";
+
+
+    voidButton.style.display =
+      "none";
+
+  } else {
+
+    voidBox.style.display =
+      "none";
+
+    voidButton.style.display =
+      "block";
+
+  }
+
+}
+
+
+/* ==========================================================
+   VOID
+
+   For now we connect this to your EXISTING
+   Void Receipt modal instead of duplicating
+   manager authorization logic.
+========================================================== */
+
+function voidTransactionFromHistory() {
+
+  const receiptId =
+    selectedTransactionReceiptId;
+
+
+  if (!receiptId) {
+
+    showNotificationToast(
+      "Receipt ID not found.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  /*
+    Hide Details directly.
+
+    DON'T call closeTransactionDetailsModal()
+    because that clears selectedTransactionReceiptId.
+  */
+
+  document.getElementById(
+    "transactionDetailsModal"
+  ).style.display =
+    "none";
+
+
+  /*
+    Keep Transaction History open underneath.
+  */
+
+  openVoidReceiptModal(
+    receiptId
+  );
+
+}
+
+</script>

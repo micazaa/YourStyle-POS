@@ -1,0 +1,155 @@
+<!-- =========================================================
+     ACCEPT DELIVERY TYPE MODAL
+========================================================== -->
+
+<div id="acceptDeliveryTypeModal" class="generic-overlay-blur" style="display:none;">
+
+  <div class="custom-popup-card" style="max-width:600px;width:95%;">
+
+    <!-- HEADER -->
+
+    <div class="d-flex justify-content-between align-items-start mb-4 pb-3 border-bottom">
+
+      <div>
+        <h5 class="fw-bold mb-1">Accept Delivery</h5>
+        <div class="small text-muted">Choose the type of delivery being received.</div>
+      </div>
+
+      <button type="button" class="btn-close" onclick="closeAcceptDeliveryTypeModal()"></button>
+
+    </div>
+
+
+    <!-- OPTIONS -->
+
+    <div class="row g-3">
+
+      <!-- YOURFINDS -->
+
+      <div class="col-md-6">
+
+        <button
+          type="button"
+          class="btn btn-light border w-100 h-100 p-4 text-start"
+          onclick="selectDeliveryType('YOURFINDS')"
+        >
+
+          <div class="fs-3 mb-2">🏷️</div>
+          <div class="fw-bold fs-5">YourFinds</div>
+
+          <div class="small text-muted mt-2">
+            Unique pieces with individual codes and labels.
+          </div>
+
+        </button>
+
+      </div>
+
+
+      <!-- YOURSTYLE -->
+
+      <div class="col-md-6">
+
+        <button
+          type="button"
+          class="btn btn-light border w-100 h-100 p-4 text-start"
+          onclick="selectDeliveryType('YOURSTYLE')"
+        >
+
+          <div class="fs-3 mb-2">📦</div>
+          <div class="fw-bold fs-5">YourStyle</div>
+
+          <div class="small text-muted mt-2">
+            Pins, Others, direct stock, and bulk deliveries.
+          </div>
+
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <!-- CANCEL -->
+
+    <div class="mt-4 pt-3 border-top">
+
+      <button
+        type="button"
+        class="btn btn-outline-secondary w-100"
+        onclick="closeAcceptDeliveryTypeModal()"
+      >
+        Cancel
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+/* ==========================================================
+   OPEN
+========================================================== */
+
+function openAcceptDeliveryTypeModal() {
+  const modal = document.getElementById("acceptDeliveryTypeModal");
+
+  if (!modal) {
+    console.error("acceptDeliveryTypeModal not found.");
+    return;
+  }
+
+  modal.style.display = "flex";
+}
+
+
+/* ==========================================================
+   CLOSE
+========================================================== */
+
+function closeAcceptDeliveryTypeModal() {
+  const modal = document.getElementById("acceptDeliveryTypeModal");
+  if (modal) modal.style.display = "none";
+}
+
+
+/* ==========================================================
+   SELECT TYPE
+========================================================== */
+
+function selectDeliveryType(type) {
+  type = String(type || "").trim().toUpperCase();
+
+  if (type === "YOURFINDS") {
+    closeAcceptDeliveryTypeModal();
+    openAcceptDeliveryModal();
+    return;
+  }
+
+  if (type === "YOURSTYLE") {
+    closeAcceptDeliveryTypeModal();
+
+    if (typeof openYourStyleDeliveryModal === "function") {
+      openYourStyleDeliveryModal();
+      return;
+    }
+
+    showNotificationToast(
+      "YourStyle receiving is being set up.",
+      false
+    );
+
+    return;
+  }
+
+  showNotificationToast(
+    "Invalid delivery type.",
+    true
+  );
+}
+
+</script>

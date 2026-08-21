@@ -1,0 +1,1297 @@
+<div id="acceptDeliveryModal" class="generic-overlay-blur" style="display:none;">
+
+  <div class="custom-popup-card" style="
+      max-width:650px;
+      max-height:90vh;
+      overflow-y:auto;
+    ">
+
+    <!-- =====================================================
+         HEADER
+    ====================================================== -->
+
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+
+      <div>
+
+        <h5 class="fw-bold mb-1">
+          Accept YourFinds Delivery
+        </h5>
+
+        <p class="text-muted small mb-0">
+          Register newly delivered unique items
+        </p>
+
+      </div>
+
+
+      <button
+        type="button"
+        class="btn-close"
+        onclick="closeAcceptDeliveryModal()"
+      ></button>
+
+    </div>
+
+
+    <!-- =====================================================
+         DELIVERY INFORMATION
+    ====================================================== -->
+
+    <div class="mb-4">
+
+      <div class="fw-semibold mb-3">
+        Delivery Information
+      </div>
+
+
+      <div class="row g-3">
+
+
+        <!-- DATE -->
+
+        <div class="col-md-6">
+
+          <label
+            class="form-label"
+            for="deliveryDate"
+          >
+            Date Delivered
+            <span class="text-danger">*</span>
+          </label>
+
+          <input
+            type="date"
+            id="deliveryDate"
+            class="form-control"
+            onchange="loadNextYourFindsDeliveryNumber()"
+          >
+
+        </div>
+
+
+        <!-- DELIVERY NO -->
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            Delivery No.
+          </label>
+
+          <div
+            class="form-control bg-light"
+            style="min-height:38px;"
+          >
+            <span
+              id="deliveryNoDisplay"
+              class="fw-semibold"
+            >
+              —
+            </span>
+          </div>
+
+        </div>
+
+        <!-- DRIVER -->
+
+        <div class="col-md-6">
+
+          <label
+          class="form-label"
+          for="deliveryDriverName"
+        >
+          Driver Name
+          <span class="text-danger">*</span>
+        </label>
+
+          <input
+          type="text"
+          id="deliveryDriverName"
+          class="form-control"
+          maxlength="100"
+          placeholder="Enter driver name"
+          autocomplete="off"
+        >
+
+        </div>
+
+
+        <!-- PLATE -->
+
+        <div class="col-md-6">
+
+          <label
+          class="form-label"
+          for="deliveryPlateNo"
+        >
+          Plate No.
+          <span class="text-danger">*</span>
+        </label>
+
+          <input
+          type="text"
+          id="deliveryPlateNo"
+          class="form-control"
+          maxlength="30"
+          placeholder="Enter plate number"
+          autocomplete="off"
+        >
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         QUANTITY BY SIZE
+    ====================================================== -->
+
+    <div class="mb-4">
+
+      <div class="d-flex justify-content-between align-items-center mb-3">
+
+        <div class="fw-semibold">
+          Quantity Received
+        </div>
+
+
+        <div class="small text-muted">
+
+          Total Pieces:
+
+          <strong
+            id="deliveryTotalQty"
+            class="text-dark"
+          >
+            0
+          </strong>
+
+        </div>
+
+      </div>
+
+
+      <div class="row g-2">
+
+
+        <!-- S -->
+
+        <div class="col">
+
+          <label
+            class="form-label text-center d-block"
+            for="deliveryQtyS"
+          >
+            S
+          </label>
+
+          <input
+            type="number"
+            id="deliveryQtyS"
+            class="form-control text-center delivery-size-qty"
+            value="0"
+            min="0"
+            max="999"
+            step="1"
+            oninput="updateDeliveryTotalQty()"
+          >
+
+        </div>
+
+
+        <!-- M -->
+
+        <div class="col">
+
+          <label
+            class="form-label text-center d-block"
+            for="deliveryQtyM"
+          >
+            M
+          </label>
+
+          <input
+            type="number"
+            id="deliveryQtyM"
+            class="form-control text-center delivery-size-qty"
+            value="0"
+            min="0"
+            max="999"
+            step="1"
+            oninput="updateDeliveryTotalQty()"
+          >
+
+        </div>
+
+
+        <!-- L -->
+
+        <div class="col">
+
+          <label
+            class="form-label text-center d-block"
+            for="deliveryQtyL"
+          >
+            L
+          </label>
+
+          <input
+            type="number"
+            id="deliveryQtyL"
+            class="form-control text-center delivery-size-qty"
+            value="0"
+            min="0"
+            max="999"
+            step="1"
+            oninput="updateDeliveryTotalQty()"
+          >
+
+        </div>
+
+
+        <!-- XL -->
+
+        <div class="col">
+
+          <label
+            class="form-label text-center d-block"
+            for="deliveryQtyXL"
+          >
+            XL
+          </label>
+
+          <input
+            type="number"
+            id="deliveryQtyXL"
+            class="form-control text-center delivery-size-qty"
+            value="0"
+            min="0"
+            max="999"
+            step="1"
+            oninput="updateDeliveryTotalQty()"
+          >
+
+        </div>
+
+
+        <!-- E -->
+
+        <div class="col">
+
+          <label
+            class="form-label text-center d-block"
+            for="deliveryQtyE"
+          >
+            E
+          </label>
+
+          <input
+            type="number"
+            id="deliveryQtyE"
+            class="form-control text-center delivery-size-qty"
+            value="0"
+            min="0"
+            max="999"
+            step="1"
+            oninput="updateDeliveryTotalQty()"
+          >
+
+        </div>
+
+      </div>
+
+
+      <div class="form-text mt-2">
+
+        Enter the number of pieces received for each size.
+        Each piece receives its own unique YourFinds Code.
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         ACCEPTED BY
+    ====================================================== -->
+
+    <div class="mb-3">
+
+      <label class="form-label">
+        Accepted By
+      </label>
+
+
+      <div class="form-control bg-light" style="min-height:38px;">
+
+        <span
+          id="deliveryAcceptedByDisplay"
+          class="fw-semibold"
+        >
+          —
+        </span>
+
+      </div>
+
+
+      <input
+        type="hidden"
+        id="deliveryAcceptedBy"
+      >
+
+    </div>
+
+    <!-- =====================================================
+        REMARKS
+    ====================================================== -->
+
+    <div class="mb-4">
+
+      <label
+        class="form-label"
+        for="deliveryRemarks"
+      >
+        Remarks
+      </label>
+
+      <textarea
+        id="deliveryRemarks"
+        rows="3"
+        maxlength="500"
+        placeholder="Type remarks here..."
+        style="
+          display:block;
+          width:100%;
+          min-height:90px;
+          padding:12px;
+          border:1px solid #dee2e6;
+          border-radius:8px;
+          background:#ffffff;
+          color:#212529;
+          font:inherit;
+          resize:vertical;
+          outline:none;
+          position:relative;
+          z-index:10;
+          pointer-events:auto;
+          user-select:text;
+        "
+      ></textarea>
+
+    </div>
+
+
+    <!-- =====================================================
+         INFORMATION
+    ====================================================== -->
+
+    <div class="p-3 rounded mb-4" style="background-color:var(--pink-light);">
+
+      <div class="small">
+
+        <strong>
+          YourFinds receiving
+        </strong>
+
+        <div class="text-muted mt-1">
+
+          New pieces will be added to Inventory as
+          <strong>INCOMPLETE</strong>
+          with Stock 1 and cannot be sold until their
+          details are completed.
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         ACTIONS
+    ====================================================== -->
+
+    <div class="d-flex gap-2">
+
+
+      <button
+        type="button"
+        class="btn btn-outline-secondary flex-fill py-2"
+        onclick="closeAcceptDeliveryModal()"
+      >
+        Cancel
+      </button>
+
+
+      <button
+        type="button"
+        id="acceptDeliveryBtn"
+        class="btn btn-pink flex-fill py-2 fw-bold"
+        onclick="submitYourFindsDelivery()"
+      >
+        Accept Delivery
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+  /* ==========================================================
+   CURRENT EMPLOYEE
+========================================================== */
+
+function getCurrentDeliveryEmployeeName() {
+
+  if (
+    typeof currentEmployee !== "undefined" &&
+    currentEmployee
+  ) {
+
+    if (
+      typeof currentEmployee === "string"
+    ) {
+
+      return currentEmployee.trim();
+
+    }
+
+
+    if (
+      currentEmployee.name
+    ) {
+
+      return String(
+        currentEmployee.name
+      ).trim();
+
+    }
+
+
+    if (
+      currentEmployee.employeeName
+    ) {
+
+      return String(
+        currentEmployee.employeeName
+      ).trim();
+
+    }
+
+  }
+
+
+  if (
+    typeof loggedInEmployee !== "undefined" &&
+    loggedInEmployee
+  ) {
+
+    if (
+      typeof loggedInEmployee === "string"
+    ) {
+
+      return loggedInEmployee.trim();
+
+    }
+
+
+    if (
+      loggedInEmployee.name
+    ) {
+
+      return String(
+        loggedInEmployee.name
+      ).trim();
+
+    }
+
+
+    if (
+      loggedInEmployee.employeeName
+    ) {
+
+      return String(
+        loggedInEmployee.employeeName
+      ).trim();
+
+    }
+
+  }
+
+
+  if (
+    typeof currentUser !== "undefined" &&
+    currentUser
+  ) {
+
+    if (
+      typeof currentUser === "string"
+    ) {
+
+      return currentUser.trim();
+
+    }
+
+
+    if (
+      currentUser.name
+    ) {
+
+      return String(
+        currentUser.name
+      ).trim();
+
+    }
+
+
+    if (
+      currentUser.employeeName
+    ) {
+
+      return String(
+        currentUser.employeeName
+      ).trim();
+
+    }
+
+  }
+
+
+  if (
+    typeof currentCashier !== "undefined" &&
+    currentCashier
+  ) {
+
+    return String(
+      currentCashier
+    ).trim();
+
+  }
+
+
+  return "";
+
+}
+
+
+/* ==========================================================
+   OPEN
+========================================================== */
+
+function openAcceptDeliveryModal() {
+
+  const modal =
+    document.getElementById(
+      "acceptDeliveryModal"
+    );
+
+
+  if (!modal) {
+
+    console.error(
+      "acceptDeliveryModal element not found."
+    );
+
+    return;
+
+  }
+
+
+  const now =
+    new Date();
+
+
+  const localToday =
+    new Date(
+      now.getTime() -
+      now.getTimezoneOffset() * 60000
+    )
+      .toISOString()
+      .split("T")[0];
+
+
+  const dateInput =
+    document.getElementById(
+      "deliveryDate"
+    );
+
+
+  dateInput.value =
+    localToday;
+
+
+  dateInput.max =
+    localToday;
+
+  loadNextYourFindsDeliveryNumber();
+
+
+  /* ================= DETAILS ================= */
+
+  document.getElementById(
+    "deliveryDriverName"
+  ).value =
+    "";
+
+
+  document.getElementById(
+    "deliveryPlateNo"
+  ).value =
+    "";
+
+
+  document.getElementById(
+    "deliveryRemarks"
+  ).value =
+    "";
+
+
+  /* ================= QUANTITIES ================= */
+
+  document.getElementById(
+    "deliveryQtyS"
+  ).value =
+    "0";
+
+
+  document.getElementById(
+    "deliveryQtyM"
+  ).value =
+    "0";
+
+
+  document.getElementById(
+    "deliveryQtyL"
+  ).value =
+    "0";
+
+
+  document.getElementById(
+    "deliveryQtyXL"
+  ).value =
+    "0";
+
+
+  document.getElementById(
+    "deliveryQtyE"
+  ).value =
+    "0";
+
+
+  updateDeliveryTotalQty();
+
+
+  /* ================= ACCEPTED BY ================= */
+
+  const employeeName =
+    getCurrentDeliveryEmployeeName();
+
+
+  document.getElementById(
+    "deliveryAcceptedBy"
+  ).value =
+    employeeName;
+
+
+  document.getElementById(
+    "deliveryAcceptedByDisplay"
+  ).textContent =
+    employeeName || "—";
+
+
+  /* ================= BUTTON ================= */
+
+  const button =
+    document.getElementById(
+      "acceptDeliveryBtn"
+    );
+
+
+  button.disabled =
+    false;
+
+
+  button.textContent =
+    "Accept Delivery";
+
+
+  /* ================= SHOW ================= */
+
+  modal.style.display =
+    "flex";
+
+}
+
+
+/* ==========================================================
+   CLOSE
+========================================================== */
+
+function closeAcceptDeliveryModal() {
+
+  const modal =
+    document.getElementById(
+      "acceptDeliveryModal"
+    );
+
+
+  if (modal) {
+
+    modal.style.display =
+      "none";
+
+  }
+
+}
+
+
+/* ==========================================================
+   GET QUANTITY
+========================================================== */
+
+function getDeliveryQuantity(
+  elementId
+) {
+
+  const input =
+    document.getElementById(
+      elementId
+    );
+
+
+  if (!input) {
+
+    return null;
+
+  }
+
+
+  const rawValue =
+    String(
+      input.value || ""
+    ).trim();
+
+
+  if (
+    rawValue === ""
+  ) {
+
+    return 0;
+
+  }
+
+
+  const quantity =
+    Number(
+      rawValue
+    );
+
+
+  if (
+    !Number.isInteger(quantity) ||
+    quantity < 0 ||
+    quantity > 999
+  ) {
+
+    return null;
+
+  }
+
+
+  return quantity;
+
+}
+
+
+/* ==========================================================
+   UPDATE TOTAL
+========================================================== */
+
+function updateDeliveryTotalQty() {
+
+  const ids = [
+
+    "deliveryQtyS",
+    "deliveryQtyM",
+    "deliveryQtyL",
+    "deliveryQtyXL",
+    "deliveryQtyE"
+
+  ];
+
+
+  let total =
+    0;
+
+
+  let valid =
+    true;
+
+
+  ids.forEach(
+    function(id) {
+
+      const quantity =
+        getDeliveryQuantity(
+          id
+        );
+
+
+      if (
+        quantity === null
+      ) {
+
+        valid =
+          false;
+
+        return;
+
+      }
+
+
+      total +=
+        quantity;
+
+    }
+  );
+
+
+  const totalElement =
+    document.getElementById(
+      "deliveryTotalQty"
+    );
+
+
+  if (!totalElement) {
+
+    return;
+
+  }
+
+
+  totalElement.textContent =
+    valid
+      ? String(total)
+      : "—";
+
+}
+
+function submitYourFindsDelivery() {
+
+  /* ================= BASIC DETAILS ================= */
+
+  const deliveryDate =
+    document.getElementById(
+      "deliveryDate"
+    ).value;
+
+
+  const driverName =
+    document.getElementById(
+      "deliveryDriverName"
+    ).value.trim();
+
+
+  const plateNo =
+    document.getElementById(
+      "deliveryPlateNo"
+    ).value
+      .trim()
+      .toUpperCase();
+
+
+  const acceptedBy =
+    document.getElementById(
+      "deliveryAcceptedBy"
+    ).value.trim();
+
+
+  const remarks =
+    document.getElementById(
+      "deliveryRemarks"
+    ).value.trim();
+
+
+  /* ================= QUANTITIES ================= */
+
+  const quantities = {
+
+    S:
+      getDeliveryQuantity(
+        "deliveryQtyS"
+      ),
+
+    M:
+      getDeliveryQuantity(
+        "deliveryQtyM"
+      ),
+
+    L:
+      getDeliveryQuantity(
+        "deliveryQtyL"
+      ),
+
+    XL:
+      getDeliveryQuantity(
+        "deliveryQtyXL"
+      ),
+
+    E:
+      getDeliveryQuantity(
+        "deliveryQtyE"
+      )
+
+  };
+
+
+  /* ========================================================
+     VALIDATION
+  ======================================================== */
+
+  if (!deliveryDate) {
+
+    showNotificationToast(
+      "Please select the delivery date.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  if (!driverName) {
+
+    showNotificationToast(
+      "Please enter the driver name.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  if (!plateNo) {
+
+    showNotificationToast(
+      "Please enter the plate number.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  const sizeOrder = [
+    "S",
+    "M",
+    "L",
+    "XL",
+    "E"
+  ];
+
+
+  let totalQty =
+    0;
+
+
+  for (
+    let i = 0;
+    i < sizeOrder.length;
+    i++
+  ) {
+
+    const size =
+      sizeOrder[i];
+
+
+    const quantity =
+      quantities[size];
+
+
+    if (
+      quantity === null
+    ) {
+
+      showNotificationToast(
+        size +
+        " quantity must be a whole number between 0 and 999.",
+        true
+      );
+
+      return;
+
+    }
+
+
+    totalQty +=
+      quantity;
+
+  }
+
+
+  if (
+    totalQty < 1
+  ) {
+
+    showNotificationToast(
+      "Enter at least one YourFinds item.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  if (!acceptedBy) {
+
+    showNotificationToast(
+      "Unable to identify the logged-in employee. Please log in again.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  /* ========================================================
+     SUBMIT
+  ======================================================== */
+
+  const button =
+    document.getElementById(
+      "acceptDeliveryBtn"
+    );
+
+
+  button.disabled =
+    true;
+
+
+  button.textContent =
+    "Accepting Delivery...";
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        /* ================= RESTORE BUTTON ================= */
+
+        button.disabled =
+          false;
+
+
+        button.textContent =
+          "Accept Delivery";
+
+
+        /* ================= FAILED ================= */
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          showNotificationToast(
+            result &&
+            result.message
+              ? result.message
+              : "Unable to accept delivery.",
+            true
+          );
+
+          return;
+
+        }
+
+
+        /* ================= CLOSE DELIVERY MODAL ================= */
+
+        closeAcceptDeliveryModal();
+
+
+        /* ================= REFRESH INVENTORY ================= */
+
+        if (
+          typeof loadInventoryPage ===
+          "function"
+        ) {
+
+          loadInventoryPage();
+
+        }
+
+
+        /* ================= SUCCESS TOAST ================= */
+
+        showNotificationToast(
+          result.totalQty +
+          " YourFinds item(s) accepted. " +
+          "Delivery ID: " +
+          result.deliveryId
+        );
+
+
+        /* ==================================================
+           OPEN LABEL SELECTION
+
+           IMPORTANT:
+           Delivery is already saved.
+
+           Closing the label selector does not undo
+           the accepted delivery.
+        ================================================== */
+
+        if (
+          result.deliveryId &&
+          typeof openYourFindsLabelModal ===
+            "function"
+        ) {
+
+          openYourFindsLabelModal(
+            result.deliveryId
+          );
+
+        }
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        button.disabled =
+          false;
+
+
+        button.textContent =
+          "Accept Delivery";
+
+
+        console.error(
+          "ACCEPT DELIVERY ERROR:",
+          err
+        );
+
+
+        const message =
+          err &&
+          err.message
+            ? err.message
+            : String(
+                err ||
+                "Unknown error"
+              );
+
+
+        showNotificationToast(
+          "Accept Delivery Error: " +
+          message,
+          true
+        );
+
+      }
+    )
+
+
+    .acceptYourFindsDelivery(
+      deliveryDate,
+      driverName,
+      plateNo,
+      acceptedBy,
+      quantities,
+      remarks
+    );
+
+}
+
+function loadNextYourFindsDeliveryNumber() {
+
+  const deliveryDate =
+    document.getElementById(
+      "deliveryDate"
+    ).value;
+
+
+  const display =
+    document.getElementById(
+      "deliveryNoDisplay"
+    );
+
+
+  if (
+    !deliveryDate ||
+    !display
+  ) {
+
+    return;
+
+  }
+
+
+  display.textContent =
+    "Loading...";
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          display.textContent =
+            "—";
+
+          return;
+
+        }
+
+
+        display.textContent =
+          String(
+            result.deliveryNo
+          );
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        console.error(
+          "DELIVERY NUMBER ERROR:",
+          err
+        );
+
+
+        display.textContent =
+          "—";
+
+      }
+    )
+
+
+    .getNextYourFindsDeliveryNumber(
+      deliveryDate
+    );
+
+}
+
+</script>

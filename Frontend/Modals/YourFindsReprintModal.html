@@ -1,0 +1,627 @@
+<!-- =========================================================
+     YOURFINDS REPRINT DELIVERY SELECTOR
+========================================================== -->
+
+<div
+  id="yourFindsReprintModal"
+  class="generic-overlay-blur"
+  style="display:none;"
+>
+
+  <div
+    class="custom-popup-card"
+    style="
+      max-width:700px;
+      width:95%;
+      max-height:90vh;
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+    "
+  >
+
+    <!-- HEADER -->
+
+    <div
+      class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom"
+    >
+
+      <div>
+
+        <h5 class="fw-bold mb-1">
+          Reprint YourFinds Labels
+        </h5>
+
+        <div class="small text-muted">
+          Select a delivery, then choose the labels to reprint.
+        </div>
+
+      </div>
+
+
+      <button
+        type="button"
+        class="btn-close"
+        onclick="closeYourFindsReprintModal()"
+      ></button>
+
+    </div>
+
+
+    <!-- LOADING -->
+
+    <div
+      id="yourFindsReprintLoading"
+      class="text-center py-4"
+      style="display:none;"
+    >
+
+      <div
+        class="spinner-border spinner-border-sm text-secondary mb-2"
+        role="status"
+      ></div>
+
+      <div class="small text-muted">
+        Loading deliveries...
+      </div>
+
+    </div>
+
+
+    <!-- EMPTY / ERROR -->
+
+    <div
+      id="yourFindsReprintEmpty"
+      class="text-center text-muted py-4"
+      style="display:none;"
+    >
+      No deliveries found.
+    </div>
+
+
+    <!-- DELIVERY LIST -->
+
+    <div
+      id="yourFindsReprintList"
+      style="
+        overflow-y:auto;
+        flex:1;
+        min-height:150px;
+        max-height:60vh;
+      "
+    ></div>
+
+
+    <!-- ACTIONS -->
+
+    <div
+      class="pt-3 mt-3 border-top"
+    >
+
+      <button
+        type="button"
+        class="btn btn-outline-secondary w-100"
+        onclick="closeYourFindsReprintModal()"
+      >
+        Close
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+/* ==========================================================
+   REPRINT STATE
+========================================================== */
+
+let yourFindsReprintDeliveries =
+  [];
+
+
+/* ==========================================================
+   OPEN REPRINT MODAL
+========================================================== */
+
+function openYourFindsReprintModal() {
+
+  const modal =
+    document.getElementById(
+      "yourFindsReprintModal"
+    );
+
+
+  if (!modal) {
+
+    console.error(
+      "yourFindsReprintModal element not found."
+    );
+
+    return;
+
+  }
+
+
+  const loading =
+    document.getElementById(
+      "yourFindsReprintLoading"
+    );
+
+
+  const empty =
+    document.getElementById(
+      "yourFindsReprintEmpty"
+    );
+
+
+  const list =
+    document.getElementById(
+      "yourFindsReprintList"
+    );
+
+
+  /* ================= RESET ================= */
+
+  yourFindsReprintDeliveries =
+    [];
+
+
+  loading.style.display =
+    "block";
+
+
+  empty.style.display =
+    "none";
+
+
+  list.innerHTML =
+    "";
+
+
+  modal.style.display =
+    "flex";
+
+
+  /* ================= LOAD ================= */
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        loading.style.display =
+          "none";
+
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          empty.style.display =
+            "block";
+
+
+          empty.textContent =
+            result &&
+            result.message
+              ? result.message
+              : "Unable to load deliveries.";
+
+
+          return;
+
+        }
+
+
+        yourFindsReprintDeliveries =
+          Array.isArray(
+            result.deliveries
+          )
+            ? result.deliveries
+            : [];
+
+
+        renderYourFindsReprintDeliveries();
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        loading.style.display =
+          "none";
+
+
+        console.error(
+          "LOAD REPRINT DELIVERIES ERROR:",
+          err
+        );
+
+
+        empty.style.display =
+          "block";
+
+
+        empty.textContent =
+          err &&
+          err.message
+            ? err.message
+            : "Unable to load deliveries.";
+
+      }
+    )
+
+
+    .getYourFindsDeliveriesForLabelReprint();
+
+}
+
+
+/* ==========================================================
+   CLOSE
+========================================================== */
+
+function closeYourFindsReprintModal() {
+
+  const modal =
+    document.getElementById(
+      "yourFindsReprintModal"
+    );
+
+
+  if (modal) {
+
+    modal.style.display =
+      "none";
+
+  }
+
+
+  yourFindsReprintDeliveries =
+    [];
+
+}
+
+
+/* ==========================================================
+   ESCAPE
+========================================================== */
+
+function escapeYourFindsReprintText(
+  value
+) {
+
+  return String(
+    value === null ||
+    value === undefined
+      ? ""
+      : value
+  )
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+}
+
+
+/* ==========================================================
+   RENDER DELIVERIES
+========================================================== */
+
+function renderYourFindsReprintDeliveries() {
+
+  const list =
+    document.getElementById(
+      "yourFindsReprintList"
+    );
+
+
+  const empty =
+    document.getElementById(
+      "yourFindsReprintEmpty"
+    );
+
+
+  list.innerHTML =
+    "";
+
+
+  if (
+    !Array.isArray(
+      yourFindsReprintDeliveries
+    ) ||
+    yourFindsReprintDeliveries.length === 0
+  ) {
+
+    empty.style.display =
+      "block";
+
+
+    empty.textContent =
+      "No accepted YourFinds deliveries found.";
+
+
+    return;
+
+  }
+
+
+  empty.style.display =
+    "none";
+
+
+  yourFindsReprintDeliveries.forEach(
+    function(delivery) {
+
+      const deliveryId =
+        String(
+          delivery.deliveryId || ""
+        ).trim();
+
+
+      const deliveryNo =
+        String(
+          delivery.deliveryNo || ""
+        ).trim();
+
+
+      const deliveryDate =
+        String(
+          delivery.deliveryDate || ""
+        ).trim();
+
+
+      const driverName =
+        String(
+          delivery.driverName || ""
+        ).trim();
+
+
+      const plateNo =
+        String(
+          delivery.plateNo || ""
+        ).trim();
+
+
+      const totalQty =
+        Number(
+          delivery.totalQty
+        ) || 0;
+
+
+      const sizeParts =
+        [];
+
+
+      if (Number(delivery.sQty) > 0) {
+        sizeParts.push(
+          "S " + Number(delivery.sQty)
+        );
+      }
+
+
+      if (Number(delivery.mQty) > 0) {
+        sizeParts.push(
+          "M " + Number(delivery.mQty)
+        );
+      }
+
+
+      if (Number(delivery.lQty) > 0) {
+        sizeParts.push(
+          "L " + Number(delivery.lQty)
+        );
+      }
+
+
+      if (Number(delivery.xlQty) > 0) {
+        sizeParts.push(
+          "XL " + Number(delivery.xlQty)
+        );
+      }
+
+
+      if (Number(delivery.eQty) > 0) {
+        sizeParts.push(
+          "E " + Number(delivery.eQty)
+        );
+      }
+
+
+      const row =
+        document.createElement(
+          "button"
+        );
+
+
+      row.type =
+        "button";
+
+
+      row.className =
+        "btn btn-light border w-100 text-start mb-2 p-3";
+
+
+      row.onclick =
+        function() {
+
+          selectYourFindsReprintDelivery(
+            deliveryId
+          );
+
+        };
+
+
+      row.innerHTML =
+        `
+
+          <div
+            class="d-flex justify-content-between align-items-start gap-3"
+          >
+
+            <div
+              class="flex-grow-1"
+              style="min-width:0;"
+            >
+
+              <div class="fw-bold">
+
+                Delivery #${escapeYourFindsReprintText(
+                  deliveryNo || "—"
+                )}
+
+              </div>
+
+
+              <div
+                class="small font-monospace text-muted"
+              >
+                ${escapeYourFindsReprintText(
+                  deliveryId
+                )}
+              </div>
+
+
+              <div class="small mt-2">
+
+                <strong>
+                  Date:
+                </strong>
+
+                ${escapeYourFindsReprintText(
+                  deliveryDate || "—"
+                )}
+
+              </div>
+
+
+              ${
+                driverName ||
+                plateNo
+                  ? `
+
+                    <div class="small text-muted">
+
+                      ${escapeYourFindsReprintText(
+                        driverName
+                      )}
+
+                      ${
+                        driverName &&
+                        plateNo
+                          ? " • "
+                          : ""
+                      }
+
+                      ${escapeYourFindsReprintText(
+                        plateNo
+                      )}
+
+                    </div>
+
+                  `
+                  : ""
+              }
+
+
+              <div class="small text-muted mt-1">
+
+                ${escapeYourFindsReprintText(
+                  sizeParts.join(" • ")
+                )}
+
+              </div>
+
+            </div>
+
+
+            <div class="text-end">
+
+              <div
+                class="fw-bold fs-5"
+              >
+                ${totalQty}
+              </div>
+
+              <div class="small text-muted">
+                ${
+                  totalQty === 1
+                    ? "piece"
+                    : "pieces"
+                }
+              </div>
+
+            </div>
+
+          </div>
+
+        `;
+
+
+      list.appendChild(
+        row
+      );
+
+    }
+  );
+
+}
+
+
+/* ==========================================================
+   SELECT DELIVERY
+
+   Reuses the existing selective label modal.
+========================================================== */
+
+function selectYourFindsReprintDelivery(
+  deliveryId
+) {
+
+  deliveryId =
+    String(
+      deliveryId || ""
+    ).trim();
+
+
+  if (!deliveryId) {
+
+    return;
+
+  }
+
+
+  closeYourFindsReprintModal();
+
+
+  if (
+    typeof openYourFindsLabelModal !==
+      "function"
+  ) {
+
+    showNotificationToast(
+      "Label selector is unavailable.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  openYourFindsLabelModal(
+    deliveryId
+  );
+
+}
+
+</script>

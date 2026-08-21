@@ -1,0 +1,686 @@
+<div
+  id="voidVerificationModal"
+  class="generic-overlay-blur"
+  style="
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:30000;
+    align-items:center;
+    justify-content:center;
+  "
+>
+
+  <div
+    class="custom-popup-card"
+    style="
+      position:relative;
+      z-index:30001;
+      max-width:500px;
+      width:90%;
+    "
+  >
+
+    <!-- HEADER -->
+
+    <div
+      class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom"
+    >
+
+      <h5 class="fw-bold m-0 text-danger">
+        Manager Authorization
+      </h5>
+
+      <button
+        type="button"
+        class="btn-close"
+        onclick="closeVoidModal()"
+        aria-label="Close"
+      ></button>
+
+    </div>
+
+
+    <p class="small text-muted mb-3">
+      Enter the receipt ID and manager PIN to void this transaction.
+    </p>
+
+
+    <!-- RECEIPT -->
+
+    <div class="mb-3">
+
+      <label class="form-label">
+        Receipt ID
+      </label>
+
+      <input
+        type="text"
+        class="form-control text-center fw-bold text-uppercase"
+        id="refundReceiptId"
+        placeholder="e.g. YS-123456"
+      >
+
+    </div>
+
+
+    <!-- PIN -->
+
+    <div class="mb-4">
+
+      <label class="form-label">
+        Manager PIN
+      </label>
+
+      <input
+        type="password"
+        class="form-control text-center fw-bold"
+        id="managerVoidPin"
+        placeholder="••••"
+        style="letter-spacing:4px;"
+      >
+
+    </div>
+
+    <!-- VOID REASON -->
+
+<div class="mb-3">
+
+  <label class="form-label">
+    Void Reason
+  </label>
+
+  <select
+    id="voidReason"
+    class="form-select"
+    onchange="toggleVoidOtherReason()"
+  >
+
+    <option value="">
+      -- Select Reason --
+    </option>
+
+    <option value="Wrong transaction">
+      Wrong transaction
+    </option>
+
+    <option value="Wrong item">
+      Wrong item
+    </option>
+
+    <option value="Wrong quantity">
+      Wrong quantity
+    </option>
+
+    <option value="Wrong payment method">
+      Wrong payment method
+    </option>
+
+    <option value="Customer cancelled">
+      Customer cancelled
+    </option>
+
+    <option value="Duplicate transaction">
+      Duplicate transaction
+    </option>
+
+    <option value="Other">
+      Other
+    </option>
+
+  </select>
+
+</div>
+
+
+<!-- OTHER REASON -->
+
+<div
+  id="voidOtherReasonBox"
+  class="mb-3"
+  style="display:none;"
+>
+
+  <label class="form-label">
+    Specify Reason
+  </label>
+
+  <input
+    type="text"
+    id="voidOtherReason"
+    class="form-control"
+    maxlength="150"
+    placeholder="Enter void reason"
+  >
+
+</div>
+
+
+    <!-- ACTION -->
+
+    <button
+      type="button"
+      id="voidTransactionSubmitBtn"
+      class="btn btn-danger w-100 py-2 fw-bold rounded-3"
+      onclick="processRefundRequest()"
+    >
+      Void Transaction
+    </button>
+
+  </div>
+
+</div>
+
+
+<script>
+
+/* ==========================================================
+   OPEN / CLOSE
+========================================================== */
+
+function toggleVoidModal(show) {
+
+  if (show) {
+
+    openVoidReceiptModal("");
+
+  } else {
+
+    closeVoidModal();
+
+  }
+
+}
+
+
+function openVoidReceiptModal(receiptId) {
+
+  const modal =
+    document.getElementById(
+      "voidVerificationModal"
+    );
+
+  const receiptInput =
+    document.getElementById(
+      "refundReceiptId"
+    );
+
+  const pinInput =
+    document.getElementById(
+      "managerVoidPin"
+    );
+
+
+  if (!modal) {
+
+    console.error(
+      "voidVerificationModal not found"
+    );
+
+    return;
+
+  }
+
+
+  if (receiptInput) {
+
+    receiptInput.value =
+      receiptId || "";
+
+  }
+
+
+  if (pinInput) {
+
+    pinInput.value = "";
+
+  }
+
+
+  modal.style.display =
+    "flex";
+
+
+  /*
+    History flow:
+    receipt already supplied → focus PIN
+
+    Sidebar flow:
+    no receipt → focus receipt
+  */
+
+  setTimeout(function() {
+
+    if (
+      receiptId &&
+      pinInput
+    ) {
+
+      pinInput.focus();
+
+    } else if (receiptInput) {
+
+      receiptInput.focus();
+
+    }
+
+  }, 50);
+
+  const reasonInput =
+  document.getElementById(
+    "voidReason"
+  );
+
+const otherReasonInput =
+  document.getElementById(
+    "voidOtherReason"
+  );
+
+const otherReasonBox =
+  document.getElementById(
+    "voidOtherReasonBox"
+  );
+
+
+if (reasonInput) {
+  reasonInput.value = "";
+}
+
+if (otherReasonInput) {
+  otherReasonInput.value = "";
+}
+
+if (otherReasonBox) {
+  otherReasonBox.style.display = "none";
+}
+
+}
+
+
+function closeVoidModal() {
+
+  const modal =
+    document.getElementById(
+      "voidVerificationModal"
+    );
+
+
+  if (!modal) {
+    return;
+  }
+
+
+  modal.style.display =
+    "none";
+
+
+  const receiptInput =
+    document.getElementById(
+      "refundReceiptId"
+    );
+
+
+  const pinInput =
+    document.getElementById(
+      "managerVoidPin"
+    );
+
+
+  if (receiptInput) {
+    receiptInput.value = "";
+  }
+
+
+  if (pinInput) {
+    pinInput.value = "";
+  }
+  const reasonInput =
+  document.getElementById(
+    "voidReason"
+  );
+
+const otherReasonInput =
+  document.getElementById(
+    "voidOtherReason"
+  );
+
+const otherReasonBox =
+  document.getElementById(
+    "voidOtherReasonBox"
+  );
+
+
+if (reasonInput) {
+  reasonInput.value = "";
+}
+
+if (otherReasonInput) {
+  otherReasonInput.value = "";
+}
+
+if (otherReasonBox) {
+  otherReasonBox.style.display = "none";
+}
+
+}
+
+function toggleVoidOtherReason() {
+
+  const reason =
+    document.getElementById(
+      "voidReason"
+    ).value;
+
+
+  const box =
+    document.getElementById(
+      "voidOtherReasonBox"
+    );
+
+
+  const input =
+    document.getElementById(
+      "voidOtherReason"
+    );
+
+
+  if (reason === "Other") {
+
+    box.style.display =
+      "block";
+
+    input.focus();
+
+  } else {
+
+    box.style.display =
+      "none";
+
+    input.value =
+      "";
+
+  }
+
+}
+
+/* ==========================================================
+   PROCESS VOID
+========================================================== */
+
+function processRefundRequest() {
+
+  const receiptInput =
+    document.getElementById(
+      "refundReceiptId"
+    );
+
+
+  const pinInput =
+    document.getElementById(
+      "managerVoidPin"
+    );
+
+
+  const button =
+    document.getElementById(
+      "voidTransactionSubmitBtn"
+    );
+
+
+  const receiptId =
+    receiptInput
+      ? receiptInput.value.trim()
+      : "";
+
+
+  const pin =
+    pinInput
+      ? pinInput.value.trim()
+      : "";
+
+  const reasonInput =
+  document.getElementById(
+    "voidReason"
+  );
+
+
+const otherReasonInput =
+  document.getElementById(
+    "voidOtherReason"
+  );
+
+
+let voidReason =
+  reasonInput
+    ? reasonInput.value.trim()
+    : "";
+
+
+  /* ================= VALIDATE ================= */
+
+  if (!receiptId) {
+
+    showNotificationToast(
+      "Please enter the Receipt ID.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  if (!pin) {
+
+    showNotificationToast(
+      "Please enter the Manager PIN.",
+      true
+    );
+
+    return;
+
+  }
+
+  if (!voidReason) {
+
+  showNotificationToast(
+    "Please select a reason for the void.",
+    true
+  );
+
+  return;
+
+}
+
+
+if (voidReason === "Other") {
+
+  voidReason =
+    otherReasonInput
+      ? otherReasonInput.value.trim()
+      : "";
+
+
+  if (!voidReason) {
+
+    showNotificationToast(
+      "Please specify the void reason.",
+      true
+    );
+
+    return;
+
+  }
+
+}
+
+
+  button.disabled =
+    true;
+
+  button.textContent =
+    "Authorizing...";
+
+
+  /* ================= VERIFY MANAGER ================= */
+
+  google.script.run
+
+    .withSuccessHandler(function(result) {
+
+      if (
+        !result ||
+        !result.success
+      ) {
+
+        button.disabled =
+          false;
+
+        button.textContent =
+          "Void Transaction";
+
+
+        showNotificationToast(
+          result && result.message
+            ? result.message
+            : "Manager authorization failed.",
+          true
+        );
+
+        return;
+
+      }
+
+
+      button.textContent =
+        "Voiding...";
+
+
+      /* ================= VOID TRANSACTION ================= */
+
+      google.script.run
+
+        .withSuccessHandler(function(res) {
+
+          button.disabled =
+            false;
+
+          button.textContent =
+            "Void Transaction";
+
+
+          if (
+            !res ||
+            !res.success
+          ) {
+
+            showNotificationToast(
+              res && res.message
+                ? res.message
+                : "Unable to void transaction.",
+              true
+            );
+
+            return;
+
+          }
+
+
+          /* UPDATE INVENTORY */
+
+          masterInventory =
+            Array.isArray(
+              res.updatedInventory
+            )
+              ? res.updatedInventory
+              : [];
+
+
+          populateManualDropdown(
+            masterInventory
+          );
+
+
+          /* CLOSE VOID */
+
+          closeVoidModal();
+
+
+          /* REFRESH HISTORY IF OPEN */
+
+          const historyModal =
+            document.getElementById(
+              "transactionHistoryModal"
+            );
+
+
+          if (
+            historyModal &&
+            historyModal.style.display === "flex"
+          ) {
+
+            loadTransactionHistory();
+
+          }
+
+
+          showNotificationToast(
+            res.message ||
+            "Transaction voided successfully."
+          );
+
+        })
+
+
+        .withFailureHandler(function(err) {
+
+          button.disabled =
+            false;
+
+          button.textContent =
+            "Void Transaction";
+
+
+          showNotificationToast(
+            err.message ||
+            "Server error while voiding transaction.",
+            true
+          );
+
+        })
+
+
+      .voidAndRefundTransactionBackend(
+        receiptId,
+        result.managerName,
+        voidReason
+      );
+
+    })
+
+
+    .withFailureHandler(function(err) {
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        "Void Transaction";
+
+
+      showNotificationToast(
+        err.message ||
+        "Authorization failed.",
+        true
+      );
+
+    })
+
+
+    .verifyManagerPin(
+      pin
+    );
+
+}
+
+</script>

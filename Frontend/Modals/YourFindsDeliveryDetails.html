@@ -1,0 +1,1070 @@
+<div
+  id="yourFindsDeliveryDetailsModal"
+  class="generic-overlay-blur"
+  style="display:none;"
+>
+
+  <div
+    class="custom-popup-card"
+    style="
+      max-width:700px;
+      width:95%;
+      max-height:90vh;
+      overflow-y:auto;
+    "
+  >
+
+    <!-- HEADER -->
+
+    <div
+      class="d-flex justify-content-between align-items-start mb-4 pb-3 border-bottom"
+    >
+
+      <div>
+
+        <h5 class="fw-bold mb-1">
+          Delivery Details
+        </h5>
+
+        <div
+          id="deliveryDetailsNumber"
+          class="fw-semibold"
+        >
+          —
+        </div>
+
+        <div
+          id="deliveryDetailsId"
+          class="small text-muted font-monospace"
+        >
+          —
+        </div>
+
+      </div>
+
+
+      <button
+        type="button"
+        class="btn-close"
+        onclick="closeYourFindsDeliveryDetailsModal()"
+      ></button>
+
+    </div>
+
+
+    <!-- LOADING -->
+
+    <div
+      id="deliveryDetailsLoading"
+      class="text-center py-5"
+      style="display:none;"
+    >
+
+      <div
+        class="spinner-border spinner-border-sm mb-2"
+      ></div>
+
+      <div class="small text-muted">
+        Loading delivery...
+      </div>
+
+    </div>
+
+
+    <!-- CONTENT -->
+
+    <div
+      id="deliveryDetailsContent"
+      style="display:none;"
+    >
+
+      <!-- BASIC INFO -->
+
+      <div class="row g-3 mb-4">
+
+        <div class="col-md-6">
+
+          <div class="small text-muted">
+            Delivery Date
+          </div>
+
+          <div
+            id="deliveryDetailsDate"
+            class="fw-semibold"
+          >
+            —
+          </div>
+
+        </div>
+
+
+        <div class="col-md-6">
+
+          <div class="small text-muted">
+            Status
+          </div>
+
+          <div
+            id="deliveryDetailsStatus"
+          >
+            —
+          </div>
+
+        </div>
+
+
+        <div class="col-md-6">
+
+          <div class="small text-muted">
+            Driver
+          </div>
+
+          <div
+            id="deliveryDetailsDriver"
+            class="fw-semibold"
+          >
+            —
+          </div>
+
+        </div>
+
+
+        <div class="col-md-6">
+
+          <div class="small text-muted">
+            Plate No.
+          </div>
+
+          <div
+            id="deliveryDetailsPlate"
+            class="fw-semibold"
+          >
+            —
+          </div>
+
+        </div>
+
+
+        <div class="col-md-6">
+
+          <div class="small text-muted">
+            Accepted By
+          </div>
+
+          <div
+            id="deliveryDetailsAcceptedBy"
+            class="fw-semibold"
+          >
+            —
+          </div>
+
+        </div>
+
+
+        <div class="col-md-6">
+
+          <div class="small text-muted">
+            Accepted Timestamp
+          </div>
+
+          <div
+            id="deliveryDetailsTimestamp"
+            class="fw-semibold"
+          >
+            —
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- QUANTITY -->
+
+      <div class="card border-0 bg-light mb-4">
+
+        <div class="card-body">
+
+          <div class="fw-semibold mb-3">
+            Quantity Received
+          </div>
+
+
+          <div class="row text-center g-2">
+
+            <div class="col">
+              <div class="small text-muted">S</div>
+              <div id="deliveryDetailsS" class="fw-bold fs-5">0</div>
+            </div>
+
+            <div class="col">
+              <div class="small text-muted">M</div>
+              <div id="deliveryDetailsM" class="fw-bold fs-5">0</div>
+            </div>
+
+            <div class="col">
+              <div class="small text-muted">L</div>
+              <div id="deliveryDetailsL" class="fw-bold fs-5">0</div>
+            </div>
+
+            <div class="col">
+              <div class="small text-muted">XL</div>
+              <div id="deliveryDetailsXL" class="fw-bold fs-5">0</div>
+            </div>
+
+            <div class="col">
+              <div class="small text-muted">E</div>
+              <div id="deliveryDetailsE" class="fw-bold fs-5">0</div>
+            </div>
+
+            <div class="col border-start">
+              <div class="small text-muted">Total</div>
+              <div id="deliveryDetailsTotal" class="fw-bold fs-5">0</div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- CODE RANGE -->
+
+      <div class="row g-3 mb-4">
+
+        <div class="col-md-6">
+
+          <div class="small text-muted">
+            First Code
+          </div>
+
+          <div
+            id="deliveryDetailsFirstCode"
+            class="font-monospace fw-semibold"
+          >
+            —
+          </div>
+
+        </div>
+
+
+        <div class="col-md-6">
+
+          <div class="small text-muted">
+            Last Code
+          </div>
+
+          <div
+            id="deliveryDetailsLastCode"
+            class="font-monospace fw-semibold"
+          >
+            —
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- REMARKS -->
+
+      <div
+        id="deliveryDetailsRemarksSection"
+        class="mb-4"
+        style="display:none;"
+      >
+
+        <div class="small text-muted mb-1">
+          Remarks
+        </div>
+
+        <div
+          id="deliveryDetailsRemarks"
+          class="border rounded p-3 bg-light"
+        >
+        </div>
+
+      </div>
+
+    <!-- =====================================================
+        DELIVERED ITEMS
+    ====================================================== -->
+
+    <div class="mb-4">
+
+      <div
+        class="d-flex justify-content-between align-items-center mb-2"
+      >
+
+        <div class="fw-semibold">
+          Delivered Items
+        </div>
+
+        <div class="small text-muted">
+
+          <span id="deliveryDetailsItemCount">
+            0
+          </span>
+
+          items
+
+        </div>
+
+      </div>
+
+
+      <!-- LOADING -->
+
+      <div
+        id="deliveryDetailsItemsLoading"
+        class="border rounded text-center text-muted py-3"
+        style="display:none;"
+      >
+        Loading items...
+      </div>
+
+
+      <!-- LIST -->
+
+      <div
+        id="deliveryDetailsItemsList"
+        class="border rounded"
+        style="
+          max-height:280px;
+          overflow-y:auto;
+        "
+      >
+      </div>
+
+
+      <!-- ERROR -->
+
+      <div
+        id="deliveryDetailsItemsError"
+        class="text-danger small mt-2"
+        style="display:none;"
+      >
+      </div>
+
+    </div>
+
+
+      <!-- ACTIONS -->
+
+      <div class="d-flex gap-2">
+
+        <button
+          type="button"
+          class="btn btn-outline-secondary flex-fill"
+          onclick="closeYourFindsDeliveryDetailsModal()"
+        >
+          Close
+        </button>
+
+
+        <button
+          type="button"
+          id="deliveryDetailsLabelsBtn"
+          class="btn btn-pink flex-fill"
+        >
+          Reprint Labels
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <!-- ERROR -->
+
+    <div
+      id="deliveryDetailsError"
+      class="text-center text-danger py-5"
+      style="display:none;"
+    >
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+var currentDeliveryDetailsId =
+  "";
+
+
+/* ==========================================================
+   OPEN DETAILS
+========================================================== */
+
+function viewYourFindsDeliveryDetails(
+  deliveryId
+) {
+
+  deliveryId =
+    String(
+      deliveryId || ""
+    )
+      .trim()
+      .toUpperCase();
+
+
+  if (!deliveryId) {
+
+    showNotificationToast(
+      "Delivery ID is required.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  const modal =
+    document.getElementById(
+      "yourFindsDeliveryDetailsModal"
+    );
+
+
+  currentDeliveryDetailsId =
+    deliveryId;
+
+
+  document.getElementById(
+    "deliveryDetailsLoading"
+  ).style.display =
+    "block";
+
+
+  document.getElementById(
+    "deliveryDetailsContent"
+  ).style.display =
+    "none";
+
+
+  document.getElementById(
+    "deliveryDetailsError"
+  ).style.display =
+    "none";
+
+
+  modal.style.display =
+    "flex";
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        document.getElementById(
+          "deliveryDetailsLoading"
+        ).style.display =
+          "none";
+
+
+        if (
+          !result ||
+          !result.success ||
+          !result.delivery
+        ) {
+
+          const error =
+            document.getElementById(
+              "deliveryDetailsError"
+            );
+
+
+          error.style.display =
+            "block";
+
+
+          error.textContent =
+            result &&
+            result.message
+              ? result.message
+              : "Unable to load delivery.";
+
+
+          return;
+
+        }
+
+
+        renderYourFindsDeliveryDetails(
+          result.delivery
+        );
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        document.getElementById(
+          "deliveryDetailsLoading"
+        ).style.display =
+          "none";
+
+
+        const error =
+          document.getElementById(
+            "deliveryDetailsError"
+          );
+
+
+        error.style.display =
+          "block";
+
+
+        error.textContent =
+          err &&
+          err.message
+            ? err.message
+            : "Unable to load delivery.";
+
+      }
+    )
+
+
+    .getYourFindsDeliveryById(
+      deliveryId
+    );
+
+}
+
+
+/* ==========================================================
+   RENDER DETAILS
+========================================================== */
+
+function renderYourFindsDeliveryDetails(
+  delivery
+) {
+
+  document.getElementById(
+    "deliveryDetailsNumber"
+  ).textContent =
+    delivery.deliveryNo ||
+    "—";
+
+
+  document.getElementById(
+    "deliveryDetailsId"
+  ).textContent =
+    delivery.deliveryId ||
+    "—";
+
+
+  document.getElementById(
+    "deliveryDetailsDate"
+  ).textContent =
+    delivery.deliveryDate ||
+    "—";
+
+
+  document.getElementById(
+    "deliveryDetailsStatus"
+  ).innerHTML =
+    buildDeliveryStatusBadge(
+      delivery.status
+    );
+
+
+  document.getElementById(
+    "deliveryDetailsDriver"
+  ).textContent =
+    delivery.driverName ||
+    "—";
+
+
+  document.getElementById(
+    "deliveryDetailsPlate"
+  ).textContent =
+    delivery.plateNo ||
+    "—";
+
+
+  document.getElementById(
+    "deliveryDetailsAcceptedBy"
+  ).textContent =
+    delivery.acceptedBy ||
+    "—";
+
+
+  document.getElementById(
+    "deliveryDetailsTimestamp"
+  ).textContent =
+    delivery.timestamp ||
+    "—";
+
+
+  document.getElementById(
+    "deliveryDetailsS"
+  ).textContent =
+    Number(delivery.sQty) || 0;
+
+
+  document.getElementById(
+    "deliveryDetailsM"
+  ).textContent =
+    Number(delivery.mQty) || 0;
+
+
+  document.getElementById(
+    "deliveryDetailsL"
+  ).textContent =
+    Number(delivery.lQty) || 0;
+
+
+  document.getElementById(
+    "deliveryDetailsXL"
+  ).textContent =
+    Number(delivery.xlQty) || 0;
+
+
+  document.getElementById(
+    "deliveryDetailsE"
+  ).textContent =
+    Number(delivery.eQty) || 0;
+
+
+  document.getElementById(
+    "deliveryDetailsTotal"
+  ).textContent =
+    Number(delivery.totalQty) || 0;
+
+
+  document.getElementById(
+    "deliveryDetailsFirstCode"
+  ).textContent =
+    delivery.firstCode ||
+    "—";
+
+
+  document.getElementById(
+    "deliveryDetailsLastCode"
+  ).textContent =
+    delivery.lastCode ||
+    "—";
+
+
+  const remarksSection =
+    document.getElementById(
+      "deliveryDetailsRemarksSection"
+    );
+
+
+  const remarksElement =
+    document.getElementById(
+      "deliveryDetailsRemarks"
+    );
+
+
+  const remarks =
+    String(
+      delivery.remarks || ""
+    ).trim();
+
+
+  if (remarks) {
+
+    remarksElement.textContent =
+      remarks;
+
+
+    remarksSection.style.display =
+      "block";
+
+  } else {
+
+    remarksElement.textContent =
+      "";
+
+
+    remarksSection.style.display =
+      "none";
+
+  }
+
+
+  const labelsButton =
+    document.getElementById(
+      "deliveryDetailsLabelsBtn"
+    );
+
+
+  labelsButton.onclick =
+    function() {
+
+      closeYourFindsDeliveryDetailsModal();
+
+
+      openYourFindsLabelModal(
+        delivery.deliveryId
+      );
+
+    };
+
+
+  document.getElementById(
+    "deliveryDetailsContent"
+  ).style.display =
+    "block";
+
+  loadYourFindsDeliveryDetailItems(
+  delivery.deliveryId
+);
+
+}
+
+
+/* ==========================================================
+   CLOSE DETAILS
+========================================================== */
+
+function closeYourFindsDeliveryDetailsModal() {
+
+  const modal =
+    document.getElementById(
+      "yourFindsDeliveryDetailsModal"
+    );
+
+
+  if (modal) {
+
+    modal.style.display =
+      "none";
+
+  }
+
+
+  currentDeliveryDetailsId =
+    "";
+
+}
+
+/* ==========================================================
+   LOAD DELIVERED ITEMS
+========================================================== */
+
+function loadYourFindsDeliveryDetailItems(
+  deliveryId
+) {
+
+  const loading =
+    document.getElementById(
+      "deliveryDetailsItemsLoading"
+    );
+
+
+  const list =
+    document.getElementById(
+      "deliveryDetailsItemsList"
+    );
+
+
+  const error =
+    document.getElementById(
+      "deliveryDetailsItemsError"
+    );
+
+
+  const count =
+    document.getElementById(
+      "deliveryDetailsItemCount"
+    );
+
+
+  loading.style.display =
+    "block";
+
+
+  list.innerHTML =
+    "";
+
+
+  error.style.display =
+    "none";
+
+
+  count.textContent =
+    "0";
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        loading.style.display =
+          "none";
+
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          error.style.display =
+            "block";
+
+
+          error.textContent =
+            result &&
+            result.message
+              ? result.message
+              : "Unable to load delivered items.";
+
+
+          return;
+
+        }
+
+
+        const items =
+          Array.isArray(
+            result.items
+          )
+            ? result.items
+            : [];
+
+
+        renderYourFindsDeliveryDetailItems(
+          items
+        );
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        loading.style.display =
+          "none";
+
+
+        error.style.display =
+          "block";
+
+
+        error.textContent =
+          err &&
+          err.message
+            ? err.message
+            : "Unable to load delivered items.";
+
+      }
+    )
+
+
+    .getYourFindsLabelItemsByDeliveryId(
+      deliveryId
+    );
+
+}
+
+
+/* ==========================================================
+   RENDER DELIVERED ITEMS
+========================================================== */
+
+function renderYourFindsDeliveryDetailItems(
+  items
+) {
+
+  const list =
+    document.getElementById(
+      "deliveryDetailsItemsList"
+    );
+
+
+  const count =
+    document.getElementById(
+      "deliveryDetailsItemCount"
+    );
+
+
+  count.textContent =
+    String(
+      items.length
+    );
+
+
+  list.innerHTML =
+    "";
+
+
+  if (
+    items.length === 0
+  ) {
+
+    list.innerHTML = `
+
+      <div
+        class="text-center text-muted small py-3"
+      >
+        No delivered items found.
+      </div>
+
+    `;
+
+
+    return;
+
+  }
+
+
+  items.forEach(
+    function(item) {
+
+      const code =
+        String(
+          item.code || ""
+        ).trim();
+
+
+      const size =
+        String(
+          item.size || ""
+        )
+          .trim()
+          .toUpperCase();
+
+
+      const status =
+        String(
+          item.status || ""
+        )
+          .trim()
+          .toUpperCase();
+
+
+      const description =
+        String(
+          item.description || ""
+        ).trim();
+
+
+      const row =
+        document.createElement(
+          "div"
+        );
+
+
+      row.className =
+        "d-flex align-items-center gap-3 px-3 py-2 border-bottom";
+
+
+      row.innerHTML = `
+
+        <!-- SIZE -->
+
+        <div
+          class="fw-bold text-center"
+          style="
+            width:35px;
+            flex:0 0 35px;
+          "
+        >
+          ${escapeDeliveryDetailsHtml(size || "—")}
+        </div>
+
+
+        <!-- CODE / DESCRIPTION -->
+
+        <div
+          class="flex-grow-1"
+          style="min-width:0;"
+        >
+
+          <div
+            class="font-monospace fw-semibold"
+          >
+            ${escapeDeliveryDetailsHtml(code)}
+          </div>
+
+
+          <div
+            class="small text-muted text-truncate"
+          >
+            ${
+              escapeDeliveryDetailsHtml(
+                description ||
+                "Details not completed"
+              )
+            }
+          </div>
+
+        </div>
+
+
+        <!-- STATUS -->
+
+        <div>
+
+          ${
+            status === "ACTIVE"
+              ? `
+                <span class="badge bg-success">
+                  Active
+                </span>
+              `
+              : status === "INCOMPLETE"
+                ? `
+                  <span class="badge bg-info text-dark">
+                    Incomplete
+                  </span>
+                `
+                : `
+                  <span class="badge bg-secondary">
+                    ${escapeDeliveryDetailsHtml(
+                      status || "Unknown"
+                    )}
+                  </span>
+                `
+          }
+
+        </div>
+
+      `;
+
+
+      list.appendChild(
+        row
+      );
+
+    }
+  );
+
+}
+
+
+/* ==========================================================
+   SAFE DETAILS HTML
+========================================================== */
+
+function escapeDeliveryDetailsHtml(
+  value
+) {
+
+  return String(
+    value === null ||
+    value === undefined
+      ? ""
+      : value
+  )
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+}
+
+</script>

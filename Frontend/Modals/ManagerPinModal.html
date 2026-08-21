@@ -1,0 +1,76 @@
+<div id="managerPinModal" class="generic-overlay-blur manager-pin-modal">
+  <div class="custom-popup-card manager-pin-card">
+    <div
+      class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom"
+    >
+      <h5 class="fw-bold m-0 text-dark">Manager Authorization</h5>
+
+      <button
+        type="button"
+        class="btn-close"
+        onclick="closeManagerPinModal(false)"
+      ></button>
+    </div>
+
+    <p class="small text-muted mb-3" id="managerPinModalMessage">
+      Enter Manager PIN to continue.
+    </p>
+
+    <div class="mb-4">
+      <input
+        type="password"
+        class="form-control text-center fw-bold manager-pin-input"
+        id="managerPinModalInput"
+        placeholder="••••"
+        autocomplete="off"
+      />
+    </div>
+
+    <button
+      type="button"
+      class="btn btn-dark-custom w-100 py-2 fw-bold"
+      onclick="submitManagerPinModal()"
+    >
+      Confirm
+    </button>
+  </div>
+</div>
+<script>
+  let _managerPinCallback = null;
+
+  function requestManagerPin(message, callback) {
+    document.getElementById("managerPinModalMessage").textContent = message;
+    document.getElementById("managerPinModalInput").value = "";
+    _managerPinCallback = callback;
+    document.getElementById("managerPinModal").style.display = "flex";
+    setTimeout(() => {
+      document.getElementById("managerPinModalInput").focus();
+    }, 100);
+  }
+
+  function closeManagerPinModal(confirmed) {
+    document.getElementById("managerPinModal").style.display = "none";
+    if (!confirmed) {
+      let cb = _managerPinCallback;
+      _managerPinCallback = null;
+      if (cb) cb(null);
+    }
+  }
+
+  function submitManagerPinModal() {
+    let pin = document.getElementById("managerPinModalInput").value;
+    document.getElementById("managerPinModal").style.display = "none";
+    let cb = _managerPinCallback;
+    _managerPinCallback = null;
+    if (cb) cb(pin);
+  }
+
+  document
+    .getElementById("managerPinModalInput")
+    .addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submitManagerPinModal();
+      }
+    });
+</script>

@@ -1,0 +1,98 @@
+<div id="loginOverlay" class="generic-overlay-blur" style="display:none;">
+  <div class="custom-popup-card text-center">
+    <img src="https://drive.google.com/thumbnail?sz=w300&id=1MsTEIjhHkeq0i74lngukOKemXDoq_O7u" alt="Logo" class="mb-3" style="height: 60px; width: 60px; object-fit: cover; border-radius: 50%; border: 1px solid var(--border-color);">
+    <h4 class="fw-bold text-dark mb-1">Welcome Back</h4>
+    <p class="text-muted small mb-4">Please log in to your system shift</p>
+
+    <div class="mb-3 text-start">
+      <label class="form-label">Cashier Name</label>
+      <select class="form-select" id="cashierSelect">
+              <option value="">Loading employees...</option>
+          </select>
+    </div>
+
+    <div class="mb-3 text-start">
+      <label class="form-label">PIN Code</label>
+      <input type="password" class="form-control text-center fw-bold" id="cashierPin" placeholder="••••" style="letter-spacing: 4px;">
+    </div>
+
+    <div class="mb-4 p-3 rounded text-start" style="background-color: var(--pink-light);">
+      <label class="form-label mb-1">Starting Petty Cash (₱)</label>
+      <div class="input-group">
+        <input type="number" class="form-control border-0 fw-bold" id="startingPettyCashInput" value="0">
+      </div>
+    </div>
+
+    <button type="button" class="btn btn-pink w-100 py-2.5" onclick="unlockTerminalSession()">Log In</button>
+  </div>
+</div>
+
+<script>
+  function loadEmployees() {
+    google.script.run
+      .withSuccessHandler(function (employees) {
+        const select = document.getElementById("cashierSelect");
+
+        select.innerHTML = "";
+
+        let first = document.createElement("option");
+        first.value = "";
+        first.textContent = "-- Select Employee --";
+        select.appendChild(first);
+
+        employees.forEach((emp) => {
+          let option = document.createElement("option");
+
+          option.value = emp.fullName;
+          option.textContent = emp.fullName;
+
+          select.appendChild(option);
+        });
+      })
+      .getEmployees();
+  }
+
+  function unlockTerminalSession() {
+    let name = document.getElementById("cashierSelect").value;
+    let pin = document.getElementById("cashierPin").value;
+    let petty =
+      parseFloat(document.getElementById("startingPettyCashInput").value) || 0;
+
+    if (!name || !pin) {
+      showNotificationToast("Please choose name and enter PIN code.", true);
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function (result) {
+        if (!result.success) {
+          showNotificationToast(result.message, true);
+          return;
+        }
+        currentEmployee = result;
+
+        currentCashier = result.fullName;
+
+        currentShiftPettyCash = petty;
+
+        updateSidebarProfile(result);
+
+        document.getElementById("sidebarManagerReportBtn").style.display =
+          result.accessLevel <= 1 ? "block" : "none";
+
+        document.getElementById("loginOverlay").style.display = "none";
+
+        document.getElementById("terminalWorkspace").style.display = "block";
+
+        document.getElementById("appSidebar").style.display = "flex";
+
+        saveSession();
+
+        refreshInventory();
+      })
+      .withFailureHandler(function (err) {
+        showNotificationToast(err.message || "Login failed.", true);
+      })
+      .verifyEmployee(name, pin);
+  }
+</script>

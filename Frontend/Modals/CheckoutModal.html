@@ -1,0 +1,512 @@
+<div id="checkoutModal" class="generic-overlay-blur" style="display:none;">
+  <div class="custom-popup-card">
+    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+      <h5 class="fw-bold m-0 text-dark">Process Checkout</h5>
+      <button type="button" class="btn-close" onclick="toggleCheckoutModal(false)"></button>
+    </div>
+
+    <div class="text-center py-3 rounded mb-3" style="background-color: var(--pink-light);">
+      <span class="small fw-bold text-muted">TOTAL DUE:</span>
+      <h2 class="fw-bold m-0 text-dark">₱<span id="modalGrandTotal">0.00</span></h2>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Payment Method</label>
+      <select class="form-select fw-bold" id="paymentMethod" onchange="recalculateModalTotals()">
+            <option value="Cash">Cash</option>
+            <option value="GCash">GCash</option>
+            <option value="QR Code">QR Code (+1.0% Fee)</option>
+            <option value="Credit Card">Credit Card</option>
+          </select>
+    </div>
+
+    <div class="mb-3 p-2 bg-light rounded" id="referenceNumberContainer"
+      style="display:none; border: 1px solid var(--border-color);">
+      <label class="form-label">Reference / Reference ID <span class="text-danger">*</span></label>
+      <input type="text" class="form-control" id="paymentReferenceInput" placeholder="Enter reference number">
+    </div>
+
+    <div class="mb-3 p-2 border rounded bg-light" id="cardFeeToggleBox" style="display:none;">
+      <div class="form-check form-switch m-0">
+        <input class="form-check-input" type="checkbox" id="applyCardFeeCheckbox" checked onchange="recalculateModalTotals()">
+        <label class="form-check-label small text-dark" for="applyCardFeeCheckbox">Add card transaction fee (3.2%)?</label>
+      </div>
+    </div>
+
+    <div class="mb-3" id="cashReceivedFieldWrapper">
+      <label class="form-label">Cash Received (₱)</label>
+      <div class="input-group">
+        <input type="number" class="form-control form-control-lg fw-bold text-end" id="customerCashPaid" placeholder="0.00" oninput="calculateChangeValue()">
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center p-3 mb-4 rounded bg-light"
+      id="changeDueDisplayFieldWrapper">
+      <span class="small fw-bold text-muted">CHANGE DUE:</span>
+      <h4 class="m-0 fw-bold text-success">₱<span id="customerChangeDue">0.00</span></h4>
+    </div>
+
+    <button type="button" id="completeOrderBtn" class="btn btn-pink w-100 py-3 fw-bold" onclick="checkoutTransaction()">Complete Order</button>
+  </div>
+</div>
+<script>
+  function triggerCheckoutConsoleModal() {
+    if (cart.length === 0) {
+      showNotificationToast("Shopping basket summary is empty.", true);
+      return;
+    }
+
+    document.getElementById("modalGrandTotal").textContent =
+      calculatedBaseTotalDue.toFixed(2);
+    document.getElementById("paymentMethod").value = "Cash";
+    document.getElementById("cardFeeToggleBox").style.display = "none";
+    document.getElementById("referenceNumberContainer").style.display = "none";
+    document.getElementById("cashReceivedFieldWrapper").style.display = "block";
+    document.getElementById("changeDueDisplayFieldWrapper").style.display =
+      "flex";
+
+    // FIX: Explicitly uncheck the card fee toggle when opening checkout
+    let applyCardFeeCheckbox = document.getElementById("applyCardFeeCheckbox");
+    if (applyCardFeeCheckbox) {
+      applyCardFeeCheckbox.checked = false;
+    }
+
+    finalActiveGrandTotal = calculatedBaseTotalDue;
+    toggleCheckoutModal(true);
+  }
+
+  function toggleCheckoutModal(show) {
+    document.getElementById("checkoutModal").style.display = show
+      ? "flex"
+      : "none";
+
+    if (show) {
+      document.getElementById("customerCashPaid").value = "";
+      document.getElementById("paymentReferenceInput").value = "";
+      document.getElementById("customerChangeDue").textContent = "0.00";
+      document.getElementById("customerCashPaid").focus();
+    } else {
+      setTimeout(() => {
+        const codeInput =
+          document.getElementById("codeInput");
+
+        if (codeInput) {
+          codeInput.focus();
+        }
+      }, 150);
+    }
+  }
+
+  function recalculateModalTotals() {
+    let method = document.getElementById("paymentMethod").value;
+    let feeApplied = 0;
+
+    let applyCardFeeCheckbox = document.getElementById("applyCardFeeCheckbox");
+
+    if (method !== "Cash") {
+      document.getElementById("referenceNumberContainer").style.display =
+        "block";
+      document.getElementById("cashReceivedFieldWrapper").style.display =
+        "none";
+      document.getElementById("changeDueDisplayFieldWrapper").style.display =
+        "none";
+    } else {
+      document.getElementById("referenceNumberContainer").style.display =
+        "none";
+      document.getElementById("cashReceivedFieldWrapper").style.display =
+        "block";
+      document.getElementById("changeDueDisplayFieldWrapper").style.display =
+        "flex";
+    }
+
+    // FIX: Force checkbox state to false if the payment method is not Credit Card
+    if (method !== "Credit Card") {
+      if (applyCardFeeCheckbox) {
+        applyCardFeeCheckbox.checked = false;
+      }
+    }
+
+    if (method === "Credit Card") {
+      document.getElementById("cardFeeToggleBox").style.display = "block";
+      let applyFee = applyCardFeeCheckbox
+        ? applyCardFeeCheckbox.checked
+        : false;
+      if (applyFee) feeApplied = calculatedBaseTotalDue * 0.032;
+    } else {
+      document.getElementById("cardFeeToggleBox").style.display = "none";
+      if (method === "QR Code") feeApplied = calculatedBaseTotalDue * 0.01;
+    }
+
+    finalActiveGrandTotal = calculatedBaseTotalDue + feeApplied;
+    document.getElementById("modalGrandTotal").textContent =
+      finalActiveGrandTotal.toFixed(2);
+    calculateChangeValue();
+  }
+
+  function calculateChangeValue() {
+    let paid =
+      parseFloat(document.getElementById("customerCashPaid").value) || 0;
+    let change = paid - finalActiveGrandTotal;
+    document.getElementById("customerChangeDue").textContent =
+      change > 0 ? change.toFixed(2) : "0.00";
+  }
+
+  function buildCheckoutPayload() {
+
+    const paymentMethod =
+        document.getElementById("paymentMethod").value;
+
+    const cashReceived =
+        parseFloat(
+            document.getElementById("customerCashPaid").value
+        ) || 0;
+
+    const referenceNumber =
+        document.getElementById("paymentReferenceInput")
+        .value
+        .trim();
+
+    const globalDiscountType =
+        document.getElementById("globalDiscountType").value;
+
+    const globalDiscountValue =
+        parseFloat(
+            document.getElementById("globalDiscountValue").value
+        ) || 0;
+
+    const receiptId =
+        "YS-" + Math.floor(100000 + Math.random() * 900000);
+
+    const changeGiven =
+        paymentMethod === "Cash"
+            ? Math.max(0, cashReceived - finalActiveGrandTotal)
+            : 0;
+
+    const applyCardFee =
+        paymentMethod === "Credit Card"
+            ? document.getElementById("applyCardFeeCheckbox").checked
+            : false;
+
+    return {
+        paymentMethod,
+        cashReceived,
+        referenceNumber,
+        globalDiscountType,
+        globalDiscountValue,
+        receiptId,
+        changeGiven,
+        applyCardFee
+    };
+
+  }
+
+  function validateCheckout(payload){
+
+    if(
+        payload.paymentMethod !== "Cash" &&
+        !payload.referenceNumber
+    ){
+
+        showNotificationToast(
+            "Please enter a reference number.",
+            true
+        );
+
+        return false;
+
+    }
+
+    if(
+        payload.paymentMethod === "Cash" &&
+        payload.cashReceived < finalActiveGrandTotal
+    ){
+
+        showNotificationToast(
+            "Insufficient cash received.",
+            true
+        );
+
+        return false;
+
+    }
+
+    return true;
+
+  }
+
+  function setCheckoutLoading(isLoading){
+
+    const btn =
+        document.getElementById("completeOrderBtn");
+
+    btn.disabled = isLoading;
+
+    btn.innerText =
+        isLoading
+            ? "Processing..."
+            : "Complete Order";
+
+  }
+
+  function handleCheckoutSuccess(
+  response,
+  payload
+) {
+
+  /* ================= INVENTORY ================= */
+
+  masterInventory =
+    Array.isArray(response.updatedInventory)
+      ? response.updatedInventory
+      : [];
+
+
+  populateManualDropdown(
+    masterInventory
+  );
+
+
+  /* ================= RESET DISCOUNT ================= */
+
+  document.getElementById(
+    "globalDiscountValue"
+  ).value = "";
+
+
+  document.getElementById(
+    "globalDiscountType"
+  ).value = "percentage";
+
+
+  /* ================= CLOSE CHECKOUT ================= */
+
+  toggleCheckoutModal(false);
+
+
+  /* ================= CLEAR CART ================= */
+
+  cart = [];
+
+  renderCart();
+
+  saveSession();
+
+
+  /* ================= SUCCESS ================= */
+
+  showSuccessModal(
+    payload.receiptId,
+    payload.changeGiven
+  );
+
+}
+
+function handleCheckoutFailure(message) {
+
+  showNotificationToast(
+    message ||
+    "Transaction failed.",
+    true
+  );
+
+}
+
+  function checkoutTransaction(){
+
+    const payload =
+        buildCheckoutPayload();
+
+    if(!validateCheckout(payload))
+        return;
+
+    setCheckoutLoading(true);
+
+    showNotificationToast(
+        "Processing transaction..."
+    );
+
+    google.script.run
+
+        .withSuccessHandler(function(raw){
+
+            setCheckoutLoading(false);
+
+            const response =
+                JSON.parse(raw);
+
+            if(response.success){
+
+                handleCheckoutSuccess(
+                    response,
+                    payload
+                );
+
+            }else{
+
+                handleCheckoutFailure(
+                    response.message
+                );
+
+            }
+
+        })
+
+        .withFailureHandler(function(err){
+
+            setCheckoutLoading(false);
+
+            handleCheckoutFailure(
+                err.message
+            );
+
+        })
+
+        .executeCheckoutBackend(
+            cart,
+            payload.paymentMethod,
+            payload.referenceNumber,
+            payload.receiptId,
+            payload.globalDiscountType,
+            payload.globalDiscountValue,
+            currentCashier,
+            payload.cashReceived,
+            payload.changeGiven,
+            payload.applyCardFee
+        );
+
+  }
+
+  function handleCheckoutSuccess(
+  response,
+  payload
+) {
+
+  /* ================= INVENTORY ================= */
+
+  masterInventory =
+    Array.isArray(response.updatedInventory)
+      ? response.updatedInventory
+      : [];
+
+  populateManualDropdown(
+    masterInventory
+  );
+
+
+  /* ================= RESET CHECKOUT ================= */
+
+  document.getElementById(
+    "globalDiscountValue"
+  ).value = "";
+
+  document.getElementById(
+    "globalDiscountType"
+  ).value = "percentage";
+
+
+  /* ================= CLOSE CHECKOUT ================= */
+
+  toggleCheckoutModal(false);
+
+
+  /* ================= CLEAR CART ================= */
+
+  cart = [];
+
+  renderCart();
+
+  saveSession();
+
+
+  /* ================= SUCCESS MODAL ================= */
+
+  const successModal =
+    document.getElementById(
+      "successModal"
+    );
+
+  const receiptOutput =
+    document.getElementById(
+      "successReceiptId"
+    );
+
+  const changeContainer =
+    document.getElementById(
+      "successChangeContainer"
+    );
+
+  const changeOutput =
+    document.getElementById(
+      "successChangeGiven"
+    );
+
+
+  if (!successModal) {
+
+    console.error(
+      "successModal not found."
+    );
+
+    showNotificationToast(
+      "Transaction completed successfully.",
+      false
+    );
+
+    return;
+
+  }
+
+
+  /* Receipt */
+
+  if (receiptOutput) {
+
+    receiptOutput.textContent =
+      payload.receiptId;
+
+  }
+
+
+  /* Change */
+
+  if (
+    Number(payload.changeGiven) > 0
+  ) {
+
+    if (changeOutput) {
+
+      changeOutput.textContent =
+        "₱" +
+        Number(
+          payload.changeGiven
+        ).toFixed(2);
+
+    }
+
+
+    if (changeContainer) {
+
+      changeContainer.style.display =
+        "block";
+
+    }
+
+  } else {
+
+    if (changeContainer) {
+
+      changeContainer.style.display =
+        "none";
+
+    }
+
+  }
+
+
+  /* SHOW */
+
+  successModal.style.display =
+    "flex";
+
+}
+</script>

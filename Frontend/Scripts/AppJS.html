@@ -1,0 +1,272 @@
+<script>
+
+  let masterInventory = [];
+  let cart = [];
+
+  let currentEmployee = null;
+  let currentCashier = "";
+
+  let currentShiftPettyCash = 0;
+  let currentShiftExpectedCash = 0;
+  let currentManagerExpectedCash = 0;
+
+  let calculatedBaseTotalDue = 0;
+  let finalActiveGrandTotal = 0;
+
+  let manualSearchHighlightIndex = -1;
+
+  const PETTY_DENOMS = [1000, 500, 200, 100, 50, 20, 10, 5, 1];
+
+
+  /* ==========================================================
+     SESSION
+  ========================================================== */
+
+  function saveSession() {
+    const session = {
+      currentEmployee,
+      currentCashier,
+      currentShiftPettyCash,
+      cart,
+      globalDiscountType: document.getElementById("globalDiscountType").value,
+      globalDiscountValue: document.getElementById("globalDiscountValue").value
+    };
+
+    localStorage.setItem("ys_pos_session", JSON.stringify(session));
+  }
+
+
+  function restoreSession() {
+    const raw = localStorage.getItem("ys_pos_session");
+
+    if (!raw) return;
+
+    const session = JSON.parse(raw);
+
+    currentEmployee = session.currentEmployee;
+
+    updateSidebarProfile(currentEmployee);
+
+    document.getElementById("appSidebar").style.display = "flex";
+
+    currentCashier = session.currentCashier;
+    currentShiftPettyCash = session.currentShiftPettyCash;
+    cart = session.cart || [];
+
+    document.getElementById("cashierSelect").value = currentCashier;
+
+    document.getElementById("globalDiscountType").value =
+      session.globalDiscountType || "percentage";
+
+    document.getElementById("globalDiscountValue").value =
+      session.globalDiscountValue || "";
+
+    document.getElementById("navbarEmployeeName").textContent = currentCashier;
+    document.getElementById("sidebarEmployeeName").textContent = currentCashier;
+
+    document.getElementById("sidebarManagerReportBtn").style.display =
+      currentEmployee.accessLevel <= 1 ? "block" : "none";
+
+    document.getElementById("loginOverlay").style.display = "none";
+    document.getElementById("terminalWorkspace").style.display = "block";
+    document.getElementById("appSidebar").style.display = "block";
+
+    restoreActivePage();
+
+    refreshInventory(function () {
+      renderCart();
+    });
+
+    restoreForm("shiftReportModal");
+    restoreForm("managerDailyModal");
+  }
+
+
+  function clearSession() {
+    localStorage.removeItem("ys_pos_session");
+  }
+
+
+  /* ==========================================================
+     FORM PERSISTENCE
+  ========================================================== */
+
+  function saveForm(formId) {
+    const form = document.getElementById(formId);
+
+    if (!form) return;
+
+    const data = {};
+
+    form.querySelectorAll("input, select, textarea").forEach((el) => {
+      data[el.id] = el.type === "checkbox" ? el.checked : el.value;
+    });
+
+    localStorage.setItem(formId, JSON.stringify(data));
+  }
+
+
+  function restoreForm(formId) {
+    const form = document.getElementById(formId);
+
+    if (!form) return;
+
+    const raw = localStorage.getItem(formId);
+
+    if (!raw) return;
+
+    const data = JSON.parse(raw);
+
+    Object.keys(data).forEach((id) => {
+      const el = document.getElementById(id);
+
+      if (!el) return;
+
+      if (el.type === "checkbox") {
+        el.checked = data[id];
+      } else {
+        el.value = data[id];
+      }
+    });
+  }
+
+
+  /* ==========================================================
+     NOTIFICATION TOAST
+  ========================================================== */
+
+  function showNotificationToast(msg, isError = false) {
+    const toastEl = document.getElementById("liveSystemToast");
+    const msgEl = document.getElementById("toastMessageContent");
+
+    if (!toastEl || !msgEl) {
+      console.log(msg);
+      return;
+    }
+
+    msgEl.textContent = msg;
+
+    toastEl.className =
+      "toast align-items-center shadow-lg border-0 " +
+      (isError ? "toast-error-custom" : "toast-success-custom");
+
+    const bsToast = new bootstrap.Toast(toastEl);
+
+    bsToast.show();
+  }
+
+
+  /* ==========================================================
+     WINDOW LOAD
+  ========================================================== */
+
+  window.onload = function () {
+
+    loadEmployees();
+
+    const hasSession = localStorage.getItem("ys_pos_session");
+
+    if (hasSession) {
+      restoreSession();
+    } else {
+      document.getElementById("loginOverlay").style.display = "flex";
+    }
+
+
+    /* ========================================================
+       BARCODE AUTOFOCUS
+
+       Do not steal focus while:
+       - a modal is open
+       - user is typing in an input/select/textarea
+       - user is using a contenteditable element
+    ======================================================== */
+
+    setInterval(() => {
+
+      const loginOverlay = document.getElementById("loginOverlay");
+      const checkoutModal = document.getElementById("checkoutModal");
+      const voidModal = document.getElementById("voidVerificationModal");
+      const shiftModal = document.getElementById("shiftReportModal");
+      const managerDailyModal = document.getElementById("managerDailyModal");
+
+      const acceptDeliveryModal = document.getElementById("acceptDeliveryModal");
+      const acceptDeliveryTypeModal = document.getElementById("acceptDeliveryTypeModal");
+
+      const yourFindsLabelModal = document.getElementById("yourFindsLabelModal");
+      const yourFindsReprintModal = document.getElementById("yourFindsReprintModal");
+
+      const yourFindsDeliveryDetailsModal =
+        document.getElementById("yourFindsDeliveryDetailsModal");
+
+
+      const overlaysActive =
+        (loginOverlay && loginOverlay.style.display !== "none") ||
+        (checkoutModal && checkoutModal.style.display === "flex") ||
+        (voidModal && voidModal.style.display === "flex") ||
+        (shiftModal && shiftModal.style.display === "flex") ||
+        (managerDailyModal && managerDailyModal.style.display === "flex") ||
+        (acceptDeliveryModal && acceptDeliveryModal.style.display === "flex") ||
+        (acceptDeliveryTypeModal && acceptDeliveryTypeModal.style.display === "flex") ||
+        (yourFindsLabelModal && yourFindsLabelModal.style.display === "flex") ||
+        (yourFindsReprintModal && yourFindsReprintModal.style.display === "flex") ||
+        (
+          yourFindsDeliveryDetailsModal &&
+          yourFindsDeliveryDetailsModal.style.display === "flex"
+        );
+
+
+      const activeElement = document.activeElement;
+
+
+      const focusOnTypingField =
+        activeElement &&
+        (
+          activeElement.tagName === "INPUT" ||
+          activeElement.tagName === "SELECT" ||
+          activeElement.tagName === "TEXTAREA" ||
+          activeElement.isContentEditable
+        );
+
+
+      if (!overlaysActive && !focusOnTypingField) {
+
+        const terminalWorkspace =
+          document.getElementById("terminalWorkspace");
+
+        const codeInput =
+          document.getElementById("codeInput");
+
+
+        if (
+          terminalWorkspace &&
+          terminalWorkspace.style.display === "block" &&
+          codeInput
+        ) {
+          codeInput.focus();
+        }
+
+      }
+
+    }, 300);
+
+  };
+
+
+  /* ==========================================================
+     FORM AUTO-SAVE
+  ========================================================== */
+
+  document.addEventListener("input", function (e) {
+
+    if (e.target.closest("#shiftReportModal")) {
+      saveForm("shiftReportModal");
+    }
+
+    if (e.target.closest("#managerDailyModal")) {
+      saveForm("managerDailyModal");
+    }
+
+  });
+
+</script>

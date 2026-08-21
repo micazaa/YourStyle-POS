@@ -1,0 +1,872 @@
+<div id="posPage">
+
+  <div class="container-fluid p-4" id="terminalWorkspace" style="display:none; height: calc(100vh - 85px);">
+    <div class="row h-100 g-4">
+
+      <div class="col-md-4 h-100 d-flex flex-column">
+        <div class="card-pane">
+          <div class="pane-header">
+            <h6>Add Items</h6>
+          </div>
+          <div class="pane-body">
+
+            <div class="mb-4">
+              <label class="form-label">Scan Barcode Here</label>
+              <input type="text" class="form-control" id="codeInput" placeholder="Ready to scan..." autocomplete="off">
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label">Or Search Item Manually</label>
+              <div class="item-search-wrapper">
+                <input type="text" class="form-control" id="manualItemSearch" placeholder="Type item name, size, or category..." autocomplete="off" oninput="filterManualItemList()" onfocus="filterManualItemList()" onkeydown="handleManualSearchKeydown(event)">
+                <div id="manualItemResults" class="list-group position-absolute w-100"
+                  style="max-height: 220px; overflow-y: auto; z-index: 1000; display:none; top: 100%; left: 0;"></div>
+              </div>
+              <input type="hidden" id="manualItemSelect" value="">
+              <button type="button" class="btn btn-dark-custom w-100 mt-2" onclick="addManualItem()">Add to Cart</button>
+            </div>
+
+            <div class="p-3 rounded" style="background-color:#fdfafa; border: 1px solid var(--border-color);">
+              <h6 class="fw-bold mb-2" style="font-size:0.85rem; color: var(--pink-hover);">Custom Unlisted Item</h6>
+              <div class="mb-2"><input type="text" class="form-control form-control-sm" id="customName" placeholder="Item Name / Description">
+              </div>
+              <div class="row g-2 mb-2">
+                <div class="col-5"><input type="text" class="form-control form-control-sm" id="customSize" placeholder="Size">
+                </div>
+                <div class="col-7"><input type="number" class="form-control form-control-sm text-end" id="customPrice" placeholder="Price (₱)" min="0">
+                </div>
+              </div>
+              <button type="button" class="btn btn-outline-pink btn-sm w-100" onclick="addCustomItem()">Add Custom Item</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-8 h-100">
+        <div class="card-pane">
+          <div class="pane-header">
+            <h6>Shopping Cart</h6>
+            <button class="btn btn-sm text-danger border-0 bg-transparent fw-semibold" onclick="clearCart()">Clear All</button>
+          </div>
+
+          <div class="pane-body p-0">
+            <table class="table align-middle">
+              <thead>
+                <tr>
+                  <th class="ps-3" style="width:70px;">Image</th>
+                  <th>Product</th>
+                  <th class="text-center" style="width:80px;">Size</th>
+                  <th class="text-center" style="width:80px;">Qty</th>
+                  <th class="text-end" style="width:100px;">Price</th>
+                  <th class="text-center" style="width:140px;">Discount</th>
+                  <th class="text-end pe-3" style="width:110px;">Total</th>
+                  <th style="width:40px;"></th>
+                </tr>
+              </thead>
+              <tbody id="cartRows"></tbody>
+            </table>
+            <div id="emptyCartMessage" class="text-center py-5 text-muted">
+              <p class="mb-0 small">The cart is currently empty.</p>
+            </div>
+          </div>
+
+          <!-- ===== Optimized Checkout / Summary Section ===== -->
+          <div class="summary-box">
+            <div class="summary-flex">
+
+              <!-- LEFT: all totals & discount controls -->
+              <div class="summary-totals">
+                <div class="row mb-1">
+                  <div class="col-8 text-end small text-muted">Total Items:</div>
+                  <div class="col-4 text-end fw-bold"><span id="totalItemsCountOut">0</span></div>
+                </div>
+
+                <div class="row mb-1">
+                  <div class="col-8 text-end small text-muted">Subtotal:</div>
+                  <div class="col-4 text-end fw-bold">₱<span id="subTotalOut">0.00</span></div>
+                </div>
+
+                <div class="row mb-1">
+                  <div class="col-8 text-end small text-muted">12% VAT (Included):</div>
+                  <div class="col-4 text-end fw-bold text-muted">₱<span id="vatBreakdownOut">0.00</span></div>
+                </div>
+
+                <div class="row align-items-center mt-2">
+                  <div class="col-4 text-end small text-muted">Global Discount:</div>
+                  <div class="col-4">
+                    <select class="form-select form-select-sm text-center" id="globalDiscountType" onchange="renderCart()">
+                        <option value="percentage">% Percentage</option>
+                        <option value="amount">Fixed Amount</option>
+                      </select>
+                  </div>
+                  <div class="col-4">
+                    <input type="number" class="form-control form-control-sm text-end fw-bold" id="globalDiscountValue" placeholder="0" min="0" oninput="renderCart()">
+                  </div>
+                </div>
+              </div>
+
+              <!-- RIGHT: grand total + checkout action -->
+              <div class="summary-action">
+                <div class="grand-total-block">
+                  <span class="label">Grand Total</span>
+                  <h3 class="fw-bold m-0 text-dark">₱<span id="grandTotal">0.00</span></h3>
+                </div>
+                <button type="button" class="btn btn-pink btn-lg w-100 py-3 text-white fw-bold" onclick="triggerCheckoutConsoleModal()">Proceed to Checkout</button>
+              </div>
+
+            </div>
+          </div>
+          <!-- ===== End Checkout / Summary Section ===== -->
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <div id="successModal"
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center;">
+    <div
+      style="background: white; padding: 30px; border-radius: 8px; text-align: center; max-width: 400px; width: 90%;">
+      <h2 style="color: #28a745; margin-top: 0;">Transaction Complete!</h2>
+      <p>Receipt ID: <strong id="successReceiptId"></strong></p>
+      <p id="successChangeContainer" style="display: none; font-size: 1.2em;">Change Due:
+        <strong id="successChangeGiven" style="color: #d9534f;"></strong></p>
+      <button
+        type="button"
+        class="btn btn-pink mt-3 px-4"
+        onclick="startNewTransaction()"
+      >
+        New Transaction
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ==========================================================
+   CART HELPERS
+========================================================== */
+  function calculateLineDiscount(item) {
+      const lineRawCost = item.price * item.quantity;
+      if (item.discountValue <= 0) {
+          return 0;
+      }
+      if (item.discountType === "percentage") {
+          return lineRawCost * (item.discountValue / 100);
+      }
+      return item.discountValue;
+  }
+
+  function calculateGlobalDiscount(subtotal){
+    const value = parseFloat(document.getElementById("globalDiscountValue").value) || 0;
+    const type =document.getElementById("globalDiscountType").value;
+
+    if(value <= 0){
+      return 0;}
+
+    if(type === "percentage"){
+      return subtotal * value / 100;}
+    return value;
+  }
+
+  function updateCartSummary(items, subtotal){
+    calculatedBaseTotalDue = Math.max(0, subtotal - calculateGlobalDiscount(subtotal));
+
+    const vat = calculatedBaseTotalDue - (calculatedBaseTotalDue / 1.12);
+
+    document.getElementById("totalItemsCountOut").textContent = items;
+    document.getElementById("subTotalOut").textContent = subtotal.toFixed(2);
+    document.getElementById("vatBreakdownOut").textContent = vat.toFixed(2);
+    document.getElementById("grandTotal").textContent = calculatedBaseTotalDue.toFixed(2);
+  }
+
+  function restoreCartFocus(tbody, focusInfo){
+    if (focusInfo) {
+      let selector = `[data-idx="${focusInfo.idx}"][data-field="${focusInfo.field}"]`;
+      let target = tbody.querySelector(selector);
+      if (target) {
+        target.focus();
+        if (focusInfo.selStart !== null && target.setSelectionRange) {
+          try {
+            target.setSelectionRange(focusInfo.selStart, focusInfo.selEnd);
+          } catch (e) {}
+        }
+      }
+    }
+  }
+  
+  function renderCart() {
+    let tbody = document.getElementById("cartRows");
+    let activeEl = document.activeElement;
+    let focusInfo = null;
+    if (
+      activeEl &&
+      activeEl.hasAttribute &&
+      activeEl.hasAttribute("data-idx") &&
+      tbody.contains(activeEl)
+    ) {
+      focusInfo = {
+        idx: activeEl.getAttribute("data-idx"),
+        field: activeEl.getAttribute("data-field"),
+        selStart:
+          typeof activeEl.selectionStart === "number"
+            ? activeEl.selectionStart
+            : null,
+        selEnd:
+          typeof activeEl.selectionEnd === "number"
+            ? activeEl.selectionEnd
+            : null,
+      };
+      saveSession();
+    }
+
+    tbody.innerHTML = "";
+
+    if (cart.length === 0) {
+
+      document.getElementById(
+        "emptyCartMessage"
+      ).style.display = "block";
+
+      updateCartSummary(0, 0);
+
+      calculatedBaseTotalDue = 0;
+
+      return;
+    }
+
+    document.getElementById("emptyCartMessage").style.display = "none";
+    let subtotalAccumulator = 0;
+    let itemQuantityAccumulator = 0;
+
+    cart.forEach((item, index) => {
+      let lineRawCost = item.price * item.quantity;
+      const calculatedLineDiscount = calculateLineDiscount(item);
+
+      let lineNetValue = Math.max(0, lineRawCost - calculatedLineDiscount);
+      subtotalAccumulator += lineNetValue;
+
+      let tr = document.createElement("tr");
+      let imgTag = item.imageUrl
+        ? `<img src="${item.imageUrl}" class="cart-img">`
+        : `<div class="cart-img bg-light border d-flex align-items-center justify-content-center text-muted small" style="font-size:10px;">No Img</div>`;
+
+      tr.innerHTML = `
+            <td class="ps-3">${imgTag}</td>
+            <td><div class="fw-bold">${
+              item.name
+            }</div><div class="text-muted small">${item.code}</div></td>
+            <td class="text-center fw-semibold">${item.size || ""}</td>
+            <td class="text-center">
+              <input type="number" class="form-control form-control-sm text-center mx-auto" style="width:60px; font-weight:600;" value="${
+                item.quantity
+              }" data-idx="${index}" data-field="qty" onchange="updateQty(${index}, this.value)">
+            </td>
+            <td class="text-end fw-semibold">₱${item.price.toFixed(2)}</td>
+            <td>
+              <div class="input-group input-group-sm mx-auto" style="width:130px;">
+                <select class="form-select p-1 text-center" style="font-size:11px;" data-idx="${index}" data-field="discountType" onchange="changeDiscountType(${index}, this.value)">
+                  <option value="percentage" ${
+                    item.discountType === "percentage" ? "selected" : ""
+                  }>%</option>
+                  <option value="amount" ${
+                    item.discountType === "amount" ? "selected" : ""
+                  }>₱</option>
+                </select>
+                <input type="text" inputmode="decimal" class="form-control text-end p-1 fw-bold" style="font-size:12px;" value="${
+                  item.discountValue || ""
+                }" placeholder="0" data-idx="${index}" data-field="discount" oninput="updateDiscountValue(${index}, this.value)">
+              </div>
+            </td>
+            <td class="text-end fw-bold pe-3">₱${lineNetValue.toFixed(2)}</td>
+            <td><button class="btn btn-sm text-danger p-0 border-0 bg-transparent fw-bold" onclick="removeItem(${index})">✕</button></td>
+          `;
+      tbody.appendChild(tr);
+    });
+
+    const globalReduction = calculateGlobalDiscount(subtotalAccumulator);
+
+    calculatedBaseTotalDue = Math.max(0, subtotalAccumulator - globalReduction);
+    let includedVatAmount =
+      calculatedBaseTotalDue - calculatedBaseTotalDue / 1.12;
+
+    document.getElementById("totalItemsCountOut").textContent =
+      itemQuantityAccumulator;
+    document.getElementById("subTotalOut").textContent =
+      subtotalAccumulator.toFixed(2);
+    document.getElementById("vatBreakdownOut").textContent =
+      includedVatAmount.toFixed(2);
+    document.getElementById("grandTotal").textContent =
+      calculatedBaseTotalDue.toFixed(2);
+
+    restoreCartFocus(
+    tbody,
+    focusInfo
+    );
+  }
+
+  // Scanner Input Automation Keydown Listener
+document
+  .getElementById("codeInput")
+  .addEventListener("keydown", function (e) {
+
+    if (e.key !== "Enter") {
+      return;
+    }
+
+    e.preventDefault();
+
+    const scannedCode =
+      this.value.trim();
+
+    if (!scannedCode) {
+      return;
+    }
+
+    const foundItem =
+      masterInventory.find(function(item) {
+
+        return String(item.code || "").trim() ===
+          scannedCode;
+
+      });
+
+
+    if (foundItem) {
+
+      addItemToCart(
+        foundItem,
+        false
+      );
+
+      showNotificationToast(
+        "Added: " + foundItem.name
+      );
+
+    } else {
+
+      showNotificationToast(
+        "Code " +
+        scannedCode +
+        " not found.",
+        true
+      );
+
+    }
+
+
+    this.value = "";
+
+    saveSession();
+
+  });
+
+  function updateQty(index, val) {
+    let qty = parseInt(val) || 1;
+    cart[index].quantity = qty <= 0 ? 1 : qty;
+    renderCart();
+  }
+
+    function changeDiscountType(index, type) {
+    cart[index].discountType = type;
+    renderCart();
+  }
+
+  function updateDiscountValue(index, val) {
+    let cleaned = val.replace(/[^0-9.]/g, "");
+    cart[index].discountValue = parseFloat(cleaned) || 0;
+    renderCart();
+  }
+
+  function removeItem(index) {
+    cart.splice(index, 1);
+    renderCart();
+  }
+
+  function clearCart() {
+    cart = [];
+    document.getElementById("globalDiscountValue").value = "";
+    document.getElementById("globalDiscountType").value = "percentage";
+    renderCart();
+  }
+
+function refreshInventory(callback) {
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+
+      masterInventory = data;
+
+      populateManualDropdown(data);
+
+      if (callback) {
+        callback();
+      }
+
+    })
+    .withFailureHandler(function(err) {
+
+      showNotificationToast(
+        err.message || "Failed to load inventory.",
+        true
+      );
+
+    })
+    .getSellableInventory();
+}
+
+  function populateManualDropdown(items) {
+    document.getElementById("manualItemSearch").value = "";
+    document.getElementById("manualItemSelect").value = "";
+    manualSearchHighlightIndex = -1;
+    let resultsBox = document.getElementById("manualItemResults");
+    resultsBox.innerHTML = "";
+    resultsBox.style.display = "none";
+  }
+
+  // Renders the filtered, clickable list under the search box.
+  function filterManualItemList() {
+    let query = document
+      .getElementById("manualItemSearch")
+      .value.trim()
+      .toLowerCase();
+    let resultsBox = document.getElementById("manualItemResults");
+
+    if (!masterInventory || masterInventory.length === 0) {
+      resultsBox.innerHTML =
+        '<div class="list-group-item small text-muted">No items registered</div>';
+      resultsBox.style.display = "block";
+      return;
+    }
+
+    let matches = masterInventory
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => {
+        if (!query) return true;
+      let haystack =
+        `${item.name} ${item.size} ${item.category} ${item.code}`
+          .toLowerCase();
+        return haystack.includes(query);
+      })
+      .slice(0, 50); // cap rendered rows for performance
+
+    manualSearchHighlightIndex = -1;
+
+    if (matches.length === 0) {
+      resultsBox.innerHTML =
+        '<div class="list-group-item small text-muted">No matching items</div>';
+      resultsBox.style.display = "block";
+      return;
+    }
+
+    resultsBox.innerHTML = matches
+      .map(
+        ({ item, index }, pos) => `
+          <button type="button" class="list-group-item list-group-item-action small py-2" data-pos="${pos}" data-inventory-index="${index}" onclick="selectManualItem(${index})">
+            <span class="fw-semibold">[${item.category}] ${item.name}</span>
+            <span class="text-muted"> (${item.size}) - ₱${item.price.toFixed(
+          2,
+        )}</span>
+          </button>
+        `,
+      )
+      .join("");
+    resultsBox.style.display = "block";
+  }
+
+  // Arrow-key navigation + Enter-to-select within the results list.
+  function handleManualSearchKeydown(e) {
+    let resultsBox = document.getElementById("manualItemResults");
+    if (resultsBox.style.display === "none") return;
+    let options = Array.from(
+      resultsBox.querySelectorAll("[data-inventory-index]"),
+    );
+    if (options.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      manualSearchHighlightIndex = Math.min(
+        manualSearchHighlightIndex + 1,
+        options.length - 1,
+      );
+      highlightManualOption(options);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      manualSearchHighlightIndex = Math.max(manualSearchHighlightIndex - 1, 0);
+      highlightManualOption(options);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (
+        manualSearchHighlightIndex >= 0 &&
+        options[manualSearchHighlightIndex]
+      ) {
+        let invIndex = parseInt(
+          options[manualSearchHighlightIndex].getAttribute(
+            "data-inventory-index",
+          ),
+        );
+        selectManualItem(invIndex);
+      } else if (options.length === 1) {
+        let invIndex = parseInt(
+          options[0].getAttribute("data-inventory-index"),
+        );
+        selectManualItem(invIndex);
+      }
+    } else if (e.key === "Escape") {
+      resultsBox.style.display = "none";
+    }
+  }
+
+  function highlightManualOption(options) {
+    options.forEach((el, pos) => {
+      el.classList.toggle(
+        "active-highlight",
+        pos === manualSearchHighlightIndex,
+      );
+    });
+    let activeEl = options[manualSearchHighlightIndex];
+    if (activeEl) activeEl.scrollIntoView({ block: "nearest" });
+  }
+
+  // Called when a result row is clicked (or selected via Enter).
+function selectManualItem(index) {
+
+  const item =
+    masterInventory[index];
+
+  if (!item) {
+    return;
+  }
+
+
+  document.getElementById(
+    "manualItemSearch"
+  ).value =
+    `${item.name}` +
+    `${item.size ? " (" + item.size + ")" : ""}` +
+    ` - ₱${Number(item.price || 0).toFixed(2)}`;
+
+
+  document.getElementById(
+    "manualItemSelect"
+  ).value =
+    String(index);
+
+
+  document.getElementById(
+    "manualItemResults"
+  ).style.display =
+    "none";
+
+
+  manualSearchHighlightIndex =
+    -1;
+
+}
+
+  // Close the results dropdown when clicking outside of it.
+  document.addEventListener("click", function (e) {
+    let wrapper = document
+      .getElementById("manualItemSearch")
+      .closest(".item-search-wrapper");
+    if (wrapper && !wrapper.contains(e.target)) {
+      document.getElementById("manualItemResults").style.display = "none";
+    }
+  });
+
+  function addManualItem() {
+
+  const selectInput =
+    document.getElementById(
+      "manualItemSelect"
+    );
+
+  const searchInput =
+    document.getElementById(
+      "manualItemSearch"
+    );
+
+  const resultsBox =
+    document.getElementById(
+      "manualItemResults"
+    );
+
+
+  const indexStr =
+    selectInput.value;
+
+
+  if (indexStr === "") {
+
+    showNotificationToast(
+      "Please search and select an item first.",
+      true
+    );
+
+    searchInput.focus();
+
+    return;
+  }
+
+
+  const index =
+    parseInt(indexStr, 10);
+
+  const selectedItem =
+    masterInventory[index];
+
+
+  if (!selectedItem) {
+
+    showNotificationToast(
+      "Selected inventory item could not be found.",
+      true
+    );
+
+    resetManualItemSearch();
+
+    return;
+  }
+
+
+  addItemToCart(
+    selectedItem,
+    false
+  );
+
+
+  resetManualItemSearch();
+
+
+  // Immediately ready for another product
+  searchInput.focus();
+
+}
+
+function resetManualItemSearch() {
+
+  const searchInput =
+    document.getElementById(
+      "manualItemSearch"
+    );
+
+  const selectInput =
+    document.getElementById(
+      "manualItemSelect"
+    );
+
+  const resultsBox =
+    document.getElementById(
+      "manualItemResults"
+    );
+
+
+  searchInput.value = "";
+
+  selectInput.value = "";
+
+  resultsBox.innerHTML = "";
+
+  resultsBox.style.display =
+    "none";
+
+  manualSearchHighlightIndex =
+    -1;
+
+}
+
+  function addCustomItem() {
+    let name = document.getElementById("customName").value.trim();
+    let sizeInput = document.getElementById("customSize").value.trim();
+    let size = sizeInput;
+    let price = parseFloat(document.getElementById("customPrice").value);
+    if (!name || isNaN(price) || price < 0) {
+      showNotificationToast(
+        "Please check structural breakdown text parameters.",
+        true,
+      );
+      return;
+    }
+    let category = sizeInput ? "YourFinds" : "Others";
+    addItemToCart(
+      {
+        code: "CUSTOM-" + Date.now().toString().slice(-5),
+        name: name,
+        size: size,
+        price: price,
+        stock: 999,
+        category: category,
+      },
+      true,
+    );
+    document.getElementById("customName").value = "";
+    document.getElementById("customSize").value = "";
+    document.getElementById("customPrice").value = "";
+  }
+
+function addItemToCart(
+  product,
+  isCustom
+) {
+
+  const productCode =
+    String(product.code || "").trim();
+
+
+  let existingItem = null;
+
+
+  if (!isCustom) {
+
+    existingItem =
+      cart.find(function(item) {
+
+        return String(item.code || "").trim() ===
+          productCode;
+
+      });
+
+  }
+
+
+  if (existingItem) {
+
+    existingItem.quantity++;
+
+  } else {
+
+    cart.push({
+
+      code:
+        productCode,
+
+      name:
+        product.name || "",
+
+      size:
+        product.size || "",
+
+      price:
+        Number(product.price) || 0,
+
+      stock:
+        Number(product.stock) || 0,
+
+      imageUrl:
+        product.imageUrl || "",
+
+      inventoryType:
+        product.inventoryType || "STOCK",
+
+      quantity:
+        1,
+
+      discountType:
+        "percentage",
+
+      discountValue:
+        0,
+
+      isCustom:
+        !!isCustom,
+
+      category:
+        product.category || "Others"
+
+    });
+
+  }
+
+
+  renderCart();
+
+  saveSession();
+
+}
+
+function startNewTransaction() {
+
+  const successModal =
+    document.getElementById("successModal");
+
+  if (successModal) {
+    successModal.style.display = "none";
+  }
+
+
+  /* RESET SUCCESS DISPLAY */
+
+  const receiptOutput =
+    document.getElementById(
+      "successReceiptId"
+    );
+
+  if (receiptOutput) {
+    receiptOutput.textContent = "";
+  }
+
+
+  const changeOutput =
+    document.getElementById(
+      "successChangeGiven"
+    );
+
+  if (changeOutput) {
+    changeOutput.textContent = "";
+  }
+
+
+  const changeContainer =
+    document.getElementById(
+      "successChangeContainer"
+    );
+
+  if (changeContainer) {
+    changeContainer.style.display = "none";
+  }
+
+
+  /* RESET CART */
+
+  cart = [];
+
+  document.getElementById(
+    "globalDiscountValue"
+  ).value = "";
+
+  document.getElementById(
+    "globalDiscountType"
+  ).value = "percentage";
+
+  renderCart();
+
+  saveSession();
+
+
+  /* GET LATEST STOCK */
+
+  refreshInventory(function() {
+
+    renderCart();
+
+    const codeInput =
+      document.getElementById(
+        "codeInput"
+      );
+
+    if (codeInput) {
+
+      codeInput.value = "";
+
+      codeInput.focus();
+
+    }
+
+  });
+
+}
+  function getCashierShiftDownloadKey() {
+    const day = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
+    return `cashierShiftReportDownloaded_${day}_${currentCashier}`;
+  }
+</script>

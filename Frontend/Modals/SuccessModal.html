@@ -1,0 +1,20 @@
+<script>
+    function showSuccessModal(receiptId, changeGiven) {
+    document.getElementById("successReceiptId").innerText = receiptId;
+
+    let changeContainer = document.getElementById("successChangeContainer");
+    if (changeGiven > 0) {
+      document.getElementById("successChangeGiven").innerText =
+        "₱" + changeGiven.toFixed(2);
+      changeContainer.style.display = "block";
+    } else {
+      changeContainer.style.display = "none";
+    }
+
+    document.getElementById("successModal").style.display = "flex";
+  }
+
+  function closeSuccessModal() {
+    document.getElementById("successModal").style.display = "none";
+  }
+</script>
