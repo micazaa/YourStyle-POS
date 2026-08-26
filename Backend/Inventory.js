@@ -651,7 +651,7 @@ function acceptYourFindsDelivery(
 
     const deliverySheet =
       ss.getSheetByName(
-        SHEETS.YOURFINDS_DELIVERY_LOG
+        SHEETS.DELIVERY_LOG
       );
 
 
@@ -1183,45 +1183,19 @@ function acceptYourFindsDelivery(
 
 
             logInventoryMovement({
-
-              code:
-                code,
-
-              type:
-                INVENTORY_MOVEMENT_TYPE.DELIVERY,
-
-              qtyChange:
-                1,
-
-              stockBefore:
-                0,
-
-              stockAfter:
-                1,
-
-              referenceId:
-                deliveryId,
-
-              employee:
-                acceptedBy,
-
-              item:
-                "YourFinds " +
-                size,
-
-              reason:
-                "",
-
-              source:
-                INVENTORY_MOVEMENT_SOURCE
-                  .YOURFINDS_DELIVERY,
-
-              notes:
-                deliveryNo
-                  ? "Delivery No: " +
-                  deliveryNo
-                  : ""
-
+              code: code,
+              type: INVENTORY_MOVEMENT_TYPE.YOURFINDS,
+              qtyChange: 1,
+              stockBefore: 0,
+              stockAfter: 1,
+              referenceId: deliveryId,
+              employee: acceptedBy,
+              item: "YourFinds " + size,
+              reason: "",
+              source: INVENTORY_MOVEMENT_SOURCE.DELIVERY,
+              bundleNo: "",
+              remainingBundleQty: "",
+              notes: deliveryNo ? "Delivery No: " + deliveryNo : ""
             });
 
           }

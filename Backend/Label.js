@@ -1216,7 +1216,7 @@ function getYourFindsDeliveriesForLabelReprint() {
 
     const sheet =
       ss.getSheetByName(
-        SHEETS.YOURFINDS_DELIVERY_LOG
+        SHEETS.DELIVERY_LOG
       );
 
 
@@ -1227,7 +1227,7 @@ function getYourFindsDeliveriesForLabelReprint() {
         success: false,
 
         message:
-          "YourFinds Delivery Log sheet not found.",
+          "Delivery Log sheet not found.",
 
         deliveries: []
 
@@ -1513,7 +1513,7 @@ function getYourFindsDeliveryHistory() {
 
     const sheet =
       ss.getSheetByName(
-        SHEETS.YOURFINDS_DELIVERY_LOG
+        SHEETS.DELIVERY_LOG
       );
 
 
@@ -1524,7 +1524,7 @@ function getYourFindsDeliveryHistory() {
         success: false,
 
         message:
-          "YourFinds Delivery Log sheet not found.",
+          "Delivery Log sheet not found.",
 
         deliveries: []
 

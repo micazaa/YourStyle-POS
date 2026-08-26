@@ -23,7 +23,7 @@ const SHEETS = {
   INVENTORY: "Inventory",
   SALES_LOG: "Sales Log",
   INVENTORY_MOVEMENT_LOG: "Inventory Movement Log",
-  YOURFINDS_DELIVERY_LOG: "YourFinds Delivery Log",
+  DELIVERY_LOG: "Delivery Log",
   CASH_REPORT_LOG: "Cash Report Log",
   EMPLOYEES: "Employees",
   PRODUCT_MASTER: "Product Master",
@@ -182,7 +182,6 @@ const SALES_LOG_COLUMN_COUNT = 20;
 
 
 const MOVE_IDX = {
-
   TIMESTAMP: 0,
   CODE: 1,
   TYPE: 2,
@@ -194,13 +193,12 @@ const MOVE_IDX = {
   ITEM: 8,
   REASON: 9,
   SOURCE: 10,
-  NOTES: 11
-
+  BUNDLE_NO: 11,
+  REMAINING_BUNDLE_QTY: 12,
+  NOTES: 13
 };
 
-
 const MOVE_COL = {
-
   TIMESTAMP: 1,
   CODE: 2,
   TYPE: 3,
@@ -212,16 +210,16 @@ const MOVE_COL = {
   ITEM: 9,
   REASON: 10,
   SOURCE: 11,
-  NOTES: 12
-
+  BUNDLE_NO: 12,
+  REMAINING_BUNDLE_QTY: 13,
+  NOTES: 14
 };
 
-
-const MOVEMENT_LOG_COLUMN_COUNT = 12;
+const MOVEMENT_LOG_COLUMN_COUNT = 14;
 
 
 /* ==========================================================
-   YOURFINDS DELIVERY LOG
+   G
 ========================================================== */
 
 const DELIVERY_IDX = {
@@ -423,15 +421,12 @@ const CASH_REPORT_COL = {
 const CASH_REPORT_COLUMN_COUNT = 37;
 
 const INVENTORY_MOVEMENT_TYPE = {
-
-  SALE:"SALE",
-  VOID:"VOID",
-  DELIVERY:"DELIVERY",
-  SUPPLIER_RETURN:"SUPPLIER_RETURN",
-  ADJUSTMENT:"ADJUSTMENT"
-
+  YOURFINDS: "YOURFINDS",
+  PINS: "PINS",
+  OTHERS: "OTHERS",
+  BULK_PINS: "BULK_PINS",
+  BULK_OTHERS: "BULK_OTHERS"
 };
-
 
 const INVENTORY_MOVEMENT_SOURCE = {
   SALE: "SALE",
