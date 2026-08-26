@@ -1590,26 +1590,16 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
          ✓ Roll stock back if movement logging fails
       ====================================================== */
 
-    const result = changeInventoryStock({
-      code: code,
-
-      qtyChange: -quantitySold,
-
-      type: INVENTORY_MOVEMENT_TYPE.SALE,
-
-      referenceId: receiptId,
-
-      employee: employeeName,
-
-      item: String(item.name || "").trim(),
-
-      reason: "",
-
-      source: INVENTORY_MOVEMENT_SOURCE.CASHIER,
-
-      notes: "",
-    });
-
+  const result = changeInventoryStock({
+    code: code,
+    qtyChange: -quantitySold,
+    referenceId: receiptId,
+    employee: employeeName,
+    item: String(item.name || "").trim(),
+    reason: "",
+    source: INVENTORY_MOVEMENT_SOURCE.SALE,
+    notes: ""
+  });
     results.push(result);
   });
 

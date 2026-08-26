@@ -604,38 +604,16 @@ function voidAndRefundTransactionBackend(
           ) &&
           qty > 0
         ) {
-
           changeInventoryStock({
-
-            code:
-              code,
-
-            qtyChange:
-              qty,
-
-            type:
-              INVENTORY_MOVEMENT_TYPE.VOID,
-
-            referenceId:
-              receiptId,
-
-            employee:
-              authorizedBy,
-
-            item:
-              itemName,
-
-            reason:
-              voidReason,
-
-            source:
-              INVENTORY_MOVEMENT_SOURCE.VOID,
-
-            notes:
-              ""
-
+            code: code,
+            qtyChange: qty,
+            referenceId: receiptId,
+            employee: authorizedBy,
+            item: itemName,
+            reason: voidReason,
+            source: INVENTORY_MOVEMENT_SOURCE.VOID,
+            notes: ""
           });
-
         }
 
 
