@@ -1,824 +1,293 @@
 <!-- =========================================================
-     ACCEPT YOURSTYLE DELIVERY
-     PHASE 7.9G-A / G-B
-
-     DIRECT receiving UI only.
-     No database write yet.
+     ACCEPT YOURSTYLE DELIVERY — PHASE 7.9G
+     DIRECT + BULK HOLDER RECEIVING
 ========================================================== -->
 
 <div id="yourStyleDeliveryModal" class="generic-overlay-blur" style="display:none;">
-
-  <div
-    class="custom-popup-card"
-    style="
-      max-width:900px;
-      width:95%;
-      max-height:92vh;
-      overflow-y:auto;
-    "
-  >
-
-    <!-- HEADER -->
+  <div class="custom-popup-card" style="max-width:980px;width:96%;max-height:92vh;overflow-y:auto;">
 
     <div class="d-flex justify-content-between align-items-start mb-4 pb-3 border-bottom">
-
       <div>
         <h5 class="fw-bold mb-1">Accept YourStyle Delivery</h5>
-        <div class="small text-muted">Receive Pins and Others inventory.</div>
+        <div class="small text-muted">Receive exact products directly or create pending bulk holders.</div>
       </div>
-
       <button type="button" class="btn-close" onclick="closeYourStyleDeliveryModal()"></button>
-
     </div>
 
-
-    <!-- =====================================================
-         DELIVERY INFORMATION
-    ====================================================== -->
-
-    <div class="fw-semibold mb-3">
-      Delivery Information
-    </div>
-
+    <div class="fw-semibold mb-3">Delivery Information</div>
     <div class="row g-3 mb-4">
-
       <div class="col-md-6">
         <label class="form-label">Date Delivered <span class="text-danger">*</span></label>
-
-        <input
-          type="date"
-          id="yourStyleDeliveryDate"
-          class="form-control"
-          onchange="loadNextYourStyleDeliveryNumber()"
-        >
+        <input type="date" id="yourStyleDeliveryDate" class="form-control" onchange="loadNextYourStyleDeliveryNumber()">
       </div>
-
-
       <div class="col-md-6">
         <label class="form-label">Delivery No.</label>
-
-        <input
-          type="text"
-          id="yourStyleDeliveryNo"
-          class="form-control"
-          value="—"
-          readonly
-        >
+        <input type="text" id="yourStyleDeliveryNo" class="form-control" value="—" readonly>
       </div>
-
-
       <div class="col-md-6">
         <label class="form-label">Driver Name <span class="text-danger">*</span></label>
-
-        <input
-          type="text"
-          id="yourStyleDriverName"
-          class="form-control"
-          placeholder="Enter driver name"
-          autocomplete="off"
-        >
+        <input type="text" id="yourStyleDriverName" class="form-control" placeholder="Enter driver name" autocomplete="off">
       </div>
-
-
       <div class="col-md-6">
         <label class="form-label">Plate No. <span class="text-danger">*</span></label>
-
-        <input
-          type="text"
-          id="yourStylePlateNo"
-          class="form-control"
-          placeholder="Enter plate number"
-          autocomplete="off"
-        >
+        <input type="text" id="yourStylePlateNo" class="form-control" placeholder="Enter plate number" autocomplete="off">
       </div>
-
     </div>
-
-
-    <!-- =====================================================
-         ITEMS
-    ====================================================== -->
 
     <div class="d-flex justify-content-between align-items-center mb-3">
-
       <div>
         <div class="fw-semibold">Items Received</div>
-        <div class="small text-muted">Select the exact Product Master item and quantity.</div>
+        <div class="small text-muted">Each row may be DIRECT or BULK.</div>
       </div>
-
-      <button
-        type="button"
-        class="btn btn-sm btn-outline-dark"
-        onclick="addYourStyleDeliveryLine()"
-      >
-        + Add Item
-      </button>
-
+      <button type="button" class="btn btn-sm btn-outline-dark" onclick="addYourStyleDeliveryLine()">+ Add Item</button>
     </div>
 
-
-    <!-- PRODUCT LOADING -->
-
-    <div
-      id="yourStyleProductsLoading"
-      class="border rounded text-center text-muted py-4 mb-3"
-      style="display:none;"
-    >
-      Loading Product Master...
-    </div>
-
-
-    <!-- PRODUCT ERROR -->
-
-    <div
-      id="yourStyleProductsError"
-      class="alert alert-danger"
-      style="display:none;"
-    ></div>
-
-
-    <!-- DELIVERY LINES -->
-
+    <div id="yourStyleProductsLoading" class="border rounded text-center text-muted py-4 mb-3" style="display:none;">Loading Product Master...</div>
+    <div id="yourStyleProductsError" class="alert alert-danger" style="display:none;"></div>
     <div id="yourStyleDeliveryLines" class="mb-4"></div>
 
-
-      <!-- =====================================================
-          SUMMARY
-      ====================================================== -->
-
-      <div class="border rounded bg-light p-3 mb-4">
-
-        <div class="row g-3 text-center">
-
-          <div class="col-md-4">
-            <div class="small text-muted">Total Units</div>
-            <div id="yourStyleSummaryUnits" class="fw-bold fs-5">0</div>
-          </div>
-
-          <div class="col-md-4">
-            <div class="small text-muted">PINS</div>
-            <div id="yourStyleSummaryPins" class="fw-bold fs-5">0</div>
-          </div>
-
-          <div class="col-md-4">
-            <div class="small text-muted">OTHERS</div>
-            <div id="yourStyleSummaryOthers" class="fw-bold fs-5">0</div>
-          </div>
-
-        </div>
-
+    <div class="border rounded bg-light p-3 mb-4">
+      <div class="row g-3 text-center">
+        <div class="col-md-3"><div class="small text-muted">Direct Units</div><div id="yourStyleSummaryDirect" class="fw-bold fs-5">0</div></div>
+        <div class="col-md-3"><div class="small text-muted">Bulk Estimate</div><div id="yourStyleSummaryBulk" class="fw-bold fs-5">0</div></div>
+        <div class="col-md-3"><div class="small text-muted">Bundles</div><div id="yourStyleSummaryBundles" class="fw-bold fs-5">0</div></div>
+        <div class="col-md-3"><div class="small text-muted">Rows</div><div id="yourStyleSummaryRows" class="fw-bold fs-5">0</div></div>
       </div>
-
-
-    <!-- ACCEPTED BY -->
+    </div>
 
     <div class="mb-3">
-
-      <label class="form-label">
-        Accepted By
-      </label>
-
-      <input
-        type="text"
-        id="yourStyleAcceptedBy"
-        class="form-control"
-        readonly
-      >
-
+      <label class="form-label">Accepted By</label>
+      <input type="text" id="yourStyleAcceptedBy" class="form-control" readonly>
     </div>
-
-
-    <!-- REMARKS -->
 
     <div class="mb-4">
-
-      <label class="form-label">
-        Remarks
-      </label>
-
-      <textarea
-        id="yourStyleRemarks"
-        class="form-control"
-        rows="3"
-        placeholder="Optional notes about this delivery"
-      ></textarea>
-
+      <label class="form-label">Remarks</label>
+      <textarea id="yourStyleRemarks" class="form-control" rows="3" placeholder="Optional notes about this delivery"></textarea>
     </div>
-
-
-    <!-- ACTIONS -->
 
     <div class="d-flex gap-2">
-
-      <button
-        type="button"
-        class="btn btn-outline-secondary flex-fill"
-        onclick="closeYourStyleDeliveryModal()"
-      >
-        Cancel
-      </button>
-
-      <button
-        type="button"
-        id="acceptYourStyleDeliveryBtn"
-        class="btn btn-pink flex-fill fw-bold"
-        onclick="submitYourStyleDirectDelivery()"
-      >
-        Accept Delivery
-      </button>
-
+      <button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeYourStyleDeliveryModal()">Cancel</button>
+      <button type="button" id="acceptYourStyleDeliveryBtn" class="btn btn-pink flex-fill fw-bold" onclick="submitYourStyleDelivery()">Accept Delivery</button>
     </div>
-
   </div>
-
 </div>
 
-
 <script>
-
-/* ==========================================================
-   YOURSTYLE DELIVERY STATE
-========================================================== */
-
 var yourStyleDeliveryProducts = [];
 var yourStyleDeliveryLineCounter = 0;
 
-
-/* ==========================================================
-   OPEN
-========================================================== */
-
 function openYourStyleDeliveryModal() {
   const modal = document.getElementById("yourStyleDeliveryModal");
-
-  if (!modal) {
-    console.error("yourStyleDeliveryModal not found.");
-    return;
-  }
-
+  if (!modal) return console.error("yourStyleDeliveryModal not found.");
   resetYourStyleDeliveryModal();
-
   modal.style.display = "flex";
-
   loadYourStyleDeliveryProducts();
   loadNextYourStyleDeliveryNumber();
 }
 
-
-/* ==========================================================
-   CLOSE
-========================================================== */
-
 function closeYourStyleDeliveryModal() {
   const modal = document.getElementById("yourStyleDeliveryModal");
-
   if (modal) modal.style.display = "none";
 }
-
-
-/* ==========================================================
-   RESET
-========================================================== */
 
 function resetYourStyleDeliveryModal() {
   yourStyleDeliveryProducts = [];
   yourStyleDeliveryLineCounter = 0;
-
   const now = new Date();
   const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-  const today = localDate.toISOString().split("T")[0];
-
-  document.getElementById("yourStyleDeliveryDate").value = today;
+  document.getElementById("yourStyleDeliveryDate").value = localDate.toISOString().split("T")[0];
   document.getElementById("yourStyleDeliveryNo").value = "—";
   document.getElementById("yourStyleDriverName").value = "";
   document.getElementById("yourStylePlateNo").value = "";
   document.getElementById("yourStyleRemarks").value = "";
-
-  document.getElementById("yourStyleAcceptedBy").value =
-    currentEmployee && currentEmployee.name
-      ? currentEmployee.name
-      : currentCashier || "";
-
+  document.getElementById("yourStyleAcceptedBy").value = currentEmployee && currentEmployee.name ? currentEmployee.name : currentCashier || "";
   document.getElementById("yourStyleDeliveryLines").innerHTML = "";
   document.getElementById("yourStyleProductsError").style.display = "none";
-
   updateYourStyleDeliverySummary();
 }
-
-
-/* ==========================================================
-   LOAD PRODUCT MASTER
-========================================================== */
 
 function loadYourStyleDeliveryProducts() {
   const loading = document.getElementById("yourStyleProductsLoading");
   const error = document.getElementById("yourStyleProductsError");
-
   loading.style.display = "block";
   error.style.display = "none";
-
-  google.script.run
-    .withSuccessHandler(function(result) {
-      loading.style.display = "none";
-
-      if (!result || !result.success) {
-        error.style.display = "block";
-        error.textContent =
-          result && result.message
-            ? result.message
-            : "Unable to load Product Master.";
-
-        return;
-      }
-
-      yourStyleDeliveryProducts =
-        Array.isArray(result.products)
-          ? result.products
-          : [];
-
-      if (yourStyleDeliveryProducts.length === 0) {
-        error.style.display = "block";
-        error.textContent = "No active YourStyle products found.";
-        return;
-      }
-
-      addYourStyleDeliveryLine();
-    })
-    .withFailureHandler(function(err) {
-      loading.style.display = "none";
+  google.script.run.withSuccessHandler(function(result) {
+    loading.style.display = "none";
+    if (!result || !result.success) {
       error.style.display = "block";
-      error.textContent =
-        err && err.message
-          ? err.message
-          : "Unable to load Product Master.";
-    })
-    .getYourStyleDeliveryProducts();
+      error.textContent = result && result.message ? result.message : "Unable to load Product Master.";
+      return;
+    }
+    yourStyleDeliveryProducts = Array.isArray(result.products) ? result.products : [];
+    if (!yourStyleDeliveryProducts.length) {
+      error.style.display = "block";
+      error.textContent = "No active YourStyle STOCK products found.";
+      return;
+    }
+    addYourStyleDeliveryLine();
+  }).withFailureHandler(function(err) {
+    loading.style.display = "none";
+    error.style.display = "block";
+    error.textContent = err && err.message ? err.message : "Unable to load Product Master.";
+  }).getYourStyleDeliveryProducts();
 }
-
-
-/* ==========================================================
-   DELIVERY NUMBER PREVIEW
-========================================================== */
 
 function loadNextYourStyleDeliveryNumber() {
   const date = document.getElementById("yourStyleDeliveryDate").value;
   const field = document.getElementById("yourStyleDeliveryNo");
-
+  if (!date) { field.value = "—"; return; }
   field.value = "Loading...";
-
-  if (!date) {
-    field.value = "—";
-    return;
-  }
-
-  google.script.run
-    .withSuccessHandler(function(result) {
-      field.value =
-        result && result.deliveryNo
-          ? result.deliveryNo
-          : "—";
-    })
-    .withFailureHandler(function(err) {
-      console.error("YOURSTYLE DELIVERY NUMBER ERROR:", err);
-      field.value = "—";
-    })
-    .generateDeliveryIdentifiers(
-      "YOURSTYLE",
-      date
-    );
+  google.script.run.withSuccessHandler(function(result) {
+    field.value = result && result.deliveryNo ? result.deliveryNo : "—";
+  }).withFailureHandler(function() { field.value = "—"; }).generateDeliveryIdentifiers("YOURSTYLE", date);
 }
 
-
-/* ==========================================================
-   ADD LINE
-========================================================== */
 function addYourStyleDeliveryLine() {
-  if (!yourStyleDeliveryProducts.length) {
-    showNotificationToast("Product Master is still loading.", true);
-    return;
-  }
-
+  if (!yourStyleDeliveryProducts.length) return showNotificationToast("Product Master is still loading.", true);
   yourStyleDeliveryLineCounter++;
-
   const lineId = yourStyleDeliveryLineCounter;
-  const container = document.getElementById("yourStyleDeliveryLines");
   const line = document.createElement("div");
-
   line.className = "yourstyle-delivery-line border rounded px-2 py-2 mb-2";
-  line.dataset.lineId = String(lineId);
-
   line.innerHTML = `
     <div class="row g-2 align-items-end">
-
-      <!-- ITEM NUMBER -->
-
-      <div class="col-auto">
-        <div class="small text-muted mb-1">#</div>
-
-        <div
-          class="yourstyle-line-title fw-bold text-center"
-          style="min-width:28px;padding:7px 0;"
-        >
-          ${lineId}
-        </div>
+      <div class="col-auto"><div class="small text-muted mb-1">#</div><div class="yourstyle-line-title fw-bold text-center" style="min-width:28px;padding:7px 0;">${lineId}</div></div>
+      <div class="col-md-2"><label class="form-label small mb-1">Type</label><select class="form-select form-select-sm yourstyle-line-type" onchange="handleYourStyleLineConfigChange(this)"><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option></select></div>
+      <div class="col-md-2"><label class="form-label small mb-1">Mode</label><select class="form-select form-select-sm yourstyle-line-mode" onchange="handleYourStyleLineConfigChange(this)"><option value="DIRECT">DIRECT</option><option value="BULK">BULK</option></select></div>
+      <div class="col yourstyle-direct-fields">
+        <label class="form-label small mb-1">Product</label>
+        <input type="text" class="form-control form-control-sm yourstyle-line-product-search" placeholder="Search code, product or price..." autocomplete="off" list="yourStyleProductList-${lineId}" oninput="handleYourStyleProductSearch(this)">
+        <datalist class="yourstyle-line-product-list" id="yourStyleProductList-${lineId}"></datalist>
+        <input type="hidden" class="yourstyle-line-product">
       </div>
-
-
-      <!-- TYPE -->
-
-      <div class="col-md-2">
-        <label class="form-label small mb-1">
-          Type
-        </label>
-
-        <select
-          class="form-select form-select-sm yourstyle-line-type"
-          onchange="handleYourStyleLineTypeChange(this)"
-        >
-          <option value="PINS">PINS</option>
-          <option value="OTHERS">OTHERS</option>
-        </select>
-      </div>
-
-    <!-- PRODUCT -->
-
-    <div class="col">
-      <label class="form-label small mb-1">
-        Product
-      </label>
-
-      <input
-        type="text"
-        class="form-control form-control-sm yourstyle-line-product-search"
-        placeholder="Search code, product or price..."
-        autocomplete="off"
-        list="yourStyleProductList-${lineId}"
-        oninput="handleYourStyleProductSearch(this)"
-      >
-
-      <datalist
-        class="yourstyle-line-product-list"
-        id="yourStyleProductList-${lineId}"
-      ></datalist>
-
-      <input
-        type="hidden"
-        class="yourstyle-line-product"
-      >
-    </div>
-
-      <!-- QUANTITY -->
-
-      <div
-        class="col-md-2"
-        style="max-width:120px;"
-      >
-        <label class="form-label small mb-1">
-          Qty
-        </label>
-
-        <input
-          type="number"
-          class="form-control form-control-sm yourstyle-line-qty"
-          min="1"
-          max="99999"
-          step="1"
-          value="1"
-          oninput="updateYourStyleDeliverySummary()"
-        >
-      </div>
-
-
-      <!-- REMOVE -->
-
-      <div class="col-auto">
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-danger"
-          style="min-width:38px;"
-          title="Remove item"
-          onclick="removeYourStyleDeliveryLine(this)"
-        >
-          ×
-        </button>
-      </div>
-
-    </div>
-  `;
-
-  container.appendChild(line);
-
-  populateYourStyleLineProducts(
-    line,
-    "PINS"
-  );
-
+      <div class="col-md-2 yourstyle-direct-fields" style="max-width:120px;"><label class="form-label small mb-1">Actual Qty</label><input type="number" class="form-control form-control-sm yourstyle-line-qty" min="1" max="99999" step="1" value="1" oninput="updateYourStyleDeliverySummary()"></div>
+      <div class="col yourstyle-bulk-fields" style="display:none;"><label class="form-label small mb-1">Description</label><input type="text" class="form-control form-control-sm yourstyle-line-bulk-description" value="PINS BUNDLE"></div>
+      <div class="col-md-2 yourstyle-bulk-fields" style="display:none;max-width:120px;"><label class="form-label small mb-1">Bundle Qty</label><input type="number" class="form-control form-control-sm yourstyle-line-bundle-qty" min="1" step="1" value="1" oninput="updateYourStyleDeliverySummary()"></div>
+      <div class="col-md-2 yourstyle-bulk-fields" style="display:none;max-width:150px;"><label class="form-label small mb-1">Est. Total Pcs</label><input type="number" class="form-control form-control-sm yourstyle-line-estimated-qty" min="1" step="1" value="80" oninput="updateYourStyleDeliverySummary()"></div>
+      <div class="col-auto"><button type="button" class="btn btn-sm btn-outline-danger" style="min-width:38px;" title="Remove item" onclick="removeYourStyleDeliveryLine(this)">×</button></div>
+    </div>`;
+  document.getElementById("yourStyleDeliveryLines").appendChild(line);
+  populateYourStyleLineProducts(line, "PINS");
   renumberYourStyleDeliveryLines();
   updateYourStyleDeliverySummary();
 }
 
-/* ==========================================================
-   REMOVE LINE
-========================================================== */
-
 function removeYourStyleDeliveryLine(button) {
   const line = button.closest(".yourstyle-delivery-line");
-
   if (line) line.remove();
-
   renumberYourStyleDeliveryLines();
   updateYourStyleDeliverySummary();
 }
 
 function renumberYourStyleDeliveryLines() {
-  const rows = document.querySelectorAll(
-    "#yourStyleDeliveryLines .yourstyle-delivery-line"
-  );
-
-  rows.forEach(function(row, index) {
+  document.querySelectorAll("#yourStyleDeliveryLines .yourstyle-delivery-line").forEach(function(row, index) {
     const title = row.querySelector(".yourstyle-line-title");
-
-    if (title) {
-      title.textContent = "Item " + (index + 1);
-    }
+    if (title) title.textContent = String(index + 1);
   });
 }
 
-
-/* ==========================================================
-   TYPE CHANGE
-========================================================== */
-
-function handleYourStyleLineTypeChange(select) {
-  const line = select.closest(".yourstyle-delivery-line");
-
+function handleYourStyleLineConfigChange(field) {
+  const line = field.closest(".yourstyle-delivery-line");
   if (!line) return;
-
-  populateYourStyleLineProducts(
-    line,
-    select.value
-  );
-
+  const type = line.querySelector(".yourstyle-line-type").value;
+  const mode = line.querySelector(".yourstyle-line-mode").value;
+  line.querySelectorAll(".yourstyle-direct-fields").forEach(function(el) { el.style.display = mode === "DIRECT" ? "" : "none"; });
+  line.querySelectorAll(".yourstyle-bulk-fields").forEach(function(el) { el.style.display = mode === "BULK" ? "" : "none"; });
+  if (mode === "DIRECT") populateYourStyleLineProducts(line, type);
+  const desc = line.querySelector(".yourstyle-line-bulk-description");
+  if (desc && mode === "BULK") desc.value = type === "PINS" ? "PINS BUNDLE" : "OTHERS BUNDLE";
   updateYourStyleDeliverySummary();
 }
-
-
-/* ==========================================================
-   PRODUCT OPTIONS
-========================================================== */
 
 function populateYourStyleLineProducts(line, type) {
   type = String(type || "").trim().toUpperCase();
-
   const searchInput = line.querySelector(".yourstyle-line-product-search");
   const hiddenInput = line.querySelector(".yourstyle-line-product");
   const datalist = line.querySelector(".yourstyle-line-product-list");
-
   if (!searchInput || !hiddenInput || !datalist) return;
-
-  const products = yourStyleDeliveryProducts.filter(function(product) {
-    return String(product.category || "").trim().toUpperCase() === type;
-  });
-
   searchInput.value = "";
   hiddenInput.value = "";
   datalist.innerHTML = "";
-
-  products.forEach(function(product) {
+  yourStyleDeliveryProducts.filter(function(product) { return String(product.category || "").trim().toUpperCase() === type; }).forEach(function(product) {
     const option = document.createElement("option");
-
-    option.value =
-      product.productCode +
-      " — " +
-      product.description +
-      " — ₱" +
-      formatYourStylePrice(product.defaultPrice);
-
+    option.value = product.productCode + " — " + product.description + " — ₱" + formatYourStylePrice(product.defaultPrice);
     datalist.appendChild(option);
   });
-
-  updateYourStyleDeliverySummary();
 }
 
 function handleYourStyleProductSearch(input) {
   const line = input.closest(".yourstyle-delivery-line");
-
   if (!line) return;
-
-  const type = String(
-    line.querySelector(".yourstyle-line-type").value || ""
-  ).trim().toUpperCase();
-
+  const type = String(line.querySelector(".yourstyle-line-type").value || "").trim().toUpperCase();
   const hiddenInput = line.querySelector(".yourstyle-line-product");
   const enteredValue = String(input.value || "").trim();
-
   const product = yourStyleDeliveryProducts.find(function(item) {
-    const displayValue =
-      item.productCode +
-      " — " +
-      item.description +
-      " — ₱" +
-      formatYourStylePrice(item.defaultPrice);
-
-    return (
-      String(item.category || "").trim().toUpperCase() === type &&
-      displayValue === enteredValue
-    );
+    const displayValue = item.productCode + " — " + item.description + " — ₱" + formatYourStylePrice(item.defaultPrice);
+    return String(item.category || "").trim().toUpperCase() === type && displayValue === enteredValue;
   });
-
   hiddenInput.value = product ? product.productCode : "";
-
   updateYourStyleDeliverySummary();
 }
 
-
-/* ==========================================================
-   PRICE FORMAT
-========================================================== */
-
 function formatYourStylePrice(value) {
-  const number = Number(value) || 0;
-
-  return number.toLocaleString(
-    "en-PH",
-    {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2
-    }
-  );
+  return (Number(value) || 0).toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
-
-
-/* ==========================================================
-   GET CURRENT LINES
-========================================================== */
 
 function getYourStyleDeliveryLinesFromForm() {
-  const rows = Array.from(
-    document.querySelectorAll(
-      "#yourStyleDeliveryLines .yourstyle-delivery-line"
-    )
-  );
-
-  return rows.map(function(row, index) {
-    const type = String(
-      row.querySelector(".yourstyle-line-type").value || ""
-    ).trim().toUpperCase();
-
-    const productCode = String(
-      row.querySelector(".yourstyle-line-product").value || ""
-    ).trim();
-
-    const quantity = Number(
-      row.querySelector(".yourstyle-line-qty").value
-    ) || 0;
-
-    const product = yourStyleDeliveryProducts.find(function(item) {
-      return String(item.productCode || "").trim() === productCode;
-    });
-
-    return {
-      lineId: String(index + 1).padStart(3, "0"),
-      type: type,
-      productCode: productCode,
-      description: product ? product.description : "",
-      quantity: quantity
-    };
+  return Array.from(document.querySelectorAll("#yourStyleDeliveryLines .yourstyle-delivery-line")).map(function(row) {
+    const type = String(row.querySelector(".yourstyle-line-type").value || "").trim().toUpperCase();
+    const receiveMode = String(row.querySelector(".yourstyle-line-mode").value || "").trim().toUpperCase();
+    if (receiveMode === "DIRECT") {
+      return { type: type, receiveMode: receiveMode, productCode: String(row.querySelector(".yourstyle-line-product").value || "").trim(), quantity: Number(row.querySelector(".yourstyle-line-qty").value) || 0 };
+    }
+    return { type: type, receiveMode: receiveMode, description: String(row.querySelector(".yourstyle-line-bulk-description").value || "").trim(), bundleQty: Number(row.querySelector(".yourstyle-line-bundle-qty").value) || 0, estimatedQuantity: Number(row.querySelector(".yourstyle-line-estimated-qty").value) || 0 };
   });
 }
-
-
-/* ==========================================================
-   SUMMARY
-========================================================== */
 
 function updateYourStyleDeliverySummary() {
-  const rows = Array.from(
-    document.querySelectorAll(
-      "#yourStyleDeliveryLines .yourstyle-delivery-line"
-    )
-  );
-
-  let pinsUnits = 0;
-  let othersUnits = 0;
-
-  rows.forEach(function(row) {
-    const typeField = row.querySelector(".yourstyle-line-type");
-    const qtyField = row.querySelector(".yourstyle-line-qty");
-
-    const type = String(typeField ? typeField.value : "").trim().toUpperCase();
-    const quantity = Number(qtyField ? qtyField.value : 0) || 0;
-
-    if (type === "PINS") pinsUnits += quantity;
-    if (type === "OTHERS") othersUnits += quantity;
+  const lines = getYourStyleDeliveryLinesFromForm();
+  let direct = 0, bulk = 0, bundles = 0;
+  lines.forEach(function(line) {
+    if (line.receiveMode === "DIRECT") direct += Number(line.quantity) || 0;
+    else { bulk += Number(line.estimatedQuantity) || 0; bundles += Number(line.bundleQty) || 0; }
   });
-
-  document.getElementById("yourStyleSummaryUnits").textContent = pinsUnits + othersUnits;
-  document.getElementById("yourStyleSummaryPins").textContent = pinsUnits;
-  document.getElementById("yourStyleSummaryOthers").textContent = othersUnits;
+  document.getElementById("yourStyleSummaryDirect").textContent = direct;
+  document.getElementById("yourStyleSummaryBulk").textContent = bulk;
+  document.getElementById("yourStyleSummaryBundles").textContent = bundles;
+  document.getElementById("yourStyleSummaryRows").textContent = lines.length;
 }
 
-/* ==========================================================
-   SUBMIT YOURSTYLE DIRECT DELIVERY
-========================================================== */
-
-function submitYourStyleDirectDelivery() {
+function submitYourStyleDelivery() {
   const deliveryDate = document.getElementById("yourStyleDeliveryDate").value;
   const driverName = document.getElementById("yourStyleDriverName").value.trim();
   const plateNo = document.getElementById("yourStylePlateNo").value.trim().toUpperCase();
   const acceptedBy = document.getElementById("yourStyleAcceptedBy").value.trim();
   const remarks = document.getElementById("yourStyleRemarks").value.trim();
   const lines = getYourStyleDeliveryLinesFromForm();
-
-  if (!deliveryDate) {
-    showNotificationToast("Please select the delivery date.", true);
-    return;
-  }
-
-  if (!driverName) {
-    showNotificationToast("Please enter the driver name.", true);
-    return;
-  }
-
-  if (!plateNo) {
-    showNotificationToast("Please enter the plate number.", true);
-    return;
-  }
-
-  if (!acceptedBy) {
-    showNotificationToast("Unable to identify the employee.", true);
-    return;
-  }
-
-  if (!lines.length) {
-    showNotificationToast("Add at least one delivery item.", true);
-    return;
-  }
+  if (!deliveryDate) return showNotificationToast("Please select the delivery date.", true);
+  if (!driverName) return showNotificationToast("Please enter the driver name.", true);
+  if (!plateNo) return showNotificationToast("Please enter the plate number.", true);
+  if (!acceptedBy) return showNotificationToast("Unable to identify the employee.", true);
+  if (!lines.length) return showNotificationToast("Add at least one delivery item.", true);
 
   for (let i = 0; i < lines.length; i++) {
-    if (!lines[i].productCode) {
-      showNotificationToast("Select a valid product for Item " + (i + 1) + ".", true);
-      return;
-    }
-
-    if (!Number.isInteger(lines[i].quantity) || lines[i].quantity < 1) {
-      showNotificationToast("Enter a valid quantity for Item " + (i + 1) + ".", true);
-      return;
-    }
+    const line = lines[i];
+    if (line.receiveMode === "DIRECT" && (!line.productCode || !Number.isInteger(line.quantity) || line.quantity < 1)) return showNotificationToast("Complete the DIRECT fields for Item " + (i + 1) + ".", true);
+    if (line.receiveMode === "BULK" && (!line.description || !Number.isInteger(line.bundleQty) || line.bundleQty < 1 || !Number.isInteger(line.estimatedQuantity) || line.estimatedQuantity < 1)) return showNotificationToast("Complete the BULK fields for Item " + (i + 1) + ".", true);
   }
 
   const button = document.getElementById("acceptYourStyleDeliveryBtn");
-
   button.disabled = true;
   button.textContent = "Accepting Delivery...";
-
-  const payload = {
-    deliveryDate: deliveryDate,
-    driverName: driverName,
-    plateNo: plateNo,
-    acceptedBy: acceptedBy,
-    remarks: remarks,
-    lines: lines
-  };
-
-  google.script.run
-    .withSuccessHandler(function(result) {
-      button.disabled = false;
-      button.textContent = "Accept Delivery";
-
-      if (!result || !result.success) {
-        showNotificationToast(
-          result && result.message
-            ? result.message
-            : "Unable to accept YourStyle delivery.",
-          true
-        );
-
-        return;
-      }
-
-      closeYourStyleDeliveryModal();
-
-      showNotificationToast(
-        result.deliveryNo +
-        " accepted — " +
-        result.totalUnits +
-        " unit(s)."
-      );
-    })
-    .withFailureHandler(function(err) {
-      button.disabled = false;
-      button.textContent = "Accept Delivery";
-
-      console.error("YOURSTYLE DELIVERY ERROR:", err);
-
-      showNotificationToast(
-        "YourStyle Delivery Error: " +
-        (err && err.message ? err.message : String(err)),
-        true
-      );
-    })
-    .acceptYourStyleDirectDelivery(payload);
+  google.script.run.withSuccessHandler(function(result) {
+    button.disabled = false;
+    button.textContent = "Accept Delivery";
+    if (!result || !result.success) return showNotificationToast(result && result.message ? result.message : "Unable to accept YourStyle delivery.", true);
+    closeYourStyleDeliveryModal();
+    showNotificationToast(result.deliveryNo + " accepted — " + result.directUnits + " direct unit(s), " + result.bulkBundles + " bundle(s).");
+  }).withFailureHandler(function(err) {
+    button.disabled = false;
+    button.textContent = "Accept Delivery";
+    showNotificationToast("YourStyle Delivery Error: " + (err && err.message ? err.message : String(err)), true);
+  }).acceptYourStyleDelivery({ deliveryDate: deliveryDate, driverName: driverName, plateNo: plateNo, acceptedBy: acceptedBy, remarks: remarks, lines: lines });
 }
-
 </script>

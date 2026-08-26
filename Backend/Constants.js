@@ -19,18 +19,13 @@
 ========================================================== */
 
 const SHEETS = {
-
   INVENTORY: "Inventory",
   SALES_LOG: "Sales Log",
   INVENTORY_MOVEMENT_LOG: "Inventory Movement Log",
   DELIVERY_LOG: "Delivery Log",
   CASH_REPORT_LOG: "Cash Report Log",
   EMPLOYEES: "Employees",
-  PRODUCT_MASTER: "Product Master",
-  DELIVERY_LOG: "Delivery Log",
-  DELIVERY_ITEMS: "Delivery Items",
-  DELIVERY_DISTRIBUTION: "Delivery Distribution",
-
+  PRODUCT_MASTER: "Product Master"
 };  
 
 
@@ -487,81 +482,12 @@ const PRODUCT_COL = {
 const PRODUCT_MASTER_COLUMN_COUNT = 10;
 
 /* ==========================================================
-   GENERAL DELIVERY LOG — A:M
+   DELIVERY VALUES
 ========================================================== */
 
-const GENERAL_DELIVERY_LOG_COLUMN_COUNT = 14;
-
-const GENERAL_DELIVERY_IDX = {
-  DELIVERY_ID: 0,
-  DELIVERY_NO: 1,
-  DELIVERY_DATE: 2,
-  TIMESTAMP: 3,
-  DRIVER_NAME: 4,
-  PLATE_NO: 5,
-  ACCEPTED_BY: 6,
-  DELIVERY_TYPE: 7,
-  YOURSTYLE_TYPE: 8,
-  LINE_COUNT: 9,
-  RECEIVED_UNITS: 10,
-  DISTRIBUTION_STATUS: 11,
-  STATUS: 12,
-  REMARKS: 13
-};
-
-/* ==========================================================
-   DELIVERY ITEMS — A:O
-========================================================== */
-
-const DELIVERY_ITEMS_COLUMN_COUNT = 15;
-
-const DELIVERY_ITEM_IDX = {
-  DELIVERY_ID: 0,
-  LINE_ID: 1,
-  TYPE: 2,
-  CATEGORY: 3,
-  PRODUCT_CODE: 4,
-  DESCRIPTION: 5,
-  RECEIVE_MODE: 6,
-  QTY_RECEIVED: 7,
-  EST_PCS_PER_UNIT: 8,
-  ESTIMATED_PIECES: 9,
-  ACTUAL_PIECES: 10,
-  VARIANCE: 11,
-  DISTRIBUTION_STATUS: 12,
-  STATUS: 13,
-  REMARKS: 14
-};
-
-/* ==========================================================
-   DELIVERY DISTRIBUTION — A:I
-========================================================== */
-
-const DELIVERY_DISTRIBUTION_COLUMN_COUNT = 9;
-
-const DELIVERY_DISTRIBUTION_IDX = {
-  DELIVERY_ID: 0,
-  LINE_ID: 1,
-  DISTRIBUTION_ID: 2,
-  PRODUCT_CODE: 3,
-  DESCRIPTION: 4,
-  QTY: 5,
-  DISTRIBUTED_BY: 6,
-  TIMESTAMP: 7,
-  REMARKS: 8
-};
-
-/* ==========================================================
-   GENERAL DELIVERY VALUES
-========================================================== */
 const DELIVERY_TYPE = {
   YOURFINDS: "YOURFINDS",
   YOURSTYLE: "YOURSTYLE"
-};
-
-const YOURSTYLE_DELIVERY_TYPE = {
-  PINS: "PINS",
-  OTHERS: "OTHERS",
 };
 
 const DELIVERY_RECEIVE_MODE = {
@@ -569,23 +495,9 @@ const DELIVERY_RECEIVE_MODE = {
   BULK: "BULK"
 };
 
-const DELIVERY_DISTRIBUTION_STATUS = {
-  NOT_REQUIRED: "NOT_REQUIRED",
+const DELIVERY_STATUS = {
+  ACCEPTED: "ACCEPTED",
   PENDING: "PENDING",
   PARTIAL: "PARTIAL",
-  DISTRIBUTED: "DISTRIBUTED"
+  COMPLETED: "COMPLETED"
 };
-
-const DELIVERY_STATUS = {
-  ACCEPTED: "ACCEPTED"
-};
-
-function testGeneralDeliveryDatabase() {
-  Logger.log(
-    JSON.stringify(
-      validateGeneralDeliveryDatabase(),
-      null,
-      2
-    )
-  );
-}
