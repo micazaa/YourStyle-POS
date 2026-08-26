@@ -145,173 +145,42 @@
 
 
     <!-- =====================================================
-         QUANTITY BY SIZE
+         QUANTITY BY FINAL YOURFINDS CATEGORY
     ====================================================== -->
 
     <div class="mb-4">
-
       <div class="d-flex justify-content-between align-items-center mb-3">
-
-        <div class="fw-semibold">
-          Quantity Received
+        <div>
+          <div class="fw-semibold">Quantity Received</div>
+          <div class="small text-muted">Enter the final YourFinds category directly.</div>
         </div>
-
-
-        <div class="small text-muted">
-
-          Total Pieces:
-
-          <strong
-            id="deliveryTotalQty"
-            class="text-dark"
-          >
-            0
-          </strong>
-
-        </div>
-
+        <div class="small text-muted">Total Pieces: <strong id="deliveryTotalQty" class="text-dark">0</strong></div>
       </div>
 
+      <div class="small fw-semibold text-muted mb-2">NON-ELECTRONIC</div>
+      <div class="row g-2 mb-3">
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtySNE">SNE</label><input type="number" id="deliveryQtySNE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyMNE">MNE</label><input type="number" id="deliveryQtyMNE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyLNE">LNE</label><input type="number" id="deliveryQtyLNE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyXLNE">XLNE</label><input type="number" id="deliveryQtyXLNE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+      </div>
 
+      <div class="small fw-semibold text-muted mb-2">ELECTRONIC</div>
+      <div class="row g-2 mb-3">
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtySE">SE</label><input type="number" id="deliveryQtySE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyME">ME</label><input type="number" id="deliveryQtyME" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyLE">LE</label><input type="number" id="deliveryQtyLE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyXLE">XLE</label><input type="number" id="deliveryQtyXLE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+      </div>
+
+      <div class="small fw-semibold text-muted mb-2">CUSTOM / UNKNOWN</div>
       <div class="row g-2">
-
-
-        <!-- S -->
-
-        <div class="col">
-
-          <label
-            class="form-label text-center d-block"
-            for="deliveryQtyS"
-          >
-            S
-          </label>
-
-          <input
-            type="number"
-            id="deliveryQtyS"
-            class="form-control text-center delivery-size-qty"
-            value="0"
-            min="0"
-            max="999"
-            step="1"
-            oninput="updateDeliveryTotalQty()"
-          >
-
-        </div>
-
-
-        <!-- M -->
-
-        <div class="col">
-
-          <label
-            class="form-label text-center d-block"
-            for="deliveryQtyM"
-          >
-            M
-          </label>
-
-          <input
-            type="number"
-            id="deliveryQtyM"
-            class="form-control text-center delivery-size-qty"
-            value="0"
-            min="0"
-            max="999"
-            step="1"
-            oninput="updateDeliveryTotalQty()"
-          >
-
-        </div>
-
-
-        <!-- L -->
-
-        <div class="col">
-
-          <label
-            class="form-label text-center d-block"
-            for="deliveryQtyL"
-          >
-            L
-          </label>
-
-          <input
-            type="number"
-            id="deliveryQtyL"
-            class="form-control text-center delivery-size-qty"
-            value="0"
-            min="0"
-            max="999"
-            step="1"
-            oninput="updateDeliveryTotalQty()"
-          >
-
-        </div>
-
-
-        <!-- XL -->
-
-        <div class="col">
-
-          <label
-            class="form-label text-center d-block"
-            for="deliveryQtyXL"
-          >
-            XL
-          </label>
-
-          <input
-            type="number"
-            id="deliveryQtyXL"
-            class="form-control text-center delivery-size-qty"
-            value="0"
-            min="0"
-            max="999"
-            step="1"
-            oninput="updateDeliveryTotalQty()"
-          >
-
-        </div>
-
-
-        <!-- E -->
-
-        <div class="col">
-
-          <label
-            class="form-label text-center d-block"
-            for="deliveryQtyE"
-          >
-            E
-          </label>
-
-          <input
-            type="number"
-            id="deliveryQtyE"
-            class="form-control text-center delivery-size-qty"
-            value="0"
-            min="0"
-            max="999"
-            step="1"
-            oninput="updateDeliveryTotalQty()"
-          >
-
-        </div>
-
+        <div class="col-md-8"><input type="text" id="deliveryCustomSize" class="form-control" maxlength="40" placeholder="Enter custom size/category"></div>
+        <div class="col-md-4"><input type="number" id="deliveryQtyCustom" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()" placeholder="Qty"></div>
       </div>
 
-
-      <div class="form-text mt-2">
-
-        Enter the number of pieces received for each size.
-        Each piece receives its own unique YourFinds Code.
-
-      </div>
-
+      <div class="form-text mt-2">Each piece receives its own unique YourFinds Code.</div>
     </div>
-
 
     <!-- =====================================================
          ACCEPTED BY
@@ -653,35 +522,12 @@ function openAcceptDeliveryModal() {
 
   /* ================= QUANTITIES ================= */
 
-  document.getElementById(
-    "deliveryQtyS"
-  ).value =
-    "0";
-
-
-  document.getElementById(
-    "deliveryQtyM"
-  ).value =
-    "0";
-
-
-  document.getElementById(
-    "deliveryQtyL"
-  ).value =
-    "0";
-
-
-  document.getElementById(
-    "deliveryQtyXL"
-  ).value =
-    "0";
-
-
-  document.getElementById(
-    "deliveryQtyE"
-  ).value =
-    "0";
-
+  ["SNE","MNE","LNE","XLNE","SE","ME","LE","XLE"].forEach(function(size) {
+    const el = document.getElementById("deliveryQty" + size);
+    if (el) el.value = "0";
+  });
+  document.getElementById("deliveryQtyCustom").value = "0";
+  document.getElementById("deliveryCustomSize").value = "";
 
   updateDeliveryTotalQty();
 
@@ -815,13 +661,9 @@ function getDeliveryQuantity(
 function updateDeliveryTotalQty() {
 
   const ids = [
-
-    "deliveryQtyS",
-    "deliveryQtyM",
-    "deliveryQtyL",
-    "deliveryQtyXL",
-    "deliveryQtyE"
-
+    "deliveryQtySNE", "deliveryQtyMNE", "deliveryQtyLNE", "deliveryQtyXLNE",
+    "deliveryQtySE", "deliveryQtyME", "deliveryQtyLE", "deliveryQtyXLE",
+    "deliveryQtyCustom"
   ];
 
 
@@ -920,34 +762,17 @@ function submitYourFindsDelivery() {
   /* ================= QUANTITIES ================= */
 
   const quantities = {
-
-    S:
-      getDeliveryQuantity(
-        "deliveryQtyS"
-      ),
-
-    M:
-      getDeliveryQuantity(
-        "deliveryQtyM"
-      ),
-
-    L:
-      getDeliveryQuantity(
-        "deliveryQtyL"
-      ),
-
-    XL:
-      getDeliveryQuantity(
-        "deliveryQtyXL"
-      ),
-
-    E:
-      getDeliveryQuantity(
-        "deliveryQtyE"
-      )
-
+    SNE: getDeliveryQuantity("deliveryQtySNE"),
+    MNE: getDeliveryQuantity("deliveryQtyMNE"),
+    LNE: getDeliveryQuantity("deliveryQtyLNE"),
+    XLNE: getDeliveryQuantity("deliveryQtyXLNE"),
+    SE: getDeliveryQuantity("deliveryQtySE"),
+    ME: getDeliveryQuantity("deliveryQtyME"),
+    LE: getDeliveryQuantity("deliveryQtyLE"),
+    XLE: getDeliveryQuantity("deliveryQtyXLE"),
+    CUSTOM: getDeliveryQuantity("deliveryQtyCustom"),
+    CUSTOM_LABEL: String(document.getElementById("deliveryCustomSize").value || "").trim().toUpperCase()
   };
-
 
   /* ========================================================
      VALIDATION
@@ -989,13 +814,7 @@ function submitYourFindsDelivery() {
   }
 
 
-  const sizeOrder = [
-    "S",
-    "M",
-    "L",
-    "XL",
-    "E"
-  ];
+  const sizeOrder = ["SNE","MNE","LNE","XLNE","SE","ME","LE","XLE","CUSTOM"];
 
 
   let totalQty =
@@ -1036,6 +855,11 @@ function submitYourFindsDelivery() {
 
   }
 
+
+  if ((quantities.CUSTOM || 0) > 0 && !quantities.CUSTOM_LABEL) {
+    showNotificationToast("Enter the custom YourFinds size/category.", true);
+    return;
+  }
 
   if (
     totalQty < 1

@@ -481,6 +481,8 @@ function acceptYourFindsDelivery(
     quantities =
       quantities || {};
 
+    const customSizeLabel = String(quantities.CUSTOM_LABEL || "").trim().toUpperCase();
+
 
     /* ========================================================
        VALIDATE DELIVERY DATE
@@ -505,24 +507,9 @@ function acceptYourFindsDelivery(
        NORMALIZE QUANTITIES
     ======================================================== */
 
-    const sizeOrder = [
-      "S",
-      "M",
-      "L",
-      "XL",
-      "E"
-    ];
-
-
-    const normalizedQuantities = {
-
-      S: 0,
-      M: 0,
-      L: 0,
-      XL: 0,
-      E: 0
-
-    };
+    const sizeOrder = YOURFINDS_SIZE_ORDER.slice();
+    const normalizedQuantities = {};
+    sizeOrder.forEach(function(size) { normalizedQuantities[size] = 0; });
 
 
     let totalQty =
@@ -596,6 +583,10 @@ function acceptYourFindsDelivery(
 
     }
 
+
+    if ((normalizedQuantities.CUSTOM || 0) > 0 && !customSizeLabel) {
+      return { success: false, message: "Enter the custom YourFinds size/category." };
+    }
 
     if (
       totalQty < 1
@@ -676,7 +667,7 @@ function acceptYourFindsDelivery(
         success: false,
 
         message:
-          "YourFinds Delivery Log sheet not found."
+          "Delivery Log sheet not found."
 
       };
 
@@ -909,7 +900,7 @@ function acceptYourFindsDelivery(
                 // Completed later
 
 
-                size,
+                size === "CUSTOM" ? customSizeLabel : size,
 
                 // C Size
 
@@ -998,113 +989,51 @@ function acceptYourFindsDelivery(
         }
       );
 
+/* ======================================================
+   BUILD UNIVERSAL YOURFINDS DELIVERY ROWS A:T
+   One row per received category.
+====================================================== */
 
-      /* ======================================================
-         BUILD DELIVERY LOG ROW A:Q
-      ====================================================== */
+      const deliveryRows = [];
 
-      const deliveryRow = [
+      sizeOrder.forEach(function(size) {
+        const qty = Number(normalizedQuantities[size]) || 0;
+        if (qty <= 0) return;
 
-        deliveryId,
+        const category = size === "CUSTOM" ? customSizeLabel : size;
+        const deliveryRow = [
+          deliveryId,
+          deliveryNo,
+          deliveryDate,
+          now,
+          driverName,
+          plateNo,
+          acceptedBy,
+          DELIVERY_TYPE.YOURFINDS,
+          "YOURFINDS",
+          category,
+          DELIVERY_RECEIVE_MODE.DIRECT,
+          "YourFinds " + category,
+          "",
+          "",
+          qty,
+          "",
+          "",
+          "",
+          DELIVERY_STATUS.ACCEPTED,
+          remarks
+        ];
 
-        // A Delivery ID
+        if (deliveryRow.length !== DELIVERY_LOG_COLUMN_COUNT) {
+          throw new Error("YourFinds Delivery row does not match universal A:T mapping.");
+        }
 
+        deliveryRows.push(deliveryRow);
+      });
 
-        deliveryNo,
-
-        // B Delivery No.
-
-
-        deliveryDate,
-
-        // C Delivery Date
-
-
-        now,
-
-        // D Timestamp
-
-
-        driverName,
-
-        // E Driver Name
-
-
-        plateNo,
-
-        // F Plate No.
-
-
-        acceptedBy,
-
-        // G Accepted By
-
-
-        normalizedQuantities.S,
-
-        // H S Qty
-
-
-        normalizedQuantities.M,
-
-        // I M Qty
-
-
-        normalizedQuantities.L,
-
-        // J L Qty
-
-
-        normalizedQuantities.XL,
-
-        // K XL Qty
-
-
-        normalizedQuantities.E,
-
-        // L E Qty
-
-
-        totalQty,
-
-        // M Total Qty
-
-
-        allCodes[0],
-
-        // N First Code
-
-
-        allCodes[
-        allCodes.length - 1
-        ],
-
-        // O Last Code
-
-
-        "ACCEPTED",
-
-        // P Status
-
-
-        remarks
-
-        // Q Remarks
-
-      ];
-
-
-      if (
-        deliveryRow.length !==
-        DELIVERY_LOG_COLUMN_COUNT
-      ) {
-
-        throw new Error(
-          "YourFinds Delivery Log row does not match A:Q mapping."
-        );
-
+      if (!deliveryRows.length) {
+        throw new Error("No YourFinds delivery rows were generated.");
       }
-
 
       /* ======================================================
          WRITE INVENTORY
@@ -1131,21 +1060,16 @@ function acceptYourFindsDelivery(
          WRITE DELIVERY LOG
       ====================================================== */
 
-      const deliveryLogRowNumber =
-        deliverySheet.getLastRow() +
-        1;
-
+      const deliveryLogRowNumber = deliverySheet.getLastRow() + 1;
 
       deliverySheet
         .getRange(
           deliveryLogRowNumber,
           1,
-          1,
+          deliveryRows.length,
           DELIVERY_LOG_COLUMN_COUNT
         )
-        .setValues([
-          deliveryRow
-        ]);
+        .setValues(deliveryRows);
 
 
       SpreadsheetApp.flush();
@@ -1190,7 +1114,7 @@ function acceptYourFindsDelivery(
               stockAfter: 1,
               referenceId: deliveryId,
               employee: acceptedBy,
-              item: "YourFinds " + size,
+              item: size,
               reason: "",
               source: INVENTORY_MOVEMENT_SOURCE.DELIVERY,
               bundleNo: "",
@@ -1217,8 +1141,9 @@ function acceptYourFindsDelivery(
         );
 
 
-        deliverySheet.deleteRow(
-          deliveryLogRowNumber
+        deliverySheet.deleteRows(
+          deliveryLogRowNumber,
+          deliveryRows.length
         );
 
 
@@ -1267,7 +1192,7 @@ function acceptYourFindsDelivery(
           totalQty,
 
         quantities:
-          normalizedQuantities,
+          Object.assign({}, normalizedQuantities, { CUSTOM_LABEL: customSizeLabel }),
 
         codes:
           allCodes,
@@ -1602,10 +1527,10 @@ function generateYourFindsDeliveryId(deliveryDate) {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  const deliverySheet = ss.getSheetByName(SHEETS.YOURFINDS_DELIVERY_LOG);
+  const deliverySheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
 
   if (!deliverySheet) {
-    throw new Error("YourFinds Delivery Log sheet not found.");
+    throw new Error("Delivery Log sheet not found.");
   }
 
   const datePart = deliveryDate.replace(/-/g, "");
@@ -1671,7 +1596,7 @@ function generateMultiSizeYourFindsCodes(
   deliveryDate,
   quantities
 ) {
-  const sizeOrder = ["S", "M", "L", "XL", "E"];
+  const sizeOrder = YOURFINDS_SIZE_ORDER.slice();
 
   const result = {
     allCodes: [],

@@ -1,40 +1,26 @@
-<!-- =========================================================
-     YOURFINDS REPRINT DELIVERY SELECTOR
-========================================================== -->
+<div id="acceptDeliveryModal" class="generic-overlay-blur" style="display:none;">
 
-<div
-  id="yourFindsReprintModal"
-  class="generic-overlay-blur"
-  style="display:none;"
->
-
-  <div
-    class="custom-popup-card"
-    style="
-      max-width:700px;
-      width:95%;
+  <div class="custom-popup-card" style="
+      max-width:650px;
       max-height:90vh;
-      overflow:hidden;
-      display:flex;
-      flex-direction:column;
-    "
-  >
+      overflow-y:auto;
+    ">
 
-    <!-- HEADER -->
+    <!-- =====================================================
+         HEADER
+    ====================================================== -->
 
-    <div
-      class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom"
-    >
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
 
       <div>
 
         <h5 class="fw-bold mb-1">
-          Reprint YourFinds Labels
+          Accept YourFinds Delivery
         </h5>
 
-        <div class="small text-muted">
-          Select a delivery, then choose the labels to reprint.
-        </div>
+        <p class="text-muted small mb-0">
+          Register newly delivered unique items
+        </p>
 
       </div>
 
@@ -42,68 +28,279 @@
       <button
         type="button"
         class="btn-close"
-        onclick="closeYourFindsReprintModal()"
+        onclick="closeAcceptDeliveryModal()"
       ></button>
 
     </div>
 
 
-    <!-- LOADING -->
+    <!-- =====================================================
+         DELIVERY INFORMATION
+    ====================================================== -->
 
-    <div
-      id="yourFindsReprintLoading"
-      class="text-center py-4"
-      style="display:none;"
-    >
+    <div class="mb-4">
 
-      <div
-        class="spinner-border spinner-border-sm text-secondary mb-2"
-        role="status"
-      ></div>
+      <div class="fw-semibold mb-3">
+        Delivery Information
+      </div>
 
-      <div class="small text-muted">
-        Loading deliveries...
+
+      <div class="row g-3">
+
+
+        <!-- DATE -->
+
+        <div class="col-md-6">
+
+          <label
+            class="form-label"
+            for="deliveryDate"
+          >
+            Date Delivered
+            <span class="text-danger">*</span>
+          </label>
+
+          <input
+            type="date"
+            id="deliveryDate"
+            class="form-control"
+            onchange="loadNextYourFindsDeliveryNumber()"
+          >
+
+        </div>
+
+
+        <!-- DELIVERY NO -->
+
+        <div class="col-md-6">
+
+          <label class="form-label">
+            Delivery No.
+          </label>
+
+          <div
+            class="form-control bg-light"
+            style="min-height:38px;"
+          >
+            <span
+              id="deliveryNoDisplay"
+              class="fw-semibold"
+            >
+              —
+            </span>
+          </div>
+
+        </div>
+
+        <!-- DRIVER -->
+
+        <div class="col-md-6">
+
+          <label
+          class="form-label"
+          for="deliveryDriverName"
+        >
+          Driver Name
+          <span class="text-danger">*</span>
+        </label>
+
+          <input
+          type="text"
+          id="deliveryDriverName"
+          class="form-control"
+          maxlength="100"
+          placeholder="Enter driver name"
+          autocomplete="off"
+        >
+
+        </div>
+
+
+        <!-- PLATE -->
+
+        <div class="col-md-6">
+
+          <label
+          class="form-label"
+          for="deliveryPlateNo"
+        >
+          Plate No.
+          <span class="text-danger">*</span>
+        </label>
+
+          <input
+          type="text"
+          id="deliveryPlateNo"
+          class="form-control"
+          maxlength="30"
+          placeholder="Enter plate number"
+          autocomplete="off"
+        >
+
+        </div>
+
       </div>
 
     </div>
 
 
-    <!-- EMPTY / ERROR -->
+    <!-- =====================================================
+         QUANTITY BY FINAL YOURFINDS CATEGORY
+    ====================================================== -->
 
-    <div
-      id="yourFindsReprintEmpty"
-      class="text-center text-muted py-4"
-      style="display:none;"
-    >
-      No deliveries found.
+    <div class="mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <div class="fw-semibold">Quantity Received</div>
+          <div class="small text-muted">Enter the final YourFinds category directly.</div>
+        </div>
+        <div class="small text-muted">Total Pieces: <strong id="deliveryTotalQty" class="text-dark">0</strong></div>
+      </div>
+
+      <div class="small fw-semibold text-muted mb-2">NON-ELECTRONIC</div>
+      <div class="row g-2 mb-3">
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtySNE">SNE</label><input type="number" id="deliveryQtySNE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyMNE">MNE</label><input type="number" id="deliveryQtyMNE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyLNE">LNE</label><input type="number" id="deliveryQtyLNE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyXLNE">XLNE</label><input type="number" id="deliveryQtyXLNE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+      </div>
+
+      <div class="small fw-semibold text-muted mb-2">ELECTRONIC</div>
+      <div class="row g-2 mb-3">
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtySE">SE</label><input type="number" id="deliveryQtySE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyME">ME</label><input type="number" id="deliveryQtyME" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyLE">LE</label><input type="number" id="deliveryQtyLE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyXLE">XLE</label><input type="number" id="deliveryQtyXLE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+      </div>
+
+      <div class="small fw-semibold text-muted mb-2">CUSTOM / UNKNOWN</div>
+      <div class="row g-2">
+        <div class="col-md-8"><input type="text" id="deliveryCustomSize" class="form-control" maxlength="40" placeholder="Enter custom size/category"></div>
+        <div class="col-md-4"><input type="number" id="deliveryQtyCustom" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()" placeholder="Qty"></div>
+      </div>
+
+      <div class="form-text mt-2">Each piece receives its own unique YourFinds Code.</div>
+    </div>
+
+    <!-- =====================================================
+         ACCEPTED BY
+    ====================================================== -->
+
+    <div class="mb-3">
+
+      <label class="form-label">
+        Accepted By
+      </label>
+
+
+      <div class="form-control bg-light" style="min-height:38px;">
+
+        <span
+          id="deliveryAcceptedByDisplay"
+          class="fw-semibold"
+        >
+          —
+        </span>
+
+      </div>
+
+
+      <input
+        type="hidden"
+        id="deliveryAcceptedBy"
+      >
+
+    </div>
+
+    <!-- =====================================================
+        REMARKS
+    ====================================================== -->
+
+    <div class="mb-4">
+
+      <label
+        class="form-label"
+        for="deliveryRemarks"
+      >
+        Remarks
+      </label>
+
+      <textarea
+        id="deliveryRemarks"
+        rows="3"
+        maxlength="500"
+        placeholder="Type remarks here..."
+        style="
+          display:block;
+          width:100%;
+          min-height:90px;
+          padding:12px;
+          border:1px solid #dee2e6;
+          border-radius:8px;
+          background:#ffffff;
+          color:#212529;
+          font:inherit;
+          resize:vertical;
+          outline:none;
+          position:relative;
+          z-index:10;
+          pointer-events:auto;
+          user-select:text;
+        "
+      ></textarea>
+
     </div>
 
 
-    <!-- DELIVERY LIST -->
+    <!-- =====================================================
+         INFORMATION
+    ====================================================== -->
 
-    <div
-      id="yourFindsReprintList"
-      style="
-        overflow-y:auto;
-        flex:1;
-        min-height:150px;
-        max-height:60vh;
-      "
-    ></div>
+    <div class="p-3 rounded mb-4" style="background-color:var(--pink-light);">
+
+      <div class="small">
+
+        <strong>
+          YourFinds receiving
+        </strong>
+
+        <div class="text-muted mt-1">
+
+          New pieces will be added to Inventory as
+          <strong>INCOMPLETE</strong>
+          with Stock 1 and cannot be sold until their
+          details are completed.
+
+        </div>
+
+      </div>
+
+    </div>
 
 
-    <!-- ACTIONS -->
+    <!-- =====================================================
+         ACTIONS
+    ====================================================== -->
 
-    <div
-      class="pt-3 mt-3 border-top"
-    >
+    <div class="d-flex gap-2">
+
 
       <button
         type="button"
-        class="btn btn-outline-secondary w-100"
-        onclick="closeYourFindsReprintModal()"
+        class="btn btn-outline-secondary flex-fill py-2"
+        onclick="closeAcceptDeliveryModal()"
       >
-        Close
+        Cancel
+      </button>
+
+
+      <button
+        type="button"
+        id="acceptDeliveryBtn"
+        class="btn btn-pink flex-fill py-2 fw-bold"
+        onclick="submitYourFindsDelivery()"
+      >
+        Accept Delivery
       </button>
 
     </div>
@@ -114,31 +311,159 @@
 
 
 <script>
-
-/* ==========================================================
-   REPRINT STATE
+  /* ==========================================================
+   CURRENT EMPLOYEE
 ========================================================== */
 
-let yourFindsReprintDeliveries =
-  [];
+function getCurrentDeliveryEmployeeName() {
+
+  if (
+    typeof currentEmployee !== "undefined" &&
+    currentEmployee
+  ) {
+
+    if (
+      typeof currentEmployee === "string"
+    ) {
+
+      return currentEmployee.trim();
+
+    }
+
+
+    if (
+      currentEmployee.name
+    ) {
+
+      return String(
+        currentEmployee.name
+      ).trim();
+
+    }
+
+
+    if (
+      currentEmployee.employeeName
+    ) {
+
+      return String(
+        currentEmployee.employeeName
+      ).trim();
+
+    }
+
+  }
+
+
+  if (
+    typeof loggedInEmployee !== "undefined" &&
+    loggedInEmployee
+  ) {
+
+    if (
+      typeof loggedInEmployee === "string"
+    ) {
+
+      return loggedInEmployee.trim();
+
+    }
+
+
+    if (
+      loggedInEmployee.name
+    ) {
+
+      return String(
+        loggedInEmployee.name
+      ).trim();
+
+    }
+
+
+    if (
+      loggedInEmployee.employeeName
+    ) {
+
+      return String(
+        loggedInEmployee.employeeName
+      ).trim();
+
+    }
+
+  }
+
+
+  if (
+    typeof currentUser !== "undefined" &&
+    currentUser
+  ) {
+
+    if (
+      typeof currentUser === "string"
+    ) {
+
+      return currentUser.trim();
+
+    }
+
+
+    if (
+      currentUser.name
+    ) {
+
+      return String(
+        currentUser.name
+      ).trim();
+
+    }
+
+
+    if (
+      currentUser.employeeName
+    ) {
+
+      return String(
+        currentUser.employeeName
+      ).trim();
+
+    }
+
+  }
+
+
+  if (
+    typeof currentCashier !== "undefined" &&
+    currentCashier
+  ) {
+
+    return String(
+      currentCashier
+    ).trim();
+
+  }
+
+
+  return "";
+
+}
 
 
 /* ==========================================================
-   OPEN REPRINT MODAL
+   OPEN
 ========================================================== */
 
-function openYourFindsReprintModal() {
+function openAcceptDeliveryModal() {
 
   const modal =
     document.getElementById(
-      "yourFindsReprintModal"
+      "acceptDeliveryModal"
     );
 
 
   if (!modal) {
 
     console.error(
-      "yourFindsReprintModal element not found."
+      "acceptDeliveryModal element not found."
     );
 
     return;
@@ -146,120 +471,105 @@ function openYourFindsReprintModal() {
   }
 
 
-  const loading =
+  const now =
+    new Date();
+
+
+  const localToday =
+    new Date(
+      now.getTime() -
+      now.getTimezoneOffset() * 60000
+    )
+      .toISOString()
+      .split("T")[0];
+
+
+  const dateInput =
     document.getElementById(
-      "yourFindsReprintLoading"
+      "deliveryDate"
     );
 
 
-  const empty =
-    document.getElementById(
-      "yourFindsReprintEmpty"
-    );
+  dateInput.value =
+    localToday;
 
 
-  const list =
-    document.getElementById(
-      "yourFindsReprintList"
-    );
+  dateInput.max =
+    localToday;
+
+  loadNextYourFindsDeliveryNumber();
 
 
-  /* ================= RESET ================= */
+  /* ================= DETAILS ================= */
 
-  yourFindsReprintDeliveries =
-    [];
-
-
-  loading.style.display =
-    "block";
-
-
-  empty.style.display =
-    "none";
-
-
-  list.innerHTML =
+  document.getElementById(
+    "deliveryDriverName"
+  ).value =
     "";
 
 
+  document.getElementById(
+    "deliveryPlateNo"
+  ).value =
+    "";
+
+
+  document.getElementById(
+    "deliveryRemarks"
+  ).value =
+    "";
+
+
+  /* ================= QUANTITIES ================= */
+
+  ["SNE","MNE","LNE","XLNE","SE","ME","LE","XLE"].forEach(function(size) {
+    const el = document.getElementById("deliveryQty" + size);
+    if (el) el.value = "0";
+  });
+  document.getElementById("deliveryQtyCustom").value = "0";
+  document.getElementById("deliveryCustomSize").value = "";
+
+  updateDeliveryTotalQty();
+
+
+  /* ================= ACCEPTED BY ================= */
+
+  const employeeName =
+    getCurrentDeliveryEmployeeName();
+
+
+  document.getElementById(
+    "deliveryAcceptedBy"
+  ).value =
+    employeeName;
+
+
+  document.getElementById(
+    "deliveryAcceptedByDisplay"
+  ).textContent =
+    employeeName || "—";
+
+
+  /* ================= BUTTON ================= */
+
+  const button =
+    document.getElementById(
+      "acceptDeliveryBtn"
+    );
+
+
+  button.disabled =
+    false;
+
+
+  button.textContent =
+    "Accept Delivery";
+
+
+  /* ================= SHOW ================= */
+
   modal.style.display =
     "flex";
-
-
-  /* ================= LOAD ================= */
-
-  google.script.run
-
-    .withSuccessHandler(
-      function(result) {
-
-        loading.style.display =
-          "none";
-
-
-        if (
-          !result ||
-          !result.success
-        ) {
-
-          empty.style.display =
-            "block";
-
-
-          empty.textContent =
-            result &&
-            result.message
-              ? result.message
-              : "Unable to load deliveries.";
-
-
-          return;
-
-        }
-
-
-        yourFindsReprintDeliveries =
-          Array.isArray(
-            result.deliveries
-          )
-            ? result.deliveries
-            : [];
-
-
-        renderYourFindsReprintDeliveries();
-
-      }
-    )
-
-
-    .withFailureHandler(
-      function(err) {
-
-        loading.style.display =
-          "none";
-
-
-        console.error(
-          "LOAD REPRINT DELIVERIES ERROR:",
-          err
-        );
-
-
-        empty.style.display =
-          "block";
-
-
-        empty.textContent =
-          err &&
-          err.message
-            ? err.message
-            : "Unable to load deliveries.";
-
-      }
-    )
-
-
-    .getYourFindsDeliveriesForLabelReprint();
 
 }
 
@@ -268,11 +578,11 @@ function openYourFindsReprintModal() {
    CLOSE
 ========================================================== */
 
-function closeYourFindsReprintModal() {
+function closeAcceptDeliveryModal() {
 
   const modal =
     document.getElementById(
-      "yourFindsReprintModal"
+      "acceptDeliveryModal"
     );
 
 
@@ -283,333 +593,195 @@ function closeYourFindsReprintModal() {
 
   }
 
-
-  yourFindsReprintDeliveries =
-    [];
-
 }
 
 
 /* ==========================================================
-   ESCAPE
+   GET QUANTITY
 ========================================================== */
 
-function escapeYourFindsReprintText(
-  value
+function getDeliveryQuantity(
+  elementId
 ) {
 
-  return String(
-    value === null ||
-    value === undefined
-      ? ""
-      : value
-  )
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-
-}
-
-
-/* ==========================================================
-   RENDER DELIVERIES
-========================================================== */
-
-function renderYourFindsReprintDeliveries() {
-
-  const list =
+  const input =
     document.getElementById(
-      "yourFindsReprintList"
+      elementId
     );
 
 
-  const empty =
-    document.getElementById(
-      "yourFindsReprintEmpty"
-    );
+  if (!input) {
 
-
-  list.innerHTML =
-    "";
-
-
-  if (
-    !Array.isArray(
-      yourFindsReprintDeliveries
-    ) ||
-    yourFindsReprintDeliveries.length === 0
-  ) {
-
-    empty.style.display =
-      "block";
-
-
-    empty.textContent =
-      "No accepted YourFinds deliveries found.";
-
-
-    return;
+    return null;
 
   }
 
 
-  empty.style.display =
-    "none";
+  const rawValue =
+    String(
+      input.value || ""
+    ).trim();
 
 
-  yourFindsReprintDeliveries.forEach(
-    function(delivery) {
+  if (
+    rawValue === ""
+  ) {
 
-      const deliveryId =
-        String(
-          delivery.deliveryId || ""
-        ).trim();
+    return 0;
 
-
-      const deliveryNo =
-        String(
-          delivery.deliveryNo || ""
-        ).trim();
+  }
 
 
-      const deliveryDate =
-        String(
-          delivery.deliveryDate || ""
-        ).trim();
+  const quantity =
+    Number(
+      rawValue
+    );
 
 
-      const driverName =
-        String(
-          delivery.driverName || ""
-        ).trim();
+  if (
+    !Number.isInteger(quantity) ||
+    quantity < 0 ||
+    quantity > 999
+  ) {
+
+    return null;
+
+  }
 
 
-      const plateNo =
-        String(
-          delivery.plateNo || ""
-        ).trim();
+  return quantity;
+
+}
 
 
-      const totalQty =
-        Number(
-          delivery.totalQty
-        ) || 0;
+/* ==========================================================
+   UPDATE TOTAL
+========================================================== */
+
+function updateDeliveryTotalQty() {
+
+  const ids = [
+    "deliveryQtySNE", "deliveryQtyMNE", "deliveryQtyLNE", "deliveryQtyXLNE",
+    "deliveryQtySE", "deliveryQtyME", "deliveryQtyLE", "deliveryQtyXLE",
+    "deliveryQtyCustom"
+  ];
 
 
-      const sizeParts =
-        [];
+  let total =
+    0;
 
 
-      if (Number(delivery.sQty) > 0) {
-        sizeParts.push(
-          "S " + Number(delivery.sQty)
+  let valid =
+    true;
+
+
+  ids.forEach(
+    function(id) {
+
+      const quantity =
+        getDeliveryQuantity(
+          id
         );
+
+
+      if (
+        quantity === null
+      ) {
+
+        valid =
+          false;
+
+        return;
+
       }
 
 
-      if (Number(delivery.mQty) > 0) {
-        sizeParts.push(
-          "M " + Number(delivery.mQty)
-        );
-      }
-
-
-      if (Number(delivery.lQty) > 0) {
-        sizeParts.push(
-          "L " + Number(delivery.lQty)
-        );
-      }
-
-
-      if (Number(delivery.xlQty) > 0) {
-        sizeParts.push(
-          "XL " + Number(delivery.xlQty)
-        );
-      }
-
-
-      if (Number(delivery.eQty) > 0) {
-        sizeParts.push(
-          "E " + Number(delivery.eQty)
-        );
-      }
-
-
-      const row =
-        document.createElement(
-          "button"
-        );
-
-
-      row.type =
-        "button";
-
-
-      row.className =
-        "btn btn-light border w-100 text-start mb-2 p-3";
-
-
-      row.onclick =
-        function() {
-
-          selectYourFindsReprintDelivery(
-            deliveryId
-          );
-
-        };
-
-
-      row.innerHTML =
-        `
-
-          <div
-            class="d-flex justify-content-between align-items-start gap-3"
-          >
-
-            <div
-              class="flex-grow-1"
-              style="min-width:0;"
-            >
-
-              <div class="fw-bold">
-
-                Delivery #${escapeYourFindsReprintText(
-                  deliveryNo || "—"
-                )}
-
-              </div>
-
-
-              <div
-                class="small font-monospace text-muted"
-              >
-                ${escapeYourFindsReprintText(
-                  deliveryId
-                )}
-              </div>
-
-
-              <div class="small mt-2">
-
-                <strong>
-                  Date:
-                </strong>
-
-                ${escapeYourFindsReprintText(
-                  deliveryDate || "—"
-                )}
-
-              </div>
-
-
-              ${
-                driverName ||
-                plateNo
-                  ? `
-
-                    <div class="small text-muted">
-
-                      ${escapeYourFindsReprintText(
-                        driverName
-                      )}
-
-                      ${
-                        driverName &&
-                        plateNo
-                          ? " • "
-                          : ""
-                      }
-
-                      ${escapeYourFindsReprintText(
-                        plateNo
-                      )}
-
-                    </div>
-
-                  `
-                  : ""
-              }
-
-
-              <div class="small text-muted mt-1">
-
-                ${escapeYourFindsReprintText(
-                  sizeParts.join(" • ")
-                )}
-
-              </div>
-
-            </div>
-
-
-            <div class="text-end">
-
-              <div
-                class="fw-bold fs-5"
-              >
-                ${totalQty}
-              </div>
-
-              <div class="small text-muted">
-                ${
-                  totalQty === 1
-                    ? "piece"
-                    : "pieces"
-                }
-              </div>
-
-            </div>
-
-          </div>
-
-        `;
-
-
-      list.appendChild(
-        row
-      );
+      total +=
+        quantity;
 
     }
   );
 
-}
+
+  const totalElement =
+    document.getElementById(
+      "deliveryTotalQty"
+    );
 
 
-/* ==========================================================
-   SELECT DELIVERY
-
-   Reuses the existing selective label modal.
-========================================================== */
-
-function selectYourFindsReprintDelivery(
-  deliveryId
-) {
-
-  deliveryId =
-    String(
-      deliveryId || ""
-    ).trim();
-
-
-  if (!deliveryId) {
+  if (!totalElement) {
 
     return;
 
   }
 
 
-  closeYourFindsReprintModal();
+  totalElement.textContent =
+    valid
+      ? String(total)
+      : "—";
+
+}
+
+function submitYourFindsDelivery() {
+
+  /* ================= BASIC DETAILS ================= */
+
+  const deliveryDate =
+    document.getElementById(
+      "deliveryDate"
+    ).value;
 
 
-  if (
-    typeof openYourFindsLabelModal !==
-      "function"
-  ) {
+  const driverName =
+    document.getElementById(
+      "deliveryDriverName"
+    ).value.trim();
+
+
+  const plateNo =
+    document.getElementById(
+      "deliveryPlateNo"
+    ).value
+      .trim()
+      .toUpperCase();
+
+
+  const acceptedBy =
+    document.getElementById(
+      "deliveryAcceptedBy"
+    ).value.trim();
+
+
+  const remarks =
+    document.getElementById(
+      "deliveryRemarks"
+    ).value.trim();
+
+
+  /* ================= QUANTITIES ================= */
+
+  const quantities = {
+    SNE: getDeliveryQuantity("deliveryQtySNE"),
+    MNE: getDeliveryQuantity("deliveryQtyMNE"),
+    LNE: getDeliveryQuantity("deliveryQtyLNE"),
+    XLNE: getDeliveryQuantity("deliveryQtyXLNE"),
+    SE: getDeliveryQuantity("deliveryQtySE"),
+    ME: getDeliveryQuantity("deliveryQtyME"),
+    LE: getDeliveryQuantity("deliveryQtyLE"),
+    XLE: getDeliveryQuantity("deliveryQtyXLE"),
+    CUSTOM: getDeliveryQuantity("deliveryQtyCustom"),
+    CUSTOM_LABEL: String(document.getElementById("deliveryCustomSize").value || "").trim().toUpperCase()
+  };
+
+  /* ========================================================
+     VALIDATION
+  ======================================================== */
+
+  if (!deliveryDate) {
 
     showNotificationToast(
-      "Label selector is unavailable.",
+      "Please select the delivery date.",
       true
     );
 
@@ -618,9 +790,331 @@ function selectYourFindsReprintDelivery(
   }
 
 
-  openYourFindsLabelModal(
-    deliveryId
-  );
+  if (!driverName) {
+
+    showNotificationToast(
+      "Please enter the driver name.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  if (!plateNo) {
+
+    showNotificationToast(
+      "Please enter the plate number.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  const sizeOrder = ["SNE","MNE","LNE","XLNE","SE","ME","LE","XLE","CUSTOM"];
+
+
+  let totalQty =
+    0;
+
+
+  for (
+    let i = 0;
+    i < sizeOrder.length;
+    i++
+  ) {
+
+    const size =
+      sizeOrder[i];
+
+
+    const quantity =
+      quantities[size];
+
+
+    if (
+      quantity === null
+    ) {
+
+      showNotificationToast(
+        size +
+        " quantity must be a whole number between 0 and 999.",
+        true
+      );
+
+      return;
+
+    }
+
+
+    totalQty +=
+      quantity;
+
+  }
+
+
+  if ((quantities.CUSTOM || 0) > 0 && !quantities.CUSTOM_LABEL) {
+    showNotificationToast("Enter the custom YourFinds size/category.", true);
+    return;
+  }
+
+  if (
+    totalQty < 1
+  ) {
+
+    showNotificationToast(
+      "Enter at least one YourFinds item.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  if (!acceptedBy) {
+
+    showNotificationToast(
+      "Unable to identify the logged-in employee. Please log in again.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  /* ========================================================
+     SUBMIT
+  ======================================================== */
+
+  const button =
+    document.getElementById(
+      "acceptDeliveryBtn"
+    );
+
+
+  button.disabled =
+    true;
+
+
+  button.textContent =
+    "Accepting Delivery...";
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        /* ================= RESTORE BUTTON ================= */
+
+        button.disabled =
+          false;
+
+
+        button.textContent =
+          "Accept Delivery";
+
+
+        /* ================= FAILED ================= */
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          showNotificationToast(
+            result &&
+            result.message
+              ? result.message
+              : "Unable to accept delivery.",
+            true
+          );
+
+          return;
+
+        }
+
+
+        /* ================= CLOSE DELIVERY MODAL ================= */
+
+        closeAcceptDeliveryModal();
+
+
+        /* ================= REFRESH INVENTORY ================= */
+
+        if (
+          typeof loadInventoryPage ===
+          "function"
+        ) {
+
+          loadInventoryPage();
+
+        }
+
+
+        /* ================= SUCCESS TOAST ================= */
+
+        showNotificationToast(
+          result.totalQty +
+          " YourFinds item(s) accepted. " +
+          "Delivery ID: " +
+          result.deliveryId
+        );
+
+
+        /* ==================================================
+           OPEN LABEL SELECTION
+
+           IMPORTANT:
+           Delivery is already saved.
+
+           Closing the label selector does not undo
+           the accepted delivery.
+        ================================================== */
+
+        if (
+          result.deliveryId &&
+          typeof openYourFindsLabelModal ===
+            "function"
+        ) {
+
+          openYourFindsLabelModal(
+            result.deliveryId
+          );
+
+        }
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        button.disabled =
+          false;
+
+
+        button.textContent =
+          "Accept Delivery";
+
+
+        console.error(
+          "ACCEPT DELIVERY ERROR:",
+          err
+        );
+
+
+        const message =
+          err &&
+          err.message
+            ? err.message
+            : String(
+                err ||
+                "Unknown error"
+              );
+
+
+        showNotificationToast(
+          "Accept Delivery Error: " +
+          message,
+          true
+        );
+
+      }
+    )
+
+
+    .acceptYourFindsDelivery(
+      deliveryDate,
+      driverName,
+      plateNo,
+      acceptedBy,
+      quantities,
+      remarks
+    );
+
+}
+
+function loadNextYourFindsDeliveryNumber() {
+
+  const deliveryDate =
+    document.getElementById(
+      "deliveryDate"
+    ).value;
+
+
+  const display =
+    document.getElementById(
+      "deliveryNoDisplay"
+    );
+
+
+  if (
+    !deliveryDate ||
+    !display
+  ) {
+
+    return;
+
+  }
+
+
+  display.textContent =
+    "Loading...";
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          display.textContent =
+            "—";
+
+          return;
+
+        }
+
+
+        display.textContent =
+          String(
+            result.deliveryNo
+          );
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        console.error(
+          "DELIVERY NUMBER ERROR:",
+          err
+        );
+
+
+        display.textContent =
+          "—";
+
+      }
+    )
+
+
+    .getNextYourFindsDeliveryNumber(
+      deliveryDate
+    );
 
 }
 

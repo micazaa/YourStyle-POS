@@ -267,24 +267,8 @@
                   Accepted By
                 </th>
 
-                <th class="text-center">
-                  S
-                </th>
-
-                <th class="text-center">
-                  M
-                </th>
-
-                <th class="text-center">
-                  L
-                </th>
-
-                <th class="text-center">
-                  XL
-                </th>
-
-                <th class="text-center">
-                  E
+                <th>
+                  Categories
                 </th>
 
                 <th class="text-center">
@@ -309,7 +293,7 @@
               <tr>
 
                 <td
-                  colspan="12"
+                  colspan="8"
                   class="text-center text-muted py-5"
                 >
                   Open Deliveries to load history.
@@ -370,7 +354,7 @@ function loadDeliveriesPage() {
     <tr>
 
       <td
-        colspan="12"
+        colspan="8"
         class="text-center text-muted py-5"
       >
         Loading deliveries...
@@ -396,7 +380,7 @@ function loadDeliveriesPage() {
             <tr>
 
               <td
-                colspan="12"
+                colspan="8"
                 class="text-center text-danger py-5"
               >
                 ${
@@ -461,7 +445,7 @@ function loadDeliveriesPage() {
           <tr>
 
             <td
-              colspan="12"
+              colspan="8"
               class="text-center text-danger py-5"
             >
               ${escapeDeliveriesHtml(message)}
@@ -514,7 +498,7 @@ function renderDeliveriesTable(
       <tr>
 
         <td
-          colspan="12"
+          colspan="8"
           class="text-center text-muted py-5"
         >
           No deliveries found.
@@ -661,28 +645,11 @@ function renderDeliveriesTable(
         </td>
 
 
-        <!-- QUANTITIES -->
+        <!-- CATEGORIES -->
 
-        <td class="text-center">
-          ${Number(delivery.sQty) || 0}
+        <td>
+          ${Object.keys(delivery.quantities || {}).filter(function(k){ return Number(delivery.quantities[k]) > 0; }).sort().map(function(k){ return escapeDeliveriesHtml(k) + " " + Number(delivery.quantities[k]); }).join(" · ") || "—"}
         </td>
-
-        <td class="text-center">
-          ${Number(delivery.mQty) || 0}
-        </td>
-
-        <td class="text-center">
-          ${Number(delivery.lQty) || 0}
-        </td>
-
-        <td class="text-center">
-          ${Number(delivery.xlQty) || 0}
-        </td>
-
-        <td class="text-center">
-          ${Number(delivery.eQty) || 0}
-        </td>
-
 
         <!-- TOTAL -->
 

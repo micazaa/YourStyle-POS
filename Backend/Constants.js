@@ -223,7 +223,6 @@ const MOVEMENT_LOG_COLUMN_COUNT = 14;
 ========================================================== */
 
 const DELIVERY_IDX = {
-
   DELIVERY_ID: 0,
   DELIVERY_NO: 1,
   DELIVERY_DATE: 2,
@@ -231,26 +230,22 @@ const DELIVERY_IDX = {
   DRIVER_NAME: 4,
   PLATE_NO: 5,
   ACCEPTED_BY: 6,
-
-  S_QTY: 7,
-  M_QTY: 8,
-  L_QTY: 9,
-  XL_QTY: 10,
-  E_QTY: 11,
-
-  TOTAL_QTY: 12,
-
-  FIRST_CODE: 13,
-  LAST_CODE: 14,
-
-  STATUS: 15,
-  REMARKS: 16
-
+  DELIVERY_TYPE: 7,
+  TYPE: 8,
+  CATEGORY: 9,
+  RECEIVE_MODE: 10,
+  DESCRIPTION: 11,
+  BUNDLE_QTY: 12,
+  ESTIMATED_QTY: 13,
+  ACTUAL_QTY: 14,
+  REMAINING_QTY: 15,
+  REMAINING_BUNDLE_QTY: 16,
+  VARIANCE: 17,
+  STATUS: 18,
+  REMARKS: 19
 };
 
-
 const DELIVERY_COL = {
-
   DELIVERY_ID: 1,
   DELIVERY_NO: 2,
   DELIVERY_DATE: 3,
@@ -258,25 +253,22 @@ const DELIVERY_COL = {
   DRIVER_NAME: 5,
   PLATE_NO: 6,
   ACCEPTED_BY: 7,
-
-  S_QTY: 8,
-  M_QTY: 9,
-  L_QTY: 10,
-  XL_QTY: 11,
-  E_QTY: 12,
-
-  TOTAL_QTY: 13,
-
-  FIRST_CODE: 14,
-  LAST_CODE: 15,
-
-  STATUS: 16,
-  REMARKS: 17
-
+  DELIVERY_TYPE: 8,
+  TYPE: 9,
+  CATEGORY: 10,
+  RECEIVE_MODE: 11,
+  DESCRIPTION: 12,
+  BUNDLE_QTY: 13,
+  ESTIMATED_QTY: 14,
+  ACTUAL_QTY: 15,
+  REMAINING_QTY: 16,
+  REMAINING_BUNDLE_QTY: 17,
+  VARIANCE: 18,
+  STATUS: 19,
+  REMARKS: 20
 };
 
-
-const DELIVERY_LOG_COLUMN_COUNT = 17;
+const DELIVERY_LOG_COLUMN_COUNT = 20;
 
 
 /* ==========================================================
@@ -308,14 +300,22 @@ const INVENTORY_TYPE = {
 ========================================================== */
 
 const YOURFINDS_SIZE_CODE = {
-
-  S: "1",
-  M: "2",
-  L: "3",
-  XL: "4",
-  E: "5"
-
+  SNE: "1",
+  MNE: "2",
+  LNE: "3",
+  XLNE: "4",
+  SE: "5",
+  ME: "6",
+  LE: "7",
+  XLE: "8",
+  CUSTOM: "9"
 };
+
+const YOURFINDS_SIZE_ORDER = [
+  "SNE", "MNE", "LNE", "XLNE",
+  "SE", "ME", "LE", "XLE",
+  "CUSTOM"
+];
 
 /* ==========================================================
    CASH REPORT LOG

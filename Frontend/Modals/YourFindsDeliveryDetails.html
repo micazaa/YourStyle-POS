@@ -182,52 +182,14 @@
       <!-- QUANTITY -->
 
       <div class="card border-0 bg-light mb-4">
-
         <div class="card-body">
-
-          <div class="fw-semibold mb-3">
-            Quantity Received
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="fw-semibold">Quantity Received</div>
+            <div>Total: <strong id="deliveryDetailsTotal">0</strong></div>
           </div>
-
-
-          <div class="row text-center g-2">
-
-            <div class="col">
-              <div class="small text-muted">S</div>
-              <div id="deliveryDetailsS" class="fw-bold fs-5">0</div>
-            </div>
-
-            <div class="col">
-              <div class="small text-muted">M</div>
-              <div id="deliveryDetailsM" class="fw-bold fs-5">0</div>
-            </div>
-
-            <div class="col">
-              <div class="small text-muted">L</div>
-              <div id="deliveryDetailsL" class="fw-bold fs-5">0</div>
-            </div>
-
-            <div class="col">
-              <div class="small text-muted">XL</div>
-              <div id="deliveryDetailsXL" class="fw-bold fs-5">0</div>
-            </div>
-
-            <div class="col">
-              <div class="small text-muted">E</div>
-              <div id="deliveryDetailsE" class="fw-bold fs-5">0</div>
-            </div>
-
-            <div class="col border-start">
-              <div class="small text-muted">Total</div>
-              <div id="deliveryDetailsTotal" class="fw-bold fs-5">0</div>
-            </div>
-
-          </div>
-
+          <div id="deliveryDetailsCategories" class="d-flex flex-wrap gap-2"></div>
         </div>
-
       </div>
-
 
       <!-- CODE RANGE -->
 
@@ -603,41 +565,19 @@ function renderYourFindsDeliveryDetails(
     "—";
 
 
-  document.getElementById(
-    "deliveryDetailsS"
-  ).textContent =
-    Number(delivery.sQty) || 0;
+  const quantities = delivery.quantities || {};
+  const categoryBox = document.getElementById("deliveryDetailsCategories");
+  categoryBox.innerHTML = "";
+  Object.keys(quantities).sort().forEach(function(size) {
+    const qty = Number(quantities[size]) || 0;
+    if (qty <= 0) return;
+    const badge = document.createElement("div");
+    badge.className = "border rounded bg-white px-3 py-2";
+    badge.innerHTML = '<div class="small text-muted">' + size + '</div><div class="fw-bold fs-5">' + qty + '</div>';
+    categoryBox.appendChild(badge);
+  });
 
-
-  document.getElementById(
-    "deliveryDetailsM"
-  ).textContent =
-    Number(delivery.mQty) || 0;
-
-
-  document.getElementById(
-    "deliveryDetailsL"
-  ).textContent =
-    Number(delivery.lQty) || 0;
-
-
-  document.getElementById(
-    "deliveryDetailsXL"
-  ).textContent =
-    Number(delivery.xlQty) || 0;
-
-
-  document.getElementById(
-    "deliveryDetailsE"
-  ).textContent =
-    Number(delivery.eQty) || 0;
-
-
-  document.getElementById(
-    "deliveryDetailsTotal"
-  ).textContent =
-    Number(delivery.totalQty) || 0;
-
+  document.getElementById("deliveryDetailsTotal").textContent = Number(delivery.totalQty) || 0;
 
   document.getElementById(
     "deliveryDetailsFirstCode"

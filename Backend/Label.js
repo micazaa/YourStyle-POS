@@ -1206,289 +1206,80 @@ function getYourFindsLabelItemsByDeliveryId(
    Reprint Labels → Select Delivery
 ========================================================== */
 
+function buildYourFindsDeliverySummaryFromInventory(deliveryId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEETS.INVENTORY);
+  if (!sheet || sheet.getLastRow() < 2) return { quantities: {}, totalQty: 0, firstCode: "", lastCode: "" };
+
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, INVENTORY_COLUMN_COUNT).getDisplayValues();
+  const items = rows.filter(function(row) {
+    return String(row[INV_IDX.DELIVERY_ID] || "").trim().toUpperCase() === String(deliveryId || "").trim().toUpperCase() &&
+      (String(row[INV_IDX.CATEGORY] || "").trim().toUpperCase() === "YOURFINDS" || String(row[INV_IDX.INVENTORY_TYPE] || "").trim().toUpperCase() === "UNIQUE");
+  });
+
+  const quantities = {};
+  const codes = [];
+  items.forEach(function(row) {
+    const size = String(row[INV_IDX.SIZE] || "UNKNOWN").trim().toUpperCase() || "UNKNOWN";
+    quantities[size] = (quantities[size] || 0) + 1;
+    const code = String(row[INV_IDX.CODE] || "").trim();
+    if (code) codes.push(code);
+  });
+
+  return { quantities: quantities, totalQty: items.length, firstCode: codes[0] || "", lastCode: codes[codes.length - 1] || "" };
+}
+
+function getGroupedYourFindsDeliveries() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
+  if (!sheet) throw new Error("Delivery Log sheet not found.");
+  if (sheet.getLastRow() < 2) return [];
+
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELIVERY_LOG_COLUMN_COUNT).getValues();
+  const display = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELIVERY_LOG_COLUMN_COUNT).getDisplayValues();
+  const grouped = {};
+
+  data.forEach(function(row, i) {
+    const d = display[i];
+    const deliveryId = String(d[DELIVERY_IDX.DELIVERY_ID] || "").trim();
+    const deliveryType = String(d[DELIVERY_IDX.DELIVERY_TYPE] || "").trim().toUpperCase();
+    if (!deliveryId || (deliveryType !== "YOURFINDS" && !deliveryId.toUpperCase().startsWith("YFD-"))) return;
+
+    if (!grouped[deliveryId]) {
+      grouped[deliveryId] = {
+        rowNumber: i + 2, deliveryId: deliveryId,
+        deliveryNo: String(d[DELIVERY_IDX.DELIVERY_NO] || "").trim(),
+        deliveryDate: String(d[DELIVERY_IDX.DELIVERY_DATE] || "").trim(),
+        timestamp: String(d[DELIVERY_IDX.TIMESTAMP] || "").trim(),
+        timestampMs: row[DELIVERY_IDX.TIMESTAMP] instanceof Date ? row[DELIVERY_IDX.TIMESTAMP].getTime() : 0,
+        driverName: String(d[DELIVERY_IDX.DRIVER_NAME] || "").trim(),
+        plateNo: String(d[DELIVERY_IDX.PLATE_NO] || "").trim(),
+        acceptedBy: String(d[DELIVERY_IDX.ACCEPTED_BY] || "").trim(),
+        status: String(d[DELIVERY_IDX.STATUS] || "").trim(),
+        remarks: String(d[DELIVERY_IDX.REMARKS] || "").trim(),
+        categories: {}
+      };
+    }
+
+    const category = String(d[DELIVERY_IDX.CATEGORY] || "").trim().toUpperCase();
+    const qty = Number(row[DELIVERY_IDX.ACTUAL_QTY]) || 0;
+    if (category && category !== "MULTIPLE") grouped[deliveryId].categories[category] = (grouped[deliveryId].categories[category] || 0) + qty;
+  });
+
+  return Object.keys(grouped).map(function(id) {
+    const item = grouped[id];
+    const summary = buildYourFindsDeliverySummaryFromInventory(id);
+    item.quantities = Object.keys(item.categories).length ? item.categories : summary.quantities;
+    item.totalQty = summary.totalQty || Object.values(item.quantities).reduce(function(a,b){ return a + Number(b || 0); }, 0);
+    item.firstCode = summary.firstCode;
+    item.lastCode = summary.lastCode;
+    return item;
+  }).sort(function(a,b) { return (b.timestampMs || 0) - (a.timestampMs || 0) || b.rowNumber - a.rowNumber; });
+}
+
 function getYourFindsDeliveriesForLabelReprint() {
-
-  try {
-
-    const ss =
-      SpreadsheetApp.getActiveSpreadsheet();
-
-
-    const sheet =
-      ss.getSheetByName(
-        SHEETS.DELIVERY_LOG
-      );
-
-
-    if (!sheet) {
-
-      return {
-
-        success: false,
-
-        message:
-          "Delivery Log sheet not found.",
-
-        deliveries: []
-
-      };
-
-    }
-
-
-    const lastRow =
-      sheet.getLastRow();
-
-
-    if (
-      lastRow < 2
-    ) {
-
-      return {
-
-        success: true,
-
-        deliveries: []
-
-      };
-
-    }
-
-
-    const data =
-      sheet
-        .getRange(
-          2,
-          1,
-          lastRow - 1,
-          DELIVERY_LOG_COLUMN_COUNT
-        )
-        .getValues();
-
-
-    const displayData =
-      sheet
-        .getRange(
-          2,
-          1,
-          lastRow - 1,
-          DELIVERY_LOG_COLUMN_COUNT
-        )
-        .getDisplayValues();
-
-
-    const deliveries =
-      [];
-
-
-    for (
-      let i = 0;
-      i < data.length;
-      i++
-    ) {
-
-      const row =
-        data[i];
-
-
-      const displayRow =
-        displayData[i];
-
-
-      const deliveryId =
-        String(
-          displayRow[
-            DELIVERY_IDX.DELIVERY_ID
-          ] || ""
-        ).trim();
-
-
-      if (!deliveryId) {
-
-        continue;
-
-      }
-
-
-      const status =
-        String(
-          displayRow[
-            DELIVERY_IDX.STATUS
-          ] || ""
-        )
-          .trim()
-          .toUpperCase();
-
-
-      /*
-        Returned deliveries can remain historically
-        visible later, but for now label reprinting
-        is based on accepted deliveries.
-      */
-
-      if (
-        status !== "ACCEPTED"
-      ) {
-
-        continue;
-
-      }
-
-
-      deliveries.push({
-
-        rowNumber:
-          i + 2,
-
-        deliveryId:
-          deliveryId,
-
-        deliveryNo:
-          String(
-            displayRow[
-              DELIVERY_IDX.DELIVERY_NO
-            ] || ""
-          ).trim(),
-
-        deliveryDate:
-          String(
-            displayRow[
-              DELIVERY_IDX.DELIVERY_DATE
-            ] || ""
-          ).trim(),
-
-        driverName:
-          String(
-            displayRow[
-              DELIVERY_IDX.DRIVER_NAME
-            ] || ""
-          ).trim(),
-
-        plateNo:
-          String(
-            displayRow[
-              DELIVERY_IDX.PLATE_NO
-            ] || ""
-          ).trim(),
-
-        acceptedBy:
-          String(
-            displayRow[
-              DELIVERY_IDX.ACCEPTED_BY
-            ] || ""
-          ).trim(),
-
-        sQty:
-          Number(
-            row[
-              DELIVERY_IDX.S_QTY
-            ]
-          ) || 0,
-
-        mQty:
-          Number(
-            row[
-              DELIVERY_IDX.M_QTY
-            ]
-          ) || 0,
-
-        lQty:
-          Number(
-            row[
-              DELIVERY_IDX.L_QTY
-            ]
-          ) || 0,
-
-        xlQty:
-          Number(
-            row[
-              DELIVERY_IDX.XL_QTY
-            ]
-          ) || 0,
-
-        eQty:
-          Number(
-            row[
-              DELIVERY_IDX.E_QTY
-            ]
-          ) || 0,
-
-        totalQty:
-          Number(
-            row[
-              DELIVERY_IDX.TOTAL_QTY
-            ]
-          ) || 0,
-
-        firstCode:
-          String(
-            displayRow[
-              DELIVERY_IDX.FIRST_CODE
-            ] || ""
-          ).trim(),
-
-        lastCode:
-          String(
-            displayRow[
-              DELIVERY_IDX.LAST_CODE
-            ] || ""
-          ).trim(),
-
-        status:
-          status
-
-      });
-
-    }
-
-
-    /* ========================================================
-       NEWEST FIRST
-
-       We can safely use the actual Timestamp column
-       internally for sorting.
-    ======================================================== */
-
-    deliveries.sort(
-      function(a, b) {
-
-        return (
-          b.rowNumber -
-          a.rowNumber
-        );
-
-      }
-    );
-
-
-    return {
-
-      success: true,
-
-      deliveries:
-        deliveries
-
-    };
-
-
-  } catch (err) {
-
-    return {
-
-      success: false,
-
-      message:
-        err &&
-        err.message
-          ? err.message
-          : String(err),
-
-      deliveries: []
-
-    };
-
-  }
-
+  try { return { success: true, deliveries: getGroupedYourFindsDeliveries() }; }
+  catch (err) { return { success: false, message: err && err.message ? err.message : String(err), deliveries: [] }; }
 }
 
 /* ==========================================================
@@ -1504,354 +1295,12 @@ function getYourFindsDeliveriesForLabelReprint() {
 ========================================================== */
 
 function getYourFindsDeliveryHistory() {
-
   try {
-
-    const ss =
-      SpreadsheetApp.getActiveSpreadsheet();
-
-
-    const sheet =
-      ss.getSheetByName(
-        SHEETS.DELIVERY_LOG
-      );
-
-
-    if (!sheet) {
-
-      return {
-
-        success: false,
-
-        message:
-          "Delivery Log sheet not found.",
-
-        deliveries: []
-
-      };
-
-    }
-
-
-    const lastRow =
-      sheet.getLastRow();
-
-
-    if (
-      lastRow < 2
-    ) {
-
-      return {
-
-        success: true,
-
-        count: 0,
-
-        deliveries: []
-
-      };
-
-    }
-
-
-    const rowCount =
-      lastRow - 1;
-
-
-    const data =
-      sheet
-        .getRange(
-          2,
-          1,
-          rowCount,
-          DELIVERY_LOG_COLUMN_COUNT
-        )
-        .getValues();
-
-
-    const displayData =
-      sheet
-        .getRange(
-          2,
-          1,
-          rowCount,
-          DELIVERY_LOG_COLUMN_COUNT
-        )
-        .getDisplayValues();
-
-
-    const deliveries =
-      [];
-
-
-    for (
-      let i = 0;
-      i < data.length;
-      i++
-    ) {
-
-      const row =
-        data[i];
-
-
-      const displayRow =
-        displayData[i];
-
-
-      const deliveryId =
-        String(
-          displayRow[
-            DELIVERY_IDX.DELIVERY_ID
-          ] || ""
-        ).trim();
-
-
-      /*
-        Ignore completely empty rows.
-      */
-
-      if (!deliveryId) {
-
-        continue;
-
-      }
-
-
-      const timestampRaw =
-        row[
-          DELIVERY_IDX.TIMESTAMP
-        ];
-
-
-      let timestampMs =
-        0;
-
-
-      if (
-        timestampRaw instanceof Date &&
-        !isNaN(
-          timestampRaw.getTime()
-        )
-      ) {
-
-        timestampMs =
-          timestampRaw.getTime();
-
-      }
-
-
-      deliveries.push({
-
-        rowNumber:
-          i + 2,
-
-
-        /* ================= IDENTIFIERS ================= */
-
-        deliveryId:
-          deliveryId,
-
-        deliveryNo:
-          String(
-            displayRow[
-              DELIVERY_IDX.DELIVERY_NO
-            ] || ""
-          ).trim(),
-
-
-        /* ================= DATES ================= */
-
-        deliveryDate:
-          String(
-            displayRow[
-              DELIVERY_IDX.DELIVERY_DATE
-            ] || ""
-          ).trim(),
-
-        timestamp:
-          String(
-            displayRow[
-              DELIVERY_IDX.TIMESTAMP
-            ] || ""
-          ).trim(),
-
-        timestampMs:
-          timestampMs,
-
-
-        /* ================= DELIVERY INFO ================= */
-
-        driverName:
-          String(
-            displayRow[
-              DELIVERY_IDX.DRIVER_NAME
-            ] || ""
-          ).trim(),
-
-        plateNo:
-          String(
-            displayRow[
-              DELIVERY_IDX.PLATE_NO
-            ] || ""
-          ).trim(),
-
-        acceptedBy:
-          String(
-            displayRow[
-              DELIVERY_IDX.ACCEPTED_BY
-            ] || ""
-          ).trim(),
-
-
-        /* ================= QUANTITIES ================= */
-
-        sQty:
-          Number(
-            row[
-              DELIVERY_IDX.S_QTY
-            ]
-          ) || 0,
-
-        mQty:
-          Number(
-            row[
-              DELIVERY_IDX.M_QTY
-            ]
-          ) || 0,
-
-        lQty:
-          Number(
-            row[
-              DELIVERY_IDX.L_QTY
-            ]
-          ) || 0,
-
-        xlQty:
-          Number(
-            row[
-              DELIVERY_IDX.XL_QTY
-            ]
-          ) || 0,
-
-        eQty:
-          Number(
-            row[
-              DELIVERY_IDX.E_QTY
-            ]
-          ) || 0,
-
-        totalQty:
-          Number(
-            row[
-              DELIVERY_IDX.TOTAL_QTY
-            ]
-          ) || 0,
-
-
-        /* ================= CODE RANGE ================= */
-
-        firstCode:
-          String(
-            displayRow[
-              DELIVERY_IDX.FIRST_CODE
-            ] || ""
-          ).trim(),
-
-        lastCode:
-          String(
-            displayRow[
-              DELIVERY_IDX.LAST_CODE
-            ] || ""
-          ).trim(),
-
-
-        /* ================= STATUS ================= */
-
-        status:
-          String(
-            displayRow[
-              DELIVERY_IDX.STATUS
-            ] || ""
-          )
-            .trim()
-            .toUpperCase(),
-
-        remarks:
-          String(
-            displayRow[
-              DELIVERY_IDX.REMARKS
-            ] || ""
-          ).trim()
-
-      });
-
-    }
-
-
-    /* ========================================================
-       NEWEST FIRST
-
-       Timestamp first.
-       Sheet row as fallback.
-    ======================================================== */
-
-    deliveries.sort(
-      function(a, b) {
-
-        if (
-          a.timestampMs !==
-          b.timestampMs
-        ) {
-
-          return (
-            b.timestampMs -
-            a.timestampMs
-          );
-
-        }
-
-
-        return (
-          b.rowNumber -
-          a.rowNumber
-        );
-
-      }
-    );
-
-
-    return {
-
-      success:
-        true,
-
-      count:
-        deliveries.length,
-
-      deliveries:
-        deliveries
-
-    };
-
-
+    const deliveries = getGroupedYourFindsDeliveries();
+    return { success: true, count: deliveries.length, deliveries: deliveries };
   } catch (err) {
-
-    return {
-
-      success: false,
-
-      message:
-        err &&
-        err.message
-          ? err.message
-          : String(err),
-
-      deliveries: []
-
-    };
-
+    return { success: false, message: err && err.message ? err.message : String(err), deliveries: [] };
   }
-
 }
 
 /* ==========================================================
