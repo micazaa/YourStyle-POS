@@ -25,7 +25,7 @@
         </h4>
 
         <div class="small text-muted">
-          YourFinds delivery history
+          YourFinds and YourStyle delivery history
         </div>
 
       </div>
@@ -43,90 +43,134 @@
 
 
     <!-- =====================================================
-         SUMMARY
-    ====================================================== -->
+     OPERATIONAL SUMMARY
+====================================================== -->
 
-    <div class="row g-3 mb-4">
+<div class="row g-3 mb-4">
 
+  <!-- YOURFINDS RECEIVED -->
 
-      <!-- TOTAL DELIVERIES -->
+  <div class="col-6 col-xl-3">
 
-      <div class="col-md-4">
+    <div class="card border-0 shadow-sm h-100">
 
-        <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
 
-          <div class="card-body">
-
-            <div class="small text-muted">
-              Total Deliveries
-            </div>
-
-            <div
-              id="deliveriesTotalCount"
-              class="fs-4 fw-bold"
-            >
-              0
-            </div>
-
-          </div>
-
+        <div class="small text-muted">
+          YourFinds Received
         </div>
 
-      </div>
-
-
-      <!-- TOTAL PIECES -->
-
-      <div class="col-md-4">
-
-        <div class="card border-0 shadow-sm h-100">
-
-          <div class="card-body">
-
-            <div class="small text-muted">
-              Total Pieces Received
-            </div>
-
-            <div
-              id="deliveriesTotalPieces"
-              class="fs-4 fw-bold"
-            >
-              0
-            </div>
-
-          </div>
-
+        <div
+          id="deliveriesYourFindsReceived"
+          class="fs-4 fw-bold"
+        >
+          0
         </div>
 
-      </div>
-
-
-      <!-- ACCEPTED -->
-
-      <div class="col-md-4">
-
-        <div class="card border-0 shadow-sm h-100">
-
-          <div class="card-body">
-
-            <div class="small text-muted">
-              Accepted Deliveries
-            </div>
-
-            <div
-              id="deliveriesAcceptedCount"
-              class="fs-4 fw-bold"
-            >
-              0
-            </div>
-
-          </div>
-
+        <div class="small text-muted">
+          actual pieces
         </div>
 
       </div>
 
     </div>
+
+  </div>
+
+
+  <!-- YOURSTYLE RECEIVED -->
+
+  <div class="col-6 col-xl-3">
+
+    <div class="card border-0 shadow-sm h-100">
+
+      <div class="card-body">
+
+        <div class="small text-muted">
+          YourStyle Received
+        </div>
+
+        <div
+          id="deliveriesYourStyleReceived"
+          class="fs-4 fw-bold"
+        >
+          0
+        </div>
+
+        <div class="small text-muted">
+          direct + distributed
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- BULK REMAINING -->
+
+  <div class="col-6 col-xl-3">
+
+    <div class="card border-0 shadow-sm h-100">
+
+      <div class="card-body">
+
+        <div class="small text-muted">
+          Bulk Remaining
+        </div>
+
+        <div
+          id="deliveriesBulkRemaining"
+          class="fs-4 fw-bold"
+        >
+          0
+        </div>
+
+        <div
+          id="deliveriesBundlesRemaining"
+          class="small text-muted"
+        >
+          0 bundles
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- OPEN BULK -->
+
+  <div class="col-6 col-xl-3">
+
+    <div class="card border-0 shadow-sm h-100">
+
+      <div class="card-body">
+
+        <div class="small text-muted">
+          Open Bulk Holders
+        </div>
+
+        <div
+          id="deliveriesOpenBulkHolders"
+          class="fs-4 fw-bold"
+        >
+          0
+        </div>
+
+        <div class="small text-muted">
+          pending / partial
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
 
   <!-- =====================================================
       FILTERS
@@ -198,6 +242,18 @@
 
             <option value="ACCEPTED">
               Accepted
+            </option>
+
+            <option value="PENDING">
+              Pending
+            </option>
+
+            <option value="PARTIAL">
+              Partial
+            </option>
+
+            <option value="COMPLETED">
+              Completed
             </option>
 
             <option value="PARTIAL RETURN">
@@ -322,15 +378,27 @@
    DELIVERIES PAGE STATE
 ========================================================== */
 
-var deliveriesPageData =
-  [];
+var deliveriesPageData = [];
+
+var deliveriesPageLoaded = false;
+
+var deliveriesPageLoading = false;
 
 
 /* ==========================================================
    LOAD DELIVERIES
+
+   First open:
+   → reads Sheets
+
+   Later opens:
+   → uses browser cache
+
+   forceRefresh = true:
+   → reload from Sheets
 ========================================================== */
 
-function loadDeliveriesPage() {
+function loadDeliveriesPage(forceRefresh) {
 
   const tbody =
     document.getElementById(
@@ -349,6 +417,45 @@ function loadDeliveriesPage() {
   }
 
 
+  /* ========================================================
+     USE CACHE
+  ======================================================== */
+
+  if (
+    !forceRefresh &&
+    deliveriesPageLoaded
+  ) {
+
+    renderDeliveriesTable(
+      deliveriesPageData
+    );
+
+
+    updateDeliveriesSummary(
+      deliveriesPageData
+    );
+
+
+    return;
+
+  }
+
+
+  /* ========================================================
+     PREVENT DUPLICATE REQUEST
+  ======================================================== */
+
+  if (deliveriesPageLoading) {
+
+    return;
+
+  }
+
+
+  deliveriesPageLoading =
+    true;
+
+
   tbody.innerHTML = `
 
     <tr>
@@ -357,7 +464,14 @@ function loadDeliveriesPage() {
         colspan="8"
         class="text-center text-muted py-5"
       >
+
+        <div
+          class="spinner-border spinner-border-sm me-2"
+          role="status"
+        ></div>
+
         Loading deliveries...
+
       </td>
 
     </tr>
@@ -370,10 +484,21 @@ function loadDeliveriesPage() {
     .withSuccessHandler(
       function(result) {
 
+        deliveriesPageLoading =
+          false;
+
+
         if (
           !result ||
           !result.success
         ) {
+
+          const message =
+            result &&
+            result.message
+              ? result.message
+              : "Unable to load deliveries.";
+
 
           tbody.innerHTML = `
 
@@ -383,14 +508,9 @@ function loadDeliveriesPage() {
                 colspan="8"
                 class="text-center text-danger py-5"
               >
-                ${
-                  escapeDeliveriesHtml(
-                    result &&
-                    result.message
-                      ? result.message
-                      : "Unable to load deliveries."
-                  )
-                }
+                ${escapeDeliveriesHtml(
+                  message
+                )}
               </td>
 
             </tr>
@@ -411,6 +531,10 @@ function loadDeliveriesPage() {
             : [];
 
 
+        deliveriesPageLoaded =
+          true;
+
+
         renderDeliveriesTable(
           deliveriesPageData
         );
@@ -427,10 +551,8 @@ function loadDeliveriesPage() {
     .withFailureHandler(
       function(err) {
 
-        console.error(
-          "DELIVERIES PAGE ERROR:",
-          err
-        );
+        deliveriesPageLoading =
+          false;
 
 
         const message =
@@ -438,6 +560,12 @@ function loadDeliveriesPage() {
           err.message
             ? err.message
             : "Unable to load deliveries.";
+
+
+        console.error(
+          "DELIVERIES PAGE ERROR:",
+          err
+        );
 
 
         tbody.innerHTML = `
@@ -448,7 +576,9 @@ function loadDeliveriesPage() {
               colspan="8"
               class="text-center text-danger py-5"
             >
-              ${escapeDeliveriesHtml(message)}
+              ${escapeDeliveriesHtml(
+                message
+              )}
             </td>
 
           </tr>
@@ -465,10 +595,37 @@ function loadDeliveriesPage() {
     )
 
 
-    .getYourFindsDeliveryHistory();
+    .getDeliveryHistoryFast();
 
 }
 
+
+/* ==========================================================
+   DELIVERY CACHE
+========================================================== */
+
+function invalidateDeliveriesCache() {
+
+  deliveriesPageLoaded =
+    false;
+
+
+  deliveriesPageData =
+    [];
+
+}
+
+
+function refreshDeliveriesPage() {
+
+  invalidateDeliveriesCache();
+
+
+  loadDeliveriesPage(
+    true
+  );
+
+}
 
 /* ==========================================================
    RENDER DELIVERIES
@@ -541,6 +698,25 @@ function renderDeliveriesTable(
         )
           .trim()
           .toUpperCase();
+
+
+      const deliveryType =
+        String(
+          delivery.deliveryType || ""
+        )
+          .trim()
+          .toUpperCase();
+
+
+      const canDistribute =
+        deliveryType === "YOURSTYLE" &&
+        (status === "PENDING" || status === "PARTIAL");
+
+
+      const canCompleteBulk =
+        deliveryType === "YOURSTYLE" &&
+        status === "PARTIAL" &&
+        delivery.hasBulk;
 
 
       row.innerHTML = `
@@ -645,10 +821,14 @@ function renderDeliveriesTable(
         </td>
 
 
-        <!-- CATEGORIES -->
+        <!-- CATEGORIES / BULK -->
 
         <td>
-          ${Object.keys(delivery.quantities || {}).filter(function(k){ return Number(delivery.quantities[k]) > 0; }).sort().map(function(k){ return escapeDeliveriesHtml(k) + " " + Number(delivery.quantities[k]); }).join(" · ") || "—"}
+
+          ${buildDeliveryCategoryDisplay(
+            delivery
+          )}
+
         </td>
 
         <!-- TOTAL -->
@@ -677,32 +857,77 @@ function renderDeliveriesTable(
             class="d-flex justify-content-center gap-1"
           >
 
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-secondary"
-              onclick="viewYourFindsDeliveryDetails(
-                '${escapeDeliveriesHtml(deliveryId)}'
-              )"
-            >
-              View
-            </button>
+            ${
+              canDistribute
+                ? `
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-pink"
+                    onclick="distributeDeliveryBundle(
+                      '${escapeDeliveriesHtml(deliveryId)}'
+                    )"
+                  >
+                    Distribute Bulk
+                  </button>
+                `
+                : ""
+            }
+
+            ${
+            canCompleteBulk
+              ? `
+
+                <button
+                  type="button"
+                  class="btn btn-sm btn-success"
+                  onclick="
+                    completeDeliveryBulk(
+                      '${escapeDeliveriesHtml(
+                        deliveryId
+                      )}'
+                    )
+                  "
+                >
+                  Complete Bulk Delivery
+                </button>
+
+              `
+              : ""
+          }
 
 
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-dark"
-              onclick="openYourFindsLabelModal(
-                '${escapeDeliveriesHtml(deliveryId)}'
-              )"
-            >
-              Labels
-            </button>
+            ${
+              deliveryType === "YOURFINDS"
+                ? `
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    onclick="viewYourFindsDeliveryDetails(
+                      '${escapeDeliveriesHtml(deliveryId)}'
+                    )"
+                  >
+                    View
+                  </button>
+
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-dark"
+                    onclick="openYourFindsLabelModal(
+                      '${escapeDeliveriesHtml(deliveryId)}'
+                    )"
+                  >
+                    Labels
+                  </button>
+                `
+                : ""
+            }
 
           </div>
 
         </td>
 
       `;
+      
 
 
       tbody.appendChild(
@@ -714,74 +939,339 @@ function renderDeliveriesTable(
 
 }
 
+/* ==========================================================
+   CATEGORY / BULK DISPLAY
+========================================================== */
+
+function buildDeliveryCategoryDisplay(
+  delivery
+) {
+
+  const quantities =
+    delivery.quantities ||
+    {};
+
+
+  const normalParts =
+    Object
+      .keys(
+        quantities
+      )
+      .filter(
+        function(key) {
+
+          return (
+            Number(
+              quantities[key]
+            ) > 0
+          );
+
+        }
+      )
+      .sort()
+      .map(
+        function(key) {
+
+          return (
+            escapeDeliveriesHtml(
+              key
+            ) +
+            " " +
+            (
+              Number(
+                quantities[key]
+              ) || 0
+            )
+          );
+
+        }
+      );
+
+
+  const blocks =
+    [];
+
+
+  if (normalParts.length) {
+
+    blocks.push(
+      "<div>" +
+      normalParts.join(
+        " · "
+      ) +
+      "</div>"
+    );
+
+  }
+
+
+  /* ========================================================
+     BULK HOLDER
+  ======================================================== */
+
+  if (delivery.hasBulk) {
+
+    const bulkTypes =
+      Array.isArray(
+        delivery.bulkTypes
+      )
+        ? delivery.bulkTypes
+        : [];
+
+
+    const typeText =
+      bulkTypes.length
+        ? bulkTypes.join(" / ")
+        : "BULK";
+
+
+    const actual =
+      Number(
+        delivery.bulkActualQuantity
+      ) || 0;
+
+
+    const estimated =
+      Number(
+        delivery.bulkEstimatedQuantity
+      ) || 0;
+
+
+    const remaining =
+      Math.max(
+        0,
+        estimated - actual
+      );
+
+
+    const bundleTotal =
+      Number(
+        delivery.bulkBundleQty
+      ) || 0;
+
+
+    blocks.push(`
+
+      <div
+        class="${
+          normalParts.length
+            ? "mt-1"
+            : ""
+        }"
+      >
+
+        <div class="fw-semibold">
+
+          ${
+            escapeDeliveriesHtml(
+              typeText
+            )
+          } BULK
+
+        </div>
+
+
+        <div class="small text-muted">
+
+          ${actual} actual
+
+          · ${estimated} est
+
+          · ${remaining} remaining estimate
+
+          · ${bundleTotal}
+          ${bundleTotal === 1 ? "physical bundle" : "physical bundles"}
+
+        </div>
+
+      </div>
+
+    `);
+
+  }
+
+
+  return (
+    blocks.join("") ||
+    "—"
+  );
+
+}
 
 /* ==========================================================
-   SUMMARY
+   OPERATIONAL SUMMARY
 ========================================================== */
 
 function updateDeliveriesSummary(
   deliveries
 ) {
 
-  let totalPieces =
+  let yourFindsReceived =
     0;
 
 
-  let acceptedCount =
+  let yourStyleReceived =
     0;
 
 
-  deliveries.forEach(
-    function(delivery) {
-
-      totalPieces +=
-        Number(
-          delivery.totalQty
-        ) || 0;
+  let bulkRemaining =
+    0;
 
 
-      if (
-        String(
-          delivery.status || ""
-        )
-          .trim()
-          .toUpperCase() ===
-        "ACCEPTED"
-      ) {
+  let bundlesRemaining =
+    0;
 
-        acceptedCount++;
+
+  let openBulkHolders =
+    0;
+
+
+  (
+    Array.isArray(deliveries)
+      ? deliveries
+      : []
+  )
+    .forEach(
+      function(delivery) {
+
+        const deliveryType =
+          String(
+            delivery.deliveryType ||
+            ""
+          )
+            .trim()
+            .toUpperCase();
+
+
+        /* ================= YOURFINDS ================= */
+
+        if (
+          deliveryType ===
+          "YOURFINDS"
+        ) {
+
+          yourFindsReceived +=
+            Number(
+              delivery.totalQty
+            ) || 0;
+
+        }
+
+
+        /* ================= YOURSTYLE ================= */
+
+        if (
+          deliveryType ===
+          "YOURSTYLE"
+        ) {
+
+          /*
+            totalQty already means:
+
+            DIRECT actual
+            +
+            BULK actual distributed
+          */
+
+          yourStyleReceived +=
+            Number(
+              delivery.totalQty
+            ) || 0;
+
+
+          bulkRemaining +=
+            Number(
+              delivery.bulkRemainingQuantity
+            ) || 0;
+
+
+          bundlesRemaining +=
+            Number(
+              delivery.bulkBundleQty
+            ) || 0;
+
+
+          openBulkHolders +=
+            Number(
+              delivery.openBulkHolderCount
+            ) || 0;
+
+        }
 
       }
+    );
 
-    }
+
+  setDeliveriesSummaryValue(
+    "deliveriesYourFindsReceived",
+    yourFindsReceived
   );
 
 
-  document.getElementById(
-    "deliveriesTotalCount"
-  ).textContent =
-    String(
-      deliveries.length
+  setDeliveriesSummaryValue(
+    "deliveriesYourStyleReceived",
+    yourStyleReceived
+  );
+
+
+  setDeliveriesSummaryValue(
+    "deliveriesBulkRemaining",
+    bulkRemaining
+  );
+
+
+  setDeliveriesSummaryValue(
+    "deliveriesOpenBulkHolders",
+    openBulkHolders
+  );
+
+
+  const bundleElement =
+    document.getElementById(
+      "deliveriesBundlesRemaining"
     );
 
 
-  document.getElementById(
-    "deliveriesTotalPieces"
-  ).textContent =
-    String(
-      totalPieces
-    );
+  if (bundleElement) {
 
+    bundleElement.textContent =
+      bundlesRemaining +
+      " " +
+      (
+        bundlesRemaining === 1
+          ? "physical bundle"
+          : "physical bundles"
+      );
 
-  document.getElementById(
-    "deliveriesAcceptedCount"
-  ).textContent =
-    String(
-      acceptedCount
-    );
+  }
 
 }
 
+
+function setDeliveriesSummaryValue(
+  elementId,
+  value
+) {
+
+  const element =
+    document.getElementById(
+      elementId
+    );
+
+
+  if (!element) {
+
+    return;
+
+  }
+
+
+  element.textContent =
+    String(
+      Number(value) || 0
+    );
+
+}
 
 /* ==========================================================
    STATUS BADGE
@@ -806,6 +1296,45 @@ function buildDeliveryStatusBadge(
     return `
       <span class="badge bg-success">
         Accepted
+      </span>
+    `;
+
+  }
+
+
+  if (
+    status === "PENDING"
+  ) {
+
+    return `
+      <span class="badge bg-warning text-dark">
+        Pending
+      </span>
+    `;
+
+  }
+
+
+  if (
+    status === "PARTIAL"
+  ) {
+
+    return `
+      <span class="badge bg-info text-dark">
+        Partial
+      </span>
+    `;
+
+  }
+
+
+  if (
+    status === "COMPLETED"
+  ) {
+
+    return `
+      <span class="badge bg-success">
+        Completed
       </span>
     `;
 
@@ -1132,6 +1661,317 @@ function clearDeliveriesFilters() {
     deliveriesPageData
   );
 
+}
+
+/* ==========================================================
+   OPEN NEXT PENDING BULK HOLDER
+========================================================== */
+
+function distributeDeliveryBundle(deliveryId) {
+  deliveryId = String(deliveryId || "").trim();
+
+  if (!deliveryId) {
+    showNotificationToast(
+      "Delivery ID is missing.",
+      true
+    );
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (
+        !result ||
+        !result.success ||
+        !result.holders ||
+        !result.holders.length
+      ) {
+        showNotificationToast(
+          "No pending bulk bundles found for this delivery.",
+          true
+        );
+        return;
+      }
+
+      /*
+        If one physical delivery contains more than one bulk
+        holder, use the first unresolved holder for now.
+
+        Later the Delivery Details view can expose each holder
+        separately.
+      */
+      const holder = result.holders[0];
+
+      const employee =
+        getCurrentDeliveryEmployeeName();
+
+      openBulkDistributionModal(
+        holder.deliveryId,
+        holder.sheetRow,
+        employee
+      );
+    })
+    .withFailureHandler(function(err) {
+      showNotificationToast(
+        err && err.message
+          ? err.message
+          : String(err),
+        true
+      );
+    })
+    .getBulkHoldersForDelivery(deliveryId);
+}
+
+/* ==========================================================
+   COMPLETE BULK
+========================================================== */
+
+function completeDeliveryBulk(
+  deliveryId
+) {
+
+  deliveryId =
+    String(
+      deliveryId || ""
+    ).trim();
+
+
+  if (!deliveryId) {
+
+    showNotificationToast(
+      "Delivery ID is missing.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  const employee =
+    getCurrentDeliveryEmployeeName();
+
+
+  if (!employee) {
+
+    showNotificationToast(
+      "Unable to identify the logged-in employee.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        if (
+          !result ||
+          !result.success ||
+          !result.holders ||
+          !result.holders.length
+        ) {
+
+          showNotificationToast(
+            "No bulk holder is ready for completion.",
+            true
+          );
+
+          refreshDeliveriesPage();
+
+          return;
+
+        }
+
+
+        const holder =
+          result.holders[0];
+
+
+        const variance =
+          Number(
+            holder.variance
+          ) || 0;
+
+
+        const message =
+          "COMPLETE BULK DELIVERY\n\nAll declared physical bundles are finished and locked.\n\n" +
+          "Estimated Quantity: " +
+          holder.estimatedQuantity +
+          "\n" +
+          "Actual Quantity: " +
+          holder.actualQuantity +
+          "\n" +
+          "Unresolved Estimate: " +
+          holder.remainingQuantity +
+          "\n" +
+          "Variance: " +
+          (
+            variance > 0
+              ? "+" + variance
+              : variance
+          );
+
+
+        if (
+          !window.confirm(
+            message
+          )
+        ) {
+
+          return;
+
+        }
+
+
+        google.script.run
+
+          .withSuccessHandler(
+            function(completeResult) {
+
+              if (
+                !completeResult ||
+                !completeResult.success
+              ) {
+
+                showNotificationToast(
+                  completeResult &&
+                  completeResult.message
+                    ? completeResult.message
+                    : "Unable to complete bulk holder.",
+                  true
+                );
+
+                return;
+
+              }
+
+
+              showNotificationToast(
+                "Bulk completed. Variance: " +
+                (
+                  Number(
+                    completeResult.variance
+                  ) > 0
+                    ? "+" +
+                      completeResult.variance
+                    : completeResult.variance
+                )
+              );
+
+
+              refreshDeliveriesPage();
+
+            }
+          )
+
+
+          .withFailureHandler(
+            function(err) {
+
+              showNotificationToast(
+                err &&
+                err.message
+                  ? err.message
+                  : String(err),
+                true
+              );
+
+            }
+          )
+
+
+          .completeBulkHolder({
+            deliveryId:
+              holder.deliveryId,
+
+            sheetRow:
+              holder.sheetRow,
+
+            employee:
+              employee,
+
+            remarks:
+              "Bulk completion"
+          });
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        showNotificationToast(
+          err &&
+          err.message
+            ? err.message
+            : String(err),
+          true
+        );
+
+      }
+    )
+
+
+    .getCompletableBulkHoldersForDelivery(
+      deliveryId
+    );
+
+}
+
+function getCurrentDeliveryEmployeeName() {
+
+  if (
+    typeof currentCashier !==
+      "undefined" &&
+    currentCashier
+  ) {
+
+    return String(
+      currentCashier
+    ).trim();
+
+  }
+
+
+  if (
+    typeof currentEmployee !==
+      "undefined" &&
+    currentEmployee
+  ) {
+
+    if (
+      typeof currentEmployee ===
+      "object"
+    ) {
+
+      return String(
+        currentEmployee.fullName ||
+        currentEmployee.name ||
+        currentEmployee.employeeName ||
+        ""
+      ).trim();
+
+    }
+
+
+    return String(
+      currentEmployee
+    ).trim();
+
+  }
+
+
+  return "";
+}
+
+function loadDeliveries() {
+  refreshDeliveriesPage();
 }
 
 </script>

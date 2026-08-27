@@ -299,7 +299,7 @@ function acceptYourStyleDelivery(payload) {
     const productMap = {};
     (productResult.products || []).forEach(function(product) { productMap[product.productCode] = product; });
 
-    const lines = submittedLines.map(function(line, index) {
+    let lines = submittedLines.map(function(line, index) {
       const type = String(line.type || "").trim().toUpperCase();
       const mode = String(line.receiveMode || "").trim().toUpperCase();
       if (type !== "PINS" && type !== "OTHERS") throw new Error("Item " + (index + 1) + ": invalid Type.");
@@ -323,6 +323,51 @@ function acceptYourStyleDelivery(payload) {
       if (estimatedQuantity < bundleQty) throw new Error("Item " + (index + 1) + ": Estimated Quantity cannot be less than Bundle Qty.");
       return { type: type, receiveMode: mode, description: description, bundleQty: bundleQty, estimatedQuantity: estimatedQuantity };
     });
+
+    /* ========================================================
+       NORMALIZE BULK HOLDERS
+
+       Multiple BULK rows of the same Type in one acceptance
+       represent physical bundles of the SAME bulk holder.
+
+       Example:
+       PINS BULK 1 bundle / est 80
+       PINS BULK 1 bundle / est 80
+
+       becomes ONE holder:
+       PINS BULK 2 bundles / est 160
+
+       This keeps the modal bundle tabs and delivery estimate
+       aligned with what the employee accepted.
+    ======================================================== */
+
+    const normalizedLines = [];
+    const bulkByType = {};
+
+    lines.forEach(function(line) {
+      if (line.receiveMode !== DELIVERY_RECEIVE_MODE.BULK) {
+        normalizedLines.push(line);
+        return;
+      }
+
+      const key = String(line.type || "").trim().toUpperCase();
+
+      if (!bulkByType[key]) {
+        bulkByType[key] = {
+          type: key,
+          receiveMode: DELIVERY_RECEIVE_MODE.BULK,
+          description: line.description,
+          bundleQty: 0,
+          estimatedQuantity: 0
+        };
+        normalizedLines.push(bulkByType[key]);
+      }
+
+      bulkByType[key].bundleQty += Number(line.bundleQty) || 0;
+      bulkByType[key].estimatedQuantity += Number(line.estimatedQuantity) || 0;
+    });
+
+    lines = normalizedLines;
 
     const identifiers = generateDeliveryIdentifiers(DELIVERY_TYPE.YOURSTYLE, deliveryDate);
     const now = new Date();
@@ -436,4 +481,992 @@ function acceptYourStyleDelivery(payload) {
   } finally {
     try { lock.releaseLock(); } catch (e) {}
   }
+}
+
+/* ==========================================================
+   7.9H-A
+   GET PENDING / PARTIAL BULK HOLDERS
+========================================================== */
+
+function getPendingBulkHolders() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
+
+  if (!sheet) {
+    throw new Error("Delivery Log sheet not found.");
+  }
+
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow < 2) {
+    return {
+      success: true,
+      holders: []
+    };
+  }
+
+  const data = sheet
+    .getRange(
+      2,
+      1,
+      lastRow - 1,
+      DELIVERY_LOG_COLUMN_COUNT
+    )
+    .getDisplayValues();
+
+  const holders = [];
+
+  data.forEach(function(row, index) {
+    const deliveryType = String(
+      row[DELIVERY_IDX.DELIVERY_TYPE] || ""
+    ).trim().toUpperCase();
+
+    const receiveMode = String(
+      row[DELIVERY_IDX.RECEIVE_MODE] || ""
+    ).trim().toUpperCase();
+
+    const type = String(
+      row[DELIVERY_IDX.TYPE] || ""
+    ).trim().toUpperCase();
+
+    const status = String(
+      row[DELIVERY_IDX.STATUS] || ""
+    ).trim().toUpperCase();
+
+    if (deliveryType !== DELIVERY_TYPE.YOURSTYLE) return;
+    if (receiveMode !== DELIVERY_RECEIVE_MODE.BULK) return;
+    if (type !== "PINS" && type !== "OTHERS") return;
+
+    if (
+      status !== DELIVERY_STATUS.PENDING &&
+      status !== DELIVERY_STATUS.PARTIAL
+    ) {
+      return;
+    }
+
+    const bundleQty =
+      Number(row[DELIVERY_IDX.BUNDLE_QTY]) || 0;
+
+    const estimatedQty =
+      Number(row[DELIVERY_IDX.ESTIMATED_QTY]) || 0;
+
+    const actualQty =
+      Number(row[DELIVERY_IDX.ACTUAL_QTY]) || 0;
+
+    const remainingQty =
+      Math.max(0, estimatedQty - actualQty);
+
+    const remainingBundleQty =
+      Number(
+        row[DELIVERY_IDX.REMAINING_BUNDLE_QTY]
+      ) || 0;
+
+    const distributedBundleQty =
+      Math.max(
+        0,
+        bundleQty - remainingBundleQty
+      );
+
+    /*
+      Bundle count is tracking only. Once all declared bundles
+      have been opened, additional distributions remain attached
+      to the last physical bundle until explicit completion.
+    */
+    const nextBundleNo =
+      Math.max(
+        1,
+        Math.min(
+          bundleQty || 1,
+          distributedBundleQty + 1
+        )
+      );
+
+    holders.push({
+      sheetRow: index + 2,
+
+      deliveryId: String(
+        row[DELIVERY_IDX.DELIVERY_ID] || ""
+      ).trim(),
+
+      deliveryNo: String(
+        row[DELIVERY_IDX.DELIVERY_NO] || ""
+      ).trim(),
+
+      deliveryDate: String(
+        row[DELIVERY_IDX.DELIVERY_DATE] || ""
+      ).trim(),
+
+      type: type,
+
+      category: String(
+        row[DELIVERY_IDX.CATEGORY] || ""
+      ).trim(),
+
+      description: String(
+        row[DELIVERY_IDX.DESCRIPTION] || ""
+      ).trim(),
+
+      bundleQty: bundleQty,
+      estimatedQuantity: estimatedQty,
+      actualQuantity: actualQty,
+      remainingQuantity: remainingQty,
+      remainingBundleQty: remainingBundleQty,
+      completedBundleQty: Math.max(0, bundleQty - remainingBundleQty),
+      nextBundleNo: nextBundleNo,
+      currentBundleStatus: remainingBundleQty > 0 ? "IN PROGRESS" : "ALL BUNDLES FINISHED",
+      status: status
+    });
+  });
+
+  holders.sort(function(a, b) {
+    return String(b.deliveryId)
+      .localeCompare(String(a.deliveryId));
+  });
+
+  return {
+    success: true,
+    holders: holders
+  };
+}
+
+
+/* ==========================================================
+   GET ONE BULK HOLDER
+
+   Used immediately before opening / distributing a bundle.
+========================================================== */
+
+function getBulkHolderDetails(deliveryId, sheetRow) {
+  deliveryId = String(deliveryId || "").trim();
+  sheetRow = Number(sheetRow);
+  if (!deliveryId) throw new Error("Delivery ID is required.");
+  if (!Number.isInteger(sheetRow) || sheetRow < 2) throw new Error("Valid Delivery Log row is required.");
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
+  if (!sheet) throw new Error("Delivery Log sheet not found.");
+  if (sheetRow > sheet.getLastRow()) throw new Error("Bulk holder row no longer exists.");
+
+  const raw = sheet.getRange(sheetRow, 1, 1, DELIVERY_LOG_COLUMN_COUNT).getValues()[0];
+  const row = sheet.getRange(sheetRow, 1, 1, DELIVERY_LOG_COLUMN_COUNT).getDisplayValues()[0];
+  const storedDeliveryId = String(row[DELIVERY_IDX.DELIVERY_ID] || "").trim();
+  const deliveryType = String(row[DELIVERY_IDX.DELIVERY_TYPE] || "").trim().toUpperCase();
+  const receiveMode = String(row[DELIVERY_IDX.RECEIVE_MODE] || "").trim().toUpperCase();
+  const type = String(row[DELIVERY_IDX.TYPE] || "").trim().toUpperCase();
+  const status = String(row[DELIVERY_IDX.STATUS] || "").trim().toUpperCase();
+
+  if (storedDeliveryId !== deliveryId) throw new Error("Bulk holder Delivery ID no longer matches.");
+  if (deliveryType !== DELIVERY_TYPE.YOURSTYLE) throw new Error("This is not a YourStyle delivery.");
+  if (receiveMode !== DELIVERY_RECEIVE_MODE.BULK) throw new Error("This delivery row is not BULK.");
+  if (type !== "PINS" && type !== "OTHERS") throw new Error("Invalid bulk holder Type.");
+  if (status !== DELIVERY_STATUS.PENDING && status !== DELIVERY_STATUS.PARTIAL) {
+    throw new Error("This bulk holder is no longer available for distribution.");
+  }
+
+  const bundleQty = Math.max(1, Number(raw[DELIVERY_IDX.BUNDLE_QTY]) || 1);
+  const estimated = Number(raw[DELIVERY_IDX.ESTIMATED_QTY]) || 0;
+  const actual = Number(raw[DELIVERY_IDX.ACTUAL_QTY]) || 0;
+  const progress = getBulkBundleProgress_(deliveryId, sheetRow, type, bundleQty);
+
+  return {success:true, holder:{
+    sheetRow:sheetRow, deliveryId:storedDeliveryId,
+    deliveryNo:String(row[DELIVERY_IDX.DELIVERY_NO]||"").trim(),
+    deliveryDate:String(row[DELIVERY_IDX.DELIVERY_DATE]||"").trim(),
+    type:type, category:String(row[DELIVERY_IDX.CATEGORY]||"").trim(),
+    description:String(row[DELIVERY_IDX.DESCRIPTION]||"").trim(),
+    bundleQty:bundleQty, estimatedQuantity:estimated, actualQuantity:actual,
+    remainingQuantity:Math.max(0, estimated-actual),
+    currentVariance:actual-estimated,
+    bundles:progress.bundles,
+    bundlesWithActivity:progress.bundlesWithActivity,
+    status:status
+  }};
+}
+
+/* ==========================================================
+   BUNDLE PROGRESS
+   Physical bundles are identifiers only. No per-bundle estimate.
+========================================================== */
+function getBulkBundleProgress_(deliveryId, sheetRow, holderType, bundleQty) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
+  const totals = {};
+  for (let n = 1; n <= bundleQty; n++) totals[n] = 0;
+
+  if (sheet && sheet.getLastRow() >= 2) {
+    const rows = sheet.getRange(2, 1, sheet.getLastRow()-1, MOVEMENT_LOG_COLUMN_COUNT).getValues();
+    rows.forEach(function(row) {
+      const ref = String(row[MOVE_IDX.REFERENCE_ID] || "").trim();
+      const source = String(row[MOVE_IDX.SOURCE] || "").trim().toUpperCase();
+      const type = String(row[MOVE_IDX.TYPE] || "").trim().toUpperCase();
+      const bundleNo = Number(row[MOVE_IDX.BUNDLE_NO]);
+      const qty = Number(row[MOVE_IDX.QTY_CHANGE]) || 0;
+      if (ref !== deliveryId || source !== INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION) return;
+      if (type !== holderType || qty <= 0) return;
+      if (!Number.isInteger(bundleNo) || bundleNo < 1 || bundleNo > bundleQty) return;
+      totals[bundleNo] = (totals[bundleNo] || 0) + qty;
+    });
+  }
+
+  const bundles = [];
+  let bundlesWithActivity = 0;
+  for (let n = 1; n <= bundleQty; n++) {
+    const actual = Number(totals[n]) || 0;
+    if (actual > 0) bundlesWithActivity++;
+    bundles.push({bundleNo:n, actualQuantity:actual, hasActivity:actual>0});
+  }
+  return {bundles:bundles, bundlesWithActivity:bundlesWithActivity};
+}
+
+/* ==========================================================
+   7.9H-C
+   DISTRIBUTE ONE BULK BUNDLE
+========================================================== */
+
+function distributeBulkBundle(payload) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const deliverySheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
+  const movementSheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
+  const inventorySheet = ss.getSheetByName(SHEETS.INVENTORY);
+  const movementStartRow = movementSheet ? movementSheet.getLastRow() : 0;
+  const stockRollbacks = [];
+  const createdInventoryRows = [];
+  let holderRollback = null;
+
+  try {
+    if (!deliverySheet || !movementSheet || !inventorySheet) throw new Error("Required inventory/delivery sheets are missing.");
+    payload = payload || {};
+    const deliveryId = String(payload.deliveryId || "").trim();
+    const sheetRow = Number(payload.sheetRow);
+    const bundleNo = Number(payload.bundleNo);
+    const employee = String(payload.employee || "").trim();
+    const remarks = String(payload.remarks || "").trim();
+    const submittedLines = Array.isArray(payload.lines) ? payload.lines : [];
+    if (!deliveryId) throw new Error("Delivery ID is required.");
+    if (!Number.isInteger(sheetRow) || sheetRow < 2) throw new Error("Valid Delivery Log row is required.");
+    if (!employee) throw new Error("Employee is required.");
+    if (!submittedLines.length) throw new Error("Add at least one distributed product.");
+
+    const holder = getBulkHolderDetails(deliveryId, sheetRow).holder;
+    const holderType = String(holder.type || "").trim().toUpperCase();
+    if (!Number.isInteger(bundleNo) || bundleNo < 1 || bundleNo > Number(holder.bundleQty)) {
+      throw new Error("Select a valid physical bundle from 1 to " + holder.bundleQty + ".");
+    }
+
+    const productResult = getYourStyleDeliveryProducts();
+    const productMap = {};
+    (productResult.products || []).forEach(function(product){ productMap[String(product.productCode||"").trim()] = product; });
+    const combined = {};
+    submittedLines.forEach(function(line,index){
+      const code=String(line.productCode||"").trim(); const qty=Number(line.quantity); const product=productMap[code];
+      if (!product) throw new Error("Item " + (index+1) + ": select a valid active Product Master item.");
+      if (String(product.category||"").trim().toUpperCase() !== holderType) throw new Error("Item " + (index+1) + ": product does not match bulk holder Type.");
+      if (!Number.isInteger(qty) || qty < 1 || qty > 99999) throw new Error("Item " + (index+1) + ": quantity must be a whole number from 1 to 99999.");
+      if (!combined[code]) combined[code]={productCode:code,description:String(product.description||"").trim(),quantity:0};
+      combined[code].quantity += qty;
+    });
+    const lines=Object.keys(combined).map(function(code){return combined[code];});
+    const distributionActual=lines.reduce(function(sum,line){return sum+line.quantity;},0);
+    if (distributionActual <= 0) throw new Error("Distributed quantity must be greater than zero.");
+
+    const oldActual=Number(holder.actualQuantity)||0;
+    const estimated=Number(holder.estimatedQuantity)||0;
+    const oldRemaining=Math.max(0,estimated-oldActual);
+    const newActual=oldActual+distributionActual;
+    const newRemaining=Math.max(0,estimated-newActual);
+    const currentVariance=newActual-estimated;
+
+    holderRollback=deliverySheet.getRange(sheetRow,DELIVERY_COL.ACTUAL_QTY,1,5).getValues()[0];
+    lines.forEach(function(line){
+      const ensured=ensureYourStyleInventoryProduct(line.productCode,holder.deliveryDate,deliveryId);
+      if (ensured.created) createdInventoryRows.push(ensured.rowNumber);
+      const stockCell=inventorySheet.getRange(ensured.rowNumber,INV_COL.STOCK);
+      stockRollbacks.push({cell:stockCell,value:Number(stockCell.getValue())||0});
+    });
+
+    const bulkMovementType=holderType === "PINS" ? INVENTORY_MOVEMENT_TYPE.BULK_PINS : INVENTORY_MOVEMENT_TYPE.BULK_OTHERS;
+    const holderCode=deliveryId+"-B"+String(getBulkHolderSequenceForRow(deliverySheet,sheetRow,deliveryId)).padStart(2,"0");
+    const estimatedConsumption=Math.min(distributionActual,oldRemaining);
+    if (estimatedConsumption > 0) {
+      logInventoryMovement({code:holderCode,type:bulkMovementType,qtyChange:-estimatedConsumption,stockBefore:oldRemaining,stockAfter:newRemaining,referenceId:deliveryId,employee:employee,item:holder.description,reason:"",source:INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION,bundleNo:bundleNo,remainingBundleQty:"",notes:remarks});
+    }
+    lines.forEach(function(line){
+      changeInventoryStock({code:line.productCode,qtyChange:line.quantity,referenceId:deliveryId,employee:employee,item:line.description,reason:"",source:INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION,bundleNo:bundleNo,remainingBundleQty:"",notes:remarks});
+    });
+
+    deliverySheet.getRange(sheetRow,DELIVERY_COL.ACTUAL_QTY,1,5).setValues([[newActual,newRemaining,"","",DELIVERY_STATUS.PARTIAL]]);
+    SpreadsheetApp.flush();
+    const progress=getBulkBundleProgress_(deliveryId,sheetRow,holderType,Number(holder.bundleQty));
+    return {success:true,deliveryId:deliveryId,deliveryNo:holder.deliveryNo,bundleNo:bundleNo,distributionActual:distributionActual,bundleActual:(progress.bundles[bundleNo-1]||{}).actualQuantity||0,actualQuantity:newActual,remainingQuantity:newRemaining,currentVariance:currentVariance,status:DELIVERY_STATUS.PARTIAL,bundles:progress.bundles};
+  } catch(err) {
+    stockRollbacks.reverse().forEach(function(entry){try{entry.cell.setValue(entry.value);}catch(e){}});
+    if (holderRollback && deliverySheet && Number(payload.sheetRow)>=2) {try{deliverySheet.getRange(Number(payload.sheetRow),DELIVERY_COL.ACTUAL_QTY,1,5).setValues([holderRollback]);}catch(e){}}
+    if (movementSheet && movementSheet.getLastRow()>movementStartRow) movementSheet.deleteRows(movementStartRow+1,movementSheet.getLastRow()-movementStartRow);
+    createdInventoryRows.sort(function(a,b){return b-a;}).forEach(function(r){try{if(r>=2&&r<=inventorySheet.getLastRow())inventorySheet.deleteRow(r);}catch(e){}});
+    SpreadsheetApp.flush();
+    return {success:false,message:err&&err.message?err.message:String(err)};
+  } finally { try{lock.releaseLock();}catch(e){} }
+}
+
+
+/* ==========================================================
+   7.9H-C3
+   COMPLETE BULK HOLDER
+
+   IMPORTANT:
+   Distribution NEVER completes a holder.
+
+   Completion is a separate explicit employee action.
+
+   Requirements:
+   - YOURSTYLE
+   - BULK
+   - Status = PARTIAL
+
+   Completion is always an explicit employee decision.
+   It is allowed for shortage, exact count, or excess.
+
+   Completion:
+   - calculates final variance
+   - reconciles estimated holder balance
+   - does NOT change sellable Inventory
+   - sets Remaining Qty = 0
+   - sets Status = COMPLETED
+========================================================== */
+
+function completeBulkHolder(payload) {
+  const lock =
+    LockService.getScriptLock();
+
+  lock.waitLock(30000);
+
+  try {
+    payload =
+      payload || {};
+
+    const deliveryId =
+      String(
+        payload.deliveryId || ""
+      ).trim();
+
+    const sheetRow =
+      Number(
+        payload.sheetRow
+      );
+
+    const employee =
+      String(
+        payload.employee || ""
+      ).trim();
+
+    const remarks =
+      String(
+        payload.remarks || ""
+      ).trim();
+
+
+    /* ========================================================
+       VALIDATE REQUEST
+    ======================================================== */
+
+    if (!deliveryId) {
+      throw new Error(
+        "Delivery ID is required."
+      );
+    }
+
+
+    if (
+      !Number.isInteger(sheetRow) ||
+      sheetRow < 2
+    ) {
+      throw new Error(
+        "Valid Delivery Log row is required."
+      );
+    }
+
+
+    if (!employee) {
+      throw new Error(
+        "Employee is required."
+      );
+    }
+
+
+    /* ========================================================
+       SHEETS
+    ======================================================== */
+
+    const ss =
+      SpreadsheetApp
+        .getActiveSpreadsheet();
+
+
+    const deliverySheet =
+      ss.getSheetByName(
+        SHEETS.DELIVERY_LOG
+      );
+
+
+    const movementSheet =
+      ss.getSheetByName(
+        SHEETS.INVENTORY_MOVEMENT_LOG
+      );
+
+
+    if (!deliverySheet) {
+      throw new Error(
+        "Delivery Log sheet not found."
+      );
+    }
+
+
+    if (!movementSheet) {
+      throw new Error(
+        "Inventory Movement Log sheet not found."
+      );
+    }
+
+
+    if (
+      sheetRow >
+      deliverySheet.getLastRow()
+    ) {
+      throw new Error(
+        "Bulk holder row no longer exists."
+      );
+    }
+
+
+    /* ========================================================
+       READ HOLDER
+    ======================================================== */
+
+    const row =
+      deliverySheet
+        .getRange(
+          sheetRow,
+          1,
+          1,
+          DELIVERY_LOG_COLUMN_COUNT
+        )
+        .getValues()[0];
+
+
+    const display =
+      deliverySheet
+        .getRange(
+          sheetRow,
+          1,
+          1,
+          DELIVERY_LOG_COLUMN_COUNT
+        )
+        .getDisplayValues()[0];
+
+
+    const storedDeliveryId =
+      String(
+        display[
+          DELIVERY_IDX.DELIVERY_ID
+        ] || ""
+      ).trim();
+
+
+    const deliveryType =
+      String(
+        display[
+          DELIVERY_IDX.DELIVERY_TYPE
+        ] || ""
+      )
+        .trim()
+        .toUpperCase();
+
+
+    const receiveMode =
+      String(
+        display[
+          DELIVERY_IDX.RECEIVE_MODE
+        ] || ""
+      )
+        .trim()
+        .toUpperCase();
+
+
+    const holderType =
+      String(
+        display[
+          DELIVERY_IDX.TYPE
+        ] || ""
+      )
+        .trim()
+        .toUpperCase();
+
+
+    const status =
+      String(
+        display[
+          DELIVERY_IDX.STATUS
+        ] || ""
+      )
+        .trim()
+        .toUpperCase();
+
+
+    const description =
+      String(
+        display[
+          DELIVERY_IDX.DESCRIPTION
+        ] || ""
+      ).trim();
+
+
+    const estimatedQuantity =
+      Number(
+        row[
+          DELIVERY_IDX.ESTIMATED_QTY
+        ]
+      ) || 0;
+
+
+    const actualQuantity =
+      Number(
+        row[
+          DELIVERY_IDX.ACTUAL_QTY
+        ]
+      ) || 0;
+
+
+    const remainingQuantity =
+      Math.max(0, estimatedQuantity - actualQuantity);
+
+
+    const remainingBundleQty =
+      Number(
+        row[
+          DELIVERY_IDX.REMAINING_BUNDLE_QTY
+        ]
+      ) || 0;
+
+
+    /* ========================================================
+       REVALIDATE HOLDER
+    ======================================================== */
+
+    if (
+      storedDeliveryId !==
+      deliveryId
+    ) {
+      throw new Error(
+        "Bulk holder Delivery ID no longer matches."
+      );
+    }
+
+
+    if (
+      deliveryType !==
+      DELIVERY_TYPE.YOURSTYLE
+    ) {
+      throw new Error(
+        "This is not a YourStyle delivery."
+      );
+    }
+
+
+    if (
+      receiveMode !==
+      DELIVERY_RECEIVE_MODE.BULK
+    ) {
+      throw new Error(
+        "This delivery row is not BULK."
+      );
+    }
+
+
+    if (
+      holderType !== "PINS" &&
+      holderType !== "OTHERS"
+    ) {
+      throw new Error(
+        "Invalid bulk holder Type."
+      );
+    }
+
+
+    if (
+      status !==
+      DELIVERY_STATUS.PARTIAL
+    ) {
+      throw new Error(
+        "Only a PARTIAL bulk holder can be completed."
+      );
+    }
+
+
+
+    /* ========================================================
+       VARIANCE
+    ======================================================== */
+
+    const variance =
+      actualQuantity -
+      estimatedQuantity;
+
+
+    /*
+      Holder balance is the unresolved estimated quantity.
+
+      Example:
+
+      Estimated = 80
+      Actual    = 6
+      Remaining = 74
+
+      Completion:
+      BULK_PINS -74 ADJUSTMENT
+    */
+
+    const unresolvedBalance =
+      estimatedQuantity - actualQuantity;
+
+
+    /* ========================================================
+       RESOLVE HOLDER CODE
+    ======================================================== */
+
+    const holderSequence =
+      getBulkHolderSequenceForRow(
+        deliverySheet,
+        sheetRow,
+        deliveryId
+      );
+
+
+    const holderCode =
+      deliveryId +
+      "-B" +
+      String(
+        holderSequence
+      ).padStart(
+        2,
+        "0"
+      );
+
+
+    const bulkMovementType =
+      holderType === "PINS"
+        ? INVENTORY_MOVEMENT_TYPE.BULK_PINS
+        : INVENTORY_MOVEMENT_TYPE.BULK_OTHERS;
+
+
+    /* ========================================================
+       ROLLBACK SNAPSHOT
+    ======================================================== */
+
+    const holderRollback =
+      deliverySheet
+        .getRange(
+          sheetRow,
+          DELIVERY_COL.ACTUAL_QTY,
+          1,
+          5
+        )
+        .getValues()[0];
+
+
+    const movementStartRow =
+      movementSheet.getLastRow();
+
+
+    try {
+
+      /* ======================================================
+         RECONCILE HOLDER
+
+         Only write an adjustment when unresolved estimated
+         quantity remains.
+      ====================================================== */
+
+      if (
+        unresolvedBalance !== 0
+      ) {
+
+        logInventoryMovement({
+          code:
+            holderCode,
+
+          type:
+            bulkMovementType,
+
+          qtyChange:
+            -unresolvedBalance,
+
+          stockBefore:
+            unresolvedBalance,
+
+          stockAfter:
+            0,
+
+          referenceId:
+            deliveryId,
+
+          employee:
+            employee,
+
+          item:
+            description,
+
+          reason:
+            variance < 0
+              ? "BULK SHORTAGE VARIANCE"
+              : (
+                  variance > 0
+                    ? "BULK EXCESS VARIANCE"
+                    : "BULK COMPLETION"
+                ),
+
+          source:
+            INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,
+
+          bundleNo:
+            "",
+
+          remainingBundleQty:
+            0,
+
+          notes:
+            remarks
+        });
+
+      }
+
+
+      /* ======================================================
+         CLOSE DELIVERY HOLDER
+
+         O Actual Qty       unchanged
+         P Remaining Qty    0
+         Q Remaining Bundle 0
+         R Variance         final actual - estimate
+         S Status           COMPLETED
+      ====================================================== */
+
+      deliverySheet
+        .getRange(
+          sheetRow,
+          DELIVERY_COL.ACTUAL_QTY,
+          1,
+          5
+        )
+        .setValues([[
+          actualQuantity,
+          0,
+          0,
+          variance,
+          DELIVERY_STATUS.COMPLETED
+        ]]);
+
+
+      SpreadsheetApp.flush();
+
+
+      return {
+        success:
+          true,
+
+        deliveryId:
+          deliveryId,
+
+        actualQuantity:
+          actualQuantity,
+
+        estimatedQuantity:
+          estimatedQuantity,
+
+        variance:
+          variance,
+
+        status:
+          DELIVERY_STATUS.COMPLETED
+      };
+
+
+    } catch (writeError) {
+
+      /* ======================================================
+         ROLLBACK DELIVERY LOG
+      ====================================================== */
+
+      deliverySheet
+        .getRange(
+          sheetRow,
+          DELIVERY_COL.ACTUAL_QTY,
+          1,
+          5
+        )
+        .setValues([
+          holderRollback
+        ]);
+
+
+      /* ======================================================
+         ROLLBACK MOVEMENTS
+      ====================================================== */
+
+      const movementEndRow =
+        movementSheet.getLastRow();
+
+
+      if (
+        movementEndRow >
+        movementStartRow
+      ) {
+
+        movementSheet.deleteRows(
+          movementStartRow + 1,
+          movementEndRow -
+            movementStartRow
+        );
+
+      }
+
+
+      SpreadsheetApp.flush();
+
+
+      throw writeError;
+    }
+
+
+  } catch (err) {
+
+    return {
+      success:
+        false,
+
+      message:
+        err &&
+        err.message
+          ? err.message
+          : String(err)
+    };
+
+
+  } finally {
+
+    try {
+      lock.releaseLock();
+    } catch (e) {}
+
+  }
+}
+
+/* ==========================================================
+   GET BULK HOLDERS READY FOR COMPLETION
+========================================================== */
+
+function getCompletableBulkHoldersForDelivery(deliveryId) {
+  deliveryId=String(deliveryId||"").trim();
+  if(!deliveryId) throw new Error("Delivery ID is required.");
+  const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(SHEETS.DELIVERY_LOG);
+  if(!sheet) throw new Error("Delivery Log sheet not found.");
+  if(sheet.getLastRow()<2) return {success:true,holders:[]};
+  const data=sheet.getRange(2,1,sheet.getLastRow()-1,DELIVERY_LOG_COLUMN_COUNT).getValues();
+  const display=sheet.getRange(2,1,sheet.getLastRow()-1,DELIVERY_LOG_COLUMN_COUNT).getDisplayValues();
+  const holders=[];
+  data.forEach(function(row,index){
+    const d=display[index]; const id=String(d[DELIVERY_IDX.DELIVERY_ID]||"").trim(); if(id!==deliveryId)return;
+    const dt=String(d[DELIVERY_IDX.DELIVERY_TYPE]||"").trim().toUpperCase();
+    const mode=String(d[DELIVERY_IDX.RECEIVE_MODE]||"").trim().toUpperCase();
+    const status=String(d[DELIVERY_IDX.STATUS]||"").trim().toUpperCase();
+    if(dt!==DELIVERY_TYPE.YOURSTYLE||mode!==DELIVERY_RECEIVE_MODE.BULK||status!==DELIVERY_STATUS.PARTIAL)return;
+    const est=Number(row[DELIVERY_IDX.ESTIMATED_QTY])||0; const actual=Number(row[DELIVERY_IDX.ACTUAL_QTY])||0;
+    holders.push({sheetRow:index+2,deliveryId:id,deliveryNo:String(d[DELIVERY_IDX.DELIVERY_NO]||"").trim(),type:String(d[DELIVERY_IDX.TYPE]||"").trim().toUpperCase(),description:String(d[DELIVERY_IDX.DESCRIPTION]||"").trim(),bundleQty:Number(row[DELIVERY_IDX.BUNDLE_QTY])||0,estimatedQuantity:est,actualQuantity:actual,remainingQuantity:Math.max(0,est-actual),variance:actual-est,status:status});
+  });
+  return {success:true,holders:holders};
+}
+
+/* ==========================================================
+   RESOLVE HOLDER SEQUENCE
+
+   Needed because one YSD can contain multiple BULK rows.
+========================================================== */
+
+function getBulkHolderSequenceForRow(
+  deliverySheet,
+  sheetRow,
+  deliveryId
+) {
+  const data = deliverySheet
+    .getRange(
+      2,
+      1,
+      sheetRow - 1,
+      DELIVERY_LOG_COLUMN_COUNT
+    )
+    .getDisplayValues();
+
+  let sequence = 0;
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+
+    const rowDeliveryId = String(
+      row[DELIVERY_IDX.DELIVERY_ID] || ""
+    ).trim();
+
+    const mode = String(
+      row[DELIVERY_IDX.RECEIVE_MODE] || ""
+    ).trim().toUpperCase();
+
+    if (
+      rowDeliveryId === deliveryId &&
+      mode === DELIVERY_RECEIVE_MODE.BULK
+    ) {
+      sequence++;
+    }
+  }
+
+  if (sequence < 1) {
+    throw new Error(
+      "Unable to resolve bulk holder sequence."
+    );
+  }
+
+  return sequence;
+}
+
+/* ==========================================================
+   7.9H-D
+   GET BULK HOLDERS FOR ONE DELIVERY
+========================================================== */
+
+function getBulkHoldersForDelivery(deliveryId) {
+  deliveryId = String(deliveryId || "").trim();
+
+  if (!deliveryId) {
+    throw new Error("Delivery ID is required.");
+  }
+
+  const result = getPendingBulkHolders();
+
+  if (!result || !result.success) {
+    return {
+      success: false,
+      holders: []
+    };
+  }
+
+  return {
+    success: true,
+
+    holders: (result.holders || [])
+      .filter(function(holder) {
+        return (
+          String(holder.deliveryId || "").trim() ===
+          deliveryId
+        );
+      })
+  };
 }

@@ -1,0 +1,192 @@
+<!-- =========================================================
+     BULK DISTRIBUTION MODAL - PHASE 7 FINAL
+     Physical bundles are identifiers only.
+========================================================== -->
+<div id="bulkDistributionModal" class="generic-overlay-blur" style="display:none;">
+  <div class="custom-popup-card" style="max-width:920px;width:95%;max-height:92vh;overflow-y:auto;">
+    <div class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom">
+      <div>
+        <h5 class="fw-bold mb-1">Distribute Bulk</h5>
+        <div id="bulkDistributionSubtitle" class="small text-muted">Choose the physical bundle, then record actual products found.</div>
+      </div>
+      <button type="button" class="btn-close" onclick="closeBulkDistributionModal()"></button>
+    </div>
+
+    <div class="border rounded bg-light p-3 mb-3">
+      <div class="row g-3 text-center">
+        <div class="col-6 col-md-3"><div class="small text-muted">Delivery</div><div id="bulkDistributionDeliveryNo" class="fw-bold">—</div></div>
+        <div class="col-6 col-md-3"><div class="small text-muted">Type</div><div id="bulkDistributionType" class="fw-bold">—</div></div>
+        <div class="col-6 col-md-3"><div class="small text-muted">Physical Bundles</div><div id="bulkDistributionBundleCount" class="fw-bold">0</div></div>
+        <div class="col-6 col-md-3"><div class="small text-muted">Status</div><div id="bulkDistributionStatus" class="fw-bold">—</div></div>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <div class="small text-muted mb-2">SELECT PHYSICAL BUNDLE</div>
+      <div id="bulkDistributionBundleTabs" class="d-flex gap-2 flex-wrap"></div>
+    </div>
+
+    <div class="border rounded p-3 mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+          <div id="bulkDistributionSelectedBundleTitle" class="fw-bold">Bundle #1</div>
+          <div class="small text-muted">All distributions entered here are audited against this bundle number.</div>
+        </div>
+        <div class="text-end">
+          <div class="small text-muted">Bundle Actual</div>
+          <div id="bulkDistributionSelectedBundleActual" class="fs-4 fw-bold">0</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="border rounded bg-light p-3 mb-4">
+      <div class="row g-3 text-center">
+        <div class="col-6 col-md-3"><div class="small text-muted">Delivery Estimate</div><div id="bulkDistributionEstimatedQty" class="fw-bold fs-5">0</div></div>
+        <div class="col-6 col-md-3"><div class="small text-muted">Actual Counted</div><div id="bulkDistributionActualQty" class="fw-bold fs-5">0</div></div>
+        <div class="col-6 col-md-3"><div class="small text-muted">Remaining Estimate</div><div id="bulkDistributionRemainingQty" class="fw-bold fs-5">0</div></div>
+        <div class="col-6 col-md-3"><div class="small text-muted">Current Variance</div><div id="bulkDistributionCurrentVariance" class="fw-bold fs-5">0</div></div>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div><div class="fw-semibold">This Distribution</div><div class="small text-muted">Select exact Product Master products from the chosen bundle.</div></div>
+      <button type="button" class="btn btn-sm btn-outline-dark" onclick="addBulkDistributionLine()">+ Add Product</button>
+    </div>
+
+    <div id="bulkDistributionProductsLoading" class="border rounded text-center text-muted py-3 mb-3" style="display:none;">Loading Product Master...</div>
+    <div id="bulkDistributionProductsError" class="alert alert-danger" style="display:none;"></div>
+    <div id="bulkDistributionLines" class="mb-3"></div>
+
+    <div class="border rounded bg-light p-3 mb-3">
+      <div class="row g-3 text-center">
+        <div class="col-md-4"><div class="small text-muted">This Distribution</div><div id="bulkDistributionThisActual" class="fw-bold fs-5">0</div></div>
+        <div class="col-md-4"><div class="small text-muted">Bundle After</div><div id="bulkDistributionBundleAfter" class="fw-bold fs-5">0</div></div>
+        <div class="col-md-4"><div class="small text-muted">Delivery Actual After</div><div id="bulkDistributionDeliveryAfter" class="fw-bold fs-5">0</div></div>
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <label class="form-label">Remarks</label>
+      <textarea id="bulkDistributionRemarks" class="form-control" rows="2" placeholder="Optional notes"></textarea>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeBulkDistributionModal()">Cancel</button>
+      <button type="button" id="confirmBulkDistributionBtn" class="btn btn-pink flex-fill fw-bold" onclick="submitBulkDistribution()">Distribute</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let bulkDistributionHolder = null;
+let bulkDistributionProducts = [];
+let bulkDistributionLineCounter = 0;
+let bulkDistributionEmployee = "";
+let bulkDistributionSelectedBundleNo = 1;
+
+function openBulkDistributionModal(deliveryId, sheetRow, employee) {
+  bulkDistributionHolder = null;
+  bulkDistributionProducts = [];
+  bulkDistributionLineCounter = 0;
+  bulkDistributionEmployee = String(employee || "").trim();
+  bulkDistributionSelectedBundleNo = 1;
+  document.getElementById("bulkDistributionLines").innerHTML = "";
+  document.getElementById("bulkDistributionRemarks").value = "";
+  document.getElementById("bulkDistributionProductsError").style.display = "none";
+  document.getElementById("bulkDistributionProductsLoading").style.display = "block";
+  document.getElementById("bulkDistributionModal").style.display = "flex";
+
+  google.script.run.withSuccessHandler(function(result) {
+    if (!result || !result.success || !result.holder) {
+      showBulkDistributionError(result && result.message ? result.message : "Unable to load bulk holder."); return;
+    }
+    bulkDistributionHolder = result.holder;
+    const firstUnused = (result.holder.bundles || []).find(function(b){return !b.hasActivity;});
+    bulkDistributionSelectedBundleNo = firstUnused ? firstUnused.bundleNo : 1;
+    renderBulkDistributionHolder();
+    loadBulkDistributionProducts();
+  }).withFailureHandler(function(err){showBulkDistributionError(err && err.message ? err.message : String(err));})
+    .getBulkHolderDetails(deliveryId, sheetRow);
+}
+
+function closeBulkDistributionModal() {
+  document.getElementById("bulkDistributionModal").style.display = "none";
+  bulkDistributionHolder = null; bulkDistributionProducts = []; bulkDistributionEmployee = "";
+}
+
+function renderBulkDistributionHolder() {
+  const h=bulkDistributionHolder; if(!h)return;
+  document.getElementById("bulkDistributionDeliveryNo").textContent=h.deliveryNo||h.deliveryId||"—";
+  document.getElementById("bulkDistributionType").textContent=h.type||"—";
+  document.getElementById("bulkDistributionBundleCount").textContent=h.bundleQty||0;
+  document.getElementById("bulkDistributionStatus").textContent=h.status||"—";
+  document.getElementById("bulkDistributionEstimatedQty").textContent=Number(h.estimatedQuantity)||0;
+  document.getElementById("bulkDistributionActualQty").textContent=Number(h.actualQuantity)||0;
+  document.getElementById("bulkDistributionRemainingQty").textContent=Math.max(0,(Number(h.estimatedQuantity)||0)-(Number(h.actualQuantity)||0));
+  renderBulkDistributionTabs(); updateBulkDistributionSummary();
+}
+
+function renderBulkDistributionTabs() {
+  const box=document.getElementById("bulkDistributionBundleTabs"); box.innerHTML="";
+  (bulkDistributionHolder.bundles||[]).forEach(function(bundle){
+    const btn=document.createElement("button"); btn.type="button";
+    btn.className="btn btn-sm "+(bundle.bundleNo===bulkDistributionSelectedBundleNo?"btn-dark":"btn-outline-secondary");
+    btn.innerHTML="Bundle #"+bundle.bundleNo+" <span class='badge bg-light text-dark ms-1'>"+(Number(bundle.actualQuantity)||0)+" actual</span>";
+    btn.onclick=function(){selectBulkDistributionBundle(bundle.bundleNo);}; box.appendChild(btn);
+  });
+  const selected=getSelectedBulkBundle();
+  document.getElementById("bulkDistributionSelectedBundleTitle").textContent="Bundle #"+bulkDistributionSelectedBundleNo;
+  document.getElementById("bulkDistributionSelectedBundleActual").textContent=selected?Number(selected.actualQuantity)||0:0;
+}
+
+function selectBulkDistributionBundle(bundleNo) {
+  bulkDistributionSelectedBundleNo=Number(bundleNo)||1; renderBulkDistributionTabs(); updateBulkDistributionSummary();
+}
+function getSelectedBulkBundle(){return (bulkDistributionHolder&&bulkDistributionHolder.bundles||[]).find(function(b){return Number(b.bundleNo)===Number(bulkDistributionSelectedBundleNo);})||null;}
+
+function loadBulkDistributionProducts() {
+  google.script.run.withSuccessHandler(function(result){
+    document.getElementById("bulkDistributionProductsLoading").style.display="none";
+    if(!result||!result.success){showBulkDistributionError(result&&result.message?result.message:"Unable to load Product Master.");return;}
+    const type=String(bulkDistributionHolder.type||"").trim().toUpperCase();
+    bulkDistributionProducts=(result.products||[]).filter(function(p){return String(p.category||"").trim().toUpperCase()===type;});
+    if(!bulkDistributionProducts.length){showBulkDistributionError("No active "+type+" products were found.");return;}
+    addBulkDistributionLine();
+  }).withFailureHandler(function(err){document.getElementById("bulkDistributionProductsLoading").style.display="none";showBulkDistributionError(err&&err.message?err.message:String(err));}).getYourStyleDeliveryProducts();
+}
+
+function addBulkDistributionLine() {
+  if(!bulkDistributionProducts.length){showNotificationToast("Product Master is still loading.",true);return;}
+  bulkDistributionLineCounter++; const id=bulkDistributionLineCounter; const c=document.getElementById("bulkDistributionLines"); const line=document.createElement("div");
+  line.className="bulk-distribution-line border rounded px-2 py-2 mb-2";
+  line.innerHTML=`<div class="row g-2 align-items-end"><div class="col"><label class="form-label small mb-1">Product</label><input type="text" class="form-control form-control-sm bulk-distribution-product-search" placeholder="Search code or description..." autocomplete="off" list="bulkProductList-${id}" oninput="handleBulkDistributionProductSearch(this)"><datalist id="bulkProductList-${id}" class="bulk-distribution-product-list"></datalist><input type="hidden" class="bulk-distribution-product-code"></div><div class="col-md-2" style="max-width:120px;"><label class="form-label small mb-1">Qty</label><input type="number" class="form-control form-control-sm bulk-distribution-qty" min="1" step="1" value="1" oninput="updateBulkDistributionSummary()"></div><div class="col-auto"><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeBulkDistributionLine(this)">×</button></div></div>`;
+  c.appendChild(line); populateBulkDistributionProducts(line); updateBulkDistributionSummary();
+}
+function populateBulkDistributionProducts(line){const list=line.querySelector(".bulk-distribution-product-list"); list.innerHTML=""; bulkDistributionProducts.forEach(function(p){const o=document.createElement("option");o.value=p.productCode+" — "+p.description;list.appendChild(o);});}
+function handleBulkDistributionProductSearch(input){const line=input.closest(".bulk-distribution-line");const hidden=line.querySelector(".bulk-distribution-product-code");const entered=String(input.value||"").trim();const p=bulkDistributionProducts.find(function(x){return x.productCode+" — "+x.description===entered;});hidden.value=p?p.productCode:"";updateBulkDistributionSummary();}
+function removeBulkDistributionLine(button){const line=button.closest(".bulk-distribution-line");if(line)line.remove();updateBulkDistributionSummary();}
+function getBulkDistributionLines(){return Array.from(document.querySelectorAll("#bulkDistributionLines .bulk-distribution-line")).map(function(row){const code=String(row.querySelector(".bulk-distribution-product-code").value||"").trim();const qty=Number(row.querySelector(".bulk-distribution-qty").value)||0;return{productCode:code,quantity:qty};});}
+
+function updateBulkDistributionSummary(){
+  const h=bulkDistributionHolder; const lines=getBulkDistributionLines(); const thisQty=lines.reduce(function(s,l){return s+(Number(l.quantity)||0);},0); const selected=getSelectedBulkBundle();
+  const bundleActual=selected?Number(selected.actualQuantity)||0:0; const deliveryActual=h?Number(h.actualQuantity)||0:0; const estimated=h?Number(h.estimatedQuantity)||0:0;
+  const after=deliveryActual+thisQty; const variance=after-estimated;
+  document.getElementById("bulkDistributionThisActual").textContent=thisQty;
+  document.getElementById("bulkDistributionBundleAfter").textContent=bundleActual+thisQty;
+  document.getElementById("bulkDistributionDeliveryAfter").textContent=after;
+  document.getElementById("bulkDistributionCurrentVariance").textContent=(variance>0?"+":"")+variance;
+}
+
+function submitBulkDistribution(){
+  if(!bulkDistributionHolder){showNotificationToast("Bulk holder is not loaded.",true);return;}
+  const employee=String((typeof currentCashier!=="undefined"&&currentCashier)?currentCashier:(typeof currentEmployee!=="undefined"&&currentEmployee)?(currentEmployee.fullName||currentEmployee.name||currentEmployee.employeeName||currentEmployee):bulkDistributionEmployee||"").trim();
+  if(!employee){showNotificationToast("Unable to identify the logged-in employee.",true);return;}
+  const lines=getBulkDistributionLines(); if(!lines.length){showNotificationToast("Add at least one product.",true);return;}
+  for(let i=0;i<lines.length;i++){if(!lines[i].productCode){showNotificationToast("Select a valid product for Item "+(i+1)+".",true);return;}if(!Number.isInteger(lines[i].quantity)||lines[i].quantity<1){showNotificationToast("Enter a valid quantity for Item "+(i+1)+".",true);return;}}
+  const button=document.getElementById("confirmBulkDistributionBtn");button.disabled=true;button.textContent="Distributing...";
+  const payload={deliveryId:bulkDistributionHolder.deliveryId,sheetRow:bulkDistributionHolder.sheetRow,bundleNo:bulkDistributionSelectedBundleNo,employee:employee,remarks:document.getElementById("bulkDistributionRemarks").value.trim(),lines:lines};
+  google.script.run.withSuccessHandler(function(result){button.disabled=false;button.textContent="Distribute";if(!result||!result.success){showNotificationToast(result&&result.message?result.message:"Distribution failed.",true);return;}closeBulkDistributionModal();showNotificationToast("Added "+result.distributionActual+" piece(s) to Bundle #"+result.bundleNo+".");if(typeof loadDeliveries==="function")loadDeliveries();}).withFailureHandler(function(err){button.disabled=false;button.textContent="Distribute";showNotificationToast(err&&err.message?err.message:String(err),true);}).distributeBulkBundle(payload);
+}
+
+function showBulkDistributionError(message){const loading=document.getElementById("bulkDistributionProductsLoading");const error=document.getElementById("bulkDistributionProductsError");if(loading)loading.style.display="none";if(error){error.textContent=String(message||"Unknown error.");error.style.display="block";}}
+</script>

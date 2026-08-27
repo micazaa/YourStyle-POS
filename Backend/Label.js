@@ -1304,6 +1304,653 @@ function getYourFindsDeliveryHistory() {
 }
 
 /* ==========================================================
+   UNIVERSAL DELIVERY HISTORY
+   PHASE 7.9H-D2
+
+   Used by Deliveries Page.
+
+   Groups Delivery Log rows by Delivery ID and returns:
+   - YOURFINDS
+   - YOURSTYLE DIRECT
+   - YOURSTYLE BULK
+
+   Does NOT replace the existing YourFinds label/reprint
+   functions.
+========================================================== */
+
+function getDeliveryHistory() {
+  try {
+    const ss =
+      SpreadsheetApp.getActiveSpreadsheet();
+
+    const sheet =
+      ss.getSheetByName(
+        SHEETS.DELIVERY_LOG
+      );
+
+    if (!sheet) {
+      throw new Error(
+        "Delivery Log sheet not found."
+      );
+    }
+
+    if (sheet.getLastRow() < 2) {
+      return {
+        success: true,
+        count: 0,
+        deliveries: []
+      };
+    }
+
+    const rowCount =
+      sheet.getLastRow() - 1;
+
+    const data =
+      sheet
+        .getRange(
+          2,
+          1,
+          rowCount,
+          DELIVERY_LOG_COLUMN_COUNT
+        )
+        .getValues();
+
+    const display =
+      sheet
+        .getRange(
+          2,
+          1,
+          rowCount,
+          DELIVERY_LOG_COLUMN_COUNT
+        )
+        .getDisplayValues();
+
+    const grouped = {};
+
+
+    /* ========================================================
+       GROUP DELIVERY LOG ROWS
+    ======================================================== */
+
+    data.forEach(
+      function(row, index) {
+        const d =
+          display[index];
+
+        const deliveryId =
+          String(
+            d[
+              DELIVERY_IDX.DELIVERY_ID
+            ] || ""
+          ).trim();
+
+        if (!deliveryId) {
+          return;
+        }
+
+
+        let deliveryType =
+          String(
+            d[
+              DELIVERY_IDX.DELIVERY_TYPE
+            ] || ""
+          )
+            .trim()
+            .toUpperCase();
+
+
+        /*
+          Backward compatibility for old YourFinds rows.
+        */
+
+        if (
+          !deliveryType &&
+          deliveryId
+            .toUpperCase()
+            .startsWith("YFD-")
+        ) {
+          deliveryType =
+            DELIVERY_TYPE.YOURFINDS;
+        }
+
+
+        if (
+          deliveryType !==
+            DELIVERY_TYPE.YOURFINDS &&
+          deliveryType !==
+            DELIVERY_TYPE.YOURSTYLE
+        ) {
+          return;
+        }
+
+
+        /* ====================================================
+           CREATE GROUP
+        ==================================================== */
+
+        if (!grouped[deliveryId]) {
+          grouped[deliveryId] = {
+            rowNumber:
+              index + 2,
+
+            deliveryId:
+              deliveryId,
+
+            deliveryNo:
+              String(
+                d[
+                  DELIVERY_IDX.DELIVERY_NO
+                ] || ""
+              ).trim(),
+
+            deliveryDate:
+              String(
+                d[
+                  DELIVERY_IDX.DELIVERY_DATE
+                ] || ""
+              ).trim(),
+
+            timestamp:
+              String(
+                d[
+                  DELIVERY_IDX.TIMESTAMP
+                ] || ""
+              ).trim(),
+
+            timestampMs:
+              row[
+                DELIVERY_IDX.TIMESTAMP
+              ] instanceof Date
+                ? row[
+                    DELIVERY_IDX.TIMESTAMP
+                  ].getTime()
+                : 0,
+
+            driverName:
+              String(
+                d[
+                  DELIVERY_IDX.DRIVER_NAME
+                ] || ""
+              ).trim(),
+
+            plateNo:
+              String(
+                d[
+                  DELIVERY_IDX.PLATE_NO
+                ] || ""
+              ).trim(),
+
+            acceptedBy:
+              String(
+                d[
+                  DELIVERY_IDX.ACCEPTED_BY
+                ] || ""
+              ).trim(),
+
+            deliveryType:
+              deliveryType,
+
+            status:
+              "",
+
+            remarks:
+              String(
+                d[
+                  DELIVERY_IDX.REMARKS
+                ] || ""
+              ).trim(),
+
+            quantities: {},
+
+            totalQty: 0,
+
+            hasBulk: false,
+
+            bulkBundleQty: 0,
+
+            bulkEstimatedQuantity: 0,
+
+            bulkActualQuantity: 0,
+
+            bulkRemainingQuantity: 0,
+
+            bulkRemainingBundleQty: 0,
+
+            _statuses: []
+          };
+        }
+
+
+        const group =
+          grouped[deliveryId];
+
+
+        /* ====================================================
+           ROW VALUES
+        ==================================================== */
+
+        const type =
+          String(
+            d[
+              DELIVERY_IDX.TYPE
+            ] || ""
+          )
+            .trim()
+            .toUpperCase();
+
+
+        const category =
+          String(
+            d[
+              DELIVERY_IDX.CATEGORY
+            ] || ""
+          )
+            .trim()
+            .toUpperCase();
+
+
+        const receiveMode =
+          String(
+            d[
+              DELIVERY_IDX.RECEIVE_MODE
+            ] || ""
+          )
+            .trim()
+            .toUpperCase();
+
+
+        const rowStatus =
+          String(
+            d[
+              DELIVERY_IDX.STATUS
+            ] || ""
+          )
+            .trim()
+            .toUpperCase();
+
+
+        const actualQty =
+          Number(
+            row[
+              DELIVERY_IDX.ACTUAL_QTY
+            ]
+          ) || 0;
+
+
+        if (rowStatus) {
+          group._statuses.push(
+            rowStatus
+          );
+        }
+
+
+        /* ====================================================
+           YOURFINDS
+        ==================================================== */
+
+        if (
+          deliveryType ===
+          DELIVERY_TYPE.YOURFINDS
+        ) {
+          if (
+            category &&
+            category !== "MULTIPLE"
+          ) {
+            group.quantities[
+              category
+            ] =
+              (
+                group.quantities[
+                  category
+                ] || 0
+              ) +
+              actualQty;
+          }
+
+          return;
+        }
+
+
+        /* ====================================================
+           YOURSTYLE DIRECT
+        ==================================================== */
+
+        if (
+          receiveMode ===
+          DELIVERY_RECEIVE_MODE.DIRECT
+        ) {
+          const directKey =
+            category ||
+            type ||
+            "DIRECT";
+
+
+          group.quantities[
+            directKey
+          ] =
+            (
+              group.quantities[
+                directKey
+              ] || 0
+            ) +
+            actualQty;
+
+
+          group.totalQty +=
+            actualQty;
+
+
+          return;
+        }
+
+
+        /* ====================================================
+           YOURSTYLE BULK
+        ==================================================== */
+
+        if (
+          receiveMode ===
+          DELIVERY_RECEIVE_MODE.BULK
+        ) {
+          group.hasBulk =
+            true;
+
+
+          const bulkKey =
+            type
+              ? "BULK " + type
+              : "BULK";
+
+
+          /*
+            Category display shows actual pieces already
+            distributed from this holder.
+          */
+
+          group.quantities[
+            bulkKey
+          ] =
+            (
+              group.quantities[
+                bulkKey
+              ] || 0
+            ) +
+            actualQty;
+
+
+          group.bulkBundleQty +=
+            Number(
+              row[
+                DELIVERY_IDX.BUNDLE_QTY
+              ]
+            ) || 0;
+
+
+          group.bulkEstimatedQuantity +=
+            Number(
+              row[
+                DELIVERY_IDX.ESTIMATED_QTY
+              ]
+            ) || 0;
+
+
+          group.bulkActualQuantity +=
+            actualQty;
+
+
+          group.bulkRemainingQuantity +=
+            Number(
+              row[
+                DELIVERY_IDX.REMAINING_QTY
+              ]
+            ) || 0;
+
+
+          group.bulkRemainingBundleQty +=
+            Number(
+              row[
+                DELIVERY_IDX
+                  .REMAINING_BUNDLE_QTY
+              ]
+            ) || 0;
+        }
+      }
+    );
+
+
+    /* ========================================================
+       FINALIZE GROUPS
+    ======================================================== */
+
+    const deliveries =
+      Object
+        .keys(grouped)
+        .map(
+          function(deliveryId) {
+            const group =
+              grouped[deliveryId];
+
+
+            /* ================================================
+               YOURFINDS
+            ================================================ */
+
+            if (
+              group.deliveryType ===
+              DELIVERY_TYPE.YOURFINDS
+            ) {
+              const summary =
+                buildYourFindsDeliverySummaryFromInventory(
+                  deliveryId
+                );
+
+
+              /*
+                If this is an older YourFinds delivery,
+                Inventory remains the source of truth.
+              */
+
+              if (
+                !Object.keys(
+                  group.quantities
+                ).length
+              ) {
+                group.quantities =
+                  summary.quantities ||
+                  {};
+              }
+
+
+              group.totalQty =
+                Number(
+                  summary.totalQty
+                ) ||
+                Object
+                  .keys(
+                    group.quantities
+                  )
+                  .reduce(
+                    function(
+                      total,
+                      key
+                    ) {
+                      return (
+                        total +
+                        (
+                          Number(
+                            group.quantities[
+                              key
+                            ]
+                          ) || 0
+                        )
+                      );
+                    },
+                    0
+                  );
+
+
+              group.firstCode =
+                summary.firstCode ||
+                "";
+
+
+              group.lastCode =
+                summary.lastCode ||
+                "";
+
+
+              /*
+                YourFinds remains ACCEPTED.
+              */
+
+              group.status =
+                group._statuses
+                  .indexOf(
+                    DELIVERY_STATUS.ACCEPTED
+                  ) !== -1
+                  ? DELIVERY_STATUS.ACCEPTED
+                  : (
+                      group._statuses[0] ||
+                      DELIVERY_STATUS.ACCEPTED
+                    );
+            }
+
+
+            /* ================================================
+               YOURSTYLE
+            ================================================ */
+
+            if (
+              group.deliveryType ===
+              DELIVERY_TYPE.YOURSTYLE
+            ) {
+              /*
+                Total Pieces Received means actual sellable
+                pieces so far:
+
+                DIRECT actual
+                +
+                BULK pieces actually distributed
+              */
+
+              group.totalQty +=
+                group.bulkActualQuantity;
+
+
+              const hasPending =
+                group._statuses
+                  .indexOf(
+                    DELIVERY_STATUS.PENDING
+                  ) !== -1;
+
+
+              const hasPartial =
+                group._statuses
+                  .indexOf(
+                    DELIVERY_STATUS.PARTIAL
+                  ) !== -1;
+
+
+              const hasCompleted =
+                group._statuses
+                  .indexOf(
+                    DELIVERY_STATUS.COMPLETED
+                  ) !== -1;
+
+
+              /*
+                STATUS PRIORITY
+
+                PARTIAL takes priority once distribution
+                has started.
+
+                PENDING means bulk exists but no bundle has
+                been distributed yet.
+
+                COMPLETED means all bulk holders are closed.
+
+                DIRECT-only deliveries remain ACCEPTED.
+              */
+
+              if (hasPartial) {
+                group.status =
+                  DELIVERY_STATUS.PARTIAL;
+
+              } else if (hasPending) {
+                group.status =
+                  DELIVERY_STATUS.PENDING;
+
+              } else if (
+                group.hasBulk &&
+                hasCompleted
+              ) {
+                group.status =
+                  DELIVERY_STATUS.COMPLETED;
+
+              } else {
+                group.status =
+                  DELIVERY_STATUS.ACCEPTED;
+              }
+            }
+
+
+            /*
+              Internal fields should not be sent to frontend.
+            */
+
+            delete group._statuses;
+
+
+            return group;
+          }
+        );
+
+
+    /* ========================================================
+       NEWEST FIRST
+    ======================================================== */
+
+    deliveries.sort(
+      function(a, b) {
+        return (
+          (
+            b.timestampMs || 0
+          ) -
+          (
+            a.timestampMs || 0
+          ) ||
+          b.rowNumber -
+          a.rowNumber
+        );
+      }
+    );
+
+
+    return {
+      success: true,
+      count:
+        deliveries.length,
+      deliveries:
+        deliveries
+    };
+
+
+  } catch (err) {
+    return {
+      success: false,
+
+      message:
+        err &&
+        err.message
+          ? err.message
+          : String(err),
+
+      deliveries: []
+    };
+  }
+}
+
+/* ==========================================================
    GET YOURFINDS DELIVERY BY ID
 
    READ-ONLY.
