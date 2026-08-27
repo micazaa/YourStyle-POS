@@ -1,0 +1,122 @@
+<!-- PHASE 8 INVENTORY MANAGEMENT MODALS -->
+<div id="inventoryDetailsModal" class="generic-overlay-blur" style="display:none;">
+  <div class="custom-popup-card" style="max-width:850px;width:95%;max-height:92vh;overflow:auto;">
+    <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
+      <div><h5 id="invDetailTitle" class="fw-bold mb-1">Inventory Item</h5><div id="invDetailCode" class="small text-muted font-monospace"></div></div>
+      <button class="btn-close" onclick="closePhase8Modal('inventoryDetailsModal')"></button>
+    </div>
+    <div class="row g-3 mb-3">
+      <div class="col-md-4">
+        <div class="border rounded p-2 text-center bg-light">
+          <img id="invDetailPhoto" alt="Inventory photo" style="width:100%;height:220px;object-fit:contain;display:none;">
+          <div id="invDetailPhotoEmpty" class="text-muted py-5">No photo uploaded</div>
+        </div>
+        <div class="d-flex gap-2 mt-2">
+          <button class="btn btn-sm btn-outline-primary flex-fill" onclick="chooseInventoryPhotoPhase8()">Upload / Change Photo</button>
+          <button id="invRemovePhotoBtn" class="btn btn-sm btn-outline-danger" onclick="removeInventoryPhotoClientPhase8()">Remove</button>
+        </div>
+        <input id="invPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="uploadInventoryPhotoPhase8(this)">
+      </div>
+      <div class="col-md-8"><div id="invDetailBody"></div></div>
+    </div>
+    <div class="d-flex flex-wrap gap-2 mt-4">
+      <button class="btn btn-outline-dark" onclick="openMovementHistoryPhase8()">Movement History</button>
+      <button id="invAdjustBtn" class="btn btn-pink" onclick="openStockAdjustmentPhase8()">Adjust Stock</button>
+      <button id="invChangeBtn" class="btn btn-outline-primary" onclick="openChangeItemPhase8()">Change Item</button>
+      <button id="invLabelBtn" class="btn btn-outline-secondary" onclick="reprintSelectedYFPhase8()">Reprint Label</button>
+      <button class="btn btn-outline-secondary ms-auto" onclick="toggleInventoryStatusPhase8()" id="invStatusBtn">Deactivate</button>
+    </div>
+  </div>
+</div>
+
+<div id="stockAdjustmentModal" class="generic-overlay-blur" style="display:none;">
+ <div class="custom-popup-card" style="max-width:560px;width:95%;">
+  <h5 class="fw-bold">Stock Adjustment</h5><div id="adjustItemLabel" class="small text-muted mb-3"></div>
+  <div class="row g-2 mb-3"><div class="col-6"><label class="form-label">Action</label><select id="adjustDirection" class="form-select"><option value="ADD">+ Add Stock</option><option value="REMOVE">- Remove Stock</option></select></div><div class="col-6"><label class="form-label">Quantity</label><input id="adjustQty" type="number" min="1" step="1" value="1" class="form-control"></div></div>
+  <label class="form-label">Reason</label><select id="adjustReason" class="form-select mb-3"><option>PHYSICAL COUNT CORRECTION</option><option>DAMAGED</option><option>LOST / MISSING</option><option>FOUND STOCK</option><option>DATA CORRECTION</option><option>OTHER</option></select>
+  <label class="form-label">Notes</label><textarea id="adjustNotes" class="form-control mb-3" rows="2"></textarea>
+  <label class="form-label">Manager PIN</label><input id="adjustManagerPin" type="password" class="form-control mb-4" autocomplete="off">
+  <div class="d-flex gap-2"><button class="btn btn-outline-secondary flex-fill" onclick="closePhase8Modal('stockAdjustmentModal')">Cancel</button><button class="btn btn-pink flex-fill" onclick="submitStockAdjustmentPhase8()">Confirm Adjustment</button></div>
+ </div>
+</div>
+
+<div id="changeItemModal" class="generic-overlay-blur" style="display:none;">
+ <div class="custom-popup-card" style="max-width:620px;width:95%;">
+  <h5 class="fw-bold">Change Inventory Item</h5><div id="changeFromLabel" class="small text-muted mb-3"></div>
+  <label class="form-label">Change To</label><select id="changeToCode" class="form-select mb-3"></select>
+  <label class="form-label">Quantity</label><input id="changeQty" type="number" min="1" step="1" value="1" class="form-control mb-3">
+  <label class="form-label">Reason</label><input id="changeReason" class="form-control mb-3" value="ITEM CHANGE">
+  <label class="form-label">Notes</label><textarea id="changeNotes" class="form-control mb-3" rows="2"></textarea>
+  <label class="form-label">Manager PIN</label><input id="changeManagerPin" type="password" class="form-control mb-4" autocomplete="off">
+  <div class="d-flex gap-2"><button class="btn btn-outline-secondary flex-fill" onclick="closePhase8Modal('changeItemModal')">Cancel</button><button class="btn btn-pink flex-fill" onclick="submitChangeItemPhase8()">Confirm Change</button></div>
+ </div>
+</div>
+
+<div id="movementHistoryModal" class="generic-overlay-blur" style="display:none;">
+ <div class="custom-popup-card" style="max-width:1050px;width:96%;max-height:92vh;overflow:auto;">
+  <div class="d-flex justify-content-between"><div><h5 class="fw-bold mb-1">Movement History</h5><div id="movementHistoryLabel" class="small text-muted"></div></div><button class="btn-close" onclick="closePhase8Modal('movementHistoryModal')"></button></div>
+  <div class="table-responsive mt-3"><table class="table table-sm align-middle"><thead class="table-light"><tr><th>Date</th><th>Change</th><th>Before</th><th>After</th><th>Source</th><th>Reference</th><th>Employee</th><th>Reason / Notes</th></tr></thead><tbody id="movementHistoryBody"></tbody></table></div>
+ </div>
+</div>
+
+<div id="productMasterModal" class="generic-overlay-blur" style="display:none;">
+ <div class="custom-popup-card" style="max-width:1100px;width:96%;max-height:92vh;overflow:auto;">
+  <div class="d-flex justify-content-between align-items-center"><div><h5 class="fw-bold mb-1">Product Master</h5><div id="pmModeLabel" class="small text-muted">Add or edit PINS and OTHERS definitions</div></div><button class="btn-close" onclick="closePhase8Modal('productMasterModal')"></button></div>
+  <div class="row g-2 mt-3"><div class="col-md-2"><input id="pmCode" class="form-control" placeholder="Code"></div><div class="col-md-3"><input id="pmDescription" class="form-control" placeholder="Description"></div><div class="col-md-2"><select id="pmCategory" class="form-select"><option>PINS</option><option>OTHERS</option></select></div><div class="col-md-1"><input id="pmPrice" type="number" min="0" class="form-control" placeholder="Price"></div><div class="col-md-1"><input id="pmOrig" type="number" min="0" class="form-control" placeholder="Orig"></div><div class="col-md-1"><input id="pmLow" type="number" min="0" class="form-control" placeholder="Low"></div><div class="col-md-2"><select id="pmActive" class="form-select"><option value="true">ACTIVE</option><option value="false">INACTIVE</option></select></div></div>
+  <div class="row g-2 mt-2"><div class="col-md-4"><input id="pmManagerPin" type="password" class="form-control" placeholder="Manager PIN"></div><div class="col-md-8"><button class="btn btn-pink" onclick="saveProductMasterPhase8Client()">Save Product</button><button class="btn btn-outline-secondary ms-2" onclick="clearProductMasterFormPhase8()">Clear</button></div></div>
+  <div class="table-responsive mt-4"><table class="table table-hover table-sm"><thead class="table-light"><tr><th>Code</th><th>Description</th><th>Category</th><th>Price</th><th>Low At</th><th>Status</th><th></th></tr></thead><tbody id="productMasterBody"></tbody></table></div>
+ </div>
+</div>
+
+<script>
+var phase8SelectedItem = null;
+function phase8Employee(){ return String((typeof currentCashier!=="undefined"&&currentCashier) ? currentCashier : (typeof currentEmployee!=="undefined"&&currentEmployee ? (currentEmployee.fullName||currentEmployee.name||"") : "")).trim(); }
+function closePhase8Modal(id){ const e=document.getElementById(id); if(e)e.style.display="none"; }
+function openInventoryDetailsPhase8(code){ const item=(inventoryPageData||[]).find(x=>String(x.code)===String(code)); if(!item)return; phase8SelectedItem=item; document.getElementById('invDetailTitle').textContent=item.name||'Inventory Item'; document.getElementById('invDetailCode').textContent=item.code;
+ const display=getInventoryDisplayStatus(item); document.getElementById('invDetailBody').innerHTML=`<div class="border rounded p-3 mb-3"><div class="small text-muted">Current Stock</div><div class="fs-3 fw-bold">${Number(item.stock)||0}</div><div>${buildInventoryStatusBadge(display)}</div></div><div class="row g-3"><div class="col-6"><b>Category</b><br>${escapeInventoryHtml(item.category)}</div><div class="col-6"><b>Type</b><br>${escapeInventoryHtml(item.inventoryType)}</div><div class="col-6"><b>Price</b><br>₱${(Number(item.price)||0).toFixed(2)}</div><div class="col-6"><b>Low Stock At</b><br>${Number(item.lowStockAt)||0}</div><div class="col-6"><b>Delivered</b><br>${escapeInventoryHtml(item.dateDelivered||'—')}</div><div class="col-6"><b>Delivery ID</b><br>${escapeInventoryHtml(item.deliveryId||'—')}</div></div>`; phase8RenderInventoryPhoto_(item.imageUrl);
+ const unique=String(item.inventoryType).toUpperCase()==='UNIQUE'; document.getElementById('invAdjustBtn').style.display=unique?'none':'inline-block'; document.getElementById('invChangeBtn').style.display=unique?'none':'inline-block'; document.getElementById('invLabelBtn').style.display=unique?'inline-block':'none'; document.getElementById('invStatusBtn').textContent=String(item.status).toUpperCase()==='ACTIVE'?'Deactivate':'Reactivate'; document.getElementById('inventoryDetailsModal').style.display='flex'; }
+function openStockAdjustmentPhase8(){ if(!phase8SelectedItem)return; document.getElementById('adjustItemLabel').textContent=`${phase8SelectedItem.name} · ${phase8SelectedItem.code} · Stock ${phase8SelectedItem.stock}`; document.getElementById('stockAdjustmentModal').style.display='flex'; }
+function submitStockAdjustmentPhase8(){ google.script.run.withSuccessHandler(r=>{ if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Adjustment failed',true);return;} closePhase8Modal('stockAdjustmentModal');closePhase8Modal('inventoryDetailsModal');showNotificationToast(`Adjustment saved · ${r.referenceId}`);loadInventoryPage(); }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).adjustInventoryStockPhase8({code:phase8SelectedItem.code,direction:document.getElementById('adjustDirection').value,quantity:Number(document.getElementById('adjustQty').value),reason:document.getElementById('adjustReason').value,notes:document.getElementById('adjustNotes').value,managerPin:document.getElementById('adjustManagerPin').value,employee:phase8Employee()}); }
+function openChangeItemPhase8(){ if(!phase8SelectedItem)return; document.getElementById('changeFromLabel').textContent=`From: ${phase8SelectedItem.name} · ${phase8SelectedItem.code} · Stock ${phase8SelectedItem.stock}`; const s=document.getElementById('changeToCode'); s.innerHTML=(inventoryPageData||[]).filter(x=>String(x.inventoryType).toUpperCase()==='STOCK'&&x.code!==phase8SelectedItem.code&&String(x.status).toUpperCase()==='ACTIVE').map(x=>`<option value="${escapeInventoryHtml(x.code)}">${escapeInventoryHtml(x.code)} — ${escapeInventoryHtml(x.name)} (${escapeInventoryHtml(x.category)})</option>`).join(''); document.getElementById('changeItemModal').style.display='flex'; }
+function submitChangeItemPhase8(){ google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Change failed',true);return;} closePhase8Modal('changeItemModal');closePhase8Modal('inventoryDetailsModal');showNotificationToast(`Item change saved · ${r.referenceId}`);loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).changeInventoryItemPhase8({fromCode:phase8SelectedItem.code,toCode:document.getElementById('changeToCode').value,quantity:Number(document.getElementById('changeQty').value),reason:document.getElementById('changeReason').value,notes:document.getElementById('changeNotes').value,managerPin:document.getElementById('changeManagerPin').value,employee:phase8Employee()}); }
+function openMovementHistoryPhase8(){ if(!phase8SelectedItem)return; document.getElementById('movementHistoryLabel').textContent=`${phase8SelectedItem.name} · ${phase8SelectedItem.code}`; document.getElementById('movementHistoryBody').innerHTML='<tr><td colspan="8" class="text-center text-muted">Loading...</td></tr>'; document.getElementById('movementHistoryModal').style.display='flex'; google.script.run.withSuccessHandler(r=>{const a=r&&r.movements?r.movements:[];document.getElementById('movementHistoryBody').innerHTML=a.length?a.map(m=>`<tr><td>${escapeInventoryHtml(m.timestamp)}</td><td class="fw-bold">${m.qtyChange>0?'+':''}${m.qtyChange}</td><td>${m.stockBefore}</td><td>${m.stockAfter}</td><td>${escapeInventoryHtml(m.source)}</td><td>${escapeInventoryHtml(m.referenceId)}</td><td>${escapeInventoryHtml(m.employee)}</td><td>${escapeInventoryHtml((m.reason||'')+(m.notes?' · '+m.notes:''))}</td></tr>`).join(''):'<tr><td colspan="8" class="text-center text-muted">No movements found.</td></tr>';}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).getInventoryMovementHistoryByCode(phase8SelectedItem.code); }
+function reprintSelectedYFPhase8(){ if(!phase8SelectedItem)return; if(typeof openYourFindsLabelModal==='function')openYourFindsLabelModal(phase8SelectedItem.deliveryId); else showNotificationToast('Label reprint modal unavailable.',true); }
+function toggleInventoryStatusPhase8(){ if(!phase8SelectedItem)return; const target=String(phase8SelectedItem.status).toUpperCase()==='ACTIVE'?'INACTIVE':'ACTIVE'; const pin=window.prompt(`Manager PIN to set ${target}:`); if(!pin)return; google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Status change failed',true);return;}closePhase8Modal('inventoryDetailsModal');showNotificationToast(`Inventory set to ${target}`);loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).setInventoryAdministrativeStatusPhase8({code:phase8SelectedItem.code,status:target,managerPin:pin}); }
+function openProductMasterPhase8(){ document.getElementById('productMasterModal').style.display='flex'; loadProductMasterPhase8(); }
+function loadProductMasterPhase8(){ google.script.run.withSuccessHandler(products=>{window.phase8Products=products||[];document.getElementById('productMasterBody').innerHTML=(products||[]).map(p=>`<tr><td>${escapeInventoryHtml(p.productCode)}</td><td>${escapeInventoryHtml(p.description)}</td><td>${escapeInventoryHtml(p.category)}</td><td>₱${(Number(p.defaultPrice)||0).toFixed(2)}</td><td>${Number(p.lowStockAt)||0}</td><td>${p.active?'ACTIVE':'INACTIVE'}</td><td><button class="btn btn-sm btn-outline-secondary" onclick="editProductMasterPhase8('${escapeInventoryHtml(p.productCode)}')">Edit</button></td></tr>`).join('');}).getProductMaster(); }
+function editProductMasterPhase8(code){const p=(window.phase8Products||[]).find(x=>x.productCode===code);if(!p)return;document.getElementById('pmModeLabel').textContent='Editing '+p.productCode+' — Product Code is locked';document.getElementById('pmCode').value=p.productCode;document.getElementById('pmCode').readOnly=true;document.getElementById('pmDescription').value=p.description;document.getElementById('pmCategory').value=p.category;document.getElementById('pmPrice').value=p.defaultPrice;document.getElementById('pmOrig').value=p.originalPrice;document.getElementById('pmLow').value=p.lowStockAt;document.getElementById('pmActive').value=String(!!p.active);}
+function clearProductMasterFormPhase8(){document.getElementById('pmModeLabel').textContent='Add or edit PINS and OTHERS definitions';['pmCode','pmDescription','pmPrice','pmOrig','pmLow','pmManagerPin'].forEach(id=>document.getElementById(id).value='');document.getElementById('pmCode').readOnly=false;document.getElementById('pmCategory').value='PINS';document.getElementById('pmActive').value='true';}
+function saveProductMasterPhase8Client(){google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Save failed',true);return;}showNotificationToast(`Product ${r.productCode} saved`);clearProductMasterFormPhase8();loadProductMasterPhase8();loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).saveProductMasterPhase8({productCode:document.getElementById('pmCode').value,description:document.getElementById('pmDescription').value,category:document.getElementById('pmCategory').value,defaultPrice:Number(document.getElementById('pmPrice').value),originalPrice:Number(document.getElementById('pmOrig').value),lowStockAt:Number(document.getElementById('pmLow').value),active:document.getElementById('pmActive').value==='true',managerPin:document.getElementById('pmManagerPin').value});}
+
+function phase8RenderInventoryPhoto_(url){
+  const img=document.getElementById('invDetailPhoto'), empty=document.getElementById('invDetailPhotoEmpty'), remove=document.getElementById('invRemovePhotoBtn');
+  const value=String(url||'').trim();
+  if(value){img.src=value;img.style.display='block';empty.style.display='none';remove.style.display='inline-block';}
+  else{img.removeAttribute('src');img.style.display='none';empty.style.display='block';remove.style.display='none';}
+}
+function chooseInventoryPhotoPhase8(){const input=document.getElementById('invPhotoInput');if(input){input.value='';input.click();}}
+function uploadInventoryPhotoPhase8(input){
+  if(!phase8SelectedItem||!input.files||!input.files[0])return;
+  const file=input.files[0];
+  if(file.size>5*1024*1024){showNotificationToast('Image must be 5 MB or smaller.',true);return;}
+  const pin=window.prompt('Manager PIN to upload/change photo:'); if(!pin)return;
+  const reader=new FileReader();
+  reader.onload=function(){
+    showNotificationToast('Uploading photo...');
+    google.script.run.withSuccessHandler(function(r){
+      if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Photo upload failed.',true);return;}
+      phase8SelectedItem.imageUrl=r.imageUrl; phase8RenderInventoryPhoto_(r.imageUrl); showNotificationToast('Photo saved to Inventory Column A.'); loadInventoryPage();
+    }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).saveInventoryPhotoPhase8({code:phase8SelectedItem.code,fileName:file.name,dataUrl:reader.result,managerPin:pin});
+  };
+  reader.readAsDataURL(file);
+}
+function removeInventoryPhotoClientPhase8(){
+  if(!phase8SelectedItem)return;
+  const pin=window.prompt('Manager PIN to remove photo:'); if(!pin)return;
+  google.script.run.withSuccessHandler(function(r){
+    if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Unable to remove photo.',true);return;}
+    phase8SelectedItem.imageUrl=''; phase8RenderInventoryPhoto_(''); showNotificationToast('Photo removed from Inventory Column A.'); loadInventoryPage();
+  }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).removeInventoryPhotoPhase8({code:phase8SelectedItem.code,managerPin:pin});
+}
+
+</script>

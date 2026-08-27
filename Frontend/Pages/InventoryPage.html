@@ -22,9 +22,9 @@
       <button
         type="button"
         class="btn btn-pink"
-        disabled
+        onclick="openProductMasterPhase8()"
       >
-        + Add Inventory
+        Manage Product Master
       </button>
 
     </div>
@@ -600,9 +600,9 @@ function renderInventoryTable(items) {
         <button
           type="button"
           class="btn btn-sm btn-outline-secondary"
-          disabled
+          onclick="openInventoryDetailsPhase8('${escapeInventoryHtml(item.code)}')"
         >
-          Edit
+          View
         </button>
 
       </td>
