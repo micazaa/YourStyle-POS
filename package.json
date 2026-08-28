@@ -1,12 +1,20 @@
 {
+  "name": "yourstyle-pos",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "validate": "node scripts/validate-project.mjs",
+    "format": "prettier --write \".github/workflows/*.yml\" \".prettierrc.json\" \"appsscript.json\" \"eslint.config.mjs\" \"package.json\" \"scripts/**/*.mjs\"",
+    "format:check": "prettier --check \".github/workflows/*.yml\" \".prettierrc.json\" \"appsscript.json\" \"eslint.config.mjs\" \"package.json\" \"scripts/**/*.mjs\"",
+    "check": "npm run lint && npm run validate && npm run format:check"
   },
   "devDependencies": {
     "@google/clasp": "3.4.0",
     "eslint": "10.9.1",
-    "prettier": "YOUR_INSTALLED_VERSION"
+    "prettier": "3.9.6"
   }
 }
