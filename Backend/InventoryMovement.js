@@ -199,6 +199,7 @@ function adjustInventoryStockPhase8(payload) {
 
 function changeInventoryItemPhase8(payload) {
   payload = payload || {};
+
   const auth = phase8RequireManager_(payload.managerPin);
   const fromCode = String(payload.fromCode || "").trim();
   const toCode = String(payload.toCode || "").trim();
@@ -206,38 +207,163 @@ function changeInventoryItemPhase8(payload) {
   const reason = String(payload.reason || "ITEM CHANGE").trim().toUpperCase();
   const notes = String(payload.notes || "").trim();
   const employee = String(payload.employee || "").trim() || auth.managerName;
-  if (!fromCode || !toCode || fromCode === toCode) throw new Error("Choose two different inventory products.");
-  if (!Number.isInteger(qty) || qty < 1) throw new Error("Quantity must be a positive whole number.");
-  const fromResult = getInventoryItemByCode(fromCode), toResult = getInventoryItemByCode(toCode);
-  if (!fromResult.success || !toResult.success) throw new Error("Source or destination inventory item was not found.");
-  const fromItem = fromResult.item, toItem = toResult.item;
-  if (String(fromItem.inventoryType).toUpperCase() !== INVENTORY_TYPE.STOCK || String(toItem.inventoryType).toUpperCase() !== INVENTORY_TYPE.STOCK) {
-    throw new Error("Change Item is only for STOCK products. UNIQUE items cannot be converted.");
+
+  if (!fromCode || !toCode || fromCode === toCode) {
+    throw new Error("Choose two different inventory products.");
   }
-  const lock = LockService.getScriptLock(); lock.waitLock(30000);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const inv = ss.getSheetByName(SHEETS.INVENTORY), mov = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
-  const movementStart = mov ? mov.getLastRow() : 0;
-  const fromCell = inv.getRange(fromItem.rowNumber, INV_COL.STOCK), toCell = inv.getRange(toItem.rowNumber, INV_COL.STOCK);
-  const fromBefore = Number(fromCell.getValue()) || 0, toBefore = Number(toCell.getValue()) || 0;
-  const referenceId = phase8AdjustmentId_();
+
+  if (!Number.isInteger(qty) || qty < 1) {
+    throw new Error("Quantity must be a positive whole number.");
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  let fromCell = null;
+  let toCell = null;
+  let fromBefore = null;
+  let toBefore = null;
+  let movementStart = 0;
+  let mov = null;
+
   try {
-    if (fromBefore < qty) throw new Error("Insufficient source stock. Available: " + fromBefore + ".");
-    fromCell.setValue(fromBefore - qty); toCell.setValue(toBefore + qty);
-    logInventoryMovement({ code: fromCode, type: getInventoryMovementType(fromItem.category, fromItem.inventoryType), qtyChange: -qty,
-      stockBefore: fromBefore, stockAfter: fromBefore - qty, referenceId: referenceId, employee: employee, item: fromItem.name,
-      reason: reason, source: INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT, notes: "Changed to " + toCode + " | Authorized by: " + auth.managerName + (notes ? " | " + notes : "") });
-    logInventoryMovement({ code: toCode, type: getInventoryMovementType(toItem.category, toItem.inventoryType), qtyChange: qty,
-      stockBefore: toBefore, stockAfter: toBefore + qty, referenceId: referenceId, employee: employee, item: toItem.name,
-      reason: reason, source: INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT, notes: "Changed from " + fromCode + " | Authorized by: " + auth.managerName + (notes ? " | " + notes : "") });
+    /*
+      Re-read both inventory items only AFTER acquiring the lock.
+      This prevents stale row numbers / stock values if another
+      stock transaction was running at the same time.
+    */
+    const fromResult = getInventoryItemByCode(fromCode);
+    const toResult = getInventoryItemByCode(toCode);
+
+    if (!fromResult.success || !toResult.success) {
+      throw new Error("Source or destination inventory item was not found.");
+    }
+
+    const fromItem = fromResult.item;
+    const toItem = toResult.item;
+
+    if (
+      String(fromItem.inventoryType || "").toUpperCase() !== INVENTORY_TYPE.STOCK ||
+      String(toItem.inventoryType || "").toUpperCase() !== INVENTORY_TYPE.STOCK
+    ) {
+      throw new Error(
+        "Change Item is only for STOCK products. UNIQUE items cannot be converted."
+      );
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const inv = ss.getSheetByName(SHEETS.INVENTORY);
+    mov = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
+
+    if (!inv) {
+      throw new Error("Inventory sheet not found.");
+    }
+
+    if (!mov) {
+      throw new Error("Inventory Movement Log sheet not found.");
+    }
+
+    movementStart = mov.getLastRow();
+
+    fromCell = inv.getRange(fromItem.rowNumber, INV_COL.STOCK);
+    toCell = inv.getRange(toItem.rowNumber, INV_COL.STOCK);
+
+    fromBefore = Number(fromCell.getValue()) || 0;
+    toBefore = Number(toCell.getValue()) || 0;
+
+    if (fromBefore < qty) {
+      throw new Error(
+        "Insufficient source stock. Available: " + fromBefore + "."
+      );
+    }
+
+    const fromAfter = fromBefore - qty;
+    const toAfter = toBefore + qty;
+    const referenceId = phase8AdjustmentId_();
+
+    fromCell.setValue(fromAfter);
+    toCell.setValue(toAfter);
+
+    logInventoryMovement({
+      code: fromCode,
+      type: getInventoryMovementType(fromItem.category, fromItem.inventoryType),
+      qtyChange: -qty,
+      stockBefore: fromBefore,
+      stockAfter: fromAfter,
+      referenceId: referenceId,
+      employee: employee,
+      item: fromItem.name,
+      reason: reason,
+      source: INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,
+      notes:
+        "Changed to " +
+        toCode +
+        " | Authorized by: " +
+        auth.managerName +
+        (notes ? " | " + notes : "")
+    });
+
+    logInventoryMovement({
+      code: toCode,
+      type: getInventoryMovementType(toItem.category, toItem.inventoryType),
+      qtyChange: qty,
+      stockBefore: toBefore,
+      stockAfter: toAfter,
+      referenceId: referenceId,
+      employee: employee,
+      item: toItem.name,
+      reason: reason,
+      source: INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,
+      notes:
+        "Changed from " +
+        fromCode +
+        " | Authorized by: " +
+        auth.managerName +
+        (notes ? " | " + notes : "")
+    });
+
     SpreadsheetApp.flush();
-    return { success: true, referenceId: referenceId, manager: auth.managerName };
+
+    return {
+      success: true,
+      referenceId: referenceId,
+      manager: auth.managerName,
+      fromCode: fromCode,
+      fromStockAfter: fromAfter,
+      toCode: toCode,
+      toStockAfter: toAfter
+    };
+
   } catch (err) {
-    try { fromCell.setValue(fromBefore); toCell.setValue(toBefore); } catch (e) {}
-    if (mov && mov.getLastRow() > movementStart) mov.deleteRows(movementStart + 1, mov.getLastRow() - movementStart);
+    /* Restore both stock cells if this transaction changed them. */
+    try {
+      if (fromCell && fromBefore !== null) {
+        fromCell.setValue(fromBefore);
+      }
+
+      if (toCell && toBefore !== null) {
+        toCell.setValue(toBefore);
+      }
+    } catch (rollbackStockError) {}
+
+    /* Remove only movement rows created by this locked transaction. */
+    try {
+      if (mov && mov.getLastRow() > movementStart) {
+        mov.deleteRows(
+          movementStart + 1,
+          mov.getLastRow() - movementStart
+        );
+      }
+    } catch (rollbackMovementError) {}
+
     SpreadsheetApp.flush();
     throw err;
-  } finally { try { lock.releaseLock(); } catch (e) {} }
+
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (e) {}
+  }
 }
 
 function saveProductMasterPhase8(payload) {
@@ -364,7 +490,7 @@ function removeInventoryPhotoPhase8(payload) {
   const oldId = phase8DriveImageId_(oldValue);
   if (oldId) {
     try { DriveApp.getFileById(oldId).setTrashed(true); } catch (e) {}
-  }
+  }A
   return { success: true, manager: auth.managerName };
 }
 
