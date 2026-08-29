@@ -1175,6 +1175,369 @@ function buildCashierSummary(byCashier) {
 }
 
 /* ==========================================================
+   SHARED SALES REPORT THEME
+
+   PDF reports are rendered from standalone HTML, so their styles must
+   live inside the generated document rather than Frontend/Styles/CSS.html.
+========================================================== */
+
+function buildSalesReportTheme_() {
+  return `
+    <style>
+      @page {
+        size: A4;
+        margin: 8mm 7mm 10mm;
+      }
+
+      body {
+        zoom: 1 !important;
+        color: #2f3038;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        font-size: 9px;
+        line-height: 1.35;
+      }
+
+      .header {
+        align-items: flex-start;
+        border-bottom: 2px solid #d97a8d;
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+      }
+
+      .brand-kicker {
+        color: #a64f62;
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 1.4px;
+        margin-bottom: 2px;
+        text-transform: uppercase;
+      }
+
+      .title {
+        color: #2f3038;
+        font-size: 17px;
+        letter-spacing: -0.25px;
+        line-height: 1.15;
+      }
+
+      .meta,
+      .meta-right {
+        color: #6f717c;
+        font-size: 8.5px;
+        line-height: 1.55;
+      }
+
+      .report-type-badge,
+      .variance-badge {
+        border-radius: 999px;
+        display: inline-block;
+        font-size: 7.5px;
+        font-weight: 800;
+        letter-spacing: .7px;
+        padding: 3px 7px;
+        text-transform: uppercase;
+      }
+
+      .report-type-badge {
+        background: #f8e9ec;
+        color: #a64f62;
+        margin-bottom: 4px;
+      }
+
+      .kpi-table {
+        border-collapse: separate;
+        border-spacing: 5px 0;
+        margin: 0 -5px 10px;
+        table-layout: fixed;
+        width: calc(100% + 10px);
+      }
+
+      .kpi-table td {
+        background: #fff;
+        border: 1px solid #eadde0;
+        border-radius: 7px;
+        padding: 7px 9px;
+        vertical-align: top;
+      }
+
+      .kpi-label {
+        color: #7b7074;
+        display: block;
+        font-size: 7.5px;
+        font-weight: 700;
+        letter-spacing: .55px;
+        margin-bottom: 2px;
+        text-transform: uppercase;
+      }
+
+      .kpi-value {
+        color: #33333d;
+        display: block;
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+
+      .kpi-primary {
+        background: #fbf1f3 !important;
+        border-color: #e2b8c0 !important;
+      }
+
+      .kpi-primary .kpi-value {
+        color: #9c4055;
+      }
+
+      h2 {
+        border: 0;
+        color: #3a3b44;
+        font-size: 10.5px;
+        letter-spacing: .4px;
+        margin: 10px 0 5px;
+        padding: 0;
+        text-transform: uppercase;
+      }
+
+      table {
+        page-break-inside: auto;
+      }
+
+      thead {
+        display: table-header-group;
+      }
+
+      tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+
+      .sales-summary-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-top: 0;
+        width: 100%;
+      }
+
+      .sales-summary-table th {
+        background: #f6f1f2;
+        border: 0;
+        border-bottom: 1px solid #dcc8cc;
+        border-top: 1px solid #dcc8cc;
+        color: #66575b;
+        font-size: 7.5px;
+        font-weight: 800;
+        letter-spacing: .25px;
+        padding: 5px 6px;
+        text-transform: uppercase;
+      }
+
+      .sales-summary-table td {
+        border: 0;
+        border-bottom: 1px solid #eee7e8;
+        padding: 5px 6px;
+        vertical-align: middle;
+      }
+
+      .sales-category-row td {
+        background: #f8e9ec;
+        border-bottom: 1px solid #e2c9ce;
+        color: #74434b;
+        font-weight: 800;
+        padding-bottom: 5px;
+        padding-top: 5px;
+      }
+
+      .sales-item-name {
+        color: #34343b;
+        font-weight: 600;
+        padding-left: 16px !important;
+      }
+
+      .sales-code {
+        color: #7d7f88;
+        font-family: Consolas, monospace;
+        font-size: 8px;
+      }
+
+      .sales-money {
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .sales-center {
+        text-align: center;
+      }
+
+      .sales-discount,
+      .sales-size {
+        color: #7d7f88;
+      }
+
+      .sales-item-total {
+        color: #3a3b44;
+        font-weight: 700;
+      }
+
+      .sales-exchange-row td {
+        background: #fcfafb;
+        border-bottom: 1px dashed #e6dadd;
+        color: #806f74;
+        font-size: 8px;
+        padding-bottom: 4px;
+        padding-top: 4px;
+      }
+
+      .sales-exchange-name {
+        font-style: italic;
+        padding-left: 30px !important;
+      }
+
+      .sales-net-row td {
+        background: #fff !important;
+      }
+
+      .report-grid {
+        gap: 8px;
+        margin-top: 9px;
+      }
+
+      .report-card {
+        border: 1px solid #e2d6d8;
+        border-radius: 7px;
+      }
+
+      .report-card-header {
+        background: #f7f1f2;
+        border-bottom: 1px solid #e2d6d8;
+        color: #5f4d52;
+        font-size: 8px;
+        letter-spacing: .55px;
+        padding: 6px 8px;
+        text-transform: uppercase;
+      }
+
+      .report-card-body {
+        padding: 7px;
+      }
+
+      .report-summary-table th,
+      .report-denom-table th,
+      .petty-denom-table th {
+        background: #f8f5f5;
+        color: #66575b;
+        font-size: 7.5px;
+        text-transform: uppercase;
+      }
+
+      .report-summary-table th,
+      .report-summary-table td,
+      .report-denom-table th,
+      .report-denom-table td,
+      .petty-denom-table th,
+      .petty-denom-table td {
+        border-color: #e4dcde;
+        padding: 4px 5px;
+      }
+
+      .report-summary-table td:last-child,
+      .report-denom-table td:last-child,
+      .petty-denom-table td:last-child {
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .reconciliation-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        margin-bottom: 7px;
+        table-layout: fixed;
+      }
+
+      .reconciliation-table td {
+        border: 1px solid #e4dcde;
+        padding: 6px;
+        text-align: center;
+      }
+
+      .reconciliation-table td + td {
+        border-left: 0;
+      }
+
+      .recon-label {
+        color: #7b7074;
+        display: block;
+        font-size: 7px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .recon-value {
+        color: #33333d;
+        display: block;
+        font-size: 10px;
+        font-weight: 800;
+        margin-top: 2px;
+      }
+
+      .variance-badge.is-balanced {
+        background: #e8f4ec;
+        color: #34734a;
+      }
+
+      .variance-badge.is-short {
+        background: #fbe7e7;
+        color: #a13d3d;
+      }
+
+      .variance-badge.is-over {
+        background: #fff1dc;
+        color: #95601b;
+      }
+
+      .report-remark {
+        background: #fff8e8;
+        border-left: 3px solid #d69b43;
+        color: #80571c;
+        font-size: 8px;
+        font-weight: 600;
+        margin: 6px 0 0;
+        padding: 5px 7px;
+      }
+
+      .signature {
+        margin-top: 22px;
+      }
+
+      .sig-line {
+        color: #5f6069;
+        font-size: 8.5px;
+        width: 42%;
+      }
+
+      .report-footer {
+        border-top: 1px solid #eee7e8;
+        color: #9798a0;
+        font-size: 7px;
+        margin-top: 12px;
+        padding-top: 5px;
+        text-align: center;
+      }
+    </style>
+  `;
+}
+
+function getReportVarianceStatus_(variance) {
+  const amount = Number(variance) || 0;
+
+  if (Math.abs(amount) <= 0.001) {
+    return { label: "Balanced", className: "is-balanced" };
+  }
+
+  return amount < 0
+    ? { label: "Short", className: "is-short" }
+    : { label: "Over", className: "is-over" };
+}
+
+/* ==========================================================
    CASHIER REPORT HTML BUILDER
 ========================================================== */
 
@@ -1197,14 +1560,12 @@ function buildCashierReportHTML(data) {
     pettyReturnBreakdown,
     pettyRemarkHtml,
 
-    expectedCashDrawer,
     cashOnHand,
-    cashVariance,
     cashBreakdown,
     cashRemarkHtml,
-
-    zoom,
   } = data;
+
+  const pettyStatus = getReportVarianceStatus_(pettyVariance);
 
   return `
     <html>
@@ -1407,10 +1768,12 @@ function buildCashierReportHTML(data) {
 
       </style>
 
+      ${buildSalesReportTheme_()}
+
     </head>
 
 
-    <body style="zoom:${zoom};">
+    <body>
 
       <!-- ================= HEADER ================= -->
 
@@ -1418,14 +1781,18 @@ function buildCashierReportHTML(data) {
 
         <div>
 
+          <div class="brand-kicker">
+            YourStyle POS
+          </div>
+
           <div class="title">
-            CASHIER'S DAILY SALES REPORT
+            Cashier Daily Sales Report
           </div>
 
           <div class="meta">
-            Manager: ${managerName}
-            &nbsp;&nbsp;
-            Cashier: ${cashierName}
+            Prepared by ${cashierName}
+            &nbsp;&nbsp;•&nbsp;&nbsp;
+            Manager ${managerName}
           </div>
 
         </div>
@@ -1433,15 +1800,39 @@ function buildCashierReportHTML(data) {
 
         <div class="meta meta-right">
 
-          Date: ${todayDisplay}<br>
+          <span class="report-type-badge">Cashier Report</span><br>
 
-          First Log: ${shiftStartDisplay}
-          &nbsp;|&nbsp;
-          Last Log: ${shiftEndDisplay}
+          <b>${todayDisplay}</b><br>
+
+          ${shiftStartDisplay} – ${shiftEndDisplay}
 
         </div>
 
       </div>
+
+
+      <!-- ================= KEY METRICS ================= -->
+
+      <table class="kpi-table">
+        <tr>
+          <td class="kpi-primary">
+            <span class="kpi-label">Net Sales</span>
+            <span class="kpi-value">${fmtMoney(metrics.totalSales)}</span>
+          </td>
+          <td>
+            <span class="kpi-label">Transactions</span>
+            <span class="kpi-value">${metrics.transactionCount}</span>
+          </td>
+          <td>
+            <span class="kpi-label">Items Sold</span>
+            <span class="kpi-value">${metrics.itemsCount}</span>
+          </td>
+          <td>
+            <span class="kpi-label">Discounts</span>
+            <span class="kpi-value">${fmtMoney(metrics.totalDiscount)}</span>
+          </td>
+        </tr>
+      </table>
 
 
       <!-- ================= SALES SUMMARY ================= -->
@@ -1450,15 +1841,19 @@ function buildCashierReportHTML(data) {
 
       <table class="sales-summary-table">
 
-        <tr>
-          <th>Item Name</th>
-          <th>Barcode</th>
-          <th>Size</th>
-          <th>Price</th>
-          <th>Discount</th>
-          <th>Qty</th>
-          <th>Net Total</th>
-        </tr>
+        <thead>
+          <tr>
+            <th>Item Name</th>
+            <th>Barcode</th>
+            <th>Size</th>
+            <th>Price</th>
+            <th>Discount</th>
+            <th>Qty</th>
+            <th>Net Total</th>
+          </tr>
+        </thead>
+
+        <tbody>
 
         ${salesRowsHtml}
 
@@ -1503,6 +1898,8 @@ function buildCashierReportHTML(data) {
           </td>
 
         </tr>
+
+        </tbody>
 
       </table>
 
@@ -1592,6 +1989,11 @@ function buildCashierReportHTML(data) {
                     : ""
                 }
 
+                <br><br>
+                <span class="variance-badge ${pettyStatus.className}">
+                  ${pettyStatus.label}
+                </span>
+
               </p>
 
 
@@ -1647,25 +2049,11 @@ function buildCashierReportHTML(data) {
             <div class="report-card-body">
 
               <p class="report-text-summary">
-                Expected:
-                <b>${fmtMoney(expectedCashDrawer)}</b>
-
-                <br>
-
-                Remitted:
-                <b>${fmtMoney(cashOnHand)}</b>
-                
-                ${
-                  Math.abs(cashVariance) > 0.001
-                    ? `
-                      <br>
-                      <span style="color:#b45f06;">
-                        Variance:
-                        <b>${fmtMoney(cashVariance)}</b>
-                      </span>
-                    `
-                    : ""
-                }
+                Cash remitted:
+                <b>${fmtMoney(cashOnHand)}</b><br>
+                <span style="color:#878892; font-size:8px;">
+                  Blind count — reconciliation is manager-only.
+                </span>
               </p>
 
 
@@ -1729,6 +2117,10 @@ function buildCashierReportHTML(data) {
 
       </div>
 
+      <div class="report-footer">
+        YourStyle POS • System-generated cashier report • Internal use only
+      </div>
+
     </body>
 
     </html>
@@ -1757,9 +2149,9 @@ function buildManagerReportHTML(data) {
     cashVariance,
     cashBreakdown,
     cashRemarkHtml,
-
-    zoom
   } = data;
+
+  const varianceStatus = getReportVarianceStatus_(cashVariance);
 
 
   return `
@@ -1927,10 +2319,12 @@ function buildManagerReportHTML(data) {
 
       </style>
 
+      ${buildSalesReportTheme_()}
+
     </head>
 
 
-    <body style="zoom:${zoom};">
+    <body>
 
 
       <!-- ================= HEADER ================= -->
@@ -1939,35 +2333,73 @@ function buildManagerReportHTML(data) {
 
         <div>
 
+          <div class="brand-kicker">
+            YourStyle POS
+          </div>
+
           <div class="title">
-            YOURSTYLE — MANAGER'S DAILY SALES REPORT
+            Manager Daily Sales Report
           </div>
 
           <div class="meta">
-            Date: ${todayDisplay}
-            &nbsp;&nbsp;
-            Generated by: ${managerName}
+            Generated by ${managerName}
           </div>
 
         </div>
 
+        <div class="meta meta-right">
+          <span class="report-type-badge">Manager Report</span><br>
+          <b>${todayDisplay}</b><br>
+          All cashier activity
+        </div>
+
       </div>
+
+
+      <!-- ================= KEY METRICS ================= -->
+
+      <table class="kpi-table">
+        <tr>
+          <td class="kpi-primary">
+            <span class="kpi-label">Net Sales</span>
+            <span class="kpi-value">${fmtMoney(metrics.totalSales)}</span>
+          </td>
+          <td>
+            <span class="kpi-label">Transactions</span>
+            <span class="kpi-value">${metrics.transactionCount}</span>
+          </td>
+          <td>
+            <span class="kpi-label">Items Sold</span>
+            <span class="kpi-value">${metrics.itemsCount}</span>
+          </td>
+          <td>
+            <span class="kpi-label">Discounts</span>
+            <span class="kpi-value">${fmtMoney(metrics.totalDiscount)}</span>
+          </td>
+        </tr>
+      </table>
 
 
       <!-- ================= SALES BY CASHIER ================= -->
 
       <h2>Sales by Cashier</h2>
 
-      <table>
+      <table class="report-summary-table">
 
-        <tr>
-          <th>Cashier</th>
-          <th>Sales</th>
-          <th>Transactions</th>
-          <th>Items</th>
-        </tr>
+        <thead>
+          <tr>
+            <th>Cashier</th>
+            <th>Sales</th>
+            <th>Transactions</th>
+            <th>Items</th>
+          </tr>
+        </thead>
+
+        <tbody>
 
         ${cashierRows}
+
+        </tbody>
 
       </table>
 
@@ -1976,22 +2408,26 @@ function buildManagerReportHTML(data) {
 
       <h2>Sales Summary</h2>
 
-      <table>
+      <table class="sales-summary-table">
 
-        <tr>
-          <th>Item Name</th>
-          <th>Barcode</th>
-          <th>Size</th>
-          <th>Price</th>
-          <th>Discount</th>
-          <th>Qty</th>
-          <th>Net Total</th>
-        </tr>
+        <thead>
+          <tr>
+            <th>Item Name</th>
+            <th>Barcode</th>
+            <th>Size</th>
+            <th>Price</th>
+            <th>Discount</th>
+            <th>Qty</th>
+            <th>Net Total</th>
+          </tr>
+        </thead>
+
+        <tbody>
 
         ${salesRowsHtml}
 
 
-        <tr>
+        <tr class="sales-net-row">
 
           <td
             colspan="5"
@@ -2018,6 +2454,8 @@ function buildManagerReportHTML(data) {
           </td>
 
         </tr>
+
+        </tbody>
 
       </table>
 
@@ -2083,39 +2521,27 @@ function buildManagerReportHTML(data) {
 
             <div class="report-card-body">
 
-              <p class="report-text-summary">
+              <table class="reconciliation-table">
+                <tr>
+                  <td>
+                    <span class="recon-label">Expected</span>
+                    <span class="recon-value">${fmtMoney(expectedCashDrawer)}</span>
+                  </td>
+                  <td>
+                    <span class="recon-label">Remitted</span>
+                    <span class="recon-value">${fmtMoney(cashOnHand)}</span>
+                  </td>
+                  <td>
+                    <span class="recon-label">Variance</span>
+                    <span class="recon-value">${fmtMoney(cashVariance)}</span>
+                  </td>
+                </tr>
+              </table>
 
-                Expected:
-                <b>
-                  ${fmtMoney(expectedCashDrawer)}
-                </b>
-
-                <br>
-
-                Remitted:
-                <b>
-                  ${fmtMoney(cashOnHand)}
-                </b>
-
-
-                ${
-                  Math.abs(cashVariance) > 0.001
-                    ? `
-                      <br>
-
-                      <span style="color:#b45f06;">
-
-                        Variance:
-
-                        <b>
-                          ${fmtMoney(cashVariance)}
-                        </b>
-
-                      </span>
-                    `
-                    : ""
-                }
-
+              <p style="margin:0 0 7px; text-align:right;">
+                <span class="variance-badge ${varianceStatus.className}">
+                  ${varianceStatus.label}
+                </span>
               </p>
 
 
@@ -2179,9 +2605,13 @@ function buildManagerReportHTML(data) {
         </div>
 
         <div class="sig-line">
-          Checked by: ${managerName}
+          Reviewed by:
         </div>
 
+      </div>
+
+      <div class="report-footer">
+        YourStyle POS • System-generated manager report • Internal use only
       </div>
 
 
