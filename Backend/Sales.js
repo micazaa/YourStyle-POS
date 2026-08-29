@@ -153,55 +153,35 @@ function executeCheckoutBackend(
   }
 }
 
-function getExpectedCashForCurrentCashier(cashierName, pettyReceived) {
+function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-
   const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
-
-  if (!sheet) {
-    return 0;
-  }
+  if (!sheet) return 0;
 
   const data = sheet.getDataRange().getValues();
-
   const tz = Session.getScriptTimeZone();
-
   const today = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
-
+  const shiftStartDate = shiftStart ? new Date(shiftStart) : null;
   let cashSales = 0;
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-
-    if (!row[SALES_IDX.TIMESTAMP]) {
-      continue;
-    }
-
-    const rowDate = Utilities.formatDate(
-      new Date(row[SALES_IDX.TIMESTAMP]),
-      tz,
-      "yyyy-MM-dd"
-    );
-
+    const ts = row[SALES_IDX.TIMESTAMP];
+    if (!ts) continue;
+    const rowTs = new Date(ts);
+    if (shiftStartDate && rowTs < shiftStartDate) continue;
+    const rowDate = Utilities.formatDate(rowTs, tz, "yyyy-MM-dd");
     const rowCashier = String(row[SALES_IDX.CASHIER] || "").trim();
+    const paymentMethod = String(row[SALES_IDX.PAYMENT_METHOD] || "").trim().toUpperCase();
+    const status = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
 
-    const paymentMethod = String(row[SALES_IDX.PAYMENT_METHOD] || "").trim();
-
-    const status = String(row[SALES_IDX.STATUS] || "")
-      .trim()
-      .toUpperCase();
-
-    if (
-      rowDate === today &&
-      rowCashier === cashierName &&
-      paymentMethod === "Cash" &&
-      status === "COMPLETED"
-    ) {
+    if (rowDate === today && rowCashier === cashierName && paymentMethod === "CASH" && status === "COMPLETED") {
       cashSales += Number(row[SALES_IDX.NET_TOTAL]) || 0;
     }
   }
 
-  return roundToTwo((Number(pettyReceived) || 0) + cashSales);
+  // PHASE 10: Petty cash is separate from sales cash and is NEVER added here.
+  return roundToTwo(cashSales);
 }
 
 function getExpectedCashForManager(reportDate) {

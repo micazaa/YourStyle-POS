@@ -1,98 +1,1013 @@
-<div id="loginOverlay" class="generic-overlay-blur" style="display:none;">
-  <div class="custom-popup-card text-center">
-    <img src="https://drive.google.com/thumbnail?sz=w300&id=1MsTEIjhHkeq0i74lngukOKemXDoq_O7u" alt="Logo" class="mb-3" style="height: 60px; width: 60px; object-fit: cover; border-radius: 50%; border: 1px solid var(--border-color);">
-    <h4 class="fw-bold text-dark mb-1">Welcome Back</h4>
-    <p class="text-muted small mb-4">Please log in to your system shift</p>
+<div
+  id="loginOverlay"
+  class="generic-overlay-blur"
+  style="display:none;"
+>
 
-    <div class="mb-3 text-start">
-      <label class="form-label">Cashier Name</label>
-      <select class="form-select" id="cashierSelect">
-              <option value="">Loading employees...</option>
-          </select>
+  <div
+    class="custom-popup-card"
+    style="
+      max-width:440px;
+      width:94%;
+      padding:32px;
+    "
+  >
+
+    <!-- =====================================================
+         HEADER
+    ====================================================== -->
+
+    <div class="text-center mb-4">
+
+      <img
+        src="https://drive.google.com/thumbnail?sz=w300&id=1MsTEIjhHkeq0i74lngukOKemXDoq_O7u"
+        alt="Logo"
+        class="mb-3"
+        style="
+          height:64px;
+          width:64px;
+          object-fit:cover;
+          border-radius:50%;
+          border:1px solid var(--border-color);
+        "
+      >
+
+      <h4 class="fw-bold text-dark mb-1">
+        Welcome Back
+      </h4>
+
+      <p class="text-muted small mb-0">
+        Log in to start your system shift
+      </p>
+
     </div>
 
-    <div class="mb-3 text-start">
-      <label class="form-label">PIN Code</label>
-      <input type="password" class="form-control text-center fw-bold" id="cashierPin" placeholder="••••" style="letter-spacing: 4px;">
+
+    <!-- =====================================================
+         EMPLOYEE
+    ====================================================== -->
+
+    <div class="mb-3">
+
+      <label class="form-label fw-semibold">
+        Cashier Name
+      </label>
+
+      <select
+        class="form-select"
+        id="cashierSelect"
+      >
+        <option value="">
+          Loading employees...
+        </option>
+      </select>
+
     </div>
 
-    <div class="mb-4 p-3 rounded text-start" style="background-color: var(--pink-light);">
-      <label class="form-label mb-1">Starting Petty Cash (₱)</label>
-      <div class="input-group">
-        <input type="number" class="form-control border-0 fw-bold" id="startingPettyCashInput" value="0">
+
+    <!-- =====================================================
+         PIN
+    ====================================================== -->
+
+    <div class="mb-4">
+
+      <label class="form-label fw-semibold">
+        PIN Code
+      </label>
+
+      <input
+        type="password"
+        class="form-control text-center fw-bold"
+        id="cashierPin"
+        placeholder="••••"
+        autocomplete="off"
+        style="letter-spacing:4px;"
+        onkeydown="
+          if(event.key === 'Enter'){
+            unlockTerminalSession();
+          }
+        "
+      >
+
+    </div>
+
+
+    <!-- =====================================================
+         PETTY HANDOVER
+    ====================================================== -->
+
+    <div
+      class="rounded p-3 mb-4"
+      style="
+        background:var(--pink-light);
+        border:1px solid rgba(0,0,0,.06);
+      "
+    >
+
+      <div
+        class="d-flex justify-content-between align-items-start gap-3"
+      >
+
+        <div>
+
+          <div class="fw-semibold">
+            Starting Petty Cash
+          </div>
+
+          <div
+            id="pettyHandoverHint"
+            class="small text-muted mt-1"
+          >
+            Loading petty handover...
+          </div>
+
+        </div>
+
+
+        <div
+          id="pettyLoadingSpinner"
+          class="spinner-border spinner-border-sm text-secondary"
+          role="status"
+        ></div>
+
       </div>
+
+
+      <div class="input-group mt-3">
+
+        <span class="input-group-text bg-white">
+          ₱
+        </span>
+
+        <input
+          type="number"
+          class="form-control fw-bold fs-5"
+          id="startingPettyCashInput"
+          value="0.00"
+          min="0"
+          step="0.01"
+          disabled
+        >
+
+      </div>
+
+
+      <div
+        id="pettyHandoverSource"
+        class="small mt-2"
+        style="display:none;"
+      ></div>
+
     </div>
 
-    <button type="button" class="btn btn-pink w-100 py-2.5" onclick="unlockTerminalSession()">Log In</button>
+
+    <!-- =====================================================
+         LOGIN
+    ====================================================== -->
+
+    <button
+      id="loginShiftButton"
+      type="button"
+      class="btn btn-pink w-100 py-2"
+      onclick="unlockTerminalSession()"
+      disabled
+    >
+      Loading shift...
+    </button>
+
   </div>
+
 </div>
 
+
 <script>
-  function loadEmployees() {
-    google.script.run
-      .withSuccessHandler(function (employees) {
-        const select = document.getElementById("cashierSelect");
 
-        select.innerHTML = "";
+/* ==========================================================
+   LOGIN STATE
+========================================================== */
 
-        let first = document.createElement("option");
-        first.value = "";
-        first.textContent = "-- Select Employee --";
-        select.appendChild(first);
+var phase10EmployeesLoaded =
+  false;
 
-        employees.forEach((emp) => {
-          let option = document.createElement("option");
+var phase10PettyLoaded =
+  false;
 
-          option.value = emp.fullName;
-          option.textContent = emp.fullName;
 
-          select.appendChild(option);
-        });
-      })
-      .getEmployees();
+/* ==========================================================
+   INITIALIZE LOGIN
+
+   IMPORTANT:
+   Call this whenever the login screen is opened.
+========================================================== */
+
+function initializeLoginPhase10() {
+
+  phase10EmployeesLoaded =
+    false;
+
+  phase10PettyLoaded =
+    false;
+
+
+  const loginButton =
+    document.getElementById(
+      "loginShiftButton"
+    );
+
+
+  if (loginButton) {
+
+    loginButton.disabled =
+      true;
+
+    loginButton.textContent =
+      "Loading shift...";
+
   }
 
-  function unlockTerminalSession() {
-    let name = document.getElementById("cashierSelect").value;
-    let pin = document.getElementById("cashierPin").value;
-    let petty =
-      parseFloat(document.getElementById("startingPettyCashInput").value) || 0;
 
-    if (!name || !pin) {
-      showNotificationToast("Please choose name and enter PIN code.", true);
-      return;
-    }
+  loadEmployees();
 
-    google.script.run
-      .withSuccessHandler(function (result) {
-        if (!result.success) {
-          showNotificationToast(result.message, true);
-          return;
+  loadPettyHandoverPhase10();
+
+}
+
+
+/* ==========================================================
+   UPDATE LOGIN READY STATE
+========================================================== */
+
+function updateLoginReadyPhase10() {
+
+  const button =
+    document.getElementById(
+      "loginShiftButton"
+    );
+
+
+  if (!button) {
+
+    return;
+
+  }
+
+
+  const ready =
+    phase10EmployeesLoaded &&
+    phase10PettyLoaded;
+
+
+  button.disabled =
+    !ready;
+
+
+  button.textContent =
+    ready
+      ? "Log In"
+      : "Loading shift...";
+
+}
+
+
+/* ==========================================================
+   LOAD EMPLOYEES
+========================================================== */
+
+function loadEmployees() {
+
+  const select =
+    document.getElementById(
+      "cashierSelect"
+    );
+
+
+  if (!select) {
+
+    return;
+
+  }
+
+
+  select.innerHTML =
+    '<option value="">Loading employees...</option>';
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(employees) {
+
+        select.innerHTML =
+          "";
+
+
+        const first =
+          document.createElement(
+            "option"
+          );
+
+
+        first.value =
+          "";
+
+        first.textContent =
+          "-- Select Employee --";
+
+
+        select.appendChild(
+          first
+        );
+
+
+        (
+          Array.isArray(employees)
+            ? employees
+            : []
+        )
+          .forEach(
+            function(emp) {
+
+              const option =
+                document.createElement(
+                  "option"
+                );
+
+
+              option.value =
+                emp.fullName;
+
+
+              option.textContent =
+                emp.fullName;
+
+
+              select.appendChild(
+                option
+              );
+
+            }
+          );
+
+
+        phase10EmployeesLoaded =
+          true;
+
+
+        updateLoginReadyPhase10();
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        console.error(
+          "Employee loading error:",
+          err
+        );
+
+
+        select.innerHTML =
+          '<option value="">Unable to load employees</option>';
+
+
+        showNotificationToast(
+          err &&
+          err.message
+            ? err.message
+            : "Unable to load employees.",
+          true
+        );
+
+      }
+    )
+
+
+    .getEmployees();
+
+}
+
+
+/* ==========================================================
+   LOAD PETTY HANDOVER
+========================================================== */
+
+function loadPettyHandoverPhase10() {
+
+  const input =
+    document.getElementById(
+      "startingPettyCashInput"
+    );
+
+
+  const hint =
+    document.getElementById(
+      "pettyHandoverHint"
+    );
+
+
+  const source =
+    document.getElementById(
+      "pettyHandoverSource"
+    );
+
+
+  const spinner =
+    document.getElementById(
+      "pettyLoadingSpinner"
+    );
+
+
+  if (
+    !input ||
+    !hint
+  ) {
+
+    return;
+
+  }
+
+
+  input.value =
+    "0.00";
+
+  input.disabled =
+    true;
+
+  input.readOnly =
+    true;
+
+
+  hint.textContent =
+    "Loading petty handover...";
+
+
+  if (source) {
+
+    source.style.display =
+      "none";
+
+    source.textContent =
+      "";
+
+  }
+
+
+  if (spinner) {
+
+    spinner.style.display =
+      "inline-block";
+
+  }
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(data) {
+
+        console.log(
+          "Phase 10 petty handover:",
+          data
+        );
+
+
+        const received =
+          Number(
+            data &&
+            data.received
+          ) || 0;
+
+
+        const previousReportId =
+          String(
+            data &&
+            data.previousReportId
+              ? data.previousReportId
+              : ""
+          ).trim();
+
+
+        const hasPrevious =
+          !!previousReportId;
+
+
+        input.value =
+          received.toFixed(
+            2
+          );
+
+
+        /*
+          Previous handover:
+          amount is controlled by the system.
+
+          No previous handover:
+          allow initial petty entry.
+        */
+
+        input.disabled =
+          false;
+
+
+        input.readOnly =
+          hasPrevious;
+
+
+        if (hasPrevious) {
+
+          hint.textContent =
+            "Petty cash carried from the previous closed shift.";
+
+
+          if (source) {
+
+            source.style.display =
+              "block";
+
+
+            source.innerHTML = `
+
+              <span class="text-success fw-semibold">
+                ✓ Handover ready
+              </span>
+
+              <span class="text-muted">
+                · ${escapeLoginHtmlPhase10(
+                  previousReportId
+                )}
+              </span>
+
+            `;
+
+          }
+
+        } else {
+
+          hint.textContent =
+            "No previous petty handover found. Enter the initial petty cash.";
+
+
+          if (source) {
+
+            source.style.display =
+              "block";
+
+
+            source.innerHTML = `
+
+              <span class="text-warning fw-semibold">
+                Initial petty setup
+              </span>
+
+            `;
+
+          }
+
         }
-        currentEmployee = result;
 
-        currentCashier = result.fullName;
 
-        currentShiftPettyCash = petty;
+        if (spinner) {
 
-        updateSidebarProfile(result);
+          spinner.style.display =
+            "none";
 
-        document.getElementById("sidebarManagerReportBtn").style.display =
-          result.accessLevel <= 1 ? "block" : "none";
+        }
 
-        document.getElementById("loginOverlay").style.display = "none";
 
-        document.getElementById("terminalWorkspace").style.display = "block";
+        phase10PettyLoaded =
+          true;
 
-        document.getElementById("appSidebar").style.display = "flex";
 
-        saveSession();
+        updateLoginReadyPhase10();
 
-        refreshInventory();
-      })
-      .withFailureHandler(function (err) {
-        showNotificationToast(err.message || "Login failed.", true);
-      })
-      .verifyEmployee(name, pin);
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        console.error(
+          "Phase 10 petty handover error:",
+          err
+        );
+
+
+        input.value =
+          "0.00";
+
+
+        input.disabled =
+          false;
+
+        input.readOnly =
+          false;
+
+
+        hint.textContent =
+          "Unable to load previous petty cash.";
+
+
+        if (source) {
+
+          source.style.display =
+            "block";
+
+
+          source.innerHTML = `
+
+            <span class="text-danger">
+              ${
+                escapeLoginHtmlPhase10(
+                  err &&
+                  err.message
+                    ? err.message
+                    : "Unknown server error"
+                )
+              }
+            </span>
+
+          `;
+
+        }
+
+
+        if (spinner) {
+
+          spinner.style.display =
+            "none";
+
+        }
+
+
+        /*
+          Do NOT leave the screen loading forever.
+
+          We deliberately allow login after showing the error,
+          but petty becomes manually editable.
+        */
+
+        phase10PettyLoaded =
+          true;
+
+
+        updateLoginReadyPhase10();
+
+      }
+    )
+
+
+    .getLatestPettyHandoverPhase10();
+
+}
+
+
+/* ==========================================================
+   LOGIN / START SHIFT
+========================================================== */
+
+function unlockTerminalSession() {
+
+  const name =
+    document.getElementById(
+      "cashierSelect"
+    ).value;
+
+
+  const pin =
+    document.getElementById(
+      "cashierPin"
+    ).value;
+
+
+  const petty =
+    Number(
+      document.getElementById(
+        "startingPettyCashInput"
+      ).value
+    ) || 0;
+
+
+  const button =
+    document.getElementById(
+      "loginShiftButton"
+    );
+
+
+  if (
+    !name ||
+    !pin
+  ) {
+
+    showNotificationToast(
+      "Please choose your name and enter your PIN.",
+      true
+    );
+
+    return;
+
   }
+
+
+  if (
+    petty < 0
+  ) {
+
+    showNotificationToast(
+      "Starting petty cash cannot be negative.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  /*
+    Prevent double click.
+  */
+
+  button.disabled =
+    true;
+
+  button.textContent =
+    "Verifying...";
+
+
+  /* ========================================================
+     STEP 1
+     VERIFY EMPLOYEE
+  ======================================================== */
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          button.disabled =
+            false;
+
+          button.textContent =
+            "Log In";
+
+
+          showNotificationToast(
+            result &&
+            result.message
+              ? result.message
+              : "Login failed.",
+            true
+          );
+
+
+          return;
+
+        }
+
+
+        button.textContent =
+          "Starting shift...";
+
+
+        /* ==================================================
+           STEP 2
+           START / RESUME SHIFT
+
+           IMPORTANT:
+           Do not hide Login until this succeeds.
+        ================================================== */
+
+        google.script.run
+
+          .withSuccessHandler(
+            function(shift) {
+
+              if (
+                !shift ||
+                !shift.success
+              ) {
+
+                button.disabled =
+                  false;
+
+                button.textContent =
+                  "Log In";
+
+
+                showNotificationToast(
+                  shift &&
+                  shift.message
+                    ? shift.message
+                    : "Unable to start shift.",
+                  true
+                );
+
+
+                return;
+
+              }
+
+
+              /* ============================================
+                 SHIFT SUCCESS
+              ============================================ */
+
+              currentEmployee =
+                result;
+
+
+              currentCashier =
+                result.fullName;
+
+
+              currentShiftPettyCash =
+                Number(
+                  shift.pettyReceived
+                ) || 0;
+
+
+              updateSidebarProfile(
+                result
+              );
+
+
+              const managerButton =
+                document.getElementById(
+                  "sidebarManagerReportBtn"
+                );
+
+
+              if (managerButton) {
+
+                managerButton.style.display =
+                  Number(
+                    result.accessLevel
+                  ) <= 1
+                    ? "block"
+                    : "none";
+
+              }
+
+
+              document.getElementById(
+                "loginOverlay"
+              ).style.display =
+                "none";
+
+
+              document.getElementById(
+                "terminalWorkspace"
+              ).style.display =
+                "block";
+
+
+              document.getElementById(
+                "appSidebar"
+              ).style.display =
+                "flex";
+
+
+              button.disabled =
+                false;
+
+              button.textContent =
+                "Log In";
+
+
+              /*
+                Clear PIN after successful login.
+              */
+
+              document.getElementById(
+                "cashierPin"
+              ).value =
+                "";
+
+
+              saveSession();
+
+
+              if (
+                typeof refreshInventory ===
+                "function"
+              ) {
+
+                refreshInventory();
+
+              }
+
+            }
+          )
+
+
+          .withFailureHandler(
+            function(err) {
+
+              button.disabled =
+                false;
+
+              button.textContent =
+                "Log In";
+
+
+              showNotificationToast(
+                err &&
+                err.message
+                  ? err.message
+                  : "Unable to start shift.",
+                true
+              );
+
+            }
+          )
+
+
+          .startCashierShiftPhase10(
+            result.fullName,
+            petty
+          );
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        button.disabled =
+          false;
+
+        button.textContent =
+          "Log In";
+
+
+        showNotificationToast(
+          err &&
+          err.message
+            ? err.message
+            : "Login failed.",
+          true
+        );
+
+      }
+    )
+
+
+    .verifyEmployee(
+      name,
+      pin
+    );
+
+}
+
+
+/* ==========================================================
+   SAFE HTML
+========================================================== */
+
+function escapeLoginHtmlPhase10(
+  value
+) {
+
+  return String(
+    value === null ||
+    value === undefined
+      ? ""
+      : value
+  )
+
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+
+    .replace(
+      /</g,
+      "&lt;"
+    )
+
+    .replace(
+      />/g,
+      "&gt;"
+    )
+
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+
+    .replace(
+      /'/g,
+      "&#039;"
+    );
+
+}
+
 </script>

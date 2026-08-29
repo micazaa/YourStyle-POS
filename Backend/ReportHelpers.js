@@ -316,7 +316,7 @@ function buildPaymentSummary(metrics) {
    - Pass null / "" = include all cashiers
 ========================================================== */
 
-function collectSalesMetrics(salesData, reportDate, cashierName) {
+function collectSalesMetrics(salesData, reportDate, cashierName, shiftStart, shiftEnd) {
   const tz = Session.getScriptTimeZone();
 
   const metrics = {
@@ -353,6 +353,9 @@ function collectSalesMetrics(salesData, reportDate, cashierName) {
     }
 
     const rowDateStr = Utilities.formatDate(rowDate, tz, "yyyy-MM-dd");
+
+    if (shiftStart && rowDate < new Date(shiftStart)) continue;
+    if (shiftEnd && rowDate > new Date(shiftEnd)) continue;
 
     const receiptId = row[1] || "";
 
@@ -1131,27 +1134,8 @@ function buildCashierReportHTML(data) {
             <div class="report-card-body">
 
               <p class="report-text-summary">
-
-                Expected:
-                <b>${fmtMoney(expectedCashDrawer)}</b>
-
-                <br>
-
-                Remitted:
+                Cash Counted / Remitted:
                 <b>${fmtMoney(cashOnHand)}</b>
-
-                ${
-                  Math.abs(cashVariance) > 0.001
-                    ? `
-                      <br>
-                      <span style="color:#b45f06;">
-                        Variance:
-                        <b>${fmtMoney(cashVariance)}</b>
-                      </span>
-                    `
-                    : ""
-                }
-
               </p>
 
 

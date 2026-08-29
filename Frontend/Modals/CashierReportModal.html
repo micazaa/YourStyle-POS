@@ -144,8 +144,8 @@
     });
     document.getElementById("pettyReturnedTotalOut").textContent = "₱" + total.toFixed(2);
 
-    let variance = Math.round((total - currentShiftPettyCash) * 100) / 100;
-    document.getElementById("pettyVarianceBox").style.display = Math.abs(variance) > 0.001 ? "block" : "none";
+    // Cashier sees received and returned amounts, but not reconciliation variance.
+    document.getElementById("pettyVarianceBox").style.display = "none";
     return total;
   }
 
