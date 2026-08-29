@@ -1,0 +1,2044 @@
+<!-- =========================================================
+     PHASE 9 — CUSTOMER EXCHANGE MODAL
+========================================================= -->
+
+<div
+  id="customerExchangeModal"
+  class="generic-overlay-blur"
+  style="
+    display:none;
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    z-index:10010;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    overflow:auto;
+  "
+>
+
+  <div
+    class="custom-popup-card"
+    style="
+      max-width:1050px;
+      width:96%;
+      max-height:92vh;
+      overflow:auto;
+      margin:auto;
+      position:relative;
+    "
+  >
+
+    <!-- HEADER -->
+
+    <div
+      class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3"
+    >
+
+      <div>
+
+        <h5 class="fw-bold mb-1">
+          Customer Exchange
+        </h5>
+
+        <div class="small text-muted">
+          Same or higher replacement value only.
+          Original sale stays unchanged.
+        </div>
+
+      </div>
+
+      <button
+        type="button"
+        class="btn-close"
+        onclick="closeCustomerExchangeModal()"
+      ></button>
+
+    </div>
+
+
+    <!-- ORIGINAL RECEIPT -->
+
+    <div class="card border-0 bg-light mb-4">
+
+      <div class="card-body">
+
+        <label class="form-label fw-semibold">
+          Original Receipt
+        </label>
+
+        <div class="input-group">
+
+          <input
+            id="exchangeReceiptId"
+            class="form-control"
+            placeholder="Enter original receipt ID"
+            autocomplete="off"
+          >
+
+          <button
+            id="exchangeReceiptSearchBtn"
+            type="button"
+            class="btn btn-dark"
+            onclick="searchExchangeReceipt()"
+          >
+            Search
+          </button>
+
+        </div>
+
+        <div
+          id="exchangeReceiptInfo"
+          class="small text-muted mt-2"
+        ></div>
+
+      </div>
+
+    </div>
+
+
+    <!-- EXCHANGE BUILDER -->
+
+    <div
+      id="exchangeBuilder"
+      style="display:none;"
+    >
+
+      <div class="row g-4">
+
+
+        <!-- RETURNING -->
+
+        <div class="col-lg-6">
+
+          <div class="border rounded p-3 h-100">
+
+            <div
+              class="small text-muted fw-semibold mb-2"
+            >
+              RETURNING
+            </div>
+
+
+            <label class="form-label">
+              Original Purchased Item
+            </label>
+
+            <select
+              id="exchangeReturnItem"
+              class="form-select mb-3"
+              onchange="updateExchangeReturnSelection()"
+            ></select>
+
+
+            <div
+              id="exchangeReturnInfo"
+              class="mb-3"
+            ></div>
+
+
+            <label class="form-label">
+              Quantity Returning
+            </label>
+
+            <input
+              id="exchangeReturnQty"
+              type="number"
+              min="1"
+              step="1"
+              value="1"
+              class="form-control"
+              oninput="updateExchangeCalculation()"
+            >
+
+          </div>
+
+        </div>
+
+
+        <!-- REPLACEMENT -->
+
+        <div class="col-lg-6">
+
+          <div class="border rounded p-3 h-100">
+
+            <div
+              class="small text-muted fw-semibold mb-2"
+            >
+              REPLACEMENT
+            </div>
+
+
+            <label class="form-label">
+              Search Replacement
+            </label>
+
+            <input
+              id="exchangeReplacementSearch"
+              class="form-control mb-2"
+              placeholder="Search replacement..."
+              autocomplete="off"
+              oninput="filterExchangeReplacementProducts()"
+            >
+
+
+            <label class="form-label">
+              Replacement Item
+            </label>
+
+            <select
+              id="exchangeReplacementItem"
+              class="form-select mb-3"
+              onchange="updateExchangeReplacementSelection()"
+            ></select>
+
+
+            <div
+              id="exchangeReplacementInfo"
+              class="mb-3"
+            ></div>
+
+
+            <label class="form-label">
+              Replacement Quantity
+            </label>
+
+            <input
+              id="exchangeReplacementQty"
+              type="number"
+              min="1"
+              step="1"
+              value="1"
+              class="form-control"
+              oninput="updateExchangeCalculation()"
+            >
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- VALUE SUMMARY -->
+
+      <div class="border rounded p-4 mt-4">
+
+        <div class="row g-3">
+
+
+          <div class="col-md-3">
+
+            <div class="small text-muted">
+              Return Value
+            </div>
+
+            <div
+              id="exchangeReturnValue"
+              class="fs-4 fw-bold"
+            >
+              ₱0.00
+            </div>
+
+          </div>
+
+
+          <div class="col-md-3">
+
+            <div class="small text-muted">
+              Replacement Value
+            </div>
+
+            <div
+              id="exchangeReplacementValue"
+              class="fs-4 fw-bold"
+            >
+              ₱0.00
+            </div>
+
+          </div>
+
+
+          <div class="col-md-3">
+
+            <div class="small text-muted">
+              Amount Due
+            </div>
+
+            <div
+              id="exchangeAmountDue"
+              class="fs-4 fw-bold"
+            >
+              ₱0.00
+            </div>
+
+          </div>
+
+
+          <div class="col-md-3">
+
+            <div class="small text-muted">
+              Validation
+            </div>
+
+            <div
+              id="exchangeValidation"
+              class="fw-semibold"
+            >
+              —
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- PAYMENT -->
+
+      <div
+        id="exchangePaymentBox"
+        class="border rounded p-3 mt-3"
+      >
+
+        <div class="row g-3">
+
+
+          <div class="col-md-3">
+
+            <label class="form-label">
+              Payment Method
+            </label>
+
+            <select
+              id="exchangePaymentMethod"
+              class="form-select"
+              onchange="updateExchangePaymentUI()"
+            >
+
+              <option>Cash</option>
+              <option>GCash</option>
+              <option>QR Code</option>
+              <option>Credit Card</option>
+
+            </select>
+
+          </div>
+
+
+          <div
+            id="exchangeReferenceBox"
+            class="col-md-3"
+            style="display:none;"
+          >
+
+            <label class="form-label">
+              Payment Reference
+            </label>
+
+            <input
+              id="exchangePaymentReference"
+              class="form-control"
+              autocomplete="off"
+            >
+
+          </div>
+
+
+          <div
+            id="exchangeCashBox"
+            class="col-md-3"
+          >
+
+            <label class="form-label">
+              Cash Received
+            </label>
+
+            <input
+              id="exchangeCashReceived"
+              type="number"
+              min="0"
+              step="0.01"
+              class="form-control"
+              oninput="updateExchangeCalculation()"
+            >
+
+          </div>
+
+
+          <div class="col-md-3">
+
+            <label class="form-label">
+              Manager PIN
+            </label>
+
+            <input
+              id="exchangeManagerPin"
+              type="password"
+              class="form-control"
+              autocomplete="off"
+            >
+
+          </div>
+
+
+          <div class="col-12">
+
+            <label class="form-label">
+              Reason / Notes
+            </label>
+
+            <input
+              id="exchangeNotes"
+              class="form-control"
+              placeholder="Optional exchange note"
+            >
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ACTIONS -->
+
+      <div
+        class="d-flex justify-content-end gap-2 mt-4"
+      >
+
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          onclick="closeCustomerExchangeModal()"
+        >
+          Cancel
+        </button>
+
+
+        <button
+          id="exchangeConfirmBtn"
+          type="button"
+          class="btn btn-pink"
+          disabled
+          onclick="confirmCustomerExchange()"
+        >
+          Complete Exchange
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+/* ==========================================================
+   STATE
+========================================================== */
+
+var phase9ExchangeReceipt =
+  null;
+
+var phase9ExchangeProducts =
+  [];
+
+var phase9FilteredProducts =
+  [];
+
+
+/* ==========================================================
+   EMPLOYEE
+========================================================== */
+
+function exchangeEmployee() {
+
+  return String(
+
+    (
+      typeof currentCashier !==
+        "undefined" &&
+      currentCashier
+    )
+
+      ? currentCashier
+
+      : (
+          typeof currentEmployee !==
+            "undefined" &&
+          currentEmployee
+        )
+
+          ? (
+              currentEmployee.fullName ||
+              currentEmployee.name ||
+              ""
+            )
+
+          : ""
+
+  ).trim();
+
+}
+
+
+/* ==========================================================
+   OPEN MODAL
+
+   Can be called as:
+
+   openCustomerExchangeModal()
+
+   OR
+
+   openCustomerExchangeModal("YS-189195")
+
+========================================================== */
+
+function openCustomerExchangeModal(
+  prefilledReceiptId
+) {
+
+  /* RESET STATE */
+
+  phase9ExchangeReceipt =
+    null;
+
+  phase9ExchangeProducts =
+    [];
+
+  phase9FilteredProducts =
+    [];
+
+
+  const modal =
+    document.getElementById(
+      "customerExchangeModal"
+    );
+
+
+  const receiptInput =
+    document.getElementById(
+      "exchangeReceiptId"
+    );
+
+
+  const receiptInfo =
+    document.getElementById(
+      "exchangeReceiptInfo"
+    );
+
+
+  const builder =
+    document.getElementById(
+      "exchangeBuilder"
+    );
+
+
+  if (
+    !modal ||
+    !receiptInput
+  ) {
+
+    console.error(
+      "Customer Exchange modal elements were not found."
+    );
+
+    return;
+
+  }
+
+
+  /* RESET FORM */
+
+  receiptInput.value =
+    String(
+      prefilledReceiptId || ""
+    ).trim();
+
+
+  if (receiptInfo) {
+
+    receiptInfo.textContent =
+      "";
+
+  }
+
+
+  if (builder) {
+
+    builder.style.display =
+      "none";
+
+  }
+
+
+  const search =
+    document.getElementById(
+      "exchangeReplacementSearch"
+    );
+
+
+  if (search) {
+
+    search.value =
+      "";
+
+  }
+
+
+  const returnQty =
+    document.getElementById(
+      "exchangeReturnQty"
+    );
+
+
+  if (returnQty) {
+
+    returnQty.value =
+      1;
+
+  }
+
+
+  const replacementQty =
+    document.getElementById(
+      "exchangeReplacementQty"
+    );
+
+
+  if (replacementQty) {
+
+    replacementQty.value =
+      1;
+
+  }
+
+
+  const paymentMethod =
+    document.getElementById(
+      "exchangePaymentMethod"
+    );
+
+
+  if (paymentMethod) {
+
+    paymentMethod.value =
+      "Cash";
+
+  }
+
+
+  const paymentReference =
+    document.getElementById(
+      "exchangePaymentReference"
+    );
+
+
+  if (paymentReference) {
+
+    paymentReference.value =
+      "";
+
+  }
+
+
+  const cashReceived =
+    document.getElementById(
+      "exchangeCashReceived"
+    );
+
+
+  if (cashReceived) {
+
+    cashReceived.value =
+      "";
+
+  }
+
+
+  const managerPin =
+    document.getElementById(
+      "exchangeManagerPin"
+    );
+
+
+  if (managerPin) {
+
+    managerPin.value =
+      "";
+
+  }
+
+
+  const notes =
+    document.getElementById(
+      "exchangeNotes"
+    );
+
+
+  if (notes) {
+
+    notes.value =
+      "";
+
+  }
+
+
+  /* SHOW MODAL */
+
+  modal.style.display =
+    "flex";
+
+
+  document.body.style.overflow =
+    "hidden";
+
+
+  /* TRANSACTION HISTORY ENTRY */
+
+  if (receiptInput.value) {
+
+    setTimeout(
+      function() {
+
+        searchExchangeReceipt();
+
+      },
+      100
+    );
+
+
+    return;
+
+  }
+
+
+  /* SIDEBAR ENTRY */
+
+  setTimeout(
+    function() {
+
+      receiptInput.focus();
+
+    },
+    100
+  );
+
+}
+
+
+/* ==========================================================
+   CLOSE MODAL
+========================================================== */
+
+function closeCustomerExchangeModal() {
+
+  const modal =
+    document.getElementById(
+      "customerExchangeModal"
+    );
+
+
+  if (modal) {
+
+    modal.style.display =
+      "none";
+
+  }
+
+
+  document.body.style.overflow =
+    "";
+
+}
+
+
+/* ==========================================================
+   SEARCH ORIGINAL RECEIPT
+========================================================== */
+
+function searchExchangeReceipt() {
+
+  const id =
+    String(
+      document.getElementById(
+        "exchangeReceiptId"
+      ).value ||
+      ""
+    ).trim();
+
+
+  if (!id) {
+
+    showNotificationToast(
+      "Enter the original receipt ID.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  const button =
+    document.getElementById(
+      "exchangeReceiptSearchBtn"
+    );
+
+
+  button.disabled =
+    true;
+
+  button.textContent =
+    "Searching...";
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        button.disabled =
+          false;
+
+        button.textContent =
+          "Search";
+
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          phase9ExchangeReceipt =
+            null;
+
+
+          document.getElementById(
+            "exchangeBuilder"
+          ).style.display =
+            "none";
+
+
+          showNotificationToast(
+            result &&
+            result.message
+              ? result.message
+              : "Receipt not found.",
+            true
+          );
+
+
+          return;
+
+        }
+
+
+        if (
+          !result.items ||
+          !result.items.length
+        ) {
+
+          phase9ExchangeReceipt =
+            result;
+
+
+          document.getElementById(
+            "exchangeBuilder"
+          ).style.display =
+            "none";
+
+
+          showNotificationToast(
+            "No remaining exchangeable items on this receipt.",
+            true
+          );
+
+
+          return;
+
+        }
+
+
+        phase9ExchangeReceipt =
+          result;
+
+
+        document.getElementById(
+          "exchangeReceiptInfo"
+        ).textContent =
+          result.receipt.receiptId +
+          " · " +
+          (
+            result.receipt.timestamp ||
+            ""
+          ) +
+          " · Cashier: " +
+          (
+            result.receipt.cashier ||
+            "—"
+          );
+
+
+        loadExchangeReplacementProducts();
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        button.disabled =
+          false;
+
+        button.textContent =
+          "Search";
+
+
+        showNotificationToast(
+          err &&
+          err.message
+            ? err.message
+            : String(err),
+          true
+        );
+
+      }
+    )
+
+
+    .getExchangeableReceipt(
+      id
+    );
+
+}
+
+
+/* ==========================================================
+   LOAD REPLACEMENTS
+========================================================== */
+
+function loadExchangeReplacementProducts() {
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          showNotificationToast(
+            result &&
+            result.message
+              ? result.message
+              : "Unable to load replacements.",
+            true
+          );
+
+          return;
+
+        }
+
+
+        phase9ExchangeProducts =
+          Array.isArray(
+            result.products
+          )
+            ? result.products
+            : [];
+
+
+        phase9FilteredProducts =
+          phase9ExchangeProducts.slice();
+
+
+        const returnSelect =
+          document.getElementById(
+            "exchangeReturnItem"
+          );
+
+
+        returnSelect.innerHTML =
+          phase9ExchangeReceipt.items
+            .map(
+              function(item) {
+
+                return `
+
+                  <option
+                    value="${exEsc(
+                      item.code
+                    )}"
+                  >
+                    ${exEsc(
+                      item.code
+                    )}
+                    —
+                    ${exEsc(
+                      item.name
+                    )}
+                    (${item.exchangeableQty} available)
+                  </option>
+
+                `;
+
+              }
+            )
+            .join("");
+
+
+        document.getElementById(
+          "exchangeBuilder"
+        ).style.display =
+          "block";
+
+
+        filterExchangeReplacementProducts();
+
+        updateExchangeReturnSelection();
+
+        updateExchangePaymentUI();
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        showNotificationToast(
+          err &&
+          err.message
+            ? err.message
+            : String(err),
+          true
+        );
+
+      }
+    )
+
+
+    .getExchangeReplacementProducts();
+
+}
+
+
+/* ==========================================================
+   GET SELECTED RETURN
+========================================================== */
+
+function getExReturn() {
+
+  if (
+    !phase9ExchangeReceipt
+  ) {
+
+    return null;
+
+  }
+
+
+  const code =
+    document.getElementById(
+      "exchangeReturnItem"
+    ).value;
+
+
+  return (
+    phase9ExchangeReceipt.items.find(
+      function(item) {
+
+        return (
+          String(
+            item.code
+          ) ===
+          String(
+            code
+          )
+        );
+
+      }
+    ) ||
+    null
+  );
+
+}
+
+
+/* ==========================================================
+   GET SELECTED REPLACEMENT
+========================================================== */
+
+function getExReplacement() {
+
+  const code =
+    document.getElementById(
+      "exchangeReplacementItem"
+    ).value;
+
+
+  return (
+    phase9ExchangeProducts.find(
+      function(item) {
+
+        return (
+          String(
+            item.code
+          ) ===
+          String(
+            code
+          )
+        );
+
+      }
+    ) ||
+    null
+  );
+
+}
+
+
+/* ==========================================================
+   RETURN SELECTION
+========================================================== */
+
+function updateExchangeReturnSelection() {
+
+  const item =
+    getExReturn();
+
+
+  if (!item) {
+
+    return;
+
+  }
+
+
+  const qty =
+    document.getElementById(
+      "exchangeReturnQty"
+    );
+
+
+  qty.max =
+    item.exchangeableQty;
+
+
+  if (
+    Number(
+      qty.value
+    ) >
+    item.exchangeableQty
+  ) {
+
+    qty.value =
+      item.exchangeableQty;
+
+  }
+
+
+  if (
+    Number(
+      qty.value
+    ) < 1
+  ) {
+
+    qty.value =
+      1;
+
+  }
+
+
+  document.getElementById(
+    "exchangeReturnInfo"
+  ).innerHTML = `
+
+    <div class="row g-2">
+
+      <div class="col-4">
+
+        <small class="text-muted">
+          Purchased
+        </small>
+
+        <div class="fw-bold">
+          ${item.purchasedQty}
+        </div>
+
+      </div>
+
+
+      <div class="col-4">
+
+        <small class="text-muted">
+          Exchanged
+        </small>
+
+        <div class="fw-bold">
+          ${item.alreadyExchangedQty}
+        </div>
+
+      </div>
+
+
+      <div class="col-4">
+
+        <small class="text-muted">
+          Available
+        </small>
+
+        <div class="fw-bold">
+          ${item.exchangeableQty}
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="mt-2">
+
+      <small class="text-muted">
+        Original unit exchange value
+      </small>
+
+      <div class="fw-bold">
+        ₱${exMoney(
+          item.originalUnitExchangeValue
+        )}
+      </div>
+
+    </div>
+
+  `;
+
+
+  updateExchangeCalculation();
+
+}
+
+
+/* ==========================================================
+   FILTER REPLACEMENTS
+========================================================== */
+
+function filterExchangeReplacementProducts() {
+
+  const search =
+    String(
+      document.getElementById(
+        "exchangeReplacementSearch"
+      ).value ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+
+  phase9FilteredProducts =
+    phase9ExchangeProducts.filter(
+      function(item) {
+
+        if (!search) {
+
+          return true;
+
+        }
+
+
+        return (
+          (
+            String(item.code || "") +
+            " " +
+            String(item.name || "") +
+            " " +
+            String(item.category || "") +
+            " " +
+            String(item.size || "")
+          )
+            .toLowerCase()
+            .includes(search)
+        );
+
+      }
+    );
+
+
+  const select =
+    document.getElementById(
+      "exchangeReplacementItem"
+    );
+
+
+  const previous =
+    select.value;
+
+
+  select.innerHTML =
+    phase9FilteredProducts
+      .map(
+        function(item) {
+
+          return `
+
+            <option
+              value="${exEsc(
+                item.code
+              )}"
+            >
+
+              ${exEsc(
+                item.code
+              )}
+              —
+              ${exEsc(
+                item.name
+              )}
+              · ₱${exMoney(
+                item.price
+              )}
+              · Stock ${item.stock}
+
+            </option>
+
+          `;
+
+        }
+      )
+      .join("");
+
+
+  if (
+    phase9FilteredProducts.some(
+      function(item) {
+
+        return (
+          String(
+            item.code
+          ) ===
+          String(
+            previous
+          )
+        );
+
+      }
+    )
+  ) {
+
+    select.value =
+      previous;
+
+  }
+
+
+  updateExchangeReplacementSelection();
+
+}
+
+
+/* ==========================================================
+   REPLACEMENT SELECTION
+========================================================== */
+
+function updateExchangeReplacementSelection() {
+
+  const item =
+    getExReplacement();
+
+
+  const box =
+    document.getElementById(
+      "exchangeReplacementInfo"
+    );
+
+
+  if (!item) {
+
+    box.innerHTML =
+      '<div class="text-muted">No matching product.</div>';
+
+
+    updateExchangeCalculation();
+
+    return;
+
+  }
+
+
+  const qty =
+    document.getElementById(
+      "exchangeReplacementQty"
+    );
+
+
+  qty.max =
+    item.stock;
+
+
+  if (
+    Number(
+      qty.value
+    ) >
+    item.stock
+  ) {
+
+    qty.value =
+      item.stock;
+
+  }
+
+
+  if (
+    Number(
+      qty.value
+    ) < 1
+  ) {
+
+    qty.value =
+      1;
+
+  }
+
+
+  box.innerHTML = `
+
+    <small class="text-muted">
+
+      ${exEsc(
+        item.category
+      )}
+
+      ${
+        item.size
+          ? " · " +
+            exEsc(
+              item.size
+            )
+          : ""
+      }
+
+    </small>
+
+
+    <div class="fw-bold">
+      ${exEsc(
+        item.name
+      )}
+    </div>
+
+
+    <div>
+      Stock ${item.stock}
+      ·
+      ₱${exMoney(
+        item.price
+      )}
+    </div>
+
+  `;
+
+
+  updateExchangeCalculation();
+
+}
+
+
+/* ==========================================================
+   PAYMENT UI
+========================================================== */
+
+function updateExchangePaymentUI() {
+
+  const method =
+    document.getElementById(
+      "exchangePaymentMethod"
+    ).value;
+
+
+  document.getElementById(
+    "exchangeReferenceBox"
+  ).style.display =
+    method === "Cash"
+      ? "none"
+      : "block";
+
+
+  document.getElementById(
+    "exchangeCashBox"
+  ).style.display =
+    method === "Cash"
+      ? "block"
+      : "none";
+
+
+  updateExchangeCalculation();
+
+}
+
+
+/* ==========================================================
+   CALCULATION
+========================================================== */
+
+function updateExchangeCalculation() {
+
+  const returned =
+    getExReturn();
+
+
+  const replacement =
+    getExReplacement();
+
+
+  const returnQty =
+    Number(
+      document.getElementById(
+        "exchangeReturnQty"
+      ).value
+    ) || 0;
+
+
+  const replacementQty =
+    Number(
+      document.getElementById(
+        "exchangeReplacementQty"
+      ).value
+    ) || 0;
+
+
+  const returnValue =
+    returned
+      ? (
+          Number(
+            returned.originalUnitExchangeValue
+          ) || 0
+        ) *
+        returnQty
+      : 0;
+
+
+  const replacementValue =
+    replacement
+      ? (
+          Number(
+            replacement.price
+          ) || 0
+        ) *
+        replacementQty
+      : 0;
+
+
+  const due =
+    Math.max(
+      0,
+      replacementValue -
+        returnValue
+    );
+
+
+  document.getElementById(
+    "exchangeReturnValue"
+  ).textContent =
+    "₱" +
+    exMoney(
+      returnValue
+    );
+
+
+  document.getElementById(
+    "exchangeReplacementValue"
+  ).textContent =
+    "₱" +
+    exMoney(
+      replacementValue
+    );
+
+
+  document.getElementById(
+    "exchangeAmountDue"
+  ).textContent =
+    "₱" +
+    exMoney(
+      due
+    );
+
+
+  let valid =
+    true;
+
+  let message =
+    "Valid Exchange";
+
+
+  if (
+    !returned ||
+    !replacement
+  ) {
+
+    valid =
+      false;
+
+    message =
+      "Select both items.";
+
+  }
+
+
+  else if (
+    !Number.isInteger(
+      returnQty
+    ) ||
+    returnQty < 1 ||
+    returnQty >
+      returned.exchangeableQty
+  ) {
+
+    valid =
+      false;
+
+    message =
+      "Invalid return quantity.";
+
+  }
+
+
+  else if (
+    !Number.isInteger(
+      replacementQty
+    ) ||
+    replacementQty < 1 ||
+    replacementQty >
+      replacement.stock
+  ) {
+
+    valid =
+      false;
+
+    message =
+      "Invalid replacement quantity / stock.";
+
+  }
+
+
+  else if (
+    replacementValue <
+    returnValue
+  ) {
+
+    valid =
+      false;
+
+    message =
+      "Replacement must be equal or higher value.";
+
+  }
+
+
+  const method =
+    document.getElementById(
+      "exchangePaymentMethod"
+    ).value;
+
+
+  const reference =
+    String(
+      document.getElementById(
+        "exchangePaymentReference"
+      ).value ||
+      ""
+    ).trim();
+
+
+  const cash =
+    Number(
+      document.getElementById(
+        "exchangeCashReceived"
+      ).value
+    ) || 0;
+
+
+  const pin =
+    String(
+      document.getElementById(
+        "exchangeManagerPin"
+      ).value ||
+      ""
+    ).trim();
+
+
+  if (
+    valid &&
+    due > 0 &&
+    method !== "Cash" &&
+    !reference
+  ) {
+
+    valid =
+      false;
+
+    message =
+      "Payment reference required.";
+
+  }
+
+
+  if (
+    valid &&
+    due > 0 &&
+    method === "Cash" &&
+    cash < due
+  ) {
+
+    valid =
+      false;
+
+    message =
+      "Cash received is less than amount due.";
+
+  }
+
+
+  if (
+    valid &&
+    !pin
+  ) {
+
+    valid =
+      false;
+
+    message =
+      "Manager PIN required.";
+
+  }
+
+
+  const validation =
+    document.getElementById(
+      "exchangeValidation"
+    );
+
+
+  validation.textContent =
+    (
+      valid
+        ? "✓ "
+        : "✕ "
+    ) +
+    message;
+
+
+  validation.className =
+    valid
+      ? "fw-semibold text-success"
+      : "fw-semibold text-danger";
+
+
+  document.getElementById(
+    "exchangeConfirmBtn"
+  ).disabled =
+    !valid;
+
+}
+
+
+/* ==========================================================
+   CONFIRM EXCHANGE
+========================================================== */
+
+function confirmCustomerExchange() {
+
+  updateExchangeCalculation();
+
+
+  const button =
+    document.getElementById(
+      "exchangeConfirmBtn"
+    );
+
+
+  if (
+    button.disabled
+  ) {
+
+    return;
+
+  }
+
+
+  const returned =
+    getExReturn();
+
+
+  const replacement =
+    getExReplacement();
+
+
+  const payload = {
+
+    originalReceiptId:
+      phase9ExchangeReceipt
+        .receipt
+        .receiptId,
+
+    returnCode:
+      returned.code,
+
+    returnQty:
+      Number(
+        document.getElementById(
+          "exchangeReturnQty"
+        ).value
+      ),
+
+    replacementCode:
+      replacement.code,
+
+    replacementQty:
+      Number(
+        document.getElementById(
+          "exchangeReplacementQty"
+        ).value
+      ),
+
+    paymentMethod:
+      document.getElementById(
+        "exchangePaymentMethod"
+      ).value,
+
+    paymentReference:
+      document.getElementById(
+        "exchangePaymentReference"
+      ).value,
+
+    cashReceived:
+      Number(
+        document.getElementById(
+          "exchangeCashReceived"
+        ).value
+      ) || 0,
+
+    managerPin:
+      document.getElementById(
+        "exchangeManagerPin"
+      ).value,
+
+    employee:
+      exchangeEmployee(),
+
+    notes:
+      document.getElementById(
+        "exchangeNotes"
+      ).value
+
+  };
+
+
+  button.disabled =
+    true;
+
+  button.textContent =
+    "Processing...";
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      function(result) {
+
+        button.textContent =
+          "Complete Exchange";
+
+
+        if (
+          !result ||
+          !result.success
+        ) {
+
+          button.disabled =
+            false;
+
+
+          showNotificationToast(
+            result &&
+            result.message
+              ? result.message
+              : "Exchange failed.",
+            true
+          );
+
+
+          return;
+
+        }
+
+
+        closeCustomerExchangeModal();
+
+
+        showNotificationToast(
+          "Exchange " +
+          result.exchangeId +
+          " completed · Additional ₱" +
+          exMoney(
+            result.amountDue
+          )
+        );
+
+
+        if (
+          typeof loadInventoryPage ===
+          "function"
+        ) {
+
+          loadInventoryPage();
+
+        }
+
+
+        if (
+          typeof loadTransactionHistory ===
+          "function"
+        ) {
+
+          loadTransactionHistory();
+
+        }
+
+      }
+    )
+
+
+    .withFailureHandler(
+      function(err) {
+
+        button.disabled =
+          false;
+
+        button.textContent =
+          "Complete Exchange";
+
+
+        showNotificationToast(
+          err &&
+          err.message
+            ? err.message
+            : String(err),
+          true
+        );
+
+      }
+    )
+
+
+    .completeCustomerExchange(
+      payload
+    );
+
+}
+
+
+/* ==========================================================
+   HELPERS
+========================================================== */
+
+function exMoney(
+  value
+) {
+
+  return (
+    Number(
+      value
+    ) || 0
+  ).toFixed(
+    2
+  );
+
+}
+
+
+function exEsc(
+  value
+) {
+
+  return String(
+    value === null ||
+    value === undefined
+      ? ""
+      : value
+  )
+
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+
+    .replace(
+      /</g,
+      "&lt;"
+    )
+
+    .replace(
+      />/g,
+      "&gt;"
+    )
+
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+
+    .replace(
+      /'/g,
+      "&#039;"
+    );
+
+}
+
+
+/* ==========================================================
+   LIVE VALIDATION
+========================================================== */
+
+[
+  "exchangeReturnQty",
+  "exchangeReplacementQty",
+  "exchangePaymentReference",
+  "exchangeCashReceived",
+  "exchangeManagerPin"
+]
+.forEach(
+  function(id) {
+
+    document.addEventListener(
+      "input",
+      function(event) {
+
+        if (
+          event.target &&
+          event.target.id === id
+        ) {
+
+          updateExchangeCalculation();
+
+        }
+
+      }
+    );
+
+  }
+);
+
+</script>
