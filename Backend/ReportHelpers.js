@@ -81,93 +81,223 @@ function denomRowsHtml(breakdown) {
 ========================================================== */
 
 function buildSalesSummary(categoryGroups) {
+
   let html = "";
 
-  const categories = Object.keys(categoryGroups || {}).sort((a, b) =>
-    a.localeCompare(b)
-  );
+  const categories =
+    Object.keys(categoryGroups || {})
+      .sort(function(a, b) {
+        return a.localeCompare(b);
+      });
 
-  if (categories.length === 0) {
+
+  if (!categories.length) {
+
     return `
       <tr>
-        <td colspan="7" style="text-align:center; color:#999;">
+        <td colspan="7" class="sales-empty">
           No completed sales recorded.
         </td>
       </tr>
     `;
+
   }
 
-  categories.forEach(function (cat) {
-    const group = categoryGroups[cat];
 
-    group.items.sort(function (a, b) {
-      return a.name.localeCompare(b.name);
-    });
+  categories.forEach(function(category) {
 
-    // Category subtotal row
+    const group =
+      categoryGroups[category];
+
+
+    const normalItems =
+      (group.items || [])
+        .filter(function(item) {
+          return !item.isExchangeAdjustment &&
+                 !item.isExchangeReturn;
+        })
+        .sort(function(a, b) {
+          return a.name.localeCompare(b.name);
+        });
+
+
+    const exchangeItems =
+      (group.items || [])
+        .filter(function(item) {
+          return item.isExchangeAdjustment;
+        });
+
+
+    const displayQty =
+      Number(
+        group.displayQty !== undefined
+          ? group.displayQty
+          : group.qty
+      ) || 0;
+
+
+    /* ================= CATEGORY ================= */
+
     html += `
-      <tr>
-        <td colspan="4" style="background-color:#fbe4e8;">
-          <b style="color:#b76e79;">
-            ${cat}
-          </b>
+      <tr class="sales-category-row">
+
+        <td colspan="5">
+          ${category}
         </td>
 
-        <td style="background-color:#fbe4e8;"></td>
-
-        <td style="background-color:#fbe4e8;">
-          <b style="color:#b76e79;">
-            ${group.qty}
-          </b>
+        <td class="sales-center">
+          ${displayQty}
         </td>
 
-        <td style="background-color:#fbe4e8;">
-          <b style="color:#b76e79;">
-            ${fmtMoney(group.total)}
-          </b>
+        <td class="sales-money">
+          ${fmtMoney(group.total)}
         </td>
+
       </tr>
     `;
 
-    // Individual items
-    group.items.forEach(function (item) {
-      html += `
-        <tr>
 
-          <td style="padding-left:20px;">
+    /* ================= NORMAL ITEMS ================= */
+
+    normalItems.forEach(function(item) {
+
+      html += `
+        <tr class="sales-item-row">
+
+          <td class="sales-item-name">
             ${item.name}
           </td>
 
-          <td>
+          <td class="sales-code">
             ${item.code}
           </td>
 
-          <td>
-            ${item.size}
+          <td class="sales-center sales-size">
+            ${item.size || ""}
           </td>
 
-          <td>
+          <td class="sales-money">
             ${fmtMoney(item.price)}
           </td>
 
-          <td>
+          <td class="sales-money sales-discount">
             ${fmtDiscount(item.discount)}
           </td>
 
-          <td>
+          <td class="sales-center">
             ${item.qty}
           </td>
 
-          <td>
+          <td class="sales-money sales-item-total">
             ${fmtMoney(item.total)}
           </td>
 
         </tr>
       `;
+
+
+      /* ============== EXCHANGE CHILD ============== */
+
+      exchangeItems
+        .filter(function(exchange) {
+
+          return String(exchange.code) ===
+                 String(item.code);
+
+        })
+        .forEach(function(exchange) {
+
+          html += `
+            <tr class="sales-exchange-row">
+
+              <td class="sales-exchange-name">
+                ${exchange.name}
+              </td>
+
+              <td class="sales-code">
+                ${exchange.code}
+              </td>
+
+              <td class="sales-center">
+                ${exchange.size || ""}
+              </td>
+
+              <td class="sales-money">
+                ${fmtMoney(exchange.total)}
+              </td>
+
+              <td></td>
+
+              <td class="sales-center">
+                1
+              </td>
+
+              <td class="sales-money sales-exchange-total">
+                ${fmtMoney(exchange.total)}
+              </td>
+
+            </tr>
+          `;
+
+        });
+
     });
+
+
+    /* Exchange replacement without another normal sale */
+
+    exchangeItems
+      .filter(function(exchange) {
+
+        return !normalItems.some(function(item) {
+
+          return String(item.code) ===
+                 String(exchange.code);
+
+        });
+
+      })
+      .forEach(function(exchange) {
+
+        html += `
+          <tr class="sales-exchange-row">
+
+            <td class="sales-exchange-name">
+              ${exchange.name}
+            </td>
+
+            <td class="sales-code">
+              ${exchange.code}
+            </td>
+
+            <td class="sales-center">
+              ${exchange.size || ""}
+            </td>
+
+            <td class="sales-money">
+              ${fmtMoney(exchange.total)}
+            </td>
+
+            <td></td>
+
+            <td class="sales-center">
+              1
+            </td>
+
+            <td class="sales-money sales-exchange-total">
+              ${fmtMoney(exchange.total)}
+            </td>
+
+          </tr>
+        `;
+
+      });
+
   });
 
+
   return html;
+
 }
 
 /* ==========================================================
@@ -316,10 +446,20 @@ function buildPaymentSummary(metrics) {
    - Pass null / "" = include all cashiers
 ========================================================== */
 
-function collectSalesMetrics(salesData, reportDate, cashierName, shiftStart, shiftEnd) {
-  const tz = Session.getScriptTimeZone();
+function collectSalesMetrics(
+  salesData,
+  reportDate,
+  cashierName,
+  shiftStart,
+  shiftEnd
+) {
+
+  const tz =
+    Session.getScriptTimeZone();
+
 
   const metrics = {
+
     items: {},
     payments: {},
     paymentDetail: {},
@@ -336,264 +476,613 @@ function collectSalesMetrics(salesData, reportDate, cashierName, shiftStart, shi
     categoryGroups: {},
 
     firstLogTimestamp: null,
-    lastLogTimestamp: null,
+    lastLogTimestamp: null
+
   };
 
-  // Used so transactionCount counts RECEIPTS,
-  // not individual Sales Log rows.
-  const receiptIds = new Set();
 
-  for (let i = 1; i < salesData.length; i++) {
-    const row = salesData[i];
+  const receiptIds =
+    new Set();
 
-    const rowDate = new Date(row[0]);
 
-    if (isNaN(rowDate.getTime())) {
+  for (
+    let i = 1;
+    i < salesData.length;
+    i++
+  ) {
+
+    const row =
+      salesData[i];
+
+
+    const rowDate =
+      new Date(
+        row[0]
+      );
+
+
+    if (
+      isNaN(
+        rowDate.getTime()
+      )
+    ) {
+
       continue;
+
     }
 
-    const rowDateStr = Utilities.formatDate(rowDate, tz, "yyyy-MM-dd");
 
-    if (shiftStart && rowDate < new Date(shiftStart)) continue;
-    if (shiftEnd && rowDate > new Date(shiftEnd)) continue;
+    const rowDateStr =
+      Utilities.formatDate(
+        rowDate,
+        tz,
+        "yyyy-MM-dd"
+      );
 
-    const receiptId = row[1] || "";
 
-    const rowCashier = row[2] || "Unknown";
+    if (
+      shiftStart &&
+      rowDate <
+        new Date(
+          shiftStart
+        )
+    ) {
 
-    const rowStatus = row[15] || "";
-
-    // -----------------------------
-    // FILTER DATE
-    // -----------------------------
-
-    if (rowDateStr !== reportDate) {
       continue;
+
     }
 
-    // -----------------------------
-    // FILTER CASHIER
-    // -----------------------------
 
-    if (cashierName && rowCashier !== cashierName) {
+    if (
+      shiftEnd &&
+      rowDate >
+        new Date(
+          shiftEnd
+        )
+    ) {
+
       continue;
+
     }
 
-    // -----------------------------
-    // COMPLETED SALES ONLY
-    // -----------------------------
 
-    if (rowStatus !== "COMPLETED") {
+    const receiptId =
+      String(
+        row[1] || ""
+      ).trim();
+
+
+    const rowCashier =
+      String(
+        row[2] || "Unknown"
+      ).trim();
+
+
+    const rowStatus =
+      String(
+        row[15] || ""
+      )
+        .trim()
+        .toUpperCase();
+
+
+    if (
+      rowDateStr !==
+      reportDate
+    ) {
+
       continue;
+
     }
 
-    // -----------------------------
-    // SHIFT TIME
-    // -----------------------------
 
-    if (!metrics.firstLogTimestamp || rowDate < metrics.firstLogTimestamp) {
-      metrics.firstLogTimestamp = rowDate;
+    if (
+      cashierName &&
+      rowCashier !==
+        cashierName
+    ) {
+
+      continue;
+
     }
 
-    if (!metrics.lastLogTimestamp || rowDate > metrics.lastLogTimestamp) {
-      metrics.lastLogTimestamp = rowDate;
+
+    if (
+      rowStatus !==
+      "COMPLETED"
+    ) {
+
+      continue;
+
     }
 
-    // -----------------------------
-    // RECEIPT COUNT
-    // -----------------------------
+
+    if (
+      !metrics.firstLogTimestamp ||
+      rowDate <
+        metrics.firstLogTimestamp
+    ) {
+
+      metrics.firstLogTimestamp =
+        rowDate;
+
+    }
+
+
+    if (
+      !metrics.lastLogTimestamp ||
+      rowDate >
+        metrics.lastLogTimestamp
+    ) {
+
+      metrics.lastLogTimestamp =
+        rowDate;
+
+    }
+
 
     if (receiptId) {
-      receiptIds.add(receiptId);
+
+      receiptIds.add(
+        receiptId
+      );
+
     }
 
-    // -----------------------------
-    // SALES DATA
-    // -----------------------------
 
-    const code = row[SALES_IDX.CODE];
-
-    const name = toProperCase(row[4] || "");
-
-    const size = (row[5] || "").toString().toUpperCase();
-
-    const category = row[6] || "YourFinds";
-
-    const qty = parseInt(row[7]) || 0;
-
-    const price = parseFloat(row[8]) || 0;
-
-    const discount = parseFloat(row[9]) || 0;
-
-    const netPayout = parseFloat(row[12]) || 0;
-
-    const paymentMethod = row[13] || "Cash";
-
-    const reference = row[14] || "N/A";
-
-    const cashReceived = parseFloat(row[16]) || 0;
-
-    const changeGiven = parseFloat(row[17]) || 0;
-
-    // -----------------------------
-    // GRAND TOTALS
-    // -----------------------------
-
-    metrics.totalSales += netPayout;
-    metrics.totalDiscount += discount;
-    metrics.itemsCount += qty;
-
-    metrics.totalCashReceived += cashReceived;
-
-    metrics.totalChangeGiven += changeGiven;
-
-    // -----------------------------
-    // ITEMS
-    // -----------------------------
-
-    const itemKey =
-      category + "|" +
-      code + "|" +
-      size + "|" +
-      price;
+    const code =
+      row[SALES_IDX.CODE];
 
 
-    if (!metrics.items[itemKey]) {
+    const name =
+      toProperCase(
+        row[4] || ""
+      );
 
-      metrics.items[itemKey] = {
 
-        category: category,
-        name: name,
-        code: code,
-        size: size,
-        price: price,
+    const size =
+      String(
+        row[5] || ""
+      ).toUpperCase();
 
-        qty: 0,
-        discount: 0,
-        total: 0
+
+    const category =
+      row[6] ||
+      "YourFinds";
+
+
+    const qty =
+      parseInt(
+        row[7]
+      ) || 0;
+
+
+    const price =
+      parseFloat(
+        row[8]
+      ) || 0;
+
+
+    const discount =
+      parseFloat(
+        row[9]
+      ) || 0;
+
+
+    const netPayout =
+      parseFloat(
+        row[12]
+      ) || 0;
+
+
+    const paymentMethod =
+      row[13] ||
+      "Cash";
+
+
+    const reference =
+      row[14] ||
+      "N/A";
+
+
+    const cashReceived =
+      parseFloat(
+        row[16]
+      ) || 0;
+
+
+    const changeGiven =
+      parseFloat(
+        row[17]
+      ) || 0;
+
+
+    /*
+      Column T = Reason
+
+      Exchange rows must remain separate
+      from the normal product summary.
+    */
+
+    const reason =
+      String(
+        row[19] || ""
+      )
+        .trim()
+        .toUpperCase();
+
+
+    const isExchange =
+      reason ===
+        "EXCHANGE RETURN" ||
+      reason ===
+        "EXCHANGE REPLACEMENT";
+
+
+    /* ================= TOTALS ================= */
+
+    metrics.totalSales +=
+      netPayout;
+
+
+    metrics.totalDiscount +=
+      discount;
+
+
+    metrics.itemsCount +=
+      qty;
+
+
+    metrics.totalCashReceived +=
+      cashReceived;
+
+
+    metrics.totalChangeGiven +=
+      changeGiven;
+
+
+    /* ================= ITEMS ================= */
+
+    let itemKey;
+
+
+    if (isExchange) {
+
+      /*
+        Every exchange line gets its own row.
+
+        Receipt ID + reason prevents it from
+        merging with normal sales or another
+        exchange.
+      */
+
+      itemKey =
+        category + "|" +
+        code + "|" +
+        size + "|" +
+        price + "|" +
+        receiptId + "|" +
+        reason;
+
+    } else {
+
+      /*
+        Normal sales continue to aggregate.
+      */
+
+      itemKey =
+        category + "|" +
+        code + "|" +
+        size + "|" +
+        price;
+
+    }
+
+
+    if (
+      !metrics.items[
+        itemKey
+      ]
+    ) {
+
+      metrics.items[
+        itemKey
+      ] = {
+
+        category:
+          category,
+
+        name:
+          name,
+
+        code:
+          code,
+
+        size:
+          size,
+
+        price:
+          price,
+
+        qty:
+          0,
+
+        discount:
+          0,
+
+        total:
+          0,
+
+        isExchange:
+          isExchange
 
       };
 
     }
 
-    metrics.items[itemKey].qty += qty;
 
-    metrics.items[itemKey].discount += discount;
+    metrics.items[
+      itemKey
+    ].qty +=
+      qty;
 
-    metrics.items[itemKey].total += netPayout;
 
-    // -----------------------------
-    // PAYMENT METHODS
-    // -----------------------------
+    metrics.items[
+      itemKey
+    ].discount +=
+      discount;
 
-    if (!metrics.payments[paymentMethod]) {
-      metrics.payments[paymentMethod] = {
+
+    metrics.items[
+      itemKey
+    ].total +=
+      netPayout;
+
+
+    /* ================= PAYMENTS ================= */
+
+    if (
+      !metrics.payments[
+        paymentMethod
+      ]
+    ) {
+
+      metrics.payments[
+        paymentMethod
+      ] = {
+
         gross: 0,
-        count: 0,
+        count: 0
+
       };
+
     }
 
-    metrics.payments[paymentMethod].gross += netPayout;
 
-    metrics.payments[paymentMethod].count++;
+    metrics.payments[
+      paymentMethod
+    ].gross +=
+      netPayout;
 
-    // -----------------------------
-    // PAYMENT REFERENCES
-    // -----------------------------
 
-    if (!metrics.paymentDetail[paymentMethod]) {
-      metrics.paymentDetail[paymentMethod] = {};
+    metrics.payments[
+      paymentMethod
+    ].count++;
+
+
+    if (
+      !metrics.paymentDetail[
+        paymentMethod
+      ]
+    ) {
+
+      metrics.paymentDetail[
+        paymentMethod
+      ] = {};
+
     }
 
-    if (!metrics.paymentDetail[paymentMethod][reference]) {
-      metrics.paymentDetail[paymentMethod][reference] = 0;
+
+    if (
+      !metrics.paymentDetail[
+        paymentMethod
+      ][reference]
+    ) {
+
+      metrics.paymentDetail[
+        paymentMethod
+      ][reference] =
+        0;
+
     }
 
-    metrics.paymentDetail[paymentMethod][reference] += netPayout;
 
-    // -----------------------------
-    // SALES BY CASHIER
-    // -----------------------------
+    metrics.paymentDetail[
+      paymentMethod
+    ][reference] +=
+      netPayout;
 
-    if (!metrics.byCashier[rowCashier]) {
-      metrics.byCashier[rowCashier] = {
+
+    /* ================= CASHIER ================= */
+
+    if (
+      !metrics.byCashier[
+        rowCashier
+      ]
+    ) {
+
+      metrics.byCashier[
+        rowCashier
+      ] = {
+
         sales: 0,
         transactions: 0,
         items: 0,
-        receiptIds: {},
+        receiptIds: {}
+
       };
+
     }
 
-    const cashierMetrics = metrics.byCashier[rowCashier];
 
-    cashierMetrics.sales += netPayout;
+    const cashierMetrics =
+      metrics.byCashier[
+        rowCashier
+      ];
 
-    cashierMetrics.items += qty;
+
+    cashierMetrics.sales +=
+      netPayout;
+
+
+    cashierMetrics.items +=
+      qty;
+
 
     if (receiptId) {
-      cashierMetrics.receiptIds[receiptId] = true;
+
+      cashierMetrics
+        .receiptIds[
+          receiptId
+        ] =
+        true;
+
     }
+
   }
 
-  /* ========================================================
-     TRANSACTION COUNTS
-  ======================================================== */
 
-  metrics.transactionCount = receiptIds.size;
+  /* ================= TRANSACTION COUNTS ================= */
 
-  Object.keys(metrics.byCashier).forEach(function (name) {
-    const cashier = metrics.byCashier[name];
+  metrics.transactionCount =
+    receiptIds.size;
 
-    cashier.transactions = Object.keys(cashier.receiptIds).length;
 
-    // Internal tracking no longer needed.
-    delete cashier.receiptIds;
-  });
+  Object.keys(
+    metrics.byCashier
+  ).forEach(
+    function(name) {
 
-  /* ========================================================
-     CATEGORY GROUPS
-  ======================================================== */
+      const cashier =
+        metrics.byCashier[
+          name
+        ];
 
-  Object.values(metrics.items).forEach(function (item) {
-    const category = item.category || "YourFinds";
 
-    if (!metrics.categoryGroups[category]) {
-      metrics.categoryGroups[category] = {
-        items: [],
-        qty: 0,
-        discount: 0,
-        total: 0,
-      };
+      cashier.transactions =
+        Object.keys(
+          cashier.receiptIds
+        ).length;
+
+
+      delete cashier.receiptIds;
+
     }
+  );
 
-    const group = metrics.categoryGroups[category];
 
-    group.items.push(item);
+  /* ================= CATEGORY GROUPS ================= */
 
-    group.qty += item.qty;
+  Object.values(
+    metrics.items
+  ).forEach(
+    function(item) {
 
-    group.discount += item.discount;
+      const category =
+        item.category ||
+        "YourFinds";
 
-    group.total += item.total;
-  });
 
-  /* ========================================================
-     ROUND MONEY VALUES
-  ======================================================== */
+      if (
+        !metrics.categoryGroups[
+          category
+        ]
+      ) {
 
-  metrics.totalSales = roundToTwo(metrics.totalSales);
+        metrics.categoryGroups[
+          category
+        ] = {
 
-  metrics.totalDiscount = roundToTwo(metrics.totalDiscount);
+          items: [],
+          qty: 0,
+          discount: 0,
+          total: 0
 
-  metrics.totalCashReceived = roundToTwo(metrics.totalCashReceived);
+        };
 
-  metrics.totalChangeGiven = roundToTwo(metrics.totalChangeGiven);
+      }
 
-  Object.keys(metrics.payments).forEach(function (method) {
-    metrics.payments[method].gross = roundToTwo(metrics.payments[method].gross);
-  });
+
+      const group =
+        metrics.categoryGroups[
+          category
+        ];
+
+
+      group.items.push(
+        item
+      );
+
+
+      group.qty +=
+        item.qty;
+
+
+      group.discount +=
+        item.discount;
+
+
+      group.total +=
+        item.total;
+
+    }
+  );
+
+
+  metrics.totalSales =
+    roundToTwo(
+      metrics.totalSales
+    );
+
+
+  metrics.totalDiscount =
+    roundToTwo(
+      metrics.totalDiscount
+    );
+
+
+  metrics.totalCashReceived =
+    roundToTwo(
+      metrics.totalCashReceived
+    );
+
+
+  metrics.totalChangeGiven =
+    roundToTwo(
+      metrics.totalChangeGiven
+    );
+
+
+  Object.keys(
+    metrics.payments
+  ).forEach(
+    function(method) {
+
+      metrics.payments[
+        method
+      ].gross =
+        roundToTwo(
+          metrics.payments[
+            method
+          ].gross
+        );
+
+    }
+  );
+
 
   return metrics;
+
 }
 
 /* ==========================================================
@@ -603,7 +1092,7 @@ function collectSalesMetrics(salesData, reportDate, cashierName, shiftStart, shi
    enables link viewing, and returns the download URL.
 ========================================================== */
 
-function createPdfFromHtml(html, fileName) {
+function createPdfFromHtml(html, fileName, overwriteExisting) {
   try {
     const safeFileName = String(fileName || "Report").replace(
       /[\\/:*?"<>|]/g,
@@ -619,6 +1108,15 @@ function createPdfFromHtml(html, fileName) {
     const pdfBlob = htmlBlob
       .getAs("application/pdf")
       .setName(safeFileName + ".pdf");
+
+    // For finalized/regenerated reports, keep one active PDF per report identity.
+    // Old same-name copies are moved to trash before the replacement is created.
+    if (overwriteExisting) {
+      const existing = DriveApp.getFilesByName(safeFileName + ".pdf");
+      while (existing.hasNext()) {
+        try { existing.next().setTrashed(true); } catch (e) {}
+      }
+    }
 
     const file = DriveApp.createFile(pdfBlob);
 
@@ -950,7 +1448,7 @@ function buildCashierReportHTML(data) {
 
       <h2>Sales Summary</h2>
 
-      <table>
+      <table class="sales-summary-table">
 
         <tr>
           <th>Item Name</th>
@@ -964,30 +1462,44 @@ function buildCashierReportHTML(data) {
 
         ${salesRowsHtml}
 
-        <tr>
+        <tr class="sales-net-row">
 
           <td
             colspan="5"
             style="
-              background-color:#f3b6c2;
               text-align:right;
+              border-top:2px solid #d7b1b8;
+              border-bottom:0;
+              padding:7px 8px;
+              font-weight:700;
+              color:#70464d;
             "
           >
-            <b style="color:#8f1d3a;">
-              Net Sales
-            </b>
+            NET SALES
           </td>
 
-          <td style="background-color:#f3b6c2;">
-            <b style="color:#8f1d3a;">
-              ${metrics.itemsCount}
-            </b>
+          <td
+            style="
+              text-align:center;
+              border-top:2px solid #d7b1b8;
+              border-bottom:0;
+              font-weight:700;
+            "
+          >
+            ${metrics.itemsCount}
           </td>
 
-          <td style="background-color:#f3b6c2;">
-            <b style="color:#8f1d3a;">
-              ${fmtMoney(metrics.totalSales)}
-            </b>
+          <td
+            style="
+              text-align:right;
+              border-top:2px solid #d7b1b8;
+              border-bottom:0;
+              font-weight:800;
+              color:#8f1d3a;
+              font-size:11px;
+            "
+          >
+            ${fmtMoney(metrics.totalSales)}
           </td>
 
         </tr>
@@ -1096,6 +1608,7 @@ function buildCashierReportHTML(data) {
                 <tr>
 
                   <td
+                    style="text-align:right;"
                     colspan="2"
                     class="ps-total-label"
                   >
@@ -1134,8 +1647,25 @@ function buildCashierReportHTML(data) {
             <div class="report-card-body">
 
               <p class="report-text-summary">
-                Cash Counted / Remitted:
+                Expected:
+                <b>${fmtMoney(expectedCashDrawer)}</b>
+
+                <br>
+
+                Remitted:
                 <b>${fmtMoney(cashOnHand)}</b>
+                
+                ${
+                  Math.abs(cashVariance) > 0.001
+                    ? `
+                      <br>
+                      <span style="color:#b45f06;">
+                        Variance:
+                        <b>${fmtMoney(cashVariance)}</b>
+                      </span>
+                    `
+                    : ""
+                }
               </p>
 
 
