@@ -560,16 +560,15 @@
 .toast-container {
   z-index: 50000 !important;
 }
-
 /* ==========================================================
-   SALES SUMMARY — CLEAN REPORT STYLE
+   SALES SUMMARY — FINAL TABLE STYLE
 ========================================================== */
 
 .sales-summary-table {
-  border-collapse: separate;
-  border-spacing: 0;
   width: 100%;
+  border-collapse: collapse;
   margin-top: 4px;
+  border: 1px solid #dfc3c8;
 }
 
 .sales-summary-table th {
@@ -578,26 +577,33 @@
   font-size: 9px;
   font-weight: 700;
   padding: 6px 8px;
-  border: 0;
-  border-top: 1px solid #dec4c8;
-  border-bottom: 1px solid #dec4c8;
+
+  border: 1px solid #dfc3c8;
 }
 
 .sales-summary-table td {
-  border: 0;
-  border-bottom: 1px solid #eee4e6;
-  padding: 6px 8px;
+  padding: 5px 8px;
   vertical-align: middle;
+
+  border-left: 1px solid #ead6da;
+  border-right: 1px solid #ead6da;
+  border-bottom: 1px solid #ead6da;
 }
 
+
+/* ================= CATEGORY ================= */
+
 .sales-category-row td {
-  background: #f7e9ec;
-  color: #74434b;
+  background: #f8edef;
+  color: #70464d;
   font-weight: 700;
-  padding-top: 6px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #dfc6ca;
+
+  border-top: 1px solid #d8afb6;
+  border-bottom: 1px solid #d8afb6;
 }
+
+
+/* ================= NORMAL SALE ================= */
 
 .sales-item-row td {
   background: #fff;
@@ -615,8 +621,8 @@
   font-size: 9px;
 }
 
-.sales-size {
-  color: #777;
+.sales-center {
+  text-align: center;
 }
 
 .sales-money {
@@ -624,28 +630,16 @@
   white-space: nowrap;
 }
 
-.sales-center {
-  text-align: center;
-}
 
-.sales-discount {
-  color: #777;
-}
-
-.sales-item-total {
-  font-weight: 600;
-}
-
-
-/* Exchange child */
+/* ================= EXCHANGE ================= */
 
 .sales-exchange-row td {
   background: #fcf9fa;
-  color: #8b7377;
+  color: #796b6e;
   font-size: 8.5px;
-  padding-top: 4px;
-  padding-bottom: 4px;
-  border-bottom: 1px dashed #eadcdf;
+
+  border-top: 1px dashed #dfcfd2;
+  border-bottom: 1px dashed #dfcfd2;
 }
 
 .sales-exchange-name {
@@ -653,17 +647,48 @@
   font-weight: 500;
 }
 
-.sales-exchange-total {
-  font-weight: 600;
+.sales-negative {
+  color: #a43d4b !important;
+  font-weight: 700;
 }
 
 
-/* Empty */
+/* ================= NET SALES FOOTER ================= */
 
-.sales-empty {
-  text-align: center;
-  color: #999;
-  padding: 18px !important;
+.sales-net-row td {
+  background: #f3dde1 !important;
+
+  border-top: 2px solid #d2a2aa !important;
+  border-bottom: 2px solid #d2a2aa !important;
+
+  padding: 7px 9px !important;
 }
 
+.sales-net-label {
+  text-align: left !important;
+
+  color: #70464d !important;
+
+  font-weight: 800 !important;
+
+  letter-spacing: 0.2px;
+}
+
+.sales-net-qty {
+  text-align: center !important;
+
+  color: #70464d !important;
+
+  font-weight: 800 !important;
+}
+
+.sales-net-total {
+  text-align: right !important;
+
+  color: #9b1738 !important;
+
+  font-size: 11px !important;
+
+  font-weight: 800 !important;
+}
 </style>

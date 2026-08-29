@@ -81,223 +81,44 @@ function denomRowsHtml(breakdown) {
 ========================================================== */
 
 function buildSalesSummary(categoryGroups) {
-
   let html = "";
-
-  const categories =
-    Object.keys(categoryGroups || {})
-      .sort(function(a, b) {
-        return a.localeCompare(b);
-      });
-
+  const categories = Object.keys(categoryGroups || {}).sort(function(a,b){ return a.localeCompare(b); });
 
   if (!categories.length) {
-
-    return `
-      <tr>
-        <td colspan="7" class="sales-empty">
-          No completed sales recorded.
-        </td>
-      </tr>
-    `;
-
+    return `<tr><td colspan="7" class="sales-empty">No completed sales recorded.</td></tr>`;
   }
 
-
   categories.forEach(function(category) {
-
-    const group =
-      categoryGroups[category];
-
-
-    const normalItems =
-      (group.items || [])
-        .filter(function(item) {
-          return !item.isExchangeAdjustment &&
-                 !item.isExchangeReturn;
-        })
-        .sort(function(a, b) {
-          return a.name.localeCompare(b.name);
-        });
-
-
-    const exchangeItems =
-      (group.items || [])
-        .filter(function(item) {
-          return item.isExchangeAdjustment;
-        });
-
-
-    const displayQty =
-      Number(
-        group.displayQty !== undefined
-          ? group.displayQty
-          : group.qty
-      ) || 0;
-
-
-    /* ================= CATEGORY ================= */
+    const group = categoryGroups[category];
+    const items = (group.items || []).slice().sort(function(a,b) {
+      if (!!a.isExchange !== !!b.isExchange) return a.isExchange ? 1 : -1;
+      if (a.isExchange && b.isExchange && a.receiptId !== b.receiptId) return String(a.receiptId).localeCompare(String(b.receiptId));
+      return String(a.name).localeCompare(String(b.name));
+    });
 
     html += `
       <tr class="sales-category-row">
+        <td colspan="5">${category}</td>
+        <td class="sales-center">${Number(group.qty) || 0}</td>
+        <td class="sales-money">${fmtMoney(group.total)}</td>
+      </tr>`;
 
-        <td colspan="5">
-          ${category}
-        </td>
-
-        <td class="sales-center">
-          ${displayQty}
-        </td>
-
-        <td class="sales-money">
-          ${fmtMoney(group.total)}
-        </td>
-
-      </tr>
-    `;
-
-
-    /* ================= NORMAL ITEMS ================= */
-
-    normalItems.forEach(function(item) {
-
+    items.forEach(function(item) {
+      const exchange = !!item.isExchange;
       html += `
-        <tr class="sales-item-row">
-
-          <td class="sales-item-name">
-            ${item.name}
-          </td>
-
-          <td class="sales-code">
-            ${item.code}
-          </td>
-
-          <td class="sales-center sales-size">
-            ${item.size || ""}
-          </td>
-
-          <td class="sales-money">
-            ${fmtMoney(item.price)}
-          </td>
-
-          <td class="sales-money sales-discount">
-            ${fmtDiscount(item.discount)}
-          </td>
-
-          <td class="sales-center">
-            ${item.qty}
-          </td>
-
-          <td class="sales-money sales-item-total">
-            ${fmtMoney(item.total)}
-          </td>
-
-        </tr>
-      `;
-
-
-      /* ============== EXCHANGE CHILD ============== */
-
-      exchangeItems
-        .filter(function(exchange) {
-
-          return String(exchange.code) ===
-                 String(item.code);
-
-        })
-        .forEach(function(exchange) {
-
-          html += `
-            <tr class="sales-exchange-row">
-
-              <td class="sales-exchange-name">
-                ${exchange.name}
-              </td>
-
-              <td class="sales-code">
-                ${exchange.code}
-              </td>
-
-              <td class="sales-center">
-                ${exchange.size || ""}
-              </td>
-
-              <td class="sales-money">
-                ${fmtMoney(exchange.total)}
-              </td>
-
-              <td></td>
-
-              <td class="sales-center">
-                1
-              </td>
-
-              <td class="sales-money sales-exchange-total">
-                ${fmtMoney(exchange.total)}
-              </td>
-
-            </tr>
-          `;
-
-        });
-
+        <tr class="${exchange ? "sales-exchange-row" : "sales-item-row"}">
+          <td class="${exchange ? "sales-exchange-name" : "sales-item-name"}">${item.name}</td>
+          <td class="sales-code">${item.code}</td>
+          <td class="sales-center">${item.size || ""}</td>
+          <td class="sales-money">${fmtMoney(item.price)}</td>
+          <td class="sales-money">${fmtDiscount(item.discount)}</td>
+          <td class="sales-center ${Number(item.qty) < 0 ? "sales-negative" : ""}">${item.qty}</td>
+          <td class="sales-money ${Number(item.total) < 0 ? "sales-negative" : ""}">${fmtMoney(item.total)}</td>
+        </tr>`;
     });
-
-
-    /* Exchange replacement without another normal sale */
-
-    exchangeItems
-      .filter(function(exchange) {
-
-        return !normalItems.some(function(item) {
-
-          return String(item.code) ===
-                 String(exchange.code);
-
-        });
-
-      })
-      .forEach(function(exchange) {
-
-        html += `
-          <tr class="sales-exchange-row">
-
-            <td class="sales-exchange-name">
-              ${exchange.name}
-            </td>
-
-            <td class="sales-code">
-              ${exchange.code}
-            </td>
-
-            <td class="sales-center">
-              ${exchange.size || ""}
-            </td>
-
-            <td class="sales-money">
-              ${fmtMoney(exchange.total)}
-            </td>
-
-            <td></td>
-
-            <td class="sales-center">
-              1
-            </td>
-
-            <td class="sales-money sales-exchange-total">
-              ${fmtMoney(exchange.total)}
-            </td>
-
-          </tr>
-        `;
-
-      });
-
   });
 
-
   return html;
-
 }
 
 /* ==========================================================
@@ -305,62 +126,116 @@ function buildSalesSummary(categoryGroups) {
 ========================================================== */
 
 function buildPaymentSummary(metrics) {
-  const payments = metrics.payments || {};
-  const paymentDetail = metrics.paymentDetail || {};
 
-  const methods = Object.keys(payments).sort((a, b) => a.localeCompare(b));
+  const payments =
+    metrics.payments || {};
+
+  const paymentDetail =
+    metrics.paymentDetail || {};
+
+
+  const methods =
+    Object.keys(payments)
+      .sort(function(a, b) {
+        return a.localeCompare(b);
+      });
+
 
   let html = "";
 
-  if (methods.length === 0) {
+
+  /* ========================================================
+     NO PAYMENTS
+  ======================================================== */
+
+  if (!methods.length) {
+
     html = `
       <tr>
-        <td colspan="3" style="color:#999; text-align:center;">
+        <td
+          colspan="3"
+          style="
+            text-align:center;
+            color:#999;
+            padding:10px;
+          "
+        >
           No payments recorded.
         </td>
       </tr>
     `;
+
   } else {
-    methods.forEach(function (method) {
-      const payment = payments[method];
-      const refs = paymentDetail[method] || {};
 
-      /* ------------------------------------------
+
+    /* ======================================================
+       PAYMENT METHODS
+    ====================================================== */
+
+    methods.forEach(function(method) {
+
+      const payment =
+        payments[method] || {};
+
+      const refs =
+        paymentDetail[method] || {};
+
+
+      /* ====================================================
          CASH
-         Subtotal only — no reference breakdown
-      ------------------------------------------ */
 
-      if (method === "Cash") {
+         Cash has no reference-number detail.
+      ==================================================== */
+
+      if (
+        String(method)
+          .trim()
+          .toUpperCase() ===
+        "CASH"
+      ) {
+
         html += `
-          <tr style="background:#faf1f2;">
+          <tr
+            style="
+              background:#faf1f2;
+            "
+          >
 
             <td>
               <b style="color:#b76e79;">
-                Cash
+                ${method}
               </b>
             </td>
 
             <td></td>
 
-            <td>
-              <b style="color:#b76e79;">
-                ${fmtMoney(payment.gross)}
+            <td style="text-align:right;">
+              <b style="color:#8f1d3a;">
+                ${fmtMoney(
+                  Number(payment.gross) || 0
+                )}
               </b>
             </td>
 
           </tr>
         `;
 
+
         return;
+
       }
 
-      /* ------------------------------------------
-         NON-CASH
-         Method subtotal
-      ------------------------------------------ */
+
+      /* ====================================================
+         NON-CASH METHOD TOTAL
+      ==================================================== */
 
       html += `
-        <tr style="background:#faf1f2;">
+        <tr
+          style="
+            background:#faf1f2;
+          "
+        >
 
           <td>
             <b style="color:#b76e79;">
@@ -370,726 +245,374 @@ function buildPaymentSummary(metrics) {
 
           <td></td>
 
-          <td>
-            <b style="color:#b76e79;">
-              ${fmtMoney(payment.gross)}
+          <td style="text-align:right;">
+            <b style="color:#8f1d3a;">
+              ${fmtMoney(
+                Number(payment.gross) || 0
+              )}
             </b>
           </td>
 
         </tr>
       `;
 
-      /* ------------------------------------------
-         NON-CASH REFERENCES
-      ------------------------------------------ */
+
+      /* ====================================================
+         REFERENCES
+
+         Exchange rows naturally NET here.
+
+         Example:
+
+         EXCHANGE RETURN      -120
+         EXCHANGE REPLACEMENT +188
+
+         Same GCash reference:
+         test = +68
+      ==================================================== */
 
       Object.keys(refs)
-        .sort((a, b) => a.localeCompare(b))
-        .forEach(function (ref) {
+        .sort(function(a, b) {
+          return a.localeCompare(b);
+        })
+        .forEach(function(ref) {
+
+          const amount =
+            Number(refs[ref]) || 0;
+
+
           html += `
             <tr>
 
               <td></td>
 
-              <td>
+              <td style="color:#666;">
                 ${ref}
               </td>
 
-              <td>
-                ${fmtMoney(refs[ref])}
+              <td style="text-align:right;">
+                ${fmtMoney(amount)}
               </td>
 
             </tr>
           `;
+
         });
+
     });
+
   }
 
-  /* ------------------------------------------
-     TOTALS
-  ------------------------------------------ */
 
-  const totalPayments = methods.reduce(function (total, method) {
-    return total + (Number(payments[method].gross) || 0);
-  }, 0);
+  /* ========================================================
+     TOTAL PAYMENTS
+  ======================================================== */
 
-  const totalNonCash = methods
-    .filter(function (method) {
-      return method !== "Cash";
-    })
-    .reduce(function (total, method) {
-      return total + (Number(payments[method].gross) || 0);
-    }, 0);
+  const totalPayments =
+    methods.reduce(
+      function(total, method) {
 
-  const cashSales = roundToTwo(
-    (Number(metrics.totalSales) || 0) - totalNonCash
-  );
+        return (
+          total +
+          (
+            Number(
+              payments[method] &&
+              payments[method].gross
+            ) || 0
+          )
+        );
+
+      },
+      0
+    );
+
+
+  /* ========================================================
+     TOTAL NON-CASH
+  ======================================================== */
+
+  const totalNonCash =
+    methods
+
+      .filter(function(method) {
+
+        return (
+          String(method)
+            .trim()
+            .toUpperCase() !==
+          "CASH"
+        );
+
+      })
+
+      .reduce(
+        function(total, method) {
+
+          return (
+            total +
+            (
+              Number(
+                payments[method] &&
+                payments[method].gross
+              ) || 0
+            )
+          );
+
+        },
+        0
+      );
+
+
+  /* ========================================================
+     CASH SALES
+
+     Uses actual net CASH movement.
+
+     Exchange:
+     -120 + 188 = +68
+
+     is therefore naturally handled.
+  ======================================================== */
+
+  let cashSales =
+    0;
+
+
+  methods.forEach(function(method) {
+
+    if (
+      String(method)
+        .trim()
+        .toUpperCase() ===
+      "CASH"
+    ) {
+
+      cashSales +=
+        Number(
+          payments[method] &&
+            payments[method].gross
+        ) || 0;
+
+    }
+
+  });
+
 
   return {
-    html: html,
 
-    totalPayments: roundToTwo(totalPayments),
+    html:
+      html,
 
-    totalNonCash: roundToTwo(totalNonCash),
+    totalPayments:
+      roundToTwo(
+        totalPayments
+      ),
 
-    cashSales: cashSales,
+    totalNonCash:
+      roundToTwo(
+        totalNonCash
+      ),
+
+    cashSales:
+      roundToTwo(
+        cashSales
+      )
+
   };
+
 }
 
 /* ==========================================================
    SALES METRICS COLLECTOR
-
-   Reads Sales Log data and builds shared report metrics.
-
-   cashierName:
-   - Pass cashier name = filter to that cashier
-   - Pass null / "" = include all cashiers
 ========================================================== */
-
-function collectSalesMetrics(
-  salesData,
-  reportDate,
-  cashierName,
-  shiftStart,
-  shiftEnd
-) {
-
-  const tz =
-    Session.getScriptTimeZone();
-
-
+function collectSalesMetrics(salesData, reportDate, cashierName, shiftStart, shiftEnd) {
+  const tz = Session.getScriptTimeZone();
   const metrics = {
-
-    items: {},
-    payments: {},
-    paymentDetail: {},
-    byCashier: {},
-
-    totalSales: 0,
-    totalDiscount: 0,
-    itemsCount: 0,
-    transactionCount: 0,
-
-    totalCashReceived: 0,
-    totalChangeGiven: 0,
-
-    categoryGroups: {},
-
-    firstLogTimestamp: null,
-    lastLogTimestamp: null
-
+    items:{}, payments:{}, paymentDetail:{}, byCashier:{},
+    totalSales:0, totalDiscount:0, itemsCount:0, transactionCount:0,
+    totalCashReceived:0, totalChangeGiven:0, categoryGroups:{},
+    firstLogTimestamp:null, lastLogTimestamp:null
   };
+  const receiptIds = new Set();
+
+  for (let i=1; i<salesData.length; i++) {
+    const row = salesData[i];
+    const rowDate = new Date(row[0]);
+    if (isNaN(rowDate.getTime())) continue;
+    const rowDateStr = Utilities.formatDate(rowDate, tz, "yyyy-MM-dd");
+    if (shiftStart && rowDate < new Date(shiftStart)) continue;
+    if (shiftEnd && rowDate > new Date(shiftEnd)) continue;
+
+    const receiptId = String(row[1] || "").trim();
+    const rowCashier = String(row[2] || "Unknown").trim();
+    const rowStatus = String(row[15] || "").trim().toUpperCase();
+    if (rowDateStr !== reportDate) continue;
+    if (cashierName && rowCashier !== cashierName) continue;
+    if (rowStatus !== "COMPLETED") continue;
+
+    if (!metrics.firstLogTimestamp || rowDate < metrics.firstLogTimestamp) metrics.firstLogTimestamp = rowDate;
+    if (!metrics.lastLogTimestamp || rowDate > metrics.lastLogTimestamp) metrics.lastLogTimestamp = rowDate;
+    if (receiptId) receiptIds.add(receiptId);
+
+    const code = row[SALES_IDX.CODE];
+    const name = toProperCase(row[4] || "");
+    const size = String(row[5] || "").toUpperCase();
+    const category = row[6] || "YourFinds";
+    const qty = parseInt(row[7]) || 0;
+    const price = parseFloat(row[8]) || 0;
+    const discount = parseFloat(row[9]) || 0;
+    const netPayout = parseFloat(row[12]) || 0;
+    const paymentMethod = row[13] || "Cash";
+    const reference = row[14] || "N/A";
+    const cashReceived = parseFloat(row[16]) || 0;
+    const changeGiven = parseFloat(row[17]) || 0;
+    const reason = String(row[19] || "").trim().toUpperCase();
+    const isExchange = reason === "EXCHANGE RETURN" || reason === "EXCHANGE REPLACEMENT";
+
+    metrics.totalSales += netPayout;
+    metrics.totalDiscount += discount;
+    if (
+      reason !== "EXCHANGE RETURN" &&
+      qty > 0
+    ) {
+
+      metrics.itemsCount += qty;
+
+    }
+    metrics.totalCashReceived += cashReceived;
+    metrics.totalChangeGiven += changeGiven;
+
+    // Normal sales aggregate. Exchange movements stay as their own auditable rows.
+    const itemKey = isExchange
+      ? ["EX", receiptId, reason, code, size, price].join("|")
+      : ["SALE", category, code, size, price].join("|");
+
+    if (!metrics.items[itemKey]) {
+      metrics.items[itemKey] = {
+        category:category, name:name, code:code, size:size, price:price,
+        qty:0, discount:0, total:0, isExchange:isExchange,
+        receiptId: receiptId,
+        reason: reason,
+        exchangeReason: isExchange ? reason : ""
+      };
+    }
+    metrics.items[itemKey].qty += qty;
+    metrics.items[itemKey].discount += discount;
+    metrics.items[itemKey].total += netPayout;
+
+    // Signed values make an exchange payment net naturally (-120 + 188 = 68).
+    if (!metrics.payments[paymentMethod]) metrics.payments[paymentMethod] = {gross:0,count:0};
+    metrics.payments[paymentMethod].gross += netPayout;
+    metrics.payments[paymentMethod].count++;
+    if (!metrics.paymentDetail[paymentMethod]) metrics.paymentDetail[paymentMethod] = {};
+    if (!metrics.paymentDetail[paymentMethod][reference]) metrics.paymentDetail[paymentMethod][reference] = 0;
+    metrics.paymentDetail[paymentMethod][reference] += netPayout;
+
+    if (!metrics.byCashier[rowCashier]) metrics.byCashier[rowCashier] = {sales:0,transactions:0,items:0,receiptIds:{}};
+    metrics.byCashier[rowCashier].sales += netPayout;
+    if (reason !== "EXCHANGE RETURN" && qty > 0) metrics.byCashier[rowCashier].items += qty;
+    if (receiptId) metrics.byCashier[rowCashier].receiptIds[receiptId] = true;
+  }
+
+  metrics.transactionCount = receiptIds.size;
+  Object.keys(metrics.byCashier).forEach(function(name){
+    const c = metrics.byCashier[name];
+    c.transactions = Object.keys(c.receiptIds).length;
+    delete c.receiptIds;
+  });
+
+Object.values(
+  metrics.items
+).forEach(function(item) {
+
+  const category =
+    item.category ||
+    "YourFinds";
 
 
-  const receiptIds =
-    new Set();
-
-
-  for (
-    let i = 1;
-    i < salesData.length;
-    i++
+  if (
+    !metrics.categoryGroups[
+      category
+    ]
   ) {
 
-    const row =
-      salesData[i];
-
-
-    const rowDate =
-      new Date(
-        row[0]
-      );
-
-
-    if (
-      isNaN(
-        rowDate.getTime()
-      )
-    ) {
-
-      continue;
-
-    }
-
-
-    const rowDateStr =
-      Utilities.formatDate(
-        rowDate,
-        tz,
-        "yyyy-MM-dd"
-      );
-
-
-    if (
-      shiftStart &&
-      rowDate <
-        new Date(
-          shiftStart
-        )
-    ) {
-
-      continue;
-
-    }
-
-
-    if (
-      shiftEnd &&
-      rowDate >
-        new Date(
-          shiftEnd
-        )
-    ) {
-
-      continue;
-
-    }
-
-
-    const receiptId =
-      String(
-        row[1] || ""
-      ).trim();
-
-
-    const rowCashier =
-      String(
-        row[2] || "Unknown"
-      ).trim();
-
-
-    const rowStatus =
-      String(
-        row[15] || ""
-      )
-        .trim()
-        .toUpperCase();
-
-
-    if (
-      rowDateStr !==
-      reportDate
-    ) {
-
-      continue;
-
-    }
-
-
-    if (
-      cashierName &&
-      rowCashier !==
-        cashierName
-    ) {
-
-      continue;
-
-    }
-
-
-    if (
-      rowStatus !==
-      "COMPLETED"
-    ) {
-
-      continue;
-
-    }
-
-
-    if (
-      !metrics.firstLogTimestamp ||
-      rowDate <
-        metrics.firstLogTimestamp
-    ) {
-
-      metrics.firstLogTimestamp =
-        rowDate;
-
-    }
-
-
-    if (
-      !metrics.lastLogTimestamp ||
-      rowDate >
-        metrics.lastLogTimestamp
-    ) {
-
-      metrics.lastLogTimestamp =
-        rowDate;
-
-    }
-
-
-    if (receiptId) {
-
-      receiptIds.add(
-        receiptId
-      );
-
-    }
-
-
-    const code =
-      row[SALES_IDX.CODE];
-
-
-    const name =
-      toProperCase(
-        row[4] || ""
-      );
-
-
-    const size =
-      String(
-        row[5] || ""
-      ).toUpperCase();
-
-
-    const category =
-      row[6] ||
-      "YourFinds";
-
-
-    const qty =
-      parseInt(
-        row[7]
-      ) || 0;
-
-
-    const price =
-      parseFloat(
-        row[8]
-      ) || 0;
-
-
-    const discount =
-      parseFloat(
-        row[9]
-      ) || 0;
-
-
-    const netPayout =
-      parseFloat(
-        row[12]
-      ) || 0;
-
-
-    const paymentMethod =
-      row[13] ||
-      "Cash";
-
-
-    const reference =
-      row[14] ||
-      "N/A";
-
-
-    const cashReceived =
-      parseFloat(
-        row[16]
-      ) || 0;
-
-
-    const changeGiven =
-      parseFloat(
-        row[17]
-      ) || 0;
-
-
-    /*
-      Column T = Reason
-
-      Exchange rows must remain separate
-      from the normal product summary.
-    */
-
-    const reason =
-      String(
-        row[19] || ""
-      )
-        .trim()
-        .toUpperCase();
-
-
-    const isExchange =
-      reason ===
-        "EXCHANGE RETURN" ||
-      reason ===
-        "EXCHANGE REPLACEMENT";
-
-
-    /* ================= TOTALS ================= */
-
-    metrics.totalSales +=
-      netPayout;
-
-
-    metrics.totalDiscount +=
-      discount;
-
-
-    metrics.itemsCount +=
-      qty;
-
-
-    metrics.totalCashReceived +=
-      cashReceived;
-
-
-    metrics.totalChangeGiven +=
-      changeGiven;
-
-
-    /* ================= ITEMS ================= */
-
-    let itemKey;
-
-
-    if (isExchange) {
-
-      /*
-        Every exchange line gets its own row.
-
-        Receipt ID + reason prevents it from
-        merging with normal sales or another
-        exchange.
-      */
-
-      itemKey =
-        category + "|" +
-        code + "|" +
-        size + "|" +
-        price + "|" +
-        receiptId + "|" +
-        reason;
-
-    } else {
-
-      /*
-        Normal sales continue to aggregate.
-      */
-
-      itemKey =
-        category + "|" +
-        code + "|" +
-        size + "|" +
-        price;
-
-    }
-
-
-    if (
-      !metrics.items[
-        itemKey
-      ]
-    ) {
-
-      metrics.items[
-        itemKey
-      ] = {
-
-        category:
-          category,
-
-        name:
-          name,
-
-        code:
-          code,
-
-        size:
-          size,
-
-        price:
-          price,
-
-        qty:
-          0,
-
-        discount:
-          0,
-
-        total:
-          0,
-
-        isExchange:
-          isExchange
-
-      };
-
-    }
-
-
-    metrics.items[
-      itemKey
-    ].qty +=
-      qty;
-
-
-    metrics.items[
-      itemKey
-    ].discount +=
-      discount;
-
-
-    metrics.items[
-      itemKey
-    ].total +=
-      netPayout;
-
-
-    /* ================= PAYMENTS ================= */
-
-    if (
-      !metrics.payments[
-        paymentMethod
-      ]
-    ) {
-
-      metrics.payments[
-        paymentMethod
-      ] = {
-
-        gross: 0,
-        count: 0
-
-      };
-
-    }
-
-
-    metrics.payments[
-      paymentMethod
-    ].gross +=
-      netPayout;
-
-
-    metrics.payments[
-      paymentMethod
-    ].count++;
-
-
-    if (
-      !metrics.paymentDetail[
-        paymentMethod
-      ]
-    ) {
-
-      metrics.paymentDetail[
-        paymentMethod
-      ] = {};
-
-    }
-
-
-    if (
-      !metrics.paymentDetail[
-        paymentMethod
-      ][reference]
-    ) {
-
-      metrics.paymentDetail[
-        paymentMethod
-      ][reference] =
-        0;
-
-    }
-
-
-    metrics.paymentDetail[
-      paymentMethod
-    ][reference] +=
-      netPayout;
-
-
-    /* ================= CASHIER ================= */
-
-    if (
-      !metrics.byCashier[
-        rowCashier
-      ]
-    ) {
-
-      metrics.byCashier[
-        rowCashier
-      ] = {
-
-        sales: 0,
-        transactions: 0,
-        items: 0,
-        receiptIds: {}
-
-      };
-
-    }
-
-
-    const cashierMetrics =
-      metrics.byCashier[
-        rowCashier
-      ];
-
-
-    cashierMetrics.sales +=
-      netPayout;
-
-
-    cashierMetrics.items +=
-      qty;
-
-
-    if (receiptId) {
-
-      cashierMetrics
-        .receiptIds[
-          receiptId
-        ] =
-        true;
-
-    }
+    metrics.categoryGroups[
+      category
+    ] = {
+
+      items: [],
+      qty: 0,
+      discount: 0,
+      total: 0
+
+    };
 
   }
 
 
-  /* ================= TRANSACTION COUNTS ================= */
-
-  metrics.transactionCount =
-    receiptIds.size;
-
-
-  Object.keys(
-    metrics.byCashier
-  ).forEach(
-    function(name) {
-
-      const cashier =
-        metrics.byCashier[
-          name
-        ];
+  const group =
+    metrics.categoryGroups[
+      category
+    ];
 
 
-      cashier.transactions =
-        Object.keys(
-          cashier.receiptIds
-        ).length;
-
-
-      delete cashier.receiptIds;
-
-    }
+  group.items.push(
+    item
   );
 
 
-  /* ================= CATEGORY GROUPS ================= */
+  /*
+    Headline Qty:
 
-  Object.values(
-    metrics.items
-  ).forEach(
-    function(item) {
+    NORMAL SALE            +qty
+    EXCHANGE REPLACEMENT   +qty
+    EXCHANGE RETURN        visible only
 
-      const category =
-        item.category ||
-        "YourFinds";
+    Therefore:
+    2 normal pins
+    + 1 replacement
+    = 3 headline pins.
+  */
 
+  if (
+    item.exchangeReason !==
+      "EXCHANGE RETURN" &&
+    Number(item.qty) > 0
+  ) {
 
-      if (
-        !metrics.categoryGroups[
-          category
-        ]
-      ) {
+    group.qty +=
+      Number(item.qty);
 
-        metrics.categoryGroups[
-          category
-        ] = {
-
-          items: [],
-          qty: 0,
-          discount: 0,
-          total: 0
-
-        };
-
-      }
+  }
 
 
-      const group =
-        metrics.categoryGroups[
-          category
-        ];
+  /*
+    Money stays SIGNED.
+
+    Return -188
+    Replacement +188
+    = ₱0 exchange effect.
+  */
+
+  group.discount +=
+    Number(item.discount) || 0;
 
 
-      group.items.push(
-        item
-      );
+  group.total +=
+    Number(item.total) || 0;
 
+});
 
-      group.qty +=
-        item.qty;
-
-
-      group.discount +=
-        item.discount;
-
-
-      group.total +=
-        item.total;
-
-    }
-  );
-
-
-  metrics.totalSales =
-    roundToTwo(
-      metrics.totalSales
-    );
-
-
-  metrics.totalDiscount =
-    roundToTwo(
-      metrics.totalDiscount
-    );
-
-
-  metrics.totalCashReceived =
-    roundToTwo(
-      metrics.totalCashReceived
-    );
-
-
-  metrics.totalChangeGiven =
-    roundToTwo(
-      metrics.totalChangeGiven
-    );
-
-
-  Object.keys(
-    metrics.payments
-  ).forEach(
-    function(method) {
-
-      metrics.payments[
-        method
-      ].gross =
-        roundToTwo(
-          metrics.payments[
-            method
-          ].gross
-        );
-
-    }
-  );
-
-
+  metrics.totalSales = roundToTwo(metrics.totalSales);
+  metrics.totalDiscount = roundToTwo(metrics.totalDiscount);
+  metrics.totalCashReceived = roundToTwo(metrics.totalCashReceived);
+  metrics.totalChangeGiven = roundToTwo(metrics.totalChangeGiven);
+  Object.keys(metrics.payments).forEach(function(method){ metrics.payments[method].gross = roundToTwo(metrics.payments[method].gross); });
   return metrics;
-
 }
 
 /* ==========================================================
    PDF CREATOR
-
-   Converts report HTML to PDF, saves it to Drive,
-   enables link viewing, and returns the download URL.
 ========================================================== */
 
 function createPdfFromHtml(html, fileName, overwriteExisting) {
@@ -1174,6 +697,136 @@ function buildCashierSummary(byCashier) {
   return html;
 }
 
+function getBaseReportStyles() {
+  return `
+    @page { size:A4; margin:5mm; }
+    * { box-sizing:border-box; }
+    body { font-family:'Segoe UI',Arial,sans-serif; margin:0; color:#333; font-size:9px; }
+    .header { border-bottom:2px solid #d8a7a7; margin-bottom:10px; padding-bottom:3px; display:flex; justify-content:space-between; align-items:flex-end; }
+    .title { color:#b76e79; font-size:16px; font-weight:bold; }
+    .meta { font-size:10px; margin-top:3px; line-height:1.5; }
+    .meta-right { text-align:right; }
+    h2 { color:#b76e79; border-bottom:1px solid #e3c6c6; padding-bottom:3px; margin:10px 0 6px; font-size:12.5px; page-break-after:avoid; }
+    table { width:100%; border-collapse:collapse; margin-bottom:6px; page-break-inside:avoid; }
+    th,td { border:1px solid #e3c6c6; padding:3px 6px; font-size:10px; }
+    th { background-color:#f2dede; color:#b76e79; text-align:left; }
+    .signature { display:flex; justify-content:space-between; margin-top:20px; page-break-inside:avoid; }
+    .sig-line { border-top:1px solid #333; width:180px; text-align:center; padding-top:4px; font-size:10.5px; }
+    .report-grid { display:flex; gap:10px; margin-top:10px; page-break-inside:avoid; align-items:flex-start; }
+    .report-card { flex:1; border:1px solid #b7b7b7; border-radius:8px; overflow:hidden; page-break-inside:avoid; }
+    .report-card-header { background:#f3dde1; color:#b76e79; font-weight:bold; font-size:11px; padding:6px 8px; border-bottom:1px solid #e3c6c6; }
+    .report-card-body { padding:8px; }
+    .report-summary-table,.report-denom-table { width:100%; border-collapse:collapse; margin-bottom:8px; }
+    .report-summary-table th,.report-summary-table td,.report-denom-table th,.report-denom-table td { border:1px solid #b7b7b7; padding:4px 6px; font-size:10px; }
+    .report-summary-table th,.report-denom-table th { background:#f2dede; color:#b76e79; }
+    .report-remark { font-size:10px; color:#b45f06; font-weight:bold; margin-top:6px; }
+    .report-col-right { flex:1; display:flex; flex-direction:column; gap:10px; }
+    .report-col-right .report-card { flex:none; }
+    .report-text-summary { font-size:10.5px; line-height:1.6; margin:0 0 8px; }
+    .petty-denom-table { width:100%; border-collapse:collapse; margin:6px 0; }
+    .petty-denom-table th,.petty-denom-table td { border:1px solid #b7b7b7; padding:3px 6px; font-size:10px; text-align:right; }
+    .ps-total-label { text-align:right !important; color:#8f1d3a; font-weight:bold; }
+    .ps-total-value { color:#8f1d3a; font-weight:bold; }
+    .ps-words { font-size:10px; font-style:italic; color:#8a6a6e; margin:4px 0; }
+    ${getBaseReportStyles()}
+  `;
+}
+
+function buildSalesSummaryFooter(metrics) {
+  return `
+    <tr>
+      <td colspan="5" style="background:#f3dde1;color:#70464d;font-weight:800;text-align:left;padding:7px 10px;border-top:2px solid #d2a2aa;border-bottom:2px solid #d2a2aa;border-left:1px solid #d2a2aa;border-right:1px solid #d2a2aa;">NET SALES</td>
+      <td style="background:#f3dde1;color:#70464d;font-weight:800;text-align:center;padding:7px 8px;border-top:2px solid #d2a2aa;border-bottom:2px solid #d2a2aa;border-left:1px solid #d2a2aa;border-right:1px solid #d2a2aa;">${metrics.itemsCount}</td>
+      <td style="background:#f3dde1;color:#9b1738;font-size:11px;font-weight:800;text-align:right;padding:7px 10px;border-top:2px solid #d2a2aa;border-bottom:2px solid #d2a2aa;border-left:1px solid #d2a2aa;border-right:1px solid #d2a2aa;">${fmtMoney(metrics.totalSales)}</td>
+    </tr>`;
+}
+
+function getSalesSummaryReportStyles() {
+
+  return `
+    .sales-summary-table {
+      width:100%;
+      border-collapse:collapse;
+      margin-top:4px;
+      margin-bottom:8px;
+    }
+
+    .sales-summary-table th {
+      background:#f7f2f3;
+      color:#68464b;
+      font-size:9px;
+      font-weight:700;
+      padding:6px 7px;
+      border:1px solid #dfc9cd;
+      text-align:left;
+    }
+
+    .sales-summary-table td {
+      padding:5px 7px;
+      border:1px solid #eadadd;
+      vertical-align:middle;
+      font-size:10px;
+    }
+
+    .sales-category-row td {
+      background:#f6e7ea;
+      color:#74434b;
+      font-weight:700;
+      border:1px solid #d9b8be;
+    }
+
+    .sales-item-row td {
+      background:#fff;
+    }
+
+    .sales-item-name {
+      padding-left:18px !important;
+      font-weight:600;
+      color:#343434;
+    }
+
+    .sales-code {
+      color:#666;
+      font-family:monospace;
+      font-size:9px;
+    }
+
+    .sales-center {
+      text-align:center;
+    }
+
+    .sales-money {
+      text-align:right;
+      white-space:nowrap;
+    }
+
+    .sales-exchange-row td {
+      background:#fcf8f9;
+      color:#75676a;
+      font-size:8.7px;
+      border-top:1px dashed #dcc9cd;
+      border-bottom:1px dashed #dcc9cd;
+    }
+
+    .sales-exchange-name {
+      padding-left:38px !important;
+      font-weight:500;
+    }
+
+    .sales-negative {
+      color:#a23f4d !important;
+      font-weight:700;
+    }
+
+    .sales-empty {
+      text-align:center;
+      color:#999;
+      padding:16px !important;
+    }
+  `;
+
+}
+
 /* ==========================================================
    CASHIER REPORT HTML BUILDER
 ========================================================== */
@@ -1213,197 +866,7 @@ function buildCashierReportHTML(data) {
 
       <style>
 
-        @page {
-          size: A4;
-          margin: 5mm;
-        }
-
-        * {
-          box-sizing: border-box;
-        }
-
-        body {
-          font-family: 'Segoe UI', Arial, sans-serif;
-          margin: 0;
-          color: #333;
-          font-size: 9px;
-        }
-
-        .header {
-          border-bottom: 2px solid #d8a7a7;
-          margin-bottom: 10px;
-          padding-bottom: 3px;
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-        }
-
-        .title {
-          color: #b76e79;
-          font-size: 16px;
-          font-weight: bold;
-        }
-
-        .meta {
-          font-size: 10px;
-          margin-top: 3px;
-          line-height: 1.5;
-        }
-
-        .meta-right {
-          text-align: right;
-        }
-
-        h2 {
-          color: #b76e79;
-          border-bottom: 1px solid #e3c6c6;
-          padding-bottom: 3px;
-          margin: 10px 0 6px;
-          font-size: 12.5px;
-          page-break-after: avoid;
-        }
-
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 6px;
-          page-break-inside: avoid;
-        }
-
-        th,
-        td {
-          border: 1px solid #e3c6c6;
-          padding: 3px 6px;
-          font-size: 10px;
-        }
-
-        th {
-          background-color: #f2dede;
-          color: #b76e79;
-          text-align: left;
-        }
-
-        .signature {
-          display: flex;
-          justify-content: space-between;
-          margin-top: 20px;
-          page-break-inside: avoid;
-        }
-
-        .sig-line {
-          border-top: 1px solid #333;
-          width: 180px;
-          text-align: center;
-          padding-top: 4px;
-          font-size: 10.5px;
-        }
-
-        .report-grid {
-          display: flex;
-          gap: 10px;
-          margin-top: 10px;
-          page-break-inside: avoid;
-          align-items: flex-start;
-        }
-
-        .report-card {
-          flex: 1;
-          border: 1px solid #b7b7b7;
-          border-radius: 8px;
-          overflow: hidden;
-          page-break-inside: avoid;
-        }
-
-        .report-card-header {
-          background: #f3dde1;
-          color: #b76e79;
-          font-weight: bold;
-          font-size: 11px;
-          padding: 6px 8px;
-          border-bottom: 1px solid #e3c6c6;
-        }
-
-        .report-card-body {
-          padding: 8px;
-        }
-
-        .report-summary-table,
-        .report-denom-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 8px;
-        }
-
-        .report-summary-table th,
-        .report-summary-table td,
-        .report-denom-table th,
-        .report-denom-table td {
-          border: 1px solid #b7b7b7;
-          padding: 4px 6px;
-          font-size: 10px;
-        }
-
-        .report-summary-table th,
-        .report-denom-table th {
-          background: #f2dede;
-          color: #b76e79;
-        }
-
-        .report-remark {
-          font-size: 10px;
-          color: #b45f06;
-          font-weight: bold;
-          margin-top: 6px;
-        }
-
-        .report-col-right {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-
-        .report-col-right .report-card {
-          flex: none;
-        }
-
-        .report-text-summary {
-          font-size: 10.5px;
-          line-height: 1.6;
-          margin: 0 0 8px;
-        }
-
-        .petty-denom-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 6px 0;
-        }
-
-        .petty-denom-table th,
-        .petty-denom-table td {
-          border: 1px solid #b7b7b7;
-          padding: 3px 6px;
-          font-size: 10px;
-          text-align: right;
-        }
-
-        .ps-total-label {
-          text-align: right !important;
-          color: #8f1d3a;
-          font-weight: bold;
-        }
-
-        .ps-total-value {
-          color: #8f1d3a;
-          font-weight: bold;
-        }
-
-        .ps-words {
-          font-size: 10px;
-          font-style: italic;
-          color: #8a6a6e;
-          margin: 4px 0;
-        }
+        ${getBaseReportStyles()}
 
       </style>
 
@@ -1462,50 +925,9 @@ function buildCashierReportHTML(data) {
 
         ${salesRowsHtml}
 
-        <tr class="sales-net-row">
-
-          <td
-            colspan="5"
-            style="
-              text-align:right;
-              border-top:2px solid #d7b1b8;
-              border-bottom:0;
-              padding:7px 8px;
-              font-weight:700;
-              color:#70464d;
-            "
-          >
-            NET SALES
-          </td>
-
-          <td
-            style="
-              text-align:center;
-              border-top:2px solid #d7b1b8;
-              border-bottom:0;
-              font-weight:700;
-            "
-          >
-            ${metrics.itemsCount}
-          </td>
-
-          <td
-            style="
-              text-align:right;
-              border-top:2px solid #d7b1b8;
-              border-bottom:0;
-              font-weight:800;
-              color:#8f1d3a;
-              font-size:11px;
-            "
-          >
-            ${fmtMoney(metrics.totalSales)}
-          </td>
-
-        </tr>
+${buildSalesSummaryFooter(metrics)}
 
       </table>
-
 
       <!-- ================= LOWER REPORT GRID ================= -->
 
@@ -1769,161 +1191,7 @@ function buildManagerReportHTML(data) {
 
       <style>
 
-        @page {
-          size: A4;
-          margin: 5mm;
-        }
-
-        * {
-          box-sizing: border-box;
-        }
-
-        body {
-          font-family: 'Segoe UI', Arial, sans-serif;
-          margin: 0;
-          color: #333;
-          font-size: 9px;
-        }
-
-        .header {
-          border-bottom: 2px solid #d8a7a7;
-          margin-bottom: 10px;
-          padding-bottom: 3px;
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-        }
-
-        .title {
-          color: #b76e79;
-          font-size: 16px;
-          font-weight: bold;
-        }
-
-        .meta {
-          font-size: 10px;
-          margin-top: 3px;
-          line-height: 1.5;
-        }
-
-        h2 {
-          color: #b76e79;
-          border-bottom: 1px solid #e3c6c6;
-          padding-bottom: 3px;
-          margin: 10px 0 6px;
-          font-size: 12.5px;
-          page-break-after: avoid;
-        }
-
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 6px;
-          page-break-inside: avoid;
-        }
-
-        th,
-        td {
-          border: 1px solid #e3c6c6;
-          padding: 3px 6px;
-          font-size: 10px;
-        }
-
-        th {
-          background-color: #f2dede;
-          color: #b76e79;
-          text-align: left;
-        }
-
-        .signature {
-          display: flex;
-          justify-content: space-between;
-          margin-top: 20px;
-          page-break-inside: avoid;
-        }
-
-        .sig-line {
-          border-top: 1px solid #333;
-          width: 180px;
-          text-align: center;
-          padding-top: 4px;
-          font-size: 10.5px;
-        }
-
-        .report-grid {
-          display: flex;
-          gap: 10px;
-          margin-top: 10px;
-          page-break-inside: avoid;
-          align-items: flex-start;
-        }
-
-        .report-card {
-          flex: 1;
-          border: 1px solid #b7b7b7;
-          border-radius: 8px;
-          overflow: hidden;
-          page-break-inside: avoid;
-        }
-
-        .report-card-header {
-          background: #f3dde1;
-          color: #b76e79;
-          font-weight: bold;
-          font-size: 11px;
-          padding: 6px 8px;
-          border-bottom: 1px solid #e3c6c6;
-        }
-
-        .report-card-body {
-          padding: 8px;
-        }
-
-        .report-summary-table,
-        .report-denom-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 8px;
-        }
-
-        .report-summary-table th,
-        .report-summary-table td,
-        .report-denom-table th,
-        .report-denom-table td {
-          border: 1px solid #b7b7b7;
-          padding: 4px 6px;
-          font-size: 10px;
-        }
-
-        .report-summary-table th,
-        .report-denom-table th {
-          background: #f2dede;
-          color: #b76e79;
-        }
-
-        .report-remark {
-          font-size: 10px;
-          color: #b45f06;
-          font-weight: bold;
-          margin-top: 6px;
-        }
-
-        .report-col-right {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-
-        .report-col-right .report-card {
-          flex: none;
-        }
-
-        .report-text-summary {
-          font-size: 10.5px;
-          line-height: 1.6;
-          margin: 0 0 8px;
-        }
+        ${getSalesSummaryReportStyles()}
 
       </style>
 
@@ -1976,7 +1244,7 @@ function buildManagerReportHTML(data) {
 
       <h2>Sales Summary</h2>
 
-      <table>
+      <table class="sales-summary-table">
 
         <tr>
           <th>Item Name</th>
@@ -1991,33 +1259,7 @@ function buildManagerReportHTML(data) {
         ${salesRowsHtml}
 
 
-        <tr>
-
-          <td
-            colspan="5"
-            style="
-              background-color:#f3b6c2;
-              text-align:right;
-            "
-          >
-            <b style="color:#8f1d3a;">
-              GRAND TOTAL (NET SALES)
-            </b>
-          </td>
-
-          <td style="background-color:#f3b6c2;">
-            <b style="color:#8f1d3a;">
-              ${metrics.itemsCount}
-            </b>
-          </td>
-
-          <td style="background-color:#f3b6c2;">
-            <b style="color:#8f1d3a;">
-              ${fmtMoney(metrics.totalSales)}
-            </b>
-          </td>
-
-        </tr>
+${buildSalesSummaryFooter(metrics)}
 
       </table>
 
