@@ -123,7 +123,9 @@ const SALES_IDX = {
   CHANGE: 17,
   AUTHORIZED_BY: 18,
 
-  VOID_REASON: 19
+  VOID_REASON: 19,
+  REASON: 19,
+  ORIGINAL_RECEIPT_ID: 20
 
 };
 
@@ -150,12 +152,14 @@ const SALES_COL = {
   CHANGE: 18,
   AUTHORIZED_BY: 19,
 
-  VOID_REASON: 20
+  VOID_REASON: 20,
+  REASON: 20,
+  ORIGINAL_RECEIPT_ID: 21
 
 };
 
 
-const SALES_LOG_COLUMN_COUNT = 20;
+const SALES_LOG_COLUMN_COUNT = 21;
 
 
 /* ==========================================================
@@ -429,7 +433,9 @@ const INVENTORY_MOVEMENT_SOURCE = {
   DELIVERY: "DELIVERY",
   DISTRIBUTION: "DISTRIBUTION",
   SUPPLIER_RETURN: "SUPPLIER_RETURN",
-  ADJUSTMENT: "ADJUSTMENT"
+  ADJUSTMENT: "ADJUSTMENT",
+
+  EXCHANGE: "EXCHANGE"
 };
 
 /* ==========================================================

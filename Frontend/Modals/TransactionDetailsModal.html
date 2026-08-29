@@ -269,6 +269,13 @@
     </div>
 
 
+
+    <!-- EXCHANGE INFO -->
+    <div id="transactionDetailsExchangeBox" class="alert alert-info" style="display:none;">
+      <strong>Customer Exchange</strong>
+      <div class="small mt-1">Original receipt: <span id="transactionDetailsOriginalReceipt" class="fw-bold">—</span></div>
+    </div>
+
     <!-- VOID INFO -->
 
     <div
@@ -317,6 +324,15 @@
         onclick="voidTransactionFromHistory()"
       >
         Void Transaction
+      </button>
+      
+      <button
+        id="transactionExchangeBtn"
+        type="button"
+        class="btn btn-pink flex-fill"
+        onclick="exchangeCurrentTransaction()"
+      >
+        Exchange
       </button>
 
     </div>
@@ -624,6 +640,12 @@ function renderTransactionDetails(tx) {
   }
 
 
+  /* ================= EXCHANGE ================= */
+  const exchangeBox=document.getElementById("transactionDetailsExchangeBox");
+  const isExchange=String(tx.receiptId||"").toUpperCase().startsWith("EX-");
+  exchangeBox.style.display=isExchange?"block":"none";
+  if(isExchange) document.getElementById("transactionDetailsOriginalReceipt").textContent=tx.originalReceiptId||"—";
+
   /* ================= VOID ================= */
 
   const voidBox =
@@ -639,9 +661,7 @@ function renderTransactionDetails(tx) {
 
 
   if (
-    String(tx.status)
-      .toUpperCase() ===
-      "VOIDED"
+    String(tx.status).toUpperCase() === "VOIDED"
   ) {
 
     voidBox.style.display =
@@ -658,12 +678,31 @@ function renderTransactionDetails(tx) {
       "none";
 
   } else {
+    voidBox.style.display = "none";
+    voidButton.style.display = isExchange ? "none" : "block";
+  }
 
-    voidBox.style.display =
-      "none";
+    /* ================= EXCHANGE ACTION ================= */
 
-    voidButton.style.display =
-      "block";
+  const exchangeButton =
+    document.getElementById(
+      "transactionExchangeBtn"
+    );
+
+
+  const canExchange =
+    String(tx.status || "")
+      .trim()
+      .toUpperCase() === "COMPLETED" &&
+    !isExchange;
+
+
+  if (exchangeButton) {
+
+    exchangeButton.style.display =
+      canExchange
+        ? "block"
+        : "none";
 
   }
 
@@ -719,4 +758,33 @@ function voidTransactionFromHistory() {
 
 }
 
+function exchangeCurrentTransaction() {
+
+  const receiptId =
+    String(
+      selectedTransactionReceiptId ||
+      ""
+    ).trim();
+
+
+  if (!receiptId) {
+
+    showNotificationToast(
+      "Receipt ID is missing.",
+      true
+    );
+
+    return;
+
+  }
+
+
+  closeTransactionDetailsModal();
+
+
+  openCustomerExchangeModal(
+    receiptId
+  );
+
+}
 </script>

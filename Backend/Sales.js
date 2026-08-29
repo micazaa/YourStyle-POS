@@ -128,7 +128,8 @@ function executeCheckoutBackend(
       changeGiven, // R Change
 
       "", // S Authorized By
-      "", // T Void Reason
+      "", // T Reason / Void Reason
+      "", // U Original Receipt ID
     ]);
     salesLogSheet
       .getRange(
@@ -423,6 +424,10 @@ function voidAndRefundTransactionBackend(
           "Receipt ID is required."
       };
 
+    }
+
+    if (receiptId.startsWith("EX-")) {
+      return { success: false, message: "Exchange transactions cannot be voided from Void Receipt." };
     }
 
 
@@ -951,6 +956,8 @@ function getTransactionDetails(receiptId) {
 
           voidReason: String(row[SALES_IDX.VOID_REASON] || ""),
 
+          originalReceiptId: SALES_IDX.ORIGINAL_RECEIPT_ID !== undefined ? String(row[SALES_IDX.ORIGINAL_RECEIPT_ID] || "") : "",
+
           total: 0,
 
           items: [],
@@ -979,6 +986,8 @@ function getTransactionDetails(receiptId) {
         feeAbsorbed: Number(row[SALES_IDX.FEE_ABSORBED]) || 0,
 
         netTotal: Number(row[SALES_IDX.NET_TOTAL]) || 0,
+
+        reason: String(row[SALES_IDX.REASON] || ""),
       });
 
       /* ================= TOTAL ================= */
