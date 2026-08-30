@@ -728,7 +728,7 @@ function getBaseReportStyles() {
     .ps-total-label { text-align:right !important; color:#8f1d3a; font-weight:bold; }
     .ps-total-value { color:#8f1d3a; font-weight:bold; }
     .ps-words { font-size:10px; font-style:italic; color:#8a6a6e; margin:4px 0; }
-    ${getBaseReportStyles()}
+    ${getSalesSummaryReportStyles()}
   `;
 }
 

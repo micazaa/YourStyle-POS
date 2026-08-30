@@ -589,6 +589,45 @@
 
         const r = res.report;
 
+        // Same calendar day is always normal working mode.
+        // CLOSED today is editable/resubmittable; historical controls start tomorrow.
+        const now = new Date();
+        const today =
+          now.getFullYear() + '-' +
+          String(now.getMonth() + 1).padStart(2, '0') + '-' +
+          String(now.getDate()).padStart(2, '0');
+        const isToday = date === today;
+
+        if (isToday) {
+          phase10LoadedClosedReport = null;
+          phase10CorrectionMode = false;
+          document.getElementById('phase10HistoricalBox').style.display = 'none';
+          document.getElementById('phase10CorrectionBox').style.display = 'none';
+
+          currentShiftPettyCash = Number(r.pettyReceived) || 0;
+          document.getElementById('reportPettyReceivedDisplay').textContent =
+            '₱' + currentShiftPettyCash.toFixed(2);
+
+          // If today was already submitted, restore its saved values for easy resubmission.
+          PETTY_DENOMS.forEach(function (d) {
+            document.getElementById('pr' + d).value = Number((r.pettyBreakdown || {})[d]) || 0;
+            document.getElementById('d' + d).value = Number((r.cashBreakdown || {})[d]) || 0;
+          });
+          document.getElementById('pettyVoucherNo').value = r.pettyVoucherNo || '';
+          document.getElementById('pettyVarianceReason').value = r.pettyRemark || '';
+          document.getElementById('cashDrawerVarianceReason').value = r.cashRemark || '';
+
+          updatePettyReturnTotal();
+          updateShiftCashDrawerTotal();
+          setPhase10ReportFieldsReadOnly(false);
+
+          const submit = document.querySelector(
+            '#shiftReportModal button[onclick="submitShiftReportTally()"]'
+          );
+          if (submit) submit.style.display = 'block';
+          return;
+        }
+
         /* ==================================================
            OPEN CURRENT SHIFT
         ================================================== */
