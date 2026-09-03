@@ -947,16 +947,39 @@ function createYourFindsLabelPDFByCodes(
    and include the product description.
 ========================================================== */
 
-function buildCompletedYourFindsLabelHtml(item) {
-  const code = String(item && item.code || "").trim();
-  const size = String(item && item.size || "").trim().toUpperCase();
-  const description = String(item && item.name || "").trim();
+function buildCompletedYourFindsLabelsHtml(labelItems) {
+  if (!Array.isArray(labelItems) || labelItems.length === 0) {
+    throw new Error("No completed YourFinds labels supplied.");
+  }
 
-  if (!code) throw new Error("Completed label is missing its Code.");
-  if (!size) throw new Error("YourFinds item " + code + " has no Size.");
-  if (!description) throw new Error("YourFinds item " + code + " has no Description.");
+  const labels = labelItems.map(function(item) {
+    const code = String(item && item.code || "").trim();
+    const size = String(item && item.size || "").trim().toUpperCase();
+    const description = String(item && item.name || "").trim();
+    const sellingPrice = Number(item && item.price);
 
-  const barcodeSvg = createCode128Svg(code, 37, 10);
+    if (!code) throw new Error("Completed label is missing its Code.");
+    if (!size) throw new Error("YourFinds item " + code + " has no Size.");
+    if (!description) throw new Error("YourFinds item " + code + " has no Description.");
+    if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
+      throw new Error("YourFinds item " + code + " has no valid Selling Price.");
+    }
+
+    const barcodeSvg = createCode128Svg(code, 37, 9);
+    const priceText = "₱" + sellingPrice.toFixed(2);
+
+    return `
+      <div class="label">
+        <div class="top">
+          <div class="description">${escapeLabelHtml(description)}</div>
+          <div class="size">${escapeLabelHtml(size)}</div>
+        </div>
+        <div class="price">${escapeLabelHtml(priceText)}</div>
+        <div class="barcode">${barcodeSvg}</div>
+        <div class="code">${escapeLabelHtml(code)}</div>
+      </div>
+    `;
+  }).join("");
 
   return `
     <!DOCTYPE html>
@@ -977,18 +1000,20 @@ function buildCompletedYourFindsLabelHtml(item) {
           flex-direction: column;
           align-items: center;
           justify-content: center;
+          page-break-after: always;
         }
+        .label:last-child { page-break-after: auto; }
         .top {
           width: 100%;
-          height: 8mm;
+          height: 7.5mm;
           display: flex;
           align-items: center;
           gap: 1mm;
-          margin-bottom: 0.7mm;
+          margin-bottom: 0.3mm;
         }
         .description {
           flex: 1;
-          max-height: 8mm;
+          max-height: 7.5mm;
           overflow: hidden;
           font-size: 8.5pt;
           font-weight: 700;
@@ -1009,10 +1034,20 @@ function buildCompletedYourFindsLabelHtml(item) {
           white-space: nowrap;
           overflow: hidden;
         }
+        .price {
+          width: 100%;
+          height: 4mm;
+          margin: 0 0 0.4mm;
+          font-size: 10pt;
+          font-weight: 700;
+          line-height: 1;
+          text-align: center;
+          white-space: nowrap;
+        }
         .barcode, .barcode svg {
           display: block;
           width: 37mm;
-          height: 10mm;
+          height: 9mm;
           margin: 0;
           padding: 0;
           overflow: hidden;
@@ -1030,48 +1065,98 @@ function buildCompletedYourFindsLabelHtml(item) {
       </style>
     </head>
     <body>
-      <div class="label">
-        <div class="top">
-          <div class="description">${escapeLabelHtml(description)}</div>
-          <div class="size">${escapeLabelHtml(size)}</div>
-        </div>
-        <div class="barcode">${barcodeSvg}</div>
-        <div class="code">${escapeLabelHtml(code)}</div>
-      </div>
+      ${labels}
     </body>
     </html>
   `;
 }
 
-function createCompletedYourFindsLabelPDF(code) {
-  code = String(code || "").trim();
-  if (!code) throw new Error("Inventory Code is required.");
+function buildCompletedYourFindsLabelHtml(item) {
+  return buildCompletedYourFindsLabelsHtml([item]);
+}
 
-  const result = getYourFindsItemForCompletion(code);
-  if (!result || !result.success || !result.item) {
-    throw new Error(result && result.message ? result.message : "YourFinds item not found.");
+function getCompletedYourFindsItemsForLabelReprint() {
+  const items = getFullInventory().filter(function(item) {
+    const status = String(item.status || "").trim().toUpperCase();
+    return String(item.category || "").trim().toUpperCase() === "YOURFINDS" &&
+      String(item.inventoryType || "").trim().toUpperCase() === INVENTORY_TYPE.UNIQUE &&
+      status !== INVENTORY_STATUS.INCOMPLETE &&
+      status !== INVENTORY_STATUS.RETURNED &&
+      Number(item.stock) > 0 &&
+      String(item.imageUrl || "").trim() !== "" &&
+      String(item.name || "").trim() !== "" &&
+      Number(item.price) > 0;
+  });
+
+  return {
+    success: true,
+    items: items.map(function(item) {
+      return {
+        code: item.code,
+        description: item.name,
+        size: item.size,
+        sellingPrice: item.price,
+        status: item.status,
+        imageUrl: item.imageUrl,
+        deliveryId: item.deliveryId
+      };
+    })
+  };
+}
+
+function createCompletedYourFindsLabelPDFByCodes(codes) {
+  if (!Array.isArray(codes) || codes.length === 0) {
+    throw new Error("Select at least one completed YourFinds label.");
   }
 
-  const item = result.item;
-  const status = String(item.status || "").trim().toUpperCase();
-  if (status === INVENTORY_STATUS.INCOMPLETE) {
-    throw new Error("Complete the YourFinds item before generating its 40 x 30 label.");
-  }
-  if (status === INVENTORY_STATUS.RETURNED) {
-    throw new Error("Returned YourFinds items cannot generate a completed label.");
-  }
-  if (Number(item.stock) <= 0) {
-    throw new Error("Sold YourFinds items cannot generate a completed label.");
-  }
-  phase8AssertCompletedYourFinds_(item);
+  const normalizedCodes = [];
+  const seen = {};
+  codes.forEach(function(value) {
+    const code = String(value || "").trim();
+    if (code && !seen[code]) {
+      seen[code] = true;
+      normalizedCodes.push(code);
+    }
+  });
+  if (normalizedCodes.length === 0) throw new Error("No valid Inventory Codes were selected.");
 
-  const html = buildCompletedYourFindsLabelHtml(item);
+  const inventoryMap = {};
+  getFullInventory().forEach(function(item) {
+    const code = String(item.code || "").trim();
+    if (code) inventoryMap[code] = item;
+  });
+
+  const labelItems = normalizedCodes.map(function(code) {
+    const item = inventoryMap[code];
+    if (!item) throw new Error("Inventory Code " + code + " was not found.");
+    if (
+      String(item.category || "").trim().toUpperCase() !== "YOURFINDS" ||
+      String(item.inventoryType || "").trim().toUpperCase() !== INVENTORY_TYPE.UNIQUE
+    ) {
+      throw new Error("Code " + code + " is not a YourFinds unique item.");
+    }
+
+    const status = String(item.status || "").trim().toUpperCase();
+    if (status === INVENTORY_STATUS.INCOMPLETE) {
+      throw new Error("Complete YourFinds item " + code + " before generating its 40 x 30 label.");
+    }
+    if (status === INVENTORY_STATUS.RETURNED) {
+      throw new Error("Returned YourFinds item " + code + " cannot generate a completed label.");
+    }
+    if (Number(item.stock) <= 0) {
+      throw new Error("Sold YourFinds item " + code + " cannot generate a completed label.");
+    }
+    phase8AssertCompletedYourFinds_(item);
+    return item;
+  });
+
+  const html = buildCompletedYourFindsLabelsHtml(labelItems);
   const timestamp = Utilities.formatDate(
     new Date(),
     Session.getScriptTimeZone(),
     "yyyyMMdd_HHmmss"
   );
-  const fileName = "YourFinds_Completed_" + code + "_" + timestamp;
+  const fileName = "YourFinds_Completed_Labels_" + timestamp;
   const htmlBlob = Utilities.newBlob(html, "text/html", fileName + ".html");
   const pdfBlob = htmlBlob.getAs("application/pdf").setName(fileName + ".pdf");
   const file = DriveApp.createFile(pdfBlob);
@@ -1079,12 +1164,16 @@ function createCompletedYourFindsLabelPDF(code) {
 
   return {
     success: true,
-    labelCount: 1,
-    code: code,
+    labelCount: labelItems.length,
+    codes: normalizedCodes,
     fileName: file.getName(),
     downloadUrl: file.getDownloadUrl(),
     fileUrl: file.getUrl()
   };
+}
+
+function createCompletedYourFindsLabelPDF(code) {
+  return createCompletedYourFindsLabelPDFByCodes([code]);
 }
 
 /* ==========================================================

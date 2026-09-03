@@ -74,9 +74,10 @@
             <label class="form-label">Selling Price <span class="text-danger">*</span></label>
             <div class="input-group"><span class="input-group-text">₱</span><input id="yfEditorSellingPrice" type="number" min="0.01" step="0.01" class="form-control"></div>
           </div>
-          <div class="col-12">
+          <div id="yfEditorManagerPinWrap" class="col-12">
             <label class="form-label">Manager PIN <span class="text-danger">*</span></label>
             <input id="yfEditorManagerPin" type="password" class="form-control" autocomplete="off">
+            <div class="form-text">Required only when correcting an already completed item.</div>
           </div>
         </div>
       </div>
@@ -173,6 +174,7 @@ function openYourFindsEditorPhase8(){
  document.getElementById('yfEditorOriginalPrice').value=Number(phase8SelectedItem.origPrice)||0;
  document.getElementById('yfEditorSellingPrice').value=Number(phase8SelectedItem.price)||'';
  document.getElementById('yfEditorManagerPin').value='';
+ document.getElementById('yfEditorManagerPinWrap').style.display=incomplete?'none':'block';
  document.getElementById('yfEditorPhoto').value='';
  renderYourFindsEditorPhotoPhase8(phase8SelectedItem.imageUrl||'');
  document.getElementById('yfEditorCompletionNote').style.display=incomplete?'block':'none';
@@ -196,6 +198,7 @@ function previewYourFindsPhotoPhase8(input){
 
 function saveYourFindsDetailsClientPhase8(){
  if(!phase8SelectedItem)return;
+ const incomplete=String(phase8SelectedItem.status||'').toUpperCase()==='INCOMPLETE';
  const description=String(document.getElementById('yfEditorDescription').value||'').trim();
  const originalPrice=Number(document.getElementById('yfEditorOriginalPrice').value);
  const sellingPrice=Number(document.getElementById('yfEditorSellingPrice').value);
@@ -204,7 +207,7 @@ function saveYourFindsDetailsClientPhase8(){
  if(!Number.isFinite(originalPrice)||originalPrice<0)return showNotificationToast('Enter a valid Original Price.',true);
  if(!Number.isFinite(sellingPrice)||sellingPrice<=0)return showNotificationToast('Selling Price must be greater than zero.',true);
  if(!phase8SelectedItem.imageUrl&&!phase8YfPhotoDataUrl)return showNotificationToast('Choose a product picture.',true);
- if(!managerPin)return showNotificationToast('Manager PIN is required.',true);
+ if(!incomplete&&!managerPin)return showNotificationToast('Manager PIN is required to edit a completed item.',true);
 
  const button=document.getElementById('yfEditorSaveBtn'); const originalText=button.textContent; button.disabled=true; button.textContent='Saving...';
  google.script.run.withSuccessHandler(function(result){

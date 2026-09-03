@@ -502,7 +502,6 @@ function phase8AssertCompletedYourFinds_(item) {
  */
 function saveYourFindsItemDetailsPhase8(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin);
   const code = String(payload.code || "").trim();
   const description = String(payload.description || "").trim();
   const originalPrice = Number(payload.originalPrice);
@@ -540,6 +539,14 @@ function saveYourFindsItemDetailsPhase8(payload) {
     if (currentStatus !== INVENTORY_STATUS.INCOMPLETE && Number(item.stock) <= 0) {
       throw new Error("Sold YourFinds items cannot be edited.");
     }
+
+    /*
+     * Receiving staff may complete a new item without manager approval.
+     * Corrections to an already completed item remain manager-controlled.
+     */
+    const auth = currentStatus === INVENTORY_STATUS.INCOMPLETE
+      ? null
+      : phase8RequireManager_(payload.managerPin);
 
     oldImageUrl = String(item.imageUrl || "").trim();
     if (decodedImage) {
@@ -589,7 +596,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
       description: description,
       originalPrice: originalPrice,
       sellingPrice: sellingPrice,
-      manager: auth.managerName
+      manager: auth ? auth.managerName : ""
     };
   } catch (err) {
     if (!inventorySaved && createdImage && createdImage.file) {
