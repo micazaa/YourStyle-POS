@@ -1104,6 +1104,43 @@ function getCompletedYourFindsItemsForLabelReprint() {
   };
 }
 
+function getYourFindsItemsForLabelReprint() {
+  const items = getFullInventory().filter(function(item) {
+    const status = String(item.status || "").trim().toUpperCase();
+    const isYourFinds =
+      String(item.category || "").trim().toUpperCase() === "YOURFINDS" &&
+      String(item.inventoryType || "").trim().toUpperCase() === INVENTORY_TYPE.UNIQUE;
+
+    if (!isYourFinds || status === INVENTORY_STATUS.RETURNED || Number(item.stock) <= 0) {
+      return false;
+    }
+
+    if (status === INVENTORY_STATUS.INCOMPLETE) {
+      return String(item.code || "").trim() !== "" && String(item.size || "").trim() !== "";
+    }
+
+    return String(item.imageUrl || "").trim() !== "" &&
+      String(item.name || "").trim() !== "" &&
+      Number(item.price) > 0;
+  });
+
+  return {
+    success: true,
+    items: items.map(function(item) {
+      const status = String(item.status || "").trim().toUpperCase();
+      return {
+        code: item.code,
+        description: item.name,
+        size: item.size,
+        sellingPrice: item.price,
+        status: status,
+        labelType: status === INVENTORY_STATUS.INCOMPLETE ? "INCOMPLETE" : "COMPLETED",
+        imageUrl: item.imageUrl
+      };
+    })
+  };
+}
+
 function createCompletedYourFindsLabelPDFByCodes(codes) {
   if (!Array.isArray(codes) || codes.length === 0) {
     throw new Error("Select at least one completed YourFinds label.");
@@ -1174,6 +1211,38 @@ function createCompletedYourFindsLabelPDFByCodes(codes) {
 
 function createCompletedYourFindsLabelPDF(code) {
   return createCompletedYourFindsLabelPDFByCodes([code]);
+}
+
+function createYourFindsReprintPDFByCodes(codes, labelType) {
+  labelType = String(labelType || "").trim().toUpperCase();
+  if (labelType !== "INCOMPLETE" && labelType !== "COMPLETED") {
+    throw new Error("Choose Incomplete or Completed labels.");
+  }
+
+  if (!Array.isArray(codes) || codes.length === 0) {
+    throw new Error("Select at least one YourFinds label.");
+  }
+
+  const inventoryMap = {};
+  getFullInventory().forEach(function(item) {
+    const code = String(item.code || "").trim();
+    if (code) inventoryMap[code] = item;
+  });
+
+  codes.forEach(function(value) {
+    const code = String(value || "").trim();
+    const item = inventoryMap[code];
+    if (!item) throw new Error("Inventory Code " + code + " was not found.");
+    const status = String(item.status || "").trim().toUpperCase();
+    const actualType = status === INVENTORY_STATUS.INCOMPLETE ? "INCOMPLETE" : "COMPLETED";
+    if (actualType !== labelType) {
+      throw new Error("Selected items must all use the same label type.");
+    }
+  });
+
+  return labelType === "INCOMPLETE"
+    ? createYourFindsLabelPDFByCodes(codes)
+    : createCompletedYourFindsLabelPDFByCodes(codes);
 }
 
 /* ==========================================================

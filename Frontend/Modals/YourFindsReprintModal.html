@@ -1,32 +1,35 @@
-<!-- PHASE 8: BULK REPRINT OF COMPLETED YOURFINDS LABELS -->
+<!-- PHASE 8: BULK REPRINT OF YOURFINDS LABELS -->
 <div id="yourFindsReprintModal" class="generic-overlay-blur" style="display:none;">
-  <div class="custom-popup-card p-0" style="max-width:1050px;width:97%;max-height:92vh;overflow:hidden;">
-    <div class="d-flex justify-content-between align-items-start border-bottom px-4 py-3">
-      <div>
-        <h5 class="fw-bold mb-1">Reprint Completed YourFinds Labels</h5>
-        <div class="small text-muted">Select one or more completed items · 40 × 30 mm (W × H)</div>
-      </div>
+  <div class="custom-popup-card p-0 d-flex flex-column" style="max-width:1050px;width:97%;height:92vh;max-height:760px;overflow:hidden;">
+    <div class="d-flex justify-content-between align-items-center border-bottom px-4 py-3 flex-shrink-0">
+      <h5 class="fw-bold mb-0">Reprint YourFinds Labels</h5>
       <button class="btn-close" onclick="closeYourFindsReprintModal()"></button>
     </div>
 
-    <div class="border-bottom bg-light px-4 py-3">
+    <div class="border-bottom bg-light px-4 py-3 flex-shrink-0">
       <div class="row g-2 align-items-center">
-        <div class="col-md-7">
+        <div class="col-md-5">
           <input
             id="yourFindsReprintSearch"
             class="form-control"
-            placeholder="Search code, description, size, or delivery ID..."
+            placeholder="Search code, description, or size..."
             oninput="renderYourFindsReprintItems()"
           >
         </div>
-        <div class="col-md-5 d-flex gap-2 justify-content-md-end">
+        <div class="col-md-3">
+          <select id="yourFindsReprintType" class="form-select" onchange="changeYourFindsReprintType()">
+            <option value="COMPLETED">Completed · 40 × 30 mm</option>
+            <option value="INCOMPLETE">Incomplete · 30 × 20 mm</option>
+          </select>
+        </div>
+        <div class="col-md-4 d-flex gap-2 justify-content-md-end">
           <button class="btn btn-sm btn-outline-secondary" onclick="selectVisibleYourFindsReprintItems()">Select Visible</button>
           <button class="btn btn-sm btn-outline-secondary" onclick="clearYourFindsReprintSelection()">Clear</button>
         </div>
       </div>
     </div>
 
-    <div class="table-responsive" style="height:58vh;overflow:auto;">
+    <div class="table-responsive flex-grow-1" style="min-height:0;overflow:auto;">
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light" style="position:sticky;top:0;z-index:2;">
           <tr>
@@ -39,12 +42,12 @@
           </tr>
         </thead>
         <tbody id="yourFindsReprintBody">
-          <tr><td colspan="6" class="text-center text-muted py-5">Loading completed YourFinds items...</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-5">Loading YourFinds items...</td></tr>
         </tbody>
       </table>
     </div>
 
-    <div class="border-top px-4 py-3">
+    <div class="border-top px-4 py-3 flex-shrink-0">
       <div id="yourFindsReprintResult" class="alert alert-success py-2 mb-3" style="display:none;">
         PDF ready. <a id="yourFindsReprintResultLink" href="#" target="_blank" rel="noopener" class="alert-link">Open generated labels</a>
       </div>
@@ -52,8 +55,8 @@
         <div><strong id="yourFindsReprintSelectedCount">0</strong> label(s) selected</div>
         <div class="d-flex gap-2">
           <button class="btn btn-outline-secondary" onclick="closeYourFindsReprintModal()">Cancel</button>
-          <button id="yourFindsBulkPrintBtn" class="btn btn-pink" onclick="printSelectedCompletedYourFindsLabels()" disabled>
-            Generate Selected Labels
+          <button id="yourFindsBulkPrintBtn" class="btn btn-pink" onclick="printSelectedYourFindsLabels()" disabled>
+            Generate 40 × 30 Labels
           </button>
         </div>
       </div>
@@ -77,15 +80,16 @@ function escapeYourFindsReprintHtml(value) {
 function openYourFindsReprintModal() {
   yourFindsReprintSelection = {};
   document.getElementById('yourFindsReprintSearch').value = '';
+  document.getElementById('yourFindsReprintType').value = 'COMPLETED';
   document.getElementById('yourFindsReprintResult').style.display = 'none';
   document.getElementById('yourFindsReprintModal').style.display = 'flex';
-  document.getElementById('yourFindsReprintBody').innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">Loading completed YourFinds items...</td></tr>';
+  document.getElementById('yourFindsReprintBody').innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">Loading YourFinds items...</td></tr>';
   updateYourFindsReprintSelection();
 
   google.script.run
     .withSuccessHandler(function(result) {
       if (!result || !result.success) {
-        showNotificationToast(result && result.message ? result.message : 'Unable to load completed YourFinds items.', true);
+        showNotificationToast(result && result.message ? result.message : 'Unable to load YourFinds items.', true);
         yourFindsReprintItems = [];
       } else {
         yourFindsReprintItems = Array.isArray(result.items) ? result.items : [];
@@ -97,7 +101,7 @@ function openYourFindsReprintModal() {
       renderYourFindsReprintItems();
       showNotificationToast(error && error.message ? error.message : String(error), true);
     })
-    .getCompletedYourFindsItemsForLabelReprint();
+    .getYourFindsItemsForLabelReprint();
 }
 
 function closeYourFindsReprintModal() {
@@ -106,9 +110,11 @@ function closeYourFindsReprintModal() {
 
 function getVisibleYourFindsReprintItems() {
   const search = String(document.getElementById('yourFindsReprintSearch').value || '').trim().toLowerCase();
-  if (!search) return yourFindsReprintItems.slice();
+  const labelType = document.getElementById('yourFindsReprintType').value;
   return yourFindsReprintItems.filter(function(item) {
-    return [item.code, item.description, item.size, item.deliveryId]
+    if (item.labelType !== labelType) return false;
+    if (!search) return true;
+    return [item.code, item.description, item.size]
       .join(' ')
       .toLowerCase()
       .includes(search);
@@ -119,7 +125,8 @@ function renderYourFindsReprintItems() {
   const items = getVisibleYourFindsReprintItems();
   const body = document.getElementById('yourFindsReprintBody');
   if (!items.length) {
-    body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">No completed, sellable YourFinds items found.</td></tr>';
+    const type = document.getElementById('yourFindsReprintType').value.toLowerCase();
+    body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">No ' + type + ' YourFinds labels found.</td></tr>';
     updateYourFindsReprintSelection();
     return;
   }
@@ -127,19 +134,28 @@ function renderYourFindsReprintItems() {
   body.innerHTML = items.map(function(item) {
     const code = String(item.code || '');
     const checked = yourFindsReprintSelection[code] ? ' checked' : '';
+    const statusClass = item.labelType === 'INCOMPLETE'
+      ? 'bg-warning text-dark'
+      : (String(item.status).toUpperCase() === 'ACTIVE' ? 'bg-success' : 'bg-secondary');
     const image = item.imageUrl
       ? '<img src="' + escapeYourFindsReprintHtml(item.imageUrl) + '" alt="" style="width:46px;height:46px;object-fit:cover;border-radius:7px;">'
       : '<div class="bg-light border rounded" style="width:46px;height:46px;"></div>';
     return '<tr>' +
       '<td class="ps-4"><input class="form-check-input" type="checkbox" value="' + escapeYourFindsReprintHtml(code) + '" onchange="toggleYourFindsReprintItem(this)"' + checked + '></td>' +
-      '<td><div class="d-flex align-items-center gap-2">' + image + '<div><div class="fw-semibold">' + escapeYourFindsReprintHtml(item.description) + '</div><div class="small text-muted">' + escapeYourFindsReprintHtml(item.deliveryId || '') + '</div></div></div></td>' +
+      '<td><div class="d-flex align-items-center gap-2">' + image + '<div class="fw-semibold">' + escapeYourFindsReprintHtml(item.description || '—') + '</div></div></td>' +
       '<td class="font-monospace small">' + escapeYourFindsReprintHtml(code) + '</td>' +
       '<td class="text-center fw-semibold">' + escapeYourFindsReprintHtml(item.size) + '</td>' +
-      '<td class="text-end fw-semibold">₱' + (Number(item.sellingPrice) || 0).toFixed(2) + '</td>' +
-      '<td class="text-center pe-4"><span class="badge bg-success">' + escapeYourFindsReprintHtml(item.status) + '</span></td>' +
+      '<td class="text-end fw-semibold">' + (item.labelType === 'COMPLETED' ? '₱' + (Number(item.sellingPrice) || 0).toFixed(2) : '—') + '</td>' +
+      '<td class="text-center pe-4"><span class="badge ' + statusClass + '">' + escapeYourFindsReprintHtml(item.status) + '</span></td>' +
       '</tr>';
   }).join('');
   updateYourFindsReprintSelection();
+}
+
+function changeYourFindsReprintType() {
+  yourFindsReprintSelection = {};
+  document.getElementById('yourFindsReprintResult').style.display = 'none';
+  renderYourFindsReprintItems();
 }
 
 function toggleYourFindsReprintItem(checkbox) {
@@ -164,13 +180,17 @@ function clearYourFindsReprintSelection() {
 
 function updateYourFindsReprintSelection() {
   const count = Object.keys(yourFindsReprintSelection).length;
+  const labelType = document.getElementById('yourFindsReprintType').value;
   document.getElementById('yourFindsReprintSelectedCount').textContent = String(count);
-  document.getElementById('yourFindsBulkPrintBtn').disabled = count === 0;
+  const button = document.getElementById('yourFindsBulkPrintBtn');
+  button.disabled = count === 0;
+  button.textContent = labelType === 'INCOMPLETE' ? 'Generate 30 × 20 Labels' : 'Generate 40 × 30 Labels';
 }
 
-function printSelectedCompletedYourFindsLabels() {
+function printSelectedYourFindsLabels() {
   const codes = Object.keys(yourFindsReprintSelection);
-  if (!codes.length) return showNotificationToast('Select at least one completed label.', true);
+  const labelType = document.getElementById('yourFindsReprintType').value;
+  if (!codes.length) return showNotificationToast('Select at least one label.', true);
 
   const button = document.getElementById('yourFindsBulkPrintBtn');
   const resultBox = document.getElementById('yourFindsReprintResult');
@@ -179,7 +199,6 @@ function printSelectedCompletedYourFindsLabels() {
   button.textContent = 'Generating...';
   google.script.run
     .withSuccessHandler(function(result) {
-      button.textContent = 'Generate Selected Labels';
       updateYourFindsReprintSelection();
       if (!result || !result.success) {
         showNotificationToast(result && result.message ? result.message : 'Unable to generate labels.', true);
@@ -193,10 +212,9 @@ function printSelectedCompletedYourFindsLabels() {
       if (!opened) showNotificationToast('PDF is ready. Click Open generated labels in the Reprint window.');
     })
     .withFailureHandler(function(error) {
-      button.textContent = 'Generate Selected Labels';
       updateYourFindsReprintSelection();
       showNotificationToast(error && error.message ? error.message : String(error), true);
     })
-    .createCompletedYourFindsLabelPDFByCodes(codes);
+    .createYourFindsReprintPDFByCodes(codes, labelType);
 }
 </script>
