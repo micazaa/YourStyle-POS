@@ -416,6 +416,21 @@ function setInventoryAdministrativeStatusPhase8(payload) {
   const status = String(payload.status || "").trim().toUpperCase();
   if (status !== INVENTORY_STATUS.ACTIVE && status !== INVENTORY_STATUS.INACTIVE) throw new Error("Status must be ACTIVE or INACTIVE.");
   const result = getInventoryItemByCode(code); if (!result.success) throw new Error(result.message || "Inventory item not found.");
+  const item = result.item;
+  const isYourFindsUnique =
+    String(item.category || "").trim().toUpperCase() === "YOURFINDS" &&
+    String(item.inventoryType || "").trim().toUpperCase() === INVENTORY_TYPE.UNIQUE;
+
+  if (
+    isYourFindsUnique &&
+    String(item.status || "").trim().toUpperCase() === INVENTORY_STATUS.INCOMPLETE
+  ) {
+    throw new Error("Use Complete Item before changing this YourFinds item's status.");
+  }
+
+  if (isYourFindsUnique && status === INVENTORY_STATUS.ACTIVE) {
+    phase8AssertCompletedYourFinds_(item);
+  }
   const ss = SpreadsheetApp.getActiveSpreadsheet(); const sheet = ss.getSheetByName(SHEETS.INVENTORY);
   sheet.getRange(result.item.rowNumber, INV_COL.STATUS).setValue(status);
   sheet.getRange(result.item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
@@ -429,6 +444,170 @@ function setInventoryAdministrativeStatusPhase8(payload) {
 
 const PHASE8_PRODUCT_IMAGES_FOLDER_ID = "1NB2QYbRXJT2yn9AY6l-1hrFtoQKjWEOf";
 
+function phase8DecodeInventoryImage_(dataUrl) {
+  dataUrl = String(dataUrl || "").trim();
+  if (!dataUrl) return null;
+
+  const match = dataUrl.match(/^data:(image\/[A-Za-z0-9.+-]+);base64,(.+)$/);
+  if (!match) throw new Error("Invalid image data.");
+  const mimeType = match[1];
+  if (["image/jpeg", "image/png", "image/webp"].indexOf(mimeType) === -1) {
+    throw new Error("Use JPG, PNG, or WEBP images only.");
+  }
+
+  const bytes = Utilities.base64Decode(match[2]);
+  if (bytes.length > 5 * 1024 * 1024) throw new Error("Image must be 5 MB or smaller.");
+  return { bytes: bytes, mimeType: mimeType };
+}
+
+function phase8CreateInventoryImage_(code, originalName, decodedImage) {
+  const folder = DriveApp.getFolderById(PHASE8_PRODUCT_IMAGES_FOLDER_ID);
+  const safeName = String(originalName || "photo").replace(/[^A-Za-z0-9._-]+/g, "_");
+  const blob = Utilities.newBlob(
+    decodedImage.bytes,
+    decodedImage.mimeType,
+    code + "_" + Date.now() + "_" + safeName
+  );
+  const file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return {
+    file: file,
+    imageUrl: "https://drive.google.com/thumbnail?id=" + file.getId() + "&sz=w1200"
+  };
+}
+
+function phase8IsYourFindsUnique_(item) {
+  return String(item && item.category || "").trim().toUpperCase() === "YOURFINDS" &&
+    String(item && item.inventoryType || "").trim().toUpperCase() === INVENTORY_TYPE.UNIQUE;
+}
+
+function phase8AssertCompletedYourFinds_(item) {
+  if (!String(item && item.imageUrl || "").trim()) {
+    throw new Error("A product picture is required before this YourFinds item can be active.");
+  }
+  if (!String(item && item.name || "").trim()) {
+    throw new Error("Description is required before this YourFinds item can be active.");
+  }
+  if (!(Number(item && item.price) > 0)) {
+    throw new Error("Selling Price must be greater than zero before this YourFinds item can be active.");
+  }
+  if (!String(item && item.size || "").trim()) {
+    throw new Error("Size is required before this YourFinds item can be active.");
+  }
+}
+
+/*
+ * Completes a newly received YourFinds item, or edits a completed one.
+ * Code, size, stock, category, type, and delivery metadata stay immutable.
+ */
+function saveYourFindsItemDetailsPhase8(payload) {
+  payload = payload || {};
+  const code = String(payload.code || "").trim();
+  const description = String(payload.description || "").trim();
+  const originalPrice = Number(payload.originalPrice);
+  const sellingPrice = Number(payload.sellingPrice);
+  const decodedImage = phase8DecodeInventoryImage_(payload.dataUrl);
+  const originalName = String(payload.fileName || "photo").trim();
+
+  if (!code) throw new Error("Inventory Code is required.");
+  if (!description) throw new Error("Description is required.");
+  if (description.length > 120) throw new Error("Description must be 120 characters or fewer.");
+  if (!Number.isFinite(originalPrice) || originalPrice < 0) {
+    throw new Error("Original Price must be a valid non-negative amount.");
+  }
+  if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
+    throw new Error("Selling Price must be greater than zero.");
+  }
+
+  let createdImage = null;
+  let oldImageUrl = "";
+  let inventorySaved = false;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const itemResult = getYourFindsItemForCompletion(code);
+    if (!itemResult || !itemResult.success || !itemResult.item) {
+      throw new Error(itemResult && itemResult.message ? itemResult.message : "YourFinds item not found.");
+    }
+
+    const item = itemResult.item;
+    const currentStatus = String(item.status || "").trim().toUpperCase();
+    if ([INVENTORY_STATUS.INCOMPLETE, INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].indexOf(currentStatus) === -1) {
+      throw new Error("This YourFinds item cannot be edited here.");
+    }
+    if (currentStatus !== INVENTORY_STATUS.INCOMPLETE && Number(item.stock) <= 0) {
+      throw new Error("Sold YourFinds items cannot be edited.");
+    }
+
+    /*
+     * Receiving staff may complete a new item without manager approval.
+     * Corrections to an already completed item remain manager-controlled.
+     */
+    const auth = currentStatus === INVENTORY_STATUS.INCOMPLETE
+      ? null
+      : phase8RequireManager_(payload.managerPin);
+
+    oldImageUrl = String(item.imageUrl || "").trim();
+    if (decodedImage) {
+      createdImage = phase8CreateInventoryImage_(code, originalName, decodedImage);
+    }
+    const finalImageUrl = createdImage ? createdImage.imageUrl : oldImageUrl;
+    if (!finalImageUrl) throw new Error("A product picture is required to complete this YourFinds item.");
+
+    const completedItem = {
+      imageUrl: finalImageUrl,
+      name: description,
+      price: sellingPrice,
+      size: item.size
+    };
+    phase8AssertCompletedYourFinds_(completedItem);
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEETS.INVENTORY);
+    if (!sheet) throw new Error("Inventory sheet not found.");
+
+    const row = sheet.getRange(item.rowNumber, 1, 1, INVENTORY_COLUMN_COUNT).getValues()[0];
+    row[INV_IDX.IMAGE] = finalImageUrl;
+    row[INV_IDX.DESCRIPTION] = description;
+    row[INV_IDX.ORIG_PRICE] = originalPrice;
+    row[INV_IDX.YS_PRICE] = sellingPrice;
+    row[INV_IDX.STATUS] = currentStatus === INVENTORY_STATUS.INCOMPLETE
+      ? INVENTORY_STATUS.ACTIVE
+      : currentStatus;
+    row[INV_IDX.UPDATED_AT] = new Date();
+    sheet.getRange(item.rowNumber, 1, 1, INVENTORY_COLUMN_COUNT).setValues([row]);
+    inventorySaved = true;
+    SpreadsheetApp.flush();
+
+    if (createdImage && oldImageUrl) {
+      const oldId = phase8DriveImageId_(oldImageUrl);
+      if (oldId) {
+        try { DriveApp.getFileById(oldId).setTrashed(true); } catch (cleanupError) {}
+      }
+    }
+
+    return {
+      success: true,
+      code: code,
+      status: row[INV_IDX.STATUS],
+      wasCompleted: currentStatus === INVENTORY_STATUS.INCOMPLETE,
+      imageUrl: finalImageUrl,
+      description: description,
+      originalPrice: originalPrice,
+      sellingPrice: sellingPrice,
+      manager: auth ? auth.managerName : ""
+    };
+  } catch (err) {
+    if (!inventorySaved && createdImage && createdImage.file) {
+      try { createdImage.file.setTrashed(true); } catch (cleanupError) {}
+    }
+    throw err;
+  } finally {
+    try { lock.releaseLock(); } catch (releaseError) {}
+  }
+}
+
 function saveInventoryPhotoPhase8(payload) {
   payload = payload || {};
   const auth = phase8RequireManager_(payload.managerPin);
@@ -438,24 +617,14 @@ function saveInventoryPhotoPhase8(payload) {
   if (!code) throw new Error("Inventory Code is required.");
   if (!dataUrl) throw new Error("Choose an image first.");
 
-  const match = dataUrl.match(/^data:(image\/[A-Za-z0-9.+-]+);base64,(.+)$/);
-  if (!match) throw new Error("Invalid image data.");
-  const mimeType = match[1];
-  if (["image/jpeg","image/png","image/webp"].indexOf(mimeType) === -1) {
-    throw new Error("Use JPG, PNG, or WEBP images only.");
-  }
-  const bytes = Utilities.base64Decode(match[2]);
-  if (bytes.length > 5 * 1024 * 1024) throw new Error("Image must be 5 MB or smaller.");
+  const decodedImage = phase8DecodeInventoryImage_(dataUrl);
 
   const itemResult = getInventoryItemByCode(code);
   if (!itemResult || !itemResult.success || !itemResult.item) throw new Error("Inventory item not found.");
 
-  const folder = DriveApp.getFolderById(PHASE8_PRODUCT_IMAGES_FOLDER_ID);
-  const safeName = originalName.replace(/[^A-Za-z0-9._-]+/g, "_");
-  const blob = Utilities.newBlob(bytes, mimeType, code + "_" + Date.now() + "_" + safeName);
-  const file = folder.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  const imageUrl = "https://drive.google.com/thumbnail?id=" + file.getId() + "&sz=w1200";
+  const createdImage = phase8CreateInventoryImage_(code, originalName, decodedImage);
+  const file = createdImage.file;
+  const imageUrl = createdImage.imageUrl;
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.INVENTORY);
@@ -479,6 +648,12 @@ function removeInventoryPhotoPhase8(payload) {
   const code = String(payload.code || "").trim();
   const itemResult = getInventoryItemByCode(code);
   if (!itemResult || !itemResult.success || !itemResult.item) throw new Error("Inventory item not found.");
+  if (
+    phase8IsYourFindsUnique_(itemResult.item) &&
+    String(itemResult.item.status || "").trim().toUpperCase() !== INVENTORY_STATUS.INCOMPLETE
+  ) {
+    throw new Error("A completed YourFinds item must keep a picture. Use Change Photo instead.");
+  }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.INVENTORY);
@@ -490,7 +665,7 @@ function removeInventoryPhotoPhase8(payload) {
   const oldId = phase8DriveImageId_(oldValue);
   if (oldId) {
     try { DriveApp.getFileById(oldId).setTrashed(true); } catch (e) {}
-  }A
+  }
   return { success: true, manager: auth.managerName };
 }
 
