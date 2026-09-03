@@ -23,8 +23,71 @@
       <button class="btn btn-outline-dark" onclick="openMovementHistoryPhase8()">Movement History</button>
       <button id="invAdjustBtn" class="btn btn-pink" onclick="openStockAdjustmentPhase8()">Adjust Stock</button>
       <button id="invChangeBtn" class="btn btn-outline-primary" onclick="openChangeItemPhase8()">Change Item</button>
-      <button id="invLabelBtn" class="btn btn-outline-secondary" onclick="reprintSelectedYFPhase8()">Reprint Label</button>
+      <button id="invYfEditBtn" class="btn btn-pink" onclick="openYourFindsEditorPhase8()">Complete Item</button>
+      <button id="invLabelBtn" class="btn btn-outline-secondary" onclick="printCompletedYourFindsLabelPhase8()">Reprint 40 × 30 Label</button>
       <button class="btn btn-outline-secondary ms-auto" onclick="toggleInventoryStatusPhase8()" id="invStatusBtn">Deactivate</button>
+    </div>
+  </div>
+</div>
+
+<div id="yourFindsEditorModal" class="generic-overlay-blur" style="display:none;">
+  <div class="custom-popup-card" style="max-width:760px;width:95%;max-height:92vh;overflow:auto;">
+    <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
+      <div>
+        <h5 id="yfEditorTitle" class="fw-bold mb-1">Complete YourFinds Item</h5>
+        <div id="yfEditorSubtitle" class="small text-muted"></div>
+      </div>
+      <button class="btn-close" onclick="closePhase8Modal('yourFindsEditorModal')"></button>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Product Picture <span class="text-danger">*</span></label>
+        <div class="border rounded bg-light d-flex align-items-center justify-content-center overflow-hidden" style="height:220px;">
+          <img id="yfEditorPhotoPreview" alt="YourFinds product preview" style="width:100%;height:100%;object-fit:contain;display:none;">
+          <div id="yfEditorPhotoEmpty" class="small text-muted text-center px-3">Choose a product picture</div>
+        </div>
+        <input id="yfEditorPhoto" type="file" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm mt-2" onchange="previewYourFindsPhotoPhase8(this)">
+        <div class="form-text">JPG, PNG, or WEBP · maximum 5 MB</div>
+      </div>
+
+      <div class="col-md-8">
+        <div class="row g-3">
+          <div class="col-md-7">
+            <label class="form-label">Inventory Code</label>
+            <input id="yfEditorCode" class="form-control font-monospace" readonly>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Size</label>
+            <input id="yfEditorSize" class="form-control" readonly>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Description <span class="text-danger">*</span></label>
+            <textarea id="yfEditorDescription" class="form-control" rows="3" maxlength="120" placeholder="Describe the item for POS and the completed sticker"></textarea>
+            <div class="form-text">Maximum 120 characters.</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Original Price</label>
+            <div class="input-group"><span class="input-group-text">₱</span><input id="yfEditorOriginalPrice" type="number" min="0" step="0.01" class="form-control"></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Selling Price <span class="text-danger">*</span></label>
+            <div class="input-group"><span class="input-group-text">₱</span><input id="yfEditorSellingPrice" type="number" min="0.01" step="0.01" class="form-control"></div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Manager PIN <span class="text-danger">*</span></label>
+            <input id="yfEditorManagerPin" type="password" class="form-control" autocomplete="off">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="yfEditorCompletionNote" class="alert alert-info py-2 mt-3 mb-0">
+      Completing this item will activate it in POS and generate its 40 × 30 mm sticker.
+    </div>
+    <div class="d-flex gap-2 mt-4">
+      <button class="btn btn-outline-secondary flex-fill" onclick="closePhase8Modal('yourFindsEditorModal')">Cancel</button>
+      <button id="yfEditorSaveBtn" class="btn btn-pink flex-fill" onclick="saveYourFindsDetailsClientPhase8()">Complete &amp; Generate Label</button>
     </div>
   </div>
 </div>
@@ -82,11 +145,89 @@
 
 <script>
 var phase8SelectedItem = null;
+var phase8YfPhotoDataUrl = '';
+var phase8YfPhotoFileName = '';
 function phase8Employee(){ return String((typeof currentCashier!=="undefined"&&currentCashier) ? currentCashier : (typeof currentEmployee!=="undefined"&&currentEmployee ? (currentEmployee.fullName||currentEmployee.name||"") : "")).trim(); }
 function closePhase8Modal(id){ const e=document.getElementById(id); if(e)e.style.display="none"; }
-function openInventoryDetailsPhase8(code){ const item=(inventoryPageData||[]).find(x=>String(x.code)===String(code)); if(!item)return; phase8SelectedItem=item; document.getElementById('invDetailTitle').textContent=item.name||'Inventory Item'; document.getElementById('invDetailCode').textContent=item.code;
- const display=getInventoryDisplayStatus(item); document.getElementById('invDetailBody').innerHTML=`<div class="border rounded p-3 mb-3"><div class="small text-muted">Current Stock</div><div class="fs-3 fw-bold">${Number(item.stock)||0}</div><div>${buildInventoryStatusBadge(display)}</div></div><div class="row g-3"><div class="col-6"><b>Category</b><br>${escapeInventoryHtml(item.category)}</div><div class="col-6"><b>Type</b><br>${escapeInventoryHtml(item.inventoryType)}</div><div class="col-6"><b>Price</b><br>₱${(Number(item.price)||0).toFixed(2)}</div><div class="col-6"><b>Low Stock At</b><br>${Number(item.lowStockAt)||0}</div><div class="col-6"><b>Delivered</b><br>${escapeInventoryHtml(item.dateDelivered||'—')}</div><div class="col-6"><b>Delivery ID</b><br>${escapeInventoryHtml(item.deliveryId||'—')}</div></div>`; phase8RenderInventoryPhoto_(item.imageUrl);
- const unique=String(item.inventoryType).toUpperCase()==='UNIQUE'; document.getElementById('invAdjustBtn').style.display=unique?'none':'inline-block'; document.getElementById('invChangeBtn').style.display=unique?'none':'inline-block'; document.getElementById('invLabelBtn').style.display=unique?'inline-block':'none'; document.getElementById('invStatusBtn').textContent=String(item.status).toUpperCase()==='ACTIVE'?'Deactivate':'Reactivate'; document.getElementById('inventoryDetailsModal').style.display='flex'; }
+function openInventoryDetailsPhase8(code){
+ const item=(inventoryPageData||[]).find(x=>String(x.code)===String(code)); if(!item)return; phase8SelectedItem=item;
+ const status=String(item.status||'').toUpperCase(); const unique=String(item.inventoryType||'').toUpperCase()==='UNIQUE'; const yourFinds=unique&&String(item.category||'').toUpperCase()==='YOURFINDS'; const incomplete=yourFinds&&status==='INCOMPLETE'; const completed=yourFinds&&!incomplete&&status!=='RETURNED'&&Number(item.stock)>0; const editable=incomplete||completed;
+ document.getElementById('invDetailTitle').textContent=item.name||(incomplete?'Incomplete YourFinds Item':'Inventory Item'); document.getElementById('invDetailCode').textContent=item.code;
+ const display=getInventoryDisplayStatus(item); document.getElementById('invDetailBody').innerHTML=`<div class="border rounded p-3 mb-3"><div class="small text-muted">Current Stock</div><div class="fs-3 fw-bold">${Number(item.stock)||0}</div><div>${buildInventoryStatusBadge(display)}</div></div><div class="row g-3"><div class="col-6"><b>Category</b><br>${escapeInventoryHtml(item.category)}</div><div class="col-6"><b>Type</b><br>${escapeInventoryHtml(item.inventoryType)}</div><div class="col-6"><b>Size</b><br>${escapeInventoryHtml(item.size||'—')}</div><div class="col-6"><b>Selling Price</b><br>₱${(Number(item.price)||0).toFixed(2)}</div><div class="col-6"><b>Original Price</b><br>₱${(Number(item.origPrice)||0).toFixed(2)}</div><div class="col-6"><b>Delivered</b><br>${escapeInventoryHtml(item.dateDelivered||'—')}</div><div class="col-12"><b>Delivery ID</b><br>${escapeInventoryHtml(item.deliveryId||'—')}</div></div>`; phase8RenderInventoryPhoto_(item.imageUrl);
+ document.getElementById('invAdjustBtn').style.display=unique?'none':'inline-block'; document.getElementById('invChangeBtn').style.display=unique?'none':'inline-block';
+ const editBtn=document.getElementById('invYfEditBtn'); editBtn.style.display=editable?'inline-block':'none'; editBtn.textContent=incomplete?'Complete Item':'Edit Details';
+ document.getElementById('invLabelBtn').style.display=completed?'inline-block':'none';
+ const statusBtn=document.getElementById('invStatusBtn'); statusBtn.style.display=incomplete||status==='RETURNED'?'none':'inline-block'; statusBtn.textContent=status==='ACTIVE'?'Deactivate':'Reactivate';
+ document.getElementById('inventoryDetailsModal').style.display='flex';
+}
+
+function openYourFindsEditorPhase8(){
+ if(!phase8SelectedItem)return;
+ const incomplete=String(phase8SelectedItem.status||'').toUpperCase()==='INCOMPLETE';
+ phase8YfPhotoDataUrl=''; phase8YfPhotoFileName='';
+ document.getElementById('yfEditorTitle').textContent=incomplete?'Complete YourFinds Item':'Edit YourFinds Details';
+ document.getElementById('yfEditorSubtitle').textContent=incomplete?'Add the required selling details. Code and size stay locked.':'Update product details. Code and size stay locked.';
+ document.getElementById('yfEditorCode').value=phase8SelectedItem.code||'';
+ document.getElementById('yfEditorSize').value=phase8SelectedItem.size||'';
+ document.getElementById('yfEditorDescription').value=phase8SelectedItem.name||'';
+ document.getElementById('yfEditorOriginalPrice').value=Number(phase8SelectedItem.origPrice)||0;
+ document.getElementById('yfEditorSellingPrice').value=Number(phase8SelectedItem.price)||'';
+ document.getElementById('yfEditorManagerPin').value='';
+ document.getElementById('yfEditorPhoto').value='';
+ renderYourFindsEditorPhotoPhase8(phase8SelectedItem.imageUrl||'');
+ document.getElementById('yfEditorCompletionNote').style.display=incomplete?'block':'none';
+ document.getElementById('yfEditorSaveBtn').textContent=incomplete?'Complete & Generate Label':'Save Changes';
+ document.getElementById('yourFindsEditorModal').style.display='flex';
+}
+
+function renderYourFindsEditorPhotoPhase8(url){
+ const preview=document.getElementById('yfEditorPhotoPreview'); const empty=document.getElementById('yfEditorPhotoEmpty');
+ if(url){preview.src=url;preview.style.display='block';empty.style.display='none';}
+ else{preview.removeAttribute('src');preview.style.display='none';empty.style.display='block';}
+}
+
+function previewYourFindsPhotoPhase8(input){
+ const file=input.files&&input.files[0]; if(!file)return;
+ if(file.size>5*1024*1024){input.value='';showNotificationToast('Image must be 5 MB or smaller.',true);return;}
+ const reader=new FileReader();
+ reader.onload=function(){phase8YfPhotoDataUrl=String(reader.result||'');phase8YfPhotoFileName=file.name;renderYourFindsEditorPhotoPhase8(phase8YfPhotoDataUrl);};
+ reader.readAsDataURL(file);
+}
+
+function saveYourFindsDetailsClientPhase8(){
+ if(!phase8SelectedItem)return;
+ const description=String(document.getElementById('yfEditorDescription').value||'').trim();
+ const originalPrice=Number(document.getElementById('yfEditorOriginalPrice').value);
+ const sellingPrice=Number(document.getElementById('yfEditorSellingPrice').value);
+ const managerPin=String(document.getElementById('yfEditorManagerPin').value||'').trim();
+ if(!description)return showNotificationToast('Description is required.',true);
+ if(!Number.isFinite(originalPrice)||originalPrice<0)return showNotificationToast('Enter a valid Original Price.',true);
+ if(!Number.isFinite(sellingPrice)||sellingPrice<=0)return showNotificationToast('Selling Price must be greater than zero.',true);
+ if(!phase8SelectedItem.imageUrl&&!phase8YfPhotoDataUrl)return showNotificationToast('Choose a product picture.',true);
+ if(!managerPin)return showNotificationToast('Manager PIN is required.',true);
+
+ const button=document.getElementById('yfEditorSaveBtn'); const originalText=button.textContent; button.disabled=true; button.textContent='Saving...';
+ google.script.run.withSuccessHandler(function(result){
+   button.disabled=false; button.textContent=originalText;
+   if(!result||!result.success){showNotificationToast(result&&result.message?result.message:'Unable to save YourFinds details.',true);return;}
+   closePhase8Modal('yourFindsEditorModal'); closePhase8Modal('inventoryDetailsModal'); loadInventoryPage();
+   if(result.wasCompleted){showNotificationToast('YourFinds item completed and activated. Generating 40 × 30 label...');printCompletedYourFindsLabelPhase8(result.code,true);}
+   else{showNotificationToast('YourFinds details updated.');}
+ }).withFailureHandler(function(error){button.disabled=false;button.textContent=originalText;showNotificationToast(error&&error.message?error.message:String(error),true);}).saveYourFindsItemDetailsPhase8({
+   code:phase8SelectedItem.code,description:description,originalPrice:originalPrice,sellingPrice:sellingPrice,managerPin:managerPin,fileName:phase8YfPhotoFileName,dataUrl:phase8YfPhotoDataUrl
+ });
+}
+
+function printCompletedYourFindsLabelPhase8(code,afterCompletion){
+ const targetCode=String(code||(phase8SelectedItem&&phase8SelectedItem.code)||'').trim(); if(!targetCode)return;
+ google.script.run.withSuccessHandler(function(result){
+   if(!result||!result.success){showNotificationToast(result&&result.message?result.message:'Label generation failed.',true);return;}
+   showNotificationToast('40 × 30 completed label generated.'); window.open(result.downloadUrl||result.fileUrl,'_blank');
+ }).withFailureHandler(function(error){
+   const prefix=afterCompletion?'Item was completed, but the label failed. You can retry Reprint Label. ':' ';
+   showNotificationToast(prefix+(error&&error.message?error.message:String(error)),true);
+ }).createCompletedYourFindsLabelPDF(targetCode);
+}
 function openStockAdjustmentPhase8(){
  if(!phase8SelectedItem)return;
  document.getElementById('adjustItemLabel').textContent=`${phase8SelectedItem.name} · ${phase8SelectedItem.code}`;
@@ -111,7 +252,6 @@ function updateChangeItemPreviewPhase8(){
 }
 function submitChangeItemPhase8(){ google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Change failed',true);return;} closePhase8Modal('changeItemModal');closePhase8Modal('inventoryDetailsModal');showNotificationToast(`Item change saved · ${r.referenceId}`);loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).changeInventoryItemPhase8({fromCode:phase8SelectedItem.code,toCode:document.getElementById('changeToCode').value,quantity:Number(document.getElementById('changeQty').value),reason:document.getElementById('changeReason').value,notes:document.getElementById('changeNotes').value,managerPin:document.getElementById('changeManagerPin').value,employee:phase8Employee()}); }
 function openMovementHistoryPhase8(){ if(!phase8SelectedItem)return; document.getElementById('movementHistoryLabel').textContent=`${phase8SelectedItem.name} · ${phase8SelectedItem.code}`; document.getElementById('movementHistoryBody').innerHTML='<tr><td colspan="8" class="text-center text-muted">Loading...</td></tr>'; document.getElementById('movementHistoryModal').style.display='flex'; google.script.run.withSuccessHandler(r=>{const a=r&&r.movements?r.movements:[];document.getElementById('movementHistoryBody').innerHTML=a.length?a.map(m=>`<tr><td>${escapeInventoryHtml(m.timestamp)}</td><td class="fw-bold">${m.qtyChange>0?'+':''}${m.qtyChange}</td><td>${m.stockBefore}</td><td>${m.stockAfter}</td><td>${escapeInventoryHtml(m.source)}</td><td>${escapeInventoryHtml(m.referenceId)}</td><td>${escapeInventoryHtml(m.employee)}</td><td>${escapeInventoryHtml((m.reason||'')+(m.notes?' · '+m.notes:''))}</td></tr>`).join(''):'<tr><td colspan="8" class="text-center text-muted">No movements found.</td></tr>';}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).getInventoryMovementHistoryByCode(phase8SelectedItem.code); }
-function reprintSelectedYFPhase8(){ if(!phase8SelectedItem)return; if(typeof openYourFindsLabelModal==='function')openYourFindsLabelModal(phase8SelectedItem.deliveryId); else showNotificationToast('Label reprint modal unavailable.',true); }
 function toggleInventoryStatusPhase8(){ if(!phase8SelectedItem)return; const target=String(phase8SelectedItem.status).toUpperCase()==='ACTIVE'?'INACTIVE':'ACTIVE'; const pin=window.prompt(`Manager PIN to set ${target}:`); if(!pin)return; google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Status change failed',true);return;}closePhase8Modal('inventoryDetailsModal');showNotificationToast(`Inventory set to ${target}`);loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).setInventoryAdministrativeStatusPhase8({code:phase8SelectedItem.code,status:target,managerPin:pin}); }
 function openProductMasterPhase8(){document.getElementById('productMasterModal').style.display='flex';loadProductMasterPhase8();}
 function loadProductMasterPhase8(){google.script.run.withSuccessHandler(products=>{window.phase8Products=products||[];renderProductMasterPhase8();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).getProductMaster();}
@@ -123,7 +263,8 @@ function saveProductMasterPhase8Client(){google.script.run.withSuccessHandler(r=
 function phase8RenderInventoryPhoto_(url){
   const img=document.getElementById('invDetailPhoto'), empty=document.getElementById('invDetailPhotoEmpty'), remove=document.getElementById('invRemovePhotoBtn');
   const value=String(url||'').trim();
-  if(value){img.src=value;img.style.display='block';empty.style.display='none';remove.style.display='inline-block';}
+  const completedYourFinds=phase8SelectedItem&&String(phase8SelectedItem.category||'').toUpperCase()==='YOURFINDS'&&String(phase8SelectedItem.inventoryType||'').toUpperCase()==='UNIQUE'&&String(phase8SelectedItem.status||'').toUpperCase()!=='INCOMPLETE';
+  if(value){img.src=value;img.style.display='block';empty.style.display='none';remove.style.display=completedYourFinds?'none':'inline-block';}
   else{img.removeAttribute('src');img.style.display='none';empty.style.display='block';remove.style.display='none';}
 }
 function chooseInventoryPhotoPhase8(){const input=document.getElementById('invPhotoInput');if(input){input.value='';input.click();}}

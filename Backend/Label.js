@@ -613,13 +613,13 @@ function buildYourFindsLabelsHtml(
 /* ==========================================================
    CREATE YOURFINDS LABEL PDF BY CODES
 
-   Universal YourFinds label generator.
+   YourFinds 30mm x 20mm receiving-label generator.
 
    Used later by:
 
    - Print after delivery
    - Selective delivery reprint
-   - Individual Inventory reprint
+   - Receiving-label reprint
 
    Input:
 
@@ -937,6 +937,154 @@ function createYourFindsLabelPDFByCodes(
 
   };
 
+}
+
+/* ==========================================================
+   COMPLETED YOURFINDS LABEL
+
+   This is intentionally separate from the 30mm x 20mm
+   receiving label above. Completed labels are 40mm x 30mm
+   and include the product description.
+========================================================== */
+
+function buildCompletedYourFindsLabelHtml(item) {
+  const code = String(item && item.code || "").trim();
+  const size = String(item && item.size || "").trim().toUpperCase();
+  const description = String(item && item.name || "").trim();
+
+  if (!code) throw new Error("Completed label is missing its Code.");
+  if (!size) throw new Error("YourFinds item " + code + " has no Size.");
+  if (!description) throw new Error("YourFinds item " + code + " has no Description.");
+
+  const barcodeSvg = createCode128Svg(code, 37, 10);
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        @page { size: 40mm 30mm; margin: 0; }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; width: 40mm; height: 30mm; }
+        body { font-family: Arial, Helvetica, sans-serif; }
+        .label {
+          width: 40mm;
+          height: 30mm;
+          padding: 1.2mm 1.5mm 0.8mm;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+        }
+        .top {
+          width: 100%;
+          height: 8mm;
+          display: flex;
+          align-items: center;
+          gap: 1mm;
+          margin-bottom: 0.7mm;
+        }
+        .description {
+          flex: 1;
+          max-height: 8mm;
+          overflow: hidden;
+          font-size: 8.5pt;
+          font-weight: 700;
+          line-height: 1.08;
+          text-align: left;
+          overflow-wrap: anywhere;
+        }
+        .size {
+          min-width: 8mm;
+          max-width: 12mm;
+          padding: 0.8mm 1mm;
+          border: 0.35mm solid #000;
+          border-radius: 1mm;
+          font-size: 10pt;
+          font-weight: 700;
+          line-height: 1;
+          text-align: center;
+          white-space: nowrap;
+          overflow: hidden;
+        }
+        .barcode, .barcode svg {
+          display: block;
+          width: 37mm;
+          height: 10mm;
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+        }
+        .code {
+          width: 100%;
+          margin-top: 0.8mm;
+          font-size: 8pt;
+          font-weight: 700;
+          letter-spacing: 0.2mm;
+          line-height: 1;
+          text-align: center;
+          white-space: nowrap;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="label">
+        <div class="top">
+          <div class="description">${escapeLabelHtml(description)}</div>
+          <div class="size">${escapeLabelHtml(size)}</div>
+        </div>
+        <div class="barcode">${barcodeSvg}</div>
+        <div class="code">${escapeLabelHtml(code)}</div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+function createCompletedYourFindsLabelPDF(code) {
+  code = String(code || "").trim();
+  if (!code) throw new Error("Inventory Code is required.");
+
+  const result = getYourFindsItemForCompletion(code);
+  if (!result || !result.success || !result.item) {
+    throw new Error(result && result.message ? result.message : "YourFinds item not found.");
+  }
+
+  const item = result.item;
+  const status = String(item.status || "").trim().toUpperCase();
+  if (status === INVENTORY_STATUS.INCOMPLETE) {
+    throw new Error("Complete the YourFinds item before generating its 40 x 30 label.");
+  }
+  if (status === INVENTORY_STATUS.RETURNED) {
+    throw new Error("Returned YourFinds items cannot generate a completed label.");
+  }
+  if (Number(item.stock) <= 0) {
+    throw new Error("Sold YourFinds items cannot generate a completed label.");
+  }
+  phase8AssertCompletedYourFinds_(item);
+
+  const html = buildCompletedYourFindsLabelHtml(item);
+  const timestamp = Utilities.formatDate(
+    new Date(),
+    Session.getScriptTimeZone(),
+    "yyyyMMdd_HHmmss"
+  );
+  const fileName = "YourFinds_Completed_" + code + "_" + timestamp;
+  const htmlBlob = Utilities.newBlob(html, "text/html", fileName + ".html");
+  const pdfBlob = htmlBlob.getAs("application/pdf").setName(fileName + ".pdf");
+  const file = DriveApp.createFile(pdfBlob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  return {
+    success: true,
+    labelCount: 1,
+    code: code,
+    fileName: file.getName(),
+    downloadUrl: file.getDownloadUrl(),
+    fileUrl: file.getUrl()
+  };
 }
 
 /* ==========================================================

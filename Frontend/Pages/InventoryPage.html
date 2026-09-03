@@ -510,6 +510,12 @@ function renderInventoryTable(items) {
         );
 
 
+      const needsYourFindsCompletion =
+        status === "INCOMPLETE" &&
+        String(item.category || "").trim().toUpperCase() === "YOURFINDS" &&
+        String(item.inventoryType || "").trim().toUpperCase() === "UNIQUE";
+
+
       const row =
         document.createElement(
           "tr"
@@ -599,10 +605,10 @@ function renderInventoryTable(items) {
 
         <button
           type="button"
-          class="btn btn-sm btn-outline-secondary"
+          class="btn btn-sm ${needsYourFindsCompletion ? "btn-pink" : "btn-outline-secondary"}"
           onclick="openInventoryDetailsPhase8('${escapeInventoryHtml(item.code)}')"
         >
-          View
+          ${needsYourFindsCompletion ? "Complete" : "View"}
         </button>
 
       </td>
