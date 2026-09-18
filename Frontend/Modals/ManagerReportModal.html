@@ -351,94 +351,39 @@ function updateManagerCashDrawerTotal() {
 /* ==========================================================
    GENERATE REPORT
 ========================================================== */
-
 function generateManagerDailyReport() {
-
   if (!currentEmployee) {
-
     showNotificationToast(
-      "No employee is currently logged in.",
+      'No employee is currently logged in.',
       true
     );
-
     return;
   }
 
+  // Preserve the existing role/access check.
   if (
-    currentEmployee.role !== "Manager" &&
+    currentEmployee.role !== 'Manager' &&
     currentEmployee.accessLevel > 1
   ) {
-
     showNotificationToast(
-      "Only managers can generate this report.",
+      'Only managers can generate this report.',
       true
     );
-
     return;
   }
 
-  const managerName =
-    currentEmployee.fullName;
-
+  const managerName = currentEmployee.fullName;
   const reportDate =
-    document.getElementById(
-      "managerReportDate"
-    ).value;
+    document.getElementById('managerReportDate').value;
 
   if (!reportDate) {
-
-    showNotificationToast(
-      "Please select a report date.",
-      true
-    );
-
+    showNotificationToast('Please select a report date.', true);
     return;
   }
 
-  requestManagerPin(
-    "Enter Manager PIN to download the PDF",
-    function(pin) {
-
-      if (pin === null) {
-        return;
-      }
-
-      google.script.run
-
-        .withSuccessHandler(function(result) {
-
-          if (!result.success) {
-
-            showNotificationToast(
-              result.message,
-              true
-            );
-
-            return;
-          }
-
-          proceedWithManagerDailyReport(
-            managerName,
-            reportDate
-          );
-
-        })
-
-        .withFailureHandler(function(err) {
-
-          showNotificationToast(
-            err.message || "Authorization failed.",
-            true
-          );
-
-        })
-
-        .verifyManagerPin(pin);
-
-    }
-  );
+  // Download without requesting another Manager PIN.
+  proceedWithManagerDailyReport(managerName, reportDate);
 }
-
 
 /* ==========================================================
    COMPILE REPORT DATA
