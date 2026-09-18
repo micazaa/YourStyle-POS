@@ -363,7 +363,8 @@ function testManagerExpectedCash() {
 function voidAndRefundTransactionBackend(
   receiptId,
   authorizedBy,
-  voidReason
+  voidReason,
+  itemCode
 ) {
 
   try {
@@ -389,6 +390,11 @@ function voidAndRefundTransactionBackend(
     voidReason =
       String(
         voidReason || ""
+      ).trim();
+
+    itemCode =
+      String(
+        itemCode || ""
       ).trim();
 
 
@@ -508,9 +514,7 @@ function voidAndRefundTransactionBackend(
           .toUpperCase();
 
 
-      if (
-        status === "VOIDED"
-      ) {
+      if (status === "VOIDED" && !itemCode) {
 
         return {
           success: false,
@@ -520,6 +524,19 @@ function voidAndRefundTransactionBackend(
 
       }
 
+      if (
+        itemCode &&
+        String(data[i][SALES_IDX.CODE] || "").trim() !== itemCode
+      ) {
+        continue;
+      }
+
+      if (status === "VOIDED") {
+        return {
+          success: false,
+          message: "This item has already been voided."
+        };
+      }
 
       matchedRows.push(i);
 
@@ -658,11 +675,12 @@ function voidAndRefundTransactionBackend(
         true,
 
       message:
-        "Receipt " +
+        (itemCode ? "Item " : "Receipt ") +
         receiptId +
-        " voided successfully (" +
-        matchedRows.length +
-        " line item(s)).",
+        (itemCode ? " voided successfully." : " voided successfully (") +
+        (itemCode
+          ? ""
+          : matchedRows.length + " line item(s))."),
 
       updatedInventory:
         getFullInventory()
@@ -793,13 +811,16 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
 
       const tx = receiptMap[receiptId];
 
-      tx.items += Number(row[SALES_IDX.QUANTITY]) || 0;
+      const rowStatus = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
 
-      tx.total += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+      if (rowStatus !== "VOIDED") {
+        tx.items += Number(row[SALES_IDX.QUANTITY]) || 0;
+        tx.total += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+      }
 
       const itemName = String(row[SALES_IDX.ITEM_NAME] || "").trim();
 
-      if (itemName) {
+      if (itemName && rowStatus !== "VOIDED") {
         tx.itemNames.push(itemName);
       }
 
@@ -808,13 +829,8 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
         receipt should display VOIDED.
       */
 
-      if (
-        String(row[SALES_IDX.STATUS] || "")
-          .trim()
-          .toUpperCase() === "VOIDED"
-      ) {
-        tx.status = "VOIDED";
-      }
+      if (rowStatus === "VOIDED") tx.hasVoided = true;
+      else tx.hasCompleted = true;
     }
 
     /* ======================================================
@@ -825,6 +841,13 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
 
     transactions.forEach(function (tx) {
       tx.total = roundToTwo(tx.total);
+      tx.status = tx.hasVoided && tx.hasCompleted
+        ? "PARTIALLY VOIDED"
+        : tx.hasVoided
+          ? "VOIDED"
+          : "COMPLETED";
+      delete tx.hasVoided;
+      delete tx.hasCompleted;
 
       tx.itemNames = tx.itemNames.join(", ");
     });
@@ -946,6 +969,8 @@ function getTransactionDetails(receiptId) {
 
       /* ================= ITEM ================= */
 
+      const itemStatus = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
+
       transaction.items.push({
         code: String(row[SALES_IDX.CODE] || ""),
 
@@ -968,21 +993,19 @@ function getTransactionDetails(receiptId) {
         netTotal: Number(row[SALES_IDX.NET_TOTAL]) || 0,
 
         reason: String(row[SALES_IDX.REASON] || ""),
+        status: itemStatus,
       });
 
       /* ================= TOTAL ================= */
 
-      transaction.total += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+      if (itemStatus !== "VOIDED") {
+        transaction.total += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+      }
 
       /* ================= VOID STATUS ================= */
 
-      if (
-        String(row[SALES_IDX.STATUS] || "")
-          .trim()
-          .toUpperCase() === "VOIDED"
-      ) {
-        transaction.status = "VOIDED";
-      }
+      if (itemStatus === "VOIDED") transaction.hasVoided = true;
+      else transaction.hasCompleted = true;
 
       /* ================= AUTHORIZED BY ================= */
 
@@ -1014,6 +1037,13 @@ function getTransactionDetails(receiptId) {
     ====================================================== */
 
     transaction.total = roundToTwo(transaction.total);
+    transaction.status = transaction.hasVoided && transaction.hasCompleted
+      ? "PARTIALLY VOIDED"
+      : transaction.hasVoided
+        ? "VOIDED"
+        : "COMPLETED";
+    delete transaction.hasVoided;
+    delete transaction.hasCompleted;
 
     return {
       success: true,

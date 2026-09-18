@@ -800,7 +800,7 @@ function updateTransactionHistorySummary(items) {
       toward sales statistics.
     */
 
-    if (status !== "COMPLETED") {
+    if (status === "VOIDED") {
       return;
     }
 
@@ -877,6 +877,14 @@ function buildTransactionStatusBadge(status) {
       </span>
     `;
 
+  }
+
+  if (value === "PARTIALLY VOIDED") {
+    return `
+      <span class="badge bg-warning text-dark">
+        Partially voided
+      </span>
+    `;
   }
 
 

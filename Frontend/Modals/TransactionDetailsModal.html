@@ -145,6 +145,10 @@
               Net
             </th>
 
+            <th class="text-end">
+              Action
+            </th>
+
           </tr>
 
         </thead>
@@ -155,7 +159,7 @@
           <tr>
 
             <td
-              colspan="6"
+              colspan="7"
               class="text-center text-muted py-4"
             >
               Loading...
@@ -376,7 +380,7 @@ function openTransactionDetails(
   ).innerHTML = `
     <tr>
       <td
-        colspan="6"
+        colspan="7"
         class="text-center text-muted py-4"
       >
         Loading transaction...
@@ -540,7 +544,24 @@ function renderTransactionDetails(tx) {
         ₱${Number(item.netTotal || 0).toFixed(2)}
       </td>
 
+      <td class="text-end"></td>
+
     `;
+
+    const actionCell = row.lastElementChild;
+    if (String(item.status).toUpperCase() === "VOIDED") {
+      actionCell.innerHTML = '<span class="badge bg-danger">Voided</span>';
+    } else if (String(tx.status).toUpperCase() !== "VOIDED") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-sm btn-outline-danger";
+      button.textContent = "Void item";
+      button.addEventListener("click", function(event) {
+        event.stopPropagation();
+        voidItemFromHistory(item.code);
+      });
+      actionCell.appendChild(button);
+    }
 
 
     tbody.appendChild(row);
@@ -679,7 +700,10 @@ function renderTransactionDetails(tx) {
 
   } else {
     voidBox.style.display = "none";
-    voidButton.style.display = isExchange ? "none" : "block";
+    voidButton.style.display =
+      isExchange || String(tx.status).toUpperCase() === "PARTIALLY VOIDED"
+        ? "none"
+        : "block";
   }
 
     /* ================= EXCHANGE ACTION ================= */
@@ -752,10 +776,19 @@ function voidTransactionFromHistory() {
     Keep Transaction History open underneath.
   */
 
-  openVoidReceiptModal(
-    receiptId
-  );
+  openVoidReceiptModal(receiptId, "");
 
+}
+
+function voidItemFromHistory(itemCode) {
+  const receiptId = String(selectedTransactionReceiptId || "").trim();
+  if (!receiptId || !itemCode) {
+    showNotificationToast("Item information is missing.", true);
+    return;
+  }
+
+  document.getElementById("transactionDetailsModal").style.display = "none";
+  openVoidReceiptModal(receiptId, itemCode);
 }
 
 function exchangeCurrentTransaction() {
