@@ -55,7 +55,7 @@
         <div><strong id="yourFindsReprintSelectedCount">0</strong> label(s) selected</div>
         <div class="d-flex gap-2">
           <button class="btn btn-outline-secondary" onclick="closeYourFindsReprintModal()">Cancel</button>
-          <button id="yourFindsBulkPrintBtn" class="btn btn-pink" onclick="printSelectedYourFindsLabels()" disabled>
+          <button id="yourFindsBulkPrintBtn" class="btn btn-pink" onclick="printSelectedYourFindsReprintLabels()" disabled>
             Generate 40 × 30 Labels
           </button>
         </div>
@@ -187,7 +187,7 @@ function updateYourFindsReprintSelection() {
   button.textContent = labelType === 'INCOMPLETE' ? 'Generate 30 × 20 Labels' : 'Generate 40 × 30 Labels';
 }
 
-function printSelectedYourFindsLabels() {
+function printSelectedYourFindsReprintLabels() {
   const codes = Object.keys(yourFindsReprintSelection);
   const labelType = document.getElementById('yourFindsReprintType').value;
   if (!codes.length) return showNotificationToast('Select at least one label.', true);

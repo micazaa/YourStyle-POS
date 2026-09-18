@@ -405,99 +405,206 @@ function closeCashierShiftPhase10(
 ) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
+
   try {
     const sheet = phase10CashReportSheet_();
     const now = new Date();
+    const tz = Session.getScriptTimeZone();
+    const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
     const dateStr = phase10DateString_(reportDate);
+    const employee = String(cashierName || '').trim();
+    const manager = String(managerName || '').trim();
 
-    // Same-day resubmission rule:
-    // 1) use current OPEN shift when present;
-    // 2) otherwise update the latest CLOSED CASHIER SHIFT for this cashier/date.
-    let target = phase10FindOpenShift_(cashierName);
+    if (!employee) throw new Error('Cashier is required.');
+    if (!manager) throw new Error('Verifying manager is required.');
 
-    if (!target && sheet.getLastRow() >= 2) {
-      const rows = sheet
-        .getRange(2, 1, sheet.getLastRow() - 1, CASH_REPORT_COLUMN_COUNT)
-        .getValues();
+    const parsedDate = new Date(dateStr + 'T00:00:00Z');
 
-      for (let i = rows.length - 1; i >= 0; i--) {
-        const r = rows[i];
-        if (
-          String(r[CASH_REPORT_IDX.REPORT_TYPE] || '').trim().toUpperCase() === 'CASHIER SHIFT' &&
-          String(r[CASH_REPORT_IDX.EMPLOYEE] || '').trim() === String(cashierName || '').trim() &&
-          phase10DateString_(r[CASH_REPORT_IDX.REPORT_DATE]) === dateStr &&
-          String(r[CASH_REPORT_IDX.STATUS] || '').trim().toUpperCase() === 'CLOSED'
-        ) {
-          target = { row: i + 2, values: r, sameDayResubmit: true };
-          break;
-        }
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(dateStr) ||
+      isNaN(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== dateStr
+    ) {
+      throw new Error('A valid report date is required.');
+    }
+
+    if (dateStr > today) {
+      throw new Error('Report date cannot be in the future.');
+    }
+
+    const rows = sheet.getLastRow() >= 2
+      ? sheet.getRange(
+          2, 1, sheet.getLastRow() - 1, CASH_REPORT_COLUMN_COUNT
+        ).getValues()
+      : [];
+
+    let openTarget = null;
+    let closedTarget = null;
+
+    // Only consider this cashier AND the selected report date.
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const row = rows[i];
+
+      if (
+        String(row[CASH_REPORT_IDX.REPORT_TYPE] || '')
+          .trim().toUpperCase() !== 'CASHIER SHIFT' ||
+        String(row[CASH_REPORT_IDX.EMPLOYEE] || '').trim() !== employee ||
+        phase10DateString_(row[CASH_REPORT_IDX.REPORT_DATE]) !== dateStr
+      ) {
+        continue;
+      }
+
+      const status = String(row[CASH_REPORT_IDX.STATUS] || '')
+        .trim().toUpperCase();
+
+      if (status === 'OPEN' && !openTarget) {
+        openTarget = { row: i + 2, values: row };
+      } else if (status === 'CLOSED' && !closedTarget) {
+        closedTarget = { row: i + 2, values: row };
+      } else if (status !== 'OPEN' && status !== 'CLOSED') {
+        throw new Error('An existing report has an unsupported status.');
       }
     }
 
-    if (!target) throw new Error('No cashier report found for this date.');
+    let target = openTarget || closedTarget;
 
-    const v = target.values;
-    const pettyBreak = (pettyCashObj && pettyCashObj.returnBreakdown) || {},
-      cashBreak = (cashOnHandObj && cashOnHandObj.breakdown) || {};
-    const pettyReceived = Number(v[CASH_REPORT_IDX.PETTY_RECEIVED]) || 0,
-      pettyReturned = sumBreakdown(pettyBreak),
-      cashCounted = sumBreakdown(cashBreak);
-    const pettyVoucher = String((pettyCashObj && pettyCashObj.voucherNo) || '').trim();
-    const pettyRemark = String((pettyCashObj && pettyCashObj.reason) || '').trim();
-    if (Math.abs(pettyReturned - pettyReceived) > 0.001) {
-      if (!pettyVoucher)
-        throw new Error(
-          'Petty Cash Voucher No. is required when petty received and returned do not match.'
-        );
-      if (!pettyRemark)
-        throw new Error(
-          'Petty cash explanation is required when petty received and returned do not match.'
-        );
+    // Historical closed reports still use the existing correction workflow.
+    if (target && !openTarget && dateStr !== today) {
+      throw new Error(
+        'This historical report is already closed. ' +
+        'Use Regenerate Report or Correct Report.'
+      );
     }
-    const expected = phase10ExpectedCashForDate_(cashierName, reportDate),
-      cashVariance = roundToTwo(cashCounted - expected),
-      pettyVariance = roundToTwo(pettyReturned - pettyReceived);
-    const row = v.slice();
-    row[CASH_REPORT_IDX.MANAGER] = managerName || '';
-    row[CASH_REPORT_IDX.SHIFT_END] = now;
+
+    const denominations = [1000, 500, 200, 100, 50, 20, 10, 5, 1];
+
+    function validateBreakdown(source) {
+      const result = {};
+
+      denominations.forEach(function(denomination) {
+        const raw = source && source[denomination];
+        const quantity =
+          raw === undefined || raw === null || raw === ''
+            ? 0
+            : Number(raw);
+
+        if (!Number.isSafeInteger(quantity) || quantity < 0) {
+          throw new Error(
+            'Bill and coin quantities must be non-negative whole numbers.'
+          );
+        }
+
+        result[denomination] = quantity;
+      });
+
+      return result;
+    }
+
+    const pettyBreak = validateBreakdown(
+      pettyCashObj && pettyCashObj.returnBreakdown
+    );
+
+    const cashBreak = validateBreakdown(
+      cashOnHandObj && cashOnHandObj.breakdown
+    );
+
+    const isNewReport = !target;
+
+    if (isNewReport) {
+      const received = Number(
+        pettyCashObj && pettyCashObj.received
+      ) || 0;
+
+      if (!Number.isFinite(received) || received < 0) {
+        throw new Error('Petty cash received must be a valid amount.');
+      }
+
+      const values = new Array(CASH_REPORT_COLUMN_COUNT).fill('');
+
+      values[CASH_REPORT_IDX.REPORT_ID] = phase10NextReportId_();
+      values[CASH_REPORT_IDX.TIMESTAMP] = now;
+      values[CASH_REPORT_IDX.REPORT_TYPE] = 'CASHIER SHIFT';
+      values[CASH_REPORT_IDX.REPORT_DATE] = dateStr;
+      values[CASH_REPORT_IDX.EMPLOYEE] = employee;
+      values[CASH_REPORT_IDX.PETTY_RECEIVED] = received;
+
+      // No recorded shift start exists. Do not invent one.
+      target = {
+        row: sheet.getLastRow() + 1,
+        values: values
+      };
+    }
+
+    const row = target.values.slice();
+    const pettyReceived =
+      Number(row[CASH_REPORT_IDX.PETTY_RECEIVED]) || 0;
+
+    const pettyReturned = sumBreakdown(pettyBreak);
+    const cashCounted = sumBreakdown(cashBreak);
+
+    const pettyVoucher = String(
+      (pettyCashObj && pettyCashObj.voucherNo) || ''
+    ).trim();
+
+    const pettyRemark = String(
+      (pettyCashObj && pettyCashObj.reason) || ''
+    ).trim();
+
+    if (Math.abs(pettyReturned - pettyReceived) > 0.001) {
+      if (!pettyVoucher) {
+        throw new Error(
+          'Petty Cash Voucher No. is required when petty received ' +
+          'and returned do not match.'
+        );
+      }
+
+      if (!pettyRemark) {
+        throw new Error(
+          'Petty cash explanation is required when petty received ' +
+          'and returned do not match.'
+        );
+      }
+    }
+
+    const expected = phase10ExpectedCashForDate_(employee, dateStr);
+    const cashVariance = roundToTwo(cashCounted - expected);
+    const pettyVariance = roundToTwo(pettyReturned - pettyReceived);
+
+    row[CASH_REPORT_IDX.MANAGER] = manager;
+
+    // Do not record today's timestamp as an older date's shift end.
+    if (dateStr === today) {
+      row[CASH_REPORT_IDX.SHIFT_END] = now;
+    }
+
     row[CASH_REPORT_IDX.EXPECTED_CASH] = expected;
-    const den = [1000, 500, 200, 100, 50, 20, 10, 5, 1],
-      cashIdx = [
-        CASH_REPORT_IDX.CASH_1000,
-        CASH_REPORT_IDX.CASH_500,
-        CASH_REPORT_IDX.CASH_200,
-        CASH_REPORT_IDX.CASH_100,
-        CASH_REPORT_IDX.CASH_50,
-        CASH_REPORT_IDX.CASH_20,
-        CASH_REPORT_IDX.CASH_10,
-        CASH_REPORT_IDX.CASH_5,
-        CASH_REPORT_IDX.CASH_1,
-      ],
-      pettyIdx = [
-        CASH_REPORT_IDX.PETTY_1000,
-        CASH_REPORT_IDX.PETTY_500,
-        CASH_REPORT_IDX.PETTY_200,
-        CASH_REPORT_IDX.PETTY_100,
-        CASH_REPORT_IDX.PETTY_50,
-        CASH_REPORT_IDX.PETTY_20,
-        CASH_REPORT_IDX.PETTY_10,
-        CASH_REPORT_IDX.PETTY_5,
-        CASH_REPORT_IDX.PETTY_1,
-      ];
-    den.forEach((d, i) => {
-      row[cashIdx[i]] = Number(cashBreak[d]) || 0;
-      row[pettyIdx[i]] = Number(pettyBreak[d]) || 0;
+
+    denominations.forEach(function(denomination) {
+      row[CASH_REPORT_IDX['CASH_' + denomination]] =
+        cashBreak[denomination];
+
+      row[CASH_REPORT_IDX['PETTY_' + denomination]] =
+        pettyBreak[denomination];
     });
+
     row[CASH_REPORT_IDX.CASH_COUNTED] = cashCounted;
     row[CASH_REPORT_IDX.CASH_VARIANCE] = cashVariance;
-    row[CASH_REPORT_IDX.CASH_REMARK] = String(cashDrawerRemark || '').trim();
+    row[CASH_REPORT_IDX.CASH_REMARK] =
+      String(cashDrawerRemark || '').trim();
+
     row[CASH_REPORT_IDX.PETTY_RETURNED] = pettyReturned;
     row[CASH_REPORT_IDX.PETTY_VARIANCE] = pettyVariance;
     row[CASH_REPORT_IDX.PETTY_VOUCHER_NO] = pettyVoucher;
     row[CASH_REPORT_IDX.PETTY_REMARK] = pettyRemark;
     row[CASH_REPORT_IDX.STATUS] = 'CLOSED';
     row[CASH_REPORT_IDX.UPDATED_AT] = now;
-    sheet.getRange(target.row, 1, 1, CASH_REPORT_COLUMN_COUNT).setValues([row]);
+
+    sheet.getRange(
+      target.row, 1, 1, CASH_REPORT_COLUMN_COUNT
+    ).setValues([row]);
+
+    SpreadsheetApp.flush();
+
     return {
       success: true,
       reportId: row[CASH_REPORT_IDX.REPORT_ID],
@@ -506,13 +613,11 @@ function closeCashierShiftPhase10(
       cashVariance: cashVariance,
       pettyReturned: pettyReturned,
       pettyVariance: pettyVariance,
-      shiftStart: v[CASH_REPORT_IDX.SHIFT_START],
-      shiftEnd: now,
+      shiftStart: row[CASH_REPORT_IDX.SHIFT_START],
+      shiftEnd: row[CASH_REPORT_IDX.SHIFT_END]
     };
   } finally {
-    try {
-      lock.releaseLock();
-    } catch (e) {}
+    lock.releaseLock();
   }
 }
 

@@ -652,5 +652,154 @@
   font-weight: 700;
 }
 
+/* Alternating detail rows */
+tbody > tr:nth-child(odd):not(.category):not(.total) > td {
+  background-color: #ffffff;
+}
 
+tbody > tr:nth-child(even):not(.category):not(.total) > td {
+  background-color: #f3f5f7;
+}
+
+/* Clear category separators */
+.category td {
+  background-color: #f4e3e7;
+  color: #70464d;
+  font-weight: bold;
+  border-top: 2px solid #cc929e;
+}
+
+/* Softer detail borders */
+tbody > tr:not(.category):not(.total) > td {
+  border-color: #d8dce1;
+}
+
+/* Keep exchange rows easy to follow */
+.exchange-table td {
+  border-top-style: solid;
+  border-bottom-style: solid;
+}
+
+.movement {
+  margin-top: 2px;
+  font-size: 7.5px;
+  font-weight: bold;
+  color: #555;
+}
+
+/* Highlight totals */
+.total td {
+  background-color: #f4e3e7;
+  color: #8f2441;
+  font-weight: bold;
+  border-top: 2px solid #cc929e;
+}
+
+/* Final combined amount */
+.combined-total {
+  background-color: #f4e3e7;
+  padding: 8px;
+  border: 1px solid #cc929e;
+  font-weight: bold;
+}
+
+/* Negative values stay distinct */
+.negative {
+  color: #b4233c;
+  font-weight: bold;
+}
+
+/* Preserve cell shading in print output */
+table, th, td {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Compact exchange rows with separate fields */
+.exchange-table {
+  table-layout: fixed;
+}
+
+.exchange-table th,
+.exchange-table td {
+  padding: 4px 3px;
+  font-size: 7.5px;
+  vertical-align: middle;
+  border: 1px solid #c8cdd3;
+}
+
+.exchange-table .exchange-type {
+  font-weight: bold;
+}
+
+.exchange-table .receipt {
+  font-size: 7px;
+}
+
+.exchange-table .exchange-date {
+  font-size: 7px;
+  white-space: nowrap;
+}
+
+/* Variance and remarks share the same color */
+.report-variance,
+.report-variance b,
+.report-remark {
+  color: #a96519 !important;
+}
+
+.report-variance {
+  font-weight: bold;
+}
+
+/* Keep category and total rows distinct */
+.category td,
+.total td {
+  background-color: #f4e3e7 !important;
+  font-weight: bold;
+}
+
+/* Solid border around the exchange total row */
+.exchange-table tbody tr.total td {
+  border-top: 1px solid #cc929e !important;
+  border-bottom: 1px solid #cc929e !important;
+}
+
+/* No separator line beneath Final Net Sales */
+.combined-total {
+  border-bottom: none !important;
+}
+
+thead th {
+  background-color: #f4e3e7 !important;
+  color: #70464d !important;
+  border-color: #d7b8bf !important;
+}
+
+.category td {
+  background-color: #faf0f2 !important;
+  color: #70464d !important;
+  font-weight: bold;
+}
+
+.card,
+.card-title,
+.card th,
+.card td {
+  border-color: #d7b8bf !important;
+}
+
+.card-title {
+  background-color: #faf0f2 !important;
+  color: #70464d !important;
+}
+
+.exchange-table .total td {
+  color: #76243d !important;
+  font-weight: bold;
+}
+
+.net-sales-total {
+  page-break-inside: avoid;
+}
 </style>
