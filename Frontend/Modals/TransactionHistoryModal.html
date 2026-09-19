@@ -192,7 +192,7 @@
 
     <div
       class="table-responsive border rounded"
-      style="max-height:55vh;"
+      style="max-height:none; overflow-y:visible;"
     >
 
       <table
@@ -270,6 +270,7 @@
 <script>
 
 var transactionHistoryData = [];
+const TRANSACTION_HISTORY_ROW_LIMIT = 6;
 
 
 /* ==========================================================
@@ -527,9 +528,7 @@ function loadTransactionHistory() {
       );
 
 
-      renderTransactionHistory(
-        transactionHistoryData
-      );
+      filterTransactionHistoryTable();
 
     })
 
@@ -714,7 +713,9 @@ function renderTransactionHistory(items) {
   }
 
 
-  items.forEach(function(tx) {
+  items
+    .slice(0, TRANSACTION_HISTORY_ROW_LIMIT)
+    .forEach(function(tx) {
 
     const row =
       document.createElement("tr");
@@ -769,9 +770,7 @@ function renderTransactionHistory(items) {
   });
 
 
-  updateTransactionHistorySummary(
-    items
-  );
+  updateTransactionHistorySummary(items);
 
 }
 
@@ -881,8 +880,8 @@ function buildTransactionStatusBadge(status) {
 
   if (value === "PARTIALLY VOIDED") {
     return `
-      <span class="badge bg-warning text-dark">
-        Partially voided
+      <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+        Amended
       </span>
     `;
   }

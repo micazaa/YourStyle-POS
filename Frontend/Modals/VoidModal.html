@@ -68,8 +68,8 @@
         Item Code
       </label>
       <input type="text" class="form-control" id="voidItemCode" readonly>
+      <input type="hidden" id="voidItemRowIndex">
     </div>
-
 
     <!-- PIN -->
 
@@ -200,7 +200,7 @@ function toggleVoidModal(show) {
 }
 
 
-function openVoidReceiptModal(receiptId, itemCode) {
+function openVoidReceiptModal(receiptId, itemCode, itemRowIndex) {
 
   const modal =
     document.getElementById(
@@ -219,6 +219,7 @@ function openVoidReceiptModal(receiptId, itemCode) {
 
   const itemBox = document.getElementById("voidItemBox");
   const itemInput = document.getElementById("voidItemCode");
+  const rowIndexInput = document.getElementById("voidItemRowIndex");
 
 
   if (!modal) {
@@ -240,6 +241,7 @@ function openVoidReceiptModal(receiptId, itemCode) {
   }
 
   if (itemInput) itemInput.value = itemCode || "";
+  if (rowIndexInput) rowIndexInput.value = itemRowIndex !== undefined && itemRowIndex !== null && itemRowIndex !== "" ? String(itemRowIndex) : "";
   if (itemBox) itemBox.style.display = itemCode ? "block" : "none";
 
 
@@ -340,6 +342,7 @@ function closeVoidModal() {
 
   const itemBox = document.getElementById("voidItemBox");
   const itemInput = document.getElementById("voidItemCode");
+  const rowIndexInput = document.getElementById("voidItemRowIndex");
 
 
   if (receiptInput) {
@@ -351,6 +354,7 @@ function closeVoidModal() {
     pinInput.value = "";
   }
   if (itemInput) itemInput.value = "";
+  if (rowIndexInput) rowIndexInput.value = "";
   if (itemBox) itemBox.style.display = "none";
   const reasonInput =
   document.getElementById(
@@ -452,6 +456,8 @@ function processRefundRequest() {
 
   const itemCodeInput = document.getElementById("voidItemCode");
   const itemCode = itemCodeInput ? itemCodeInput.value.trim() : "";
+  const itemRowIndexInput = document.getElementById("voidItemRowIndex");
+  const itemRowIndex = itemRowIndexInput && itemRowIndexInput.value !== "" ? Number(itemRowIndexInput.value) : "";
 
 
   const pin =
@@ -512,7 +518,6 @@ let voidReason =
   return;
 
 }
-
 
 if (voidReason === "Other") {
 
@@ -675,7 +680,9 @@ if (voidReason === "Other") {
         receiptId,
         result.managerName,
         voidReason,
-        itemCode
+        itemCode,
+        itemRowIndex,
+        1
       );
 
     })
