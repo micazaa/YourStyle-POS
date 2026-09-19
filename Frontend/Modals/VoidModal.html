@@ -42,7 +42,7 @@
 
 
     <p class="small text-muted mb-3">
-      Enter the receipt ID and manager PIN to void this transaction.
+      Enter the receipt ID and manager PIN to void this transaction or item.
     </p>
 
 
@@ -63,6 +63,13 @@
 
     </div>
 
+    <div id="voidItemBox" class="mb-3" style="display:none;">
+      <label class="form-label">
+        Item Code
+      </label>
+      <input type="text" class="form-control" id="voidItemCode" readonly>
+      <input type="hidden" id="voidItemRowIndex">
+    </div>
 
     <!-- PIN -->
 
@@ -193,7 +200,7 @@ function toggleVoidModal(show) {
 }
 
 
-function openVoidReceiptModal(receiptId) {
+function openVoidReceiptModal(receiptId, itemCode, itemRowIndex) {
 
   const modal =
     document.getElementById(
@@ -209,6 +216,10 @@ function openVoidReceiptModal(receiptId) {
     document.getElementById(
       "managerVoidPin"
     );
+
+  const itemBox = document.getElementById("voidItemBox");
+  const itemInput = document.getElementById("voidItemCode");
+  const rowIndexInput = document.getElementById("voidItemRowIndex");
 
 
   if (!modal) {
@@ -228,6 +239,10 @@ function openVoidReceiptModal(receiptId) {
       receiptId || "";
 
   }
+
+  if (itemInput) itemInput.value = itemCode || "";
+  if (rowIndexInput) rowIndexInput.value = itemRowIndex !== undefined && itemRowIndex !== null && itemRowIndex !== "" ? String(itemRowIndex) : "";
+  if (itemBox) itemBox.style.display = itemCode ? "block" : "none";
 
 
   if (pinInput) {
@@ -325,6 +340,10 @@ function closeVoidModal() {
       "managerVoidPin"
     );
 
+  const itemBox = document.getElementById("voidItemBox");
+  const itemInput = document.getElementById("voidItemCode");
+  const rowIndexInput = document.getElementById("voidItemRowIndex");
+
 
   if (receiptInput) {
     receiptInput.value = "";
@@ -334,6 +353,9 @@ function closeVoidModal() {
   if (pinInput) {
     pinInput.value = "";
   }
+  if (itemInput) itemInput.value = "";
+  if (rowIndexInput) rowIndexInput.value = "";
+  if (itemBox) itemBox.style.display = "none";
   const reasonInput =
   document.getElementById(
     "voidReason"
@@ -432,6 +454,11 @@ function processRefundRequest() {
       ? receiptInput.value.trim()
       : "";
 
+  const itemCodeInput = document.getElementById("voidItemCode");
+  const itemCode = itemCodeInput ? itemCodeInput.value.trim() : "";
+  const itemRowIndexInput = document.getElementById("voidItemRowIndex");
+  const itemRowIndex = itemRowIndexInput && itemRowIndexInput.value !== "" ? Number(itemRowIndexInput.value) : "";
+
 
   const pin =
     pinInput
@@ -491,7 +518,6 @@ let voidReason =
   return;
 
 }
-
 
 if (voidReason === "Other") {
 
@@ -653,7 +679,10 @@ if (voidReason === "Other") {
       .voidAndRefundTransactionBackend(
         receiptId,
         result.managerName,
-        voidReason
+        voidReason,
+        itemCode,
+        itemRowIndex,
+        1
       );
 
     })

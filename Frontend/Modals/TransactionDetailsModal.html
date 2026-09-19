@@ -129,10 +129,6 @@
               Size
             </th>
 
-            <th class="text-center">
-              Qty
-            </th>
-
             <th class="text-end">
               Price
             </th>
@@ -143,6 +139,10 @@
 
             <th class="text-end">
               Net
+            </th>
+
+            <th class="text-end">
+              Action
             </th>
 
           </tr>
@@ -157,8 +157,10 @@
             <td
               colspan="6"
               class="text-center text-muted py-4"
+              role="status"
+              aria-live="polite"
             >
-              Loading...
+              <div class="spinner-border spinner-border-sm text-secondary me-2" aria-hidden="true"></div>
             </td>
 
           </tr>
@@ -378,8 +380,10 @@ function openTransactionDetails(
       <td
         colspan="6"
         class="text-center text-muted py-4"
+        role="status"
+        aria-live="polite"
       >
-        Loading transaction...
+        <div class="spinner-border spinner-border-sm text-secondary me-2" aria-hidden="true"></div>
       </td>
     </tr>
   `;
@@ -496,9 +500,19 @@ function renderTransactionDetails(tx) {
 
 
   tx.items.forEach(function(item) {
+    const quantity = Math.max(1, Math.floor(Number(item.quantity) || 1));
+    const unitDiscount = Number(item.discount || 0) / quantity;
+    const unitNetTotal = Number(item.netTotal || 0) / quantity;
 
-    const row =
-      document.createElement("tr");
+    for (let unitIndex = 0; unitIndex < quantity; unitIndex++) {
+      const itemUnit = Object.assign({}, item, {
+        quantity: 1,
+        discount: unitDiscount,
+        netTotal: unitNetTotal
+      });
+
+      const row =
+        document.createElement("tr");
 
 
     row.innerHTML = `
@@ -520,30 +534,60 @@ function renderTransactionDetails(tx) {
         ${escapeTransactionHtml(item.size)}
       </td>
 
-
-      <td class="text-center">
-        ${Number(item.quantity) || 0}
+  <td class="text-end">
+        ₱${Number(itemUnit.price || 0).toFixed(2)}
       </td>
 
 
       <td class="text-end">
-        ₱${Number(item.price || 0).toFixed(2)}
-      </td>
-
-
-      <td class="text-end">
-        ₱${Number(item.discount || 0).toFixed(2)}
+        ₱${Number(itemUnit.discount || 0).toFixed(2)}
       </td>
 
 
       <td class="text-end fw-bold">
-        ₱${Number(item.netTotal || 0).toFixed(2)}
+        ₱${Number(itemUnit.netTotal || 0).toFixed(2)}
       </td>
+
+      <td class="text-end"></td>
 
     `;
 
+    const actionCell = row.lastElementChild;
+    if (String(item.status).toUpperCase() === "VOIDED") {
+      actionCell.innerHTML = '<span class="badge bg-warning text-dark">Voided</span>';
+    } else if (String(tx.status).toUpperCase() !== "VOIDED") {
+      if (String(item.status).toUpperCase() === "PARTIALLY VOIDED") {
+        actionCell.innerHTML = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle me-1">Adjusted</span>';
+      }
 
-    tbody.appendChild(row);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-sm btn-link text-danger p-1 lh-1";
+      button.setAttribute("aria-label", "Void item");
+      button.title = "Void item";
+      button.innerHTML = `
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="15"
+          height="15"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          aria-hidden="true"
+          style="vertical-align:middle; opacity:0.9;"
+        >
+          <path d="M5.5 5.5A.5.5 0 0 1 6 5h4a.5.5 0 0 1 .5.5V6h-5v-.5zm-1 1.5h7l-.5 7.5A1.5 1.5 0 0 1 9.5 15h-3a1.5 1.5 0 0 1-1.5-1.5L4.5 7zM7 2.5A1.5 1.5 0 0 1 8.5 1h-1A1.5 1.5 0 0 1 9 2.5V3h3a.5.5 0 0 1 0 1H4a.5.5 0 0 1 0-1h3v-.5z"/>
+        </svg>
+      `;
+      button.addEventListener("click", function(event) {
+        event.stopPropagation();
+        voidItemFromHistory(itemUnit);
+      });
+      actionCell.appendChild(button);
+    }
+
+
+      tbody.appendChild(row);
+    }
 
   });
 
@@ -679,7 +723,10 @@ function renderTransactionDetails(tx) {
 
   } else {
     voidBox.style.display = "none";
-    voidButton.style.display = isExchange ? "none" : "block";
+    voidButton.style.display =
+      isExchange || String(tx.status).toUpperCase() === "VOIDED"
+        ? "none"
+        : "block";
   }
 
     /* ================= EXCHANGE ACTION ================= */
@@ -752,10 +799,22 @@ function voidTransactionFromHistory() {
     Keep Transaction History open underneath.
   */
 
-  openVoidReceiptModal(
-    receiptId
-  );
+  openVoidReceiptModal(receiptId, "");
 
+}
+
+function voidItemFromHistory(item) {
+  const receiptId = String(selectedTransactionReceiptId || "").trim();
+  const itemCode = typeof item === "string" ? item : (item && item.code) || "";
+  const rowIndex = Number.isFinite(Number(item && item.rowIndex)) ? Number(item.rowIndex) : "";
+
+  if (!receiptId || !itemCode) {
+    showNotificationToast("Item information is missing.", true);
+    return;
+  }
+
+  document.getElementById("transactionDetailsModal").style.display = "none";
+  openVoidReceiptModal(receiptId, itemCode, rowIndex);
 }
 
 function exchangeCurrentTransaction() {

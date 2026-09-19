@@ -363,7 +363,10 @@ function testManagerExpectedCash() {
 function voidAndRefundTransactionBackend(
   receiptId,
   authorizedBy,
-  voidReason
+  voidReason,
+  itemCode,
+  itemRowIndex,
+  qtyToVoid
 ) {
 
   try {
@@ -390,6 +393,18 @@ function voidAndRefundTransactionBackend(
       String(
         voidReason || ""
       ).trim();
+
+    itemCode =
+      String(
+        itemCode || ""
+      ).trim();
+
+    itemRowIndex =
+      itemCode && itemRowIndex !== undefined && itemRowIndex !== null && itemRowIndex !== ""
+        ? Number(itemRowIndex)
+        : "";
+
+    qtyToVoid = 1;
 
 
     /* ========================================================
@@ -458,10 +473,9 @@ function voidAndRefundTransactionBackend(
     }
 
 
-    const data =
-      salesLogSheet
-        .getDataRange()
-        .getValues();
+    const salesRange = salesLogSheet.getDataRange();
+    const data = salesRange.getValues();
+    const notes = salesRange.getNotes();
 
 
     const matchedRows =
@@ -508,9 +522,10 @@ function voidAndRefundTransactionBackend(
           .toUpperCase();
 
 
-      if (
-        status === "VOIDED"
-      ) {
+      const isPartialVoid = status === "VOIDED" &&
+        String(notes[i][SALES_IDX.STATUS] || "").trim().toUpperCase() === "PARTIALLY VOIDED";
+
+      if (status === "VOIDED" && !isPartialVoid && !itemCode) {
 
         return {
           success: false,
@@ -520,6 +535,22 @@ function voidAndRefundTransactionBackend(
 
       }
 
+      if (itemCode) {
+        const rowCode = String(data[i][SALES_IDX.CODE] || "").trim();
+        const matchesCode = rowCode === itemCode;
+        const matchesRowIndex = itemRowIndex === "" || i === Number(itemRowIndex);
+
+        if (!matchesCode || !matchesRowIndex) {
+          continue;
+        }
+      }
+
+      if (status === "VOIDED" && !isPartialVoid) {
+        return {
+          success: false,
+          message: "This item has already been voided."
+        };
+      }
 
       matchedRows.push(i);
 
@@ -575,6 +606,11 @@ function voidAndRefundTransactionBackend(
             10
           ) || 0;
 
+        const lineNetTotal = Number(row[SALES_IDX.NET_TOTAL]) || 0;
+        const lineDiscount = Number(row[SALES_IDX.DISCOUNT]) || 0;
+        const lineFeeCharged = Number(row[SALES_IDX.FEE_CHARGED]) || 0;
+        const lineFeeAbsorbed = Number(row[SALES_IDX.FEE_ABSORBED]) || 0;
+        const voidQty = itemCode ? Math.min(qtyToVoid, qty) : qty;
 
         /* ====================================================
            INVENTORY RESTORE
@@ -587,11 +623,11 @@ function voidAndRefundTransactionBackend(
           !code.startsWith(
             "CUSTOM-"
           ) &&
-          qty > 0
+          voidQty > 0
         ) {
           changeInventoryStock({
             code: code,
-            qtyChange: qty,
+            qtyChange: voidQty,
             referenceId: receiptId,
             employee: authorizedBy,
             item: itemName,
@@ -599,6 +635,40 @@ function voidAndRefundTransactionBackend(
             source: INVENTORY_MOVEMENT_SOURCE.VOID,
             notes: ""
           });
+        }
+
+
+        if (itemCode && qty > voidQty) {
+          const remainingQty = qty - voidQty;
+          const ratio = remainingQty / qty;
+
+          salesLogSheet.getRange(rowIndex + 1, SALES_COL.QUANTITY).setValue(remainingQty);
+          salesLogSheet.getRange(rowIndex + 1, SALES_COL.STATUS).setValue("VOIDED");
+          salesLogSheet.getRange(rowIndex + 1, SALES_COL.STATUS).setNote("PARTIALLY VOIDED");
+          salesLogSheet.getRange(rowIndex + 1, SALES_COL.DISCOUNT).setValue(roundToTwo(lineDiscount * ratio));
+          salesLogSheet.getRange(rowIndex + 1, SALES_COL.FEE_CHARGED).setValue(roundToTwo(lineFeeCharged * ratio));
+          salesLogSheet.getRange(rowIndex + 1, SALES_COL.FEE_ABSORBED).setValue(roundToTwo(lineFeeAbsorbed * ratio));
+          salesLogSheet.getRange(rowIndex + 1, SALES_COL.NET_TOTAL).setValue(roundToTwo(lineNetTotal * ratio));
+
+          salesLogSheet
+            .getRange(
+              rowIndex + 1,
+              SALES_COL.AUTHORIZED_BY
+            )
+            .setValue(
+              authorizedBy
+            );
+
+          salesLogSheet
+            .getRange(
+              rowIndex + 1,
+              SALES_COL.VOID_REASON
+            )
+            .setValue(
+              voidReason
+            );
+
+          return;
         }
 
 
@@ -620,6 +690,13 @@ function voidAndRefundTransactionBackend(
           .setValue(
             "VOIDED"
           );
+
+        salesLogSheet
+          .getRange(
+            rowIndex + 1,
+            SALES_COL.STATUS
+          )
+          .clearNote();
 
 
         salesLogSheet
@@ -658,11 +735,12 @@ function voidAndRefundTransactionBackend(
         true,
 
       message:
-        "Receipt " +
+        (itemCode ? "Item " : "Receipt ") +
         receiptId +
-        " voided successfully (" +
-        matchedRows.length +
-        " line item(s)).",
+        (itemCode ? " voided successfully." : " voided successfully (") +
+        (itemCode
+          ? ""
+          : matchedRows.length + " line item(s))."),
 
       updatedInventory:
         getFullInventory()
@@ -693,7 +771,7 @@ function voidAndRefundTransactionBackend(
    TRANSACTION HISTORY
 ========================================================== */
 
-function getTransactionHistory(cashierName, reportDate, isManager) {
+function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -706,7 +784,9 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
       };
     }
 
-    const data = sheet.getDataRange().getValues();
+    const salesRange = sheet.getDataRange();
+    const data = salesRange.getValues();
+    const notes = salesRange.getNotes();
 
     const tz = Session.getScriptTimeZone();
 
@@ -730,7 +810,15 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
         .toISOString()
         .split("T")[0];
 
-    const selectedDate = isManager ? reportDate : today;
+    const selectedFromDate = isManager ? String(fromDate || today) : today;
+    const selectedToDate = isManager ? String(toDate || selectedFromDate) : today;
+
+    if (selectedFromDate > selectedToDate) {
+      return {
+        success: false,
+        message: "From Date cannot be later than To Date.",
+      };
+    }
 
     /* ======================================================
        GROUP SALES LOG LINES BY RECEIPT
@@ -749,7 +837,7 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
 
       const rowDate = Utilities.formatDate(timestamp, tz, "yyyy-MM-dd");
 
-      if (rowDate !== selectedDate) {
+      if (rowDate < selectedFromDate || rowDate > selectedToDate) {
         continue;
       }
 
@@ -793,13 +881,19 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
 
       const tx = receiptMap[receiptId];
 
-      tx.items += Number(row[SALES_IDX.QUANTITY]) || 0;
+      const rowStatus = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
+      const isPartialVoid = rowStatus === "VOIDED" &&
+        String(notes[i][SALES_IDX.STATUS] || "").trim().toUpperCase() === "PARTIALLY VOIDED";
+      const effectiveStatus = isPartialVoid ? "PARTIALLY VOIDED" : rowStatus;
 
-      tx.total += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+      if (effectiveStatus !== "VOIDED") {
+        tx.items += Number(row[SALES_IDX.QUANTITY]) || 0;
+        tx.total += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+      }
 
       const itemName = String(row[SALES_IDX.ITEM_NAME] || "").trim();
 
-      if (itemName) {
+      if (itemName && effectiveStatus !== "VOIDED") {
         tx.itemNames.push(itemName);
       }
 
@@ -808,13 +902,8 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
         receipt should display VOIDED.
       */
 
-      if (
-        String(row[SALES_IDX.STATUS] || "")
-          .trim()
-          .toUpperCase() === "VOIDED"
-      ) {
-        tx.status = "VOIDED";
-      }
+      if (effectiveStatus === "VOIDED" || effectiveStatus === "PARTIALLY VOIDED") tx.hasVoided = true;
+      else tx.hasCompleted = true;
     }
 
     /* ======================================================
@@ -825,6 +914,13 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
 
     transactions.forEach(function (tx) {
       tx.total = roundToTwo(tx.total);
+      tx.status = tx.hasVoided && tx.hasCompleted
+        ? "PARTIALLY VOIDED"
+        : tx.hasVoided
+          ? "VOIDED"
+          : "COMPLETED";
+      delete tx.hasVoided;
+      delete tx.hasCompleted;
 
       tx.itemNames = tx.itemNames.join(", ");
     });
@@ -848,7 +944,8 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
     return {
       success: true,
 
-      date: selectedDate,
+      fromDate: selectedFromDate,
+      toDate: selectedToDate,
 
       transactions: transactions,
     };
@@ -889,7 +986,38 @@ function getTransactionDetails(receiptId) {
       };
     }
 
-    const data = sheet.getDataRange().getValues();
+    const lastRow = sheet.getLastRow();
+    const receiptMatches = lastRow > 1
+      ? sheet
+        .getRange(2, SALES_COL.RECEIPT_ID, lastRow - 1, 1)
+        .createTextFinder(receiptId)
+        .matchCase(false)
+        .matchEntireCell(true)
+        .findAll()
+        .map(function(cell) {
+          return cell.getRow();
+        })
+        .sort(function(a, b) {
+          return a - b;
+        })
+      : [];
+
+    if (receiptMatches.length === 0) {
+      return {
+        success: false,
+        message: "Transaction " + receiptId + " was not found.",
+      };
+    }
+
+    const rowRuns = [];
+    receiptMatches.forEach(function(rowNumber) {
+      const previousRun = rowRuns[rowRuns.length - 1];
+      if (previousRun && rowNumber === previousRun.end + 1) {
+        previousRun.end = rowNumber;
+      } else {
+        rowRuns.push({ start: rowNumber, end: rowNumber });
+      }
+    });
 
     const tz = Session.getScriptTimeZone();
 
@@ -899,8 +1027,17 @@ function getTransactionDetails(receiptId) {
        FIND ALL LINES BELONGING TO RECEIPT
     ====================================================== */
 
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
+    rowRuns.forEach(function(run) {
+      const data = sheet
+        .getRange(run.start, 1, run.end - run.start + 1, SALES_LOG_COLUMN_COUNT)
+        .getValues();
+      const statusNotes = sheet
+        .getRange(run.start, SALES_COL.STATUS, run.end - run.start + 1, 1)
+        .getNotes();
+
+      for (let offset = 0; offset < data.length; offset++) {
+        const row = data[offset];
+        const i = run.start + offset - 1;
 
       const rowReceipt = String(row[SALES_IDX.RECEIPT_ID] || "")
         .trim()
@@ -946,7 +1083,14 @@ function getTransactionDetails(receiptId) {
 
       /* ================= ITEM ================= */
 
+      const itemStatus = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
+      const isPartialVoid = itemStatus === "VOIDED" &&
+        String(statusNotes[offset][0] || "").trim().toUpperCase() === "PARTIALLY VOIDED";
+      const effectiveItemStatus = isPartialVoid ? "PARTIALLY VOIDED" : itemStatus;
+
       transaction.items.push({
+        rowIndex: i,
+
         code: String(row[SALES_IDX.CODE] || ""),
 
         name: String(row[SALES_IDX.ITEM_NAME] || ""),
@@ -968,21 +1112,19 @@ function getTransactionDetails(receiptId) {
         netTotal: Number(row[SALES_IDX.NET_TOTAL]) || 0,
 
         reason: String(row[SALES_IDX.REASON] || ""),
+        status: effectiveItemStatus,
       });
 
       /* ================= TOTAL ================= */
 
-      transaction.total += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+      if (effectiveItemStatus !== "VOIDED") {
+        transaction.total += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+      }
 
       /* ================= VOID STATUS ================= */
 
-      if (
-        String(row[SALES_IDX.STATUS] || "")
-          .trim()
-          .toUpperCase() === "VOIDED"
-      ) {
-        transaction.status = "VOIDED";
-      }
+      if (effectiveItemStatus === "VOIDED" || effectiveItemStatus === "PARTIALLY VOIDED") transaction.hasVoided = true;
+      else transaction.hasCompleted = true;
 
       /* ================= AUTHORIZED BY ================= */
 
@@ -995,7 +1137,8 @@ function getTransactionDetails(receiptId) {
       if (row[SALES_IDX.VOID_REASON]) {
         transaction.voidReason = String(row[SALES_IDX.VOID_REASON]);
       }
-    }
+      }
+    });
 
     /* ======================================================
        NOT FOUND
@@ -1014,6 +1157,13 @@ function getTransactionDetails(receiptId) {
     ====================================================== */
 
     transaction.total = roundToTwo(transaction.total);
+    transaction.status = transaction.hasVoided && transaction.hasCompleted
+      ? "PARTIALLY VOIDED"
+      : transaction.hasVoided
+        ? "VOIDED"
+        : "COMPLETED";
+    delete transaction.hasVoided;
+    delete transaction.hasCompleted;
 
     return {
       success: true,

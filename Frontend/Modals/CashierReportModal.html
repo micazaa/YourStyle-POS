@@ -357,11 +357,51 @@
   </div>
 </div>
 <script>
+  var phase10ReportLoadId = 0;
+
+  function getCashReportTodayPhase10() {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Singapore',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(new Date());
+
+    const values = {};
+    parts.forEach(function(part) {
+      values[part.type] = part.value;
+    });
+
+    return values.year + '-' + values.month + '-' + values.day;
+  }
+
+  function getDisplayedPettyReceivedPhase10() {
+    const value = document.getElementById('shiftReportModal')
+      .dataset.pettyReceived;
+
+    return Number(value) || 0;
+  }
+
+  function setDisplayedPettyReceivedPhase10(value) {
+    const amount = Number(value) || 0;
+
+    document.getElementById('shiftReportModal')
+      .dataset.pettyReceived = String(amount);
+
+    document.getElementById('reportPettyReceivedDisplay').textContent =
+      '₱' + amount.toFixed(2);
+  }
+
   function toggleShiftReportModal(show) {
     document.getElementById('shiftReportModal').style.display = show ? 'flex' : 'none';
     restoreForm('shiftReportModal');
     if (show) {
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const today = getCashReportTodayPhase10();
+      document.getElementById('cashierReportDate').max = today;
+        now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0');
       document.getElementById('cashierReportDate').value = today;
       document.getElementById('reportManagerName').value = '';
       document.getElementById('reportPettyReceivedDisplay').textContent =
@@ -387,16 +427,23 @@
 
   function updatePettyReturnTotal() {
     let total = 0;
-    PETTY_DENOMS.forEach((d) => {
-      let qty = parseInt(document.getElementById('pr' + d).value) || 0;
-      total += d * qty;
-    });
-    document.getElementById('pettyReturnedTotalOut').textContent = '₱' + total.toFixed(2);
 
-    // Petty is separate from sales cash. If any petty was used/missing,
-    // cashier must document the voucher and explanation.
-    const mismatch = Math.abs(total - Number(currentShiftPettyCash || 0)) > 0.001;
-    document.getElementById('pettyVarianceBox').style.display = mismatch ? 'block' : 'none';
+    PETTY_DENOMS.forEach(function(denomination) {
+      const quantity =
+        parseInt(document.getElementById('pr' + denomination).value, 10) || 0;
+
+      total += denomination * quantity;
+    });
+
+    document.getElementById('pettyReturnedTotalOut').textContent =
+      '₱' + total.toFixed(2);
+
+    const mismatch =
+      Math.abs(total - getDisplayedPettyReceivedPhase10()) > 0.001;
+
+    document.getElementById('pettyVarianceBox').style.display =
+      mismatch ? 'block' : 'none';
+
     return total;
   }
 
@@ -456,8 +503,7 @@
     let voucherNo = document.getElementById('pettyVoucherNo').value.trim();
     let reasonTxt = document.getElementById('pettyVarianceReason').value.trim();
 
-    if (Math.abs(pettyReturnedTotal - Number(currentShiftPettyCash || 0)) > 0.001) {
-      document.getElementById('pettyVarianceBox').style.display = 'block';
+if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceivedPhase10()) > 0.001) {      document.getElementById('pettyVarianceBox').style.display = 'block';
       if (!voucherNo) {
         showNotificationToast(
           'Petty Cash Voucher No. is required when petty received and returned do not match.',
@@ -483,7 +529,7 @@
     let cashDrawerReason = document.getElementById('cashDrawerVarianceReason').value.trim();
 
     let pettyCashObj = {
-      received: currentShiftPettyCash,
+      received: getDisplayedPettyReceivedPhase10(),
       returnBreakdown: pettyReturnBreakdown,
       voucherNo: voucherNo,
       reason: reasonTxt,
@@ -547,190 +593,138 @@
   }
 
   function loadCashReportByDatePhase10() {
-    const date = String(document.getElementById('cashierReportDate').value || '').trim();
+    const requestId = ++phase10ReportLoadId;
+    const dateInput = document.getElementById('cashierReportDate');
+    const date = String(dateInput.value || '').trim();
+    const cashier = currentCashier;
+    const today = getCashReportTodayPhase10();
 
-    if (!date || !currentCashier) {
+    const submit = document.querySelector(
+      '#shiftReportModal button[onclick="submitShiftReportTally()"]'
+    );
+
+    clearCashReportModalPhase10();
+    setDisplayedPettyReceivedPhase10(0);
+
+    if (submit) submit.style.display = 'none';
+
+    if (!date || !cashier) return;
+
+    if (date > today) {
+      showNotificationToast('Report date cannot be in the future.', true);
       return;
     }
 
-    /*
-    Immediately clear the previous date's information.
-
-    This prevents:
-    Date = Aug 28
-    Data = Aug 29
-  */
-
-    clearCashReportModalPhase10();
+    function isCurrentRequest() {
+      return requestId === phase10ReportLoadId &&
+        dateInput.value === date &&
+        currentCashier === cashier;
+    }
 
     google.script.run
+      .withSuccessHandler(function(res) {
+        // Ignore a response for a date the user has already changed.
+        if (!isCurrentRequest()) return;
 
-      .withSuccessHandler(function (res) {
         if (!res || !res.success) {
           showNotificationToast(
-            res && res.message ? res.message : 'Unable to check report date.',
+            res && res.message
+              ? res.message
+              : 'Unable to check report date.',
             true
           );
-
           return;
         }
-
-        /* ==================================================
-           NO REPORT FOR SELECTED DATE
-        ================================================== */
 
         if (!res.found || !res.report) {
-          clearCashReportModalPhase10();
-
-          showNotificationToast('No cash report found for ' + date + '.', false);
-
-          return;
-        }
-
-        const r = res.report;
-
-        // Same calendar day is always normal working mode.
-        // CLOSED today is editable/resubmittable; historical controls start tomorrow.
-        const now = new Date();
-        const today =
-          now.getFullYear() + '-' +
-          String(now.getMonth() + 1).padStart(2, '0') + '-' +
-          String(now.getDate()).padStart(2, '0');
-        const isToday = date === today;
-
-        if (isToday) {
-          phase10LoadedClosedReport = null;
-          phase10CorrectionMode = false;
-          document.getElementById('phase10HistoricalBox').style.display = 'none';
-          document.getElementById('phase10CorrectionBox').style.display = 'none';
-
-          currentShiftPettyCash = Number(r.pettyReceived) || 0;
-          document.getElementById('reportPettyReceivedDisplay').textContent =
-            '₱' + currentShiftPettyCash.toFixed(2);
-
-          // If today was already submitted, restore its saved values for easy resubmission.
-          PETTY_DENOMS.forEach(function (d) {
-            document.getElementById('pr' + d).value = Number((r.pettyBreakdown || {})[d]) || 0;
-            document.getElementById('d' + d).value = Number((r.cashBreakdown || {})[d]) || 0;
-          });
-          document.getElementById('pettyVoucherNo').value = r.pettyVoucherNo || '';
-          document.getElementById('pettyVarianceReason').value = r.pettyRemark || '';
-          document.getElementById('cashDrawerVarianceReason').value = r.cashRemark || '';
-
-          updatePettyReturnTotal();
-          updateShiftCashDrawerTotal();
-          setPhase10ReportFieldsReadOnly(false);
-
-          const submit = document.querySelector(
-            '#shiftReportModal button[onclick="submitShiftReportTally()"]'
+          // Do not copy today's petty cash into a historical report.
+          setDisplayedPettyReceivedPhase10(
+            date === today ? currentShiftPettyCash : 0
           );
+
+          setPhase10ReportFieldsReadOnly(false);
           if (submit) submit.style.display = 'block';
-          return;
-        }
 
-        /* ==================================================
-           OPEN CURRENT SHIFT
-        ================================================== */
-
-        if (String(r.status || '').toUpperCase() === 'OPEN') {
-          /*
-            Current OPEN shift:
-            allow cashier counting.
-
-            Petty Received comes from the actual
-            OPEN Cash Report row.
-          */
-
-          phase10LoadedClosedReport = null;
-
-          currentShiftPettyCash = Number(r.pettyReceived) || 0;
-
-          document.getElementById('reportPettyReceivedDisplay').textContent =
-            '₱' + currentShiftPettyCash.toFixed(2);
-
-          setPhase10ReportFieldsReadOnly(false);
-
-          const submit = document.querySelector(
-            '#shiftReportModal button[onclick="submitShiftReportTally()"]'
-          );
-
-          if (submit) {
-            submit.style.display = 'block';
+          if (date !== today) {
+            showNotificationToast(
+              'No saved report for ' + date +
+              '. Enter the counts to create and download it.',
+              false
+            );
           }
 
           return;
         }
 
-        /* ==================================================
-           CLOSED HISTORICAL REPORT
-        ================================================== */
+        const report = res.report;
+        const status = String(report.status || '').trim().toUpperCase();
 
-        if (String(r.status || '').toUpperCase() !== 'CLOSED') {
+        if (status !== 'OPEN' && status !== 'CLOSED') {
+          showNotificationToast('Unsupported cash report status.', true);
           return;
         }
 
-        phase10LoadedClosedReport = r;
+        setDisplayedPettyReceivedPhase10(report.pettyReceived);
 
-        document.getElementById('phase10HistoricalBox').style.display = 'block';
+        document.getElementById('reportManagerName').value =
+          report.manager || '';
 
-        document.getElementById('phase10ClosedReportInfo').textContent =
-          r.reportId +
-          ' · ' +
-          r.reportDate +
-          ' · ' +
-          r.employee +
-          ' · ' +
-          (r.shiftStart || '—') +
-          ' to ' +
-          (r.shiftEnd || '—');
+        PETTY_DENOMS.forEach(function(denomination) {
+          document.getElementById('pr' + denomination).value =
+            Number((report.pettyBreakdown || {})[denomination]) || 0;
 
-        document.getElementById('reportManagerName').value = r.manager || '';
-
-        document.getElementById('reportPettyReceivedDisplay').textContent =
-          '₱' + Number(r.pettyReceived || 0).toFixed(2);
-
-        /* ================= DENOMINATIONS ================= */
-
-        PETTY_DENOMS.forEach(function (d) {
-          document.getElementById('pr' + d).value = Number((r.pettyBreakdown || {})[d]) || 0;
-
-          document.getElementById('d' + d).value = Number((r.cashBreakdown || {})[d]) || 0;
+          document.getElementById('d' + denomination).value =
+            Number((report.cashBreakdown || {})[denomination]) || 0;
         });
 
-        /* ================= DETAILS ================= */
+        document.getElementById('pettyVoucherNo').value =
+          report.pettyVoucherNo || '';
 
-        document.getElementById('pettyVoucherNo').value = r.pettyVoucherNo || '';
+        document.getElementById('pettyVarianceReason').value =
+          report.pettyRemark || '';
 
-        document.getElementById('pettyVarianceReason').value = r.pettyRemark || '';
-
-        document.getElementById('cashDrawerVarianceReason').value = r.cashRemark || '';
-
-        /* ================= TOTALS ================= */
+        document.getElementById('cashDrawerVarianceReason').value =
+          report.cashRemark || '';
 
         updatePettyReturnTotal();
-
         updateShiftCashDrawerTotal();
 
-        /* ================= LOCK ================= */
+        const historicalClosed =
+          date !== today && status === 'CLOSED';
 
-        setPhase10ReportFieldsReadOnly(true);
+        if (historicalClosed) {
+          phase10LoadedClosedReport = report;
+          phase10CorrectionMode = false;
 
-        const submit = document.querySelector(
-          '#shiftReportModal button[onclick="submitShiftReportTally()"]'
-        );
+          document.getElementById('phase10HistoricalBox').style.display =
+            'block';
 
-        if (submit) {
-          submit.style.display = 'none';
+          document.getElementById('phase10ClosedReportInfo').textContent =
+            report.reportId + ' · ' +
+            report.reportDate + ' · ' +
+            report.employee + ' · ' +
+            (report.shiftStart || '—') + ' to ' +
+            (report.shiftEnd || '—');
+
+          setPhase10ReportFieldsReadOnly(true);
+          if (submit) submit.style.display = 'none';
+        } else {
+          phase10LoadedClosedReport = null;
+          phase10CorrectionMode = false;
+
+          setPhase10ReportFieldsReadOnly(false);
+          if (submit) submit.style.display = 'block';
         }
       })
+      .withFailureHandler(function(error) {
+        if (!isCurrentRequest()) return;
 
-      .withFailureHandler(function (e) {
-        clearCashReportModalPhase10();
-
-        showNotificationToast(e && e.message ? e.message : String(e), true);
+        showNotificationToast(
+          error && error.message ? error.message : String(error),
+          true
+        );
       })
-
-      .getCashReportByDatePhase10(currentCashier, date);
+      .getCashReportByDatePhase10(cashier, date);
   }
 
   function regenerateClosedReportPhase10() {
