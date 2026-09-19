@@ -27,7 +27,6 @@
 
       </div>
 
-
       <button
         type="button"
         class="btn-close"
@@ -86,7 +85,6 @@
 
       </div>
 
-
       <!-- SEARCH -->
 
       <div class="col">
@@ -100,7 +98,7 @@
           id="transactionHistorySearch"
           class="form-control"
           placeholder="Receipt, cashier, item..."
-          oninput="filterTransactionHistoryTable()"
+          oninput="scheduleTransactionHistoryFilter()"
         >
 
       </div>
@@ -197,10 +195,12 @@
 
   </div>
 
+
 </div>
 
 
     <!-- TABLE -->
+
 
     <div
       class="table-responsive border rounded"
@@ -298,6 +298,7 @@
 <script>
 
 var transactionHistoryData = [];
+var transactionHistoryFilterTimer = null;
 var transactionHistorySort = {
   key: "time",
   direction: "desc"
@@ -334,6 +335,15 @@ function openTransactionHistoryModal() {
       .toISOString()
       .split("T")[0];
 
+  const accessibleStart = new Date(now);
+  accessibleStart.setDate(accessibleStart.getDate() - 6);
+  const accessibleStartDate = new Date(
+    accessibleStart.getTime() -
+    accessibleStart.getTimezoneOffset() * 60000
+  )
+    .toISOString()
+    .split("T")[0];
+
 
   const fromDateInput =
     document.getElementById(
@@ -349,6 +359,8 @@ function openTransactionHistoryModal() {
   fromDateInput.value = today;
   toDateInput.value = today;
 
+  fromDateInput.min = accessibleStartDate;
+  toDateInput.min = accessibleStartDate;
   fromDateInput.max = today;
   toDateInput.max = today;
 
@@ -387,17 +399,20 @@ if (paymentFilter) {
   document.getElementById(
     "transactionDateFilterBox"
   ).style.display =
-    isManager
-      ? "block"
-      : "none";
+    "block";
 
   document.getElementById(
     "transactionToDateFilterBox"
   ).style.display =
-    isManager
-      ? "block"
-      : "none";
+    "block";
 
+  if (isManager) {
+    fromDateInput.removeAttribute("min");
+    toDateInput.removeAttribute("min");
+  } else {
+    fromDateInput.min = accessibleStartDate;
+    toDateInput.min = accessibleStartDate;
+  }
 
   /* ================= SUMMARY ================= */
 
@@ -441,6 +456,13 @@ function closeTransactionHistoryModal() {
   ).style.display =
     "none";
 
+}
+
+function scheduleTransactionHistoryFilter() {
+  window.clearTimeout(transactionHistoryFilterTimer);
+  transactionHistoryFilterTimer = window.setTimeout(function() {
+    filterTransactionHistoryTable();
+  }, 180);
 }
 
 
@@ -496,26 +518,9 @@ function loadTransactionHistory() {
     ) <= 1;
 
 
-  console.log(
-    "TRANSACTION HISTORY REQUEST:",
-    {
-      cashier: currentCashier,
-      fromDate: fromDate,
-      toDate: toDate,
-      isManager: isManager
-    }
-  );
-
-
   google.script.run
 
     .withSuccessHandler(function(result) {
-
-      console.log(
-        "TRANSACTION HISTORY RESPONSE:",
-        result
-      );
-
 
       if (
         !result ||
@@ -557,13 +562,6 @@ function loadTransactionHistory() {
           : [];
 
       populateTransactionPaymentFilter(
-        transactionHistoryData
-      );
-
-
-      console.log(
-        "TRANSACTIONS RECEIVED:",
-        transactionHistoryData.length,
         transactionHistoryData
       );
 
@@ -774,11 +772,6 @@ function getSortedTransactionHistory(items) {
 
 function renderTransactionHistory(items) {
 
-  console.log(
-  "RENDER TRANSACTION HISTORY:",
-  items
-);
-
   const tbody =
     document.getElementById(
       "transactionHistoryRows"
@@ -806,9 +799,7 @@ function renderTransactionHistory(items) {
     `;
 
 
-    updateTransactionHistorySummary(
-      []
-    );
+    updateTransactionHistorySummary([]);
 
     return;
 

@@ -786,7 +786,9 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
 
     const salesRange = sheet.getDataRange();
     const data = salesRange.getValues();
-    const notes = salesRange.getNotes();
+    const statusNotes = sheet
+      .getRange(1, SALES_COL.STATUS, salesRange.getNumRows(), 1)
+      .getNotes();
 
     const tz = Session.getScriptTimeZone();
 
@@ -802,16 +804,24 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
     const now =
       new Date();
 
-    const today =
-      new Date(
-        now.getTime() -
-        now.getTimezoneOffset() * 60000
-      )
-        .toISOString()
-        .split("T")[0];
+    const localToday = new Date(
+      now.getTime() - now.getTimezoneOffset() * 60000
+    );
+    const today = localToday.toISOString().split("T")[0];
+    const cashierStartDate = new Date(localToday);
+    cashierStartDate.setDate(cashierStartDate.getDate() - 6);
+    const cashierFromDate = cashierStartDate.toISOString().split("T")[0];
 
-    const selectedFromDate = isManager ? String(fromDate || today) : today;
-    const selectedToDate = isManager ? String(toDate || selectedFromDate) : today;
+    const selectedFromDate = String(fromDate || (isManager ? today : cashierFromDate));
+    const selectedToDate = String(toDate || (isManager ? selectedFromDate : today));
+
+    if (!isManager &&
+      (selectedFromDate < cashierFromDate || selectedToDate > today)) {
+      return {
+        success: false,
+        message: "Cashier history is limited to the latest 7 days.",
+      };
+    }
 
     if (selectedFromDate > selectedToDate) {
       return {
@@ -883,7 +893,7 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
 
       const rowStatus = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
       const isPartialVoid = rowStatus === "VOIDED" &&
-        String(notes[i][SALES_IDX.STATUS] || "").trim().toUpperCase() === "PARTIALLY VOIDED";
+        String(statusNotes[i][0] || "").trim().toUpperCase() === "PARTIALLY VOIDED";
       const effectiveStatus = isPartialVoid ? "PARTIALLY VOIDED" : rowStatus;
 
       if (effectiveStatus !== "VOIDED") {
