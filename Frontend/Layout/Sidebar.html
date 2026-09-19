@@ -92,7 +92,6 @@
     class="sidebar-subitem"
     onclick="
       showPage('inventoryPage');
-      loadInventoryPage();
       toggleSidebar(false);
     "
   >
@@ -110,19 +109,6 @@
     "
   >
     Deliveries
-  </button>
-
-
-  <!-- REPRINT LABELS -->
-
-  <button
-    class="sidebar-subitem"
-    onclick="
-      openYourFindsReprintModal();
-      toggleSidebar(false);
-    "
-  >
-    Reprint Labels
   </button>
 
 
@@ -392,6 +378,15 @@ function showPage(pageId) {
   selectedPage.style.display =
     "block";
 
+  localStorage.setItem(
+    "ys_pos_active_page",
+    pageId
+  );
+
+  if (pageId === "inventoryPage" && typeof loadInventoryPage === "function") {
+    loadInventoryPage();
+  }
+
 }
 
   function updateSidebarProfile(employee) {
@@ -418,8 +413,16 @@ function showPage(pageId) {
       "ys_pos_active_page"
     );
 
-  const pageId =
-    savedPage || "posPage";
+  const validPages = [
+    "dashboardPage",
+    "posPage",
+    "inventoryPage",
+    "deliveriesPage"
+  ];
+
+  const pageId = validPages.includes(savedPage)
+    ? savedPage
+    : "posPage";
 
   showPage(pageId);
 
@@ -439,15 +442,12 @@ function showPage(pageId) {
     button.classList.add("active");
   }
 
-  // Inventory needs its data loaded
-  if (pageId === "inventoryPage") {
-    loadInventoryPage();
-  }
 }
 
   function triggerCleanLogout() {
     if (confirm("Are you sure you want to log out?")) {
       clearSession();
+      localStorage.removeItem("ys_pos_active_page");
       currentCashier = "";
       currentShiftPettyCash = 0;
       cart = [];

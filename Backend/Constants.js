@@ -464,7 +464,8 @@ const PRODUCT_IDX = {
   LOW_STOCK_AT: 6,
   ACTIVE: 7,
   CREATED_AT: 8,
-  UPDATED_AT: 9
+  UPDATED_AT: 9,
+  IMAGE: 10
 
 };
 
@@ -480,12 +481,13 @@ const PRODUCT_COL = {
   LOW_STOCK_AT: 7,
   ACTIVE: 8,
   CREATED_AT: 9,
-  UPDATED_AT: 10
+  UPDATED_AT: 10,
+  IMAGE: 11
 
 };
 
 
-const PRODUCT_MASTER_COLUMN_COUNT = 10;
+const PRODUCT_MASTER_COLUMN_COUNT = 11;
 
 /* ==========================================================
    DELIVERY VALUES

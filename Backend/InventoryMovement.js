@@ -366,29 +366,63 @@ function changeInventoryItemPhase8(payload) {
   }
 }
 
+function generateProductMasterCodePhase8_() {
+  const usedCodes = {};
+  getProductMaster().forEach(function(product) {
+    const code = String(product.productCode || "").trim();
+    if (code) usedCodes[code] = true;
+  });
+
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    if (!usedCodes[code]) return code;
+  }
+
+  throw new Error("Unable to generate a unique Product Code.");
+}
+
+function generateProductMasterCodePhase8() {
+  return generateProductMasterCodePhase8_();
+}
+
 function saveProductMasterPhase8(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin);
-  const code = String(payload.productCode || "").trim();
+  let code = String(payload.productCode || "").trim();
   const description = String(payload.description || "").trim();
   const category = String(payload.category || "").trim().toUpperCase();
   const defaultPrice = Number(payload.defaultPrice), originalPrice = Number(payload.originalPrice), lowStockAt = Number(payload.lowStockAt);
-  const active = payload.active !== false;
-  if (!code || !description) throw new Error("Product Code and Description are required.");
+  if (!description) throw new Error("Description is required.");
   if (category !== "PINS" && category !== "OTHERS") throw new Error("Category must be PINS or OTHERS.");
   if (!Number.isFinite(defaultPrice) || defaultPrice < 0 || !Number.isFinite(originalPrice) || originalPrice < 0) throw new Error("Prices must be valid non-negative numbers.");
   if (!Number.isInteger(lowStockAt) || lowStockAt < 0) throw new Error("Low Stock At must be a non-negative whole number.");
   const ss = SpreadsheetApp.getActiveSpreadsheet(); const sheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
   if (!sheet) throw new Error("Product Master sheet not found.");
-  const products = getProductMaster(); const existing = products.find(function(p){ return String(p.productCode) === code; });
+  const products = getProductMaster();
+  const existing = code
+    ? products.find(function(p){ return String(p.productCode) === code; })
+    : null;
+
+  if (!existing && !code) {
+    code = generateProductMasterCodePhase8_();
+  }
+  const active = existing
+    ? existing.active !== false
+    : true;
+  const imageDataUrl = String(payload.imageDataUrl || "").trim();
+  const imageFileName = String(payload.imageFileName || "product-photo").trim();
+  const createdImage = imageDataUrl
+    ? phase8CreateInventoryImage_(code, imageFileName, phase8DecodeInventoryImage_(imageDataUrl))
+    : null;
+  const imageUrl = createdImage ? createdImage.imageUrl : (existing ? String(existing.imageUrl || "") : "");
   const now = new Date();
   if (existing) {
     sheet.getRange(existing.rowNumber, PRODUCT_COL.DESCRIPTION, 1, 7).setValues([[
       description, category, defaultPrice, originalPrice, INVENTORY_TYPE.STOCK, lowStockAt, active
     ]]);
     sheet.getRange(existing.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(now);
+    sheet.getRange(existing.rowNumber, PRODUCT_COL.IMAGE).setValue(imageUrl);
   } else {
-    sheet.appendRow([code, description, category, defaultPrice, originalPrice, INVENTORY_TYPE.STOCK, lowStockAt, active, now, now]);
+    sheet.appendRow([code, description, category, defaultPrice, originalPrice, INVENTORY_TYPE.STOCK, lowStockAt, active, now, now, imageUrl]);
   }
   // Sync safe metadata into existing STOCK Inventory row if present.
   const inv = ss.getSheetByName(SHEETS.INVENTORY);
@@ -406,7 +440,7 @@ function saveProductMasterPhase8(payload) {
       break;
     }
   }
-  return { success: true, productCode: code, manager: auth.managerName };
+  return { success: true, productCode: code };
 }
 
 function setInventoryAdministrativeStatusPhase8(payload) {

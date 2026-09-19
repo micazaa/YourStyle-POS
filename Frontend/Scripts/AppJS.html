@@ -28,11 +28,16 @@
       currentCashier,
       currentShiftPettyCash,
       cart,
+      activePage: localStorage.getItem("ys_pos_active_page") || "posPage",
       globalDiscountType: document.getElementById("globalDiscountType").value,
       globalDiscountValue: document.getElementById("globalDiscountValue").value
     };
 
     localStorage.setItem("ys_pos_session", JSON.stringify(session));
+
+    if (session.activePage) {
+      localStorage.setItem("ys_pos_active_page", session.activePage);
+    }
   }
 
 

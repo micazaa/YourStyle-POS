@@ -13,19 +13,31 @@
       <div>
 
         <h4 class="fw-bold mb-1">
-          Inventory
+          Inventory Master List
         </h4>
 
       </div>
 
 
-      <button
-        type="button"
-        class="btn btn-pink"
-        onclick="openProductMasterPhase8()"
-      >
-        Manage Product Master
-      </button>
+      <div class="d-flex gap-2">
+        <button
+          type="button"
+          class="btn btn-outline-pink"
+          onclick="openYourFindsReprintModal()"
+        >
+          Reprint Barcode
+        </button>
+
+        <button
+          id="inventoryAddProductButton"
+          type="button"
+          class="btn btn-pink"
+          style="display:none;"
+          onclick="openProductEditorPhase8()"
+        >
+          + Add Product
+        </button>
+      </div>
 
     </div>
 
@@ -335,6 +347,13 @@ var inventoryPageData = [];
 ========================================================== */
 
 function loadInventoryPage() {
+
+  const addProductButton = document.getElementById("inventoryAddProductButton");
+  if (addProductButton) {
+    addProductButton.style.display = currentEmployee && Number(currentEmployee.accessLevel) <= 1
+      ? "inline-block"
+      : "none";
+  }
 
   const tbody =
     document.getElementById(
