@@ -25,13 +25,6 @@
           Transaction History
         </h5>
 
-        <p
-          id="transactionHistorySubtitle"
-          class="text-muted small mb-0"
-        >
-          Today's transactions
-        </p>
-
       </div>
 
 
@@ -57,17 +50,36 @@
 
       <div
         id="transactionDateFilterBox"
-        class="col-md-4"
+        class="col-md-2"
         style="display:none;"
       >
 
         <label class="form-label small">
-          Transaction Date
+          From
         </label>
 
         <input
           type="date"
-          id="transactionHistoryDate"
+          id="transactionHistoryFromDate"
+          class="form-control"
+          onchange="loadTransactionHistory()"
+        >
+
+      </div>
+
+      <div
+        id="transactionToDateFilterBox"
+        class="col-md-2"
+        style="display:none;"
+      >
+
+        <label class="form-label small">
+          To
+        </label>
+
+        <input
+          type="date"
+          id="transactionHistoryToDate"
           class="form-control"
           onchange="loadTransactionHistory()"
         >
@@ -87,7 +99,7 @@
           type="text"
           id="transactionHistorySearch"
           class="form-control"
-          placeholder="Receipt, cashier, item, payment..."
+          placeholder="Receipt, cashier, item..."
           oninput="filterTransactionHistoryTable()"
         >
 
@@ -192,7 +204,7 @@
 
     <div
       class="table-responsive border rounded"
-      style="max-height:none; overflow-y:visible;"
+      style="height:340px; overflow-y:auto;"
     >
 
       <table
@@ -211,31 +223,45 @@
           <tr>
 
             <th>
-              Time
+              <button type="button" class="btn btn-link p-0 text-reset text-decoration-none" onclick="sortTransactionHistory('time')">
+                Time <span id="transactionSortTime" aria-hidden="true">↕</span>
+              </button>
             </th>
 
             <th>
-              Receipt
+              <button type="button" class="btn btn-link p-0 text-reset text-decoration-none" onclick="sortTransactionHistory('receiptId')">
+                Receipt <span id="transactionSortReceiptId" aria-hidden="true">↕</span>
+              </button>
             </th>
 
             <th>
-              Cashier
+              <button type="button" class="btn btn-link p-0 text-reset text-decoration-none" onclick="sortTransactionHistory('cashier')">
+                Cashier <span id="transactionSortCashier" aria-hidden="true">↕</span>
+              </button>
             </th>
 
             <th class="text-center">
-              Items
+              <button type="button" class="btn btn-link p-0 text-reset text-decoration-none" onclick="sortTransactionHistory('items')">
+                Items <span id="transactionSortItems" aria-hidden="true">↕</span>
+              </button>
             </th>
 
             <th>
-              Payment
+              <button type="button" class="btn btn-link p-0 text-reset text-decoration-none" onclick="sortTransactionHistory('paymentMethod')">
+                Payment <span id="transactionSortPaymentMethod" aria-hidden="true">↕</span>
+              </button>
             </th>
 
             <th class="text-end">
-              Total
+              <button type="button" class="btn btn-link p-0 text-reset text-decoration-none" onclick="sortTransactionHistory('total')">
+                Total <span id="transactionSortTotal" aria-hidden="true">↕</span>
+              </button>
             </th>
 
             <th class="text-center">
-              Status
+              <button type="button" class="btn btn-link p-0 text-reset text-decoration-none" onclick="sortTransactionHistory('status')">
+                Status <span id="transactionSortStatus" aria-hidden="true">↕</span>
+              </button>
             </th>
 
           </tr>
@@ -250,8 +276,10 @@
             <td
               colspan="7"
               class="text-center text-muted py-5"
+              role="status"
+              aria-label="Loading transactions"
             >
-              Loading transactions...
+              <div class="spinner-border spinner-border-sm text-secondary" aria-hidden="true"></div>
             </td>
 
           </tr>
@@ -270,7 +298,10 @@
 <script>
 
 var transactionHistoryData = [];
-const TRANSACTION_HISTORY_ROW_LIMIT = 6;
+var transactionHistorySort = {
+  key: "time",
+  direction: "desc"
+};
 
 
 /* ==========================================================
@@ -304,17 +335,22 @@ function openTransactionHistoryModal() {
       .split("T")[0];
 
 
-  const dateInput =
+  const fromDateInput =
     document.getElementById(
-      "transactionHistoryDate"
+      "transactionHistoryFromDate"
+    );
+
+  const toDateInput =
+    document.getElementById(
+      "transactionHistoryToDate"
     );
 
 
-  dateInput.value =
-    today;
+  fromDateInput.value = today;
+  toDateInput.value = today;
 
-  dateInput.max =
-    today;
+  fromDateInput.max = today;
+  toDateInput.max = today;
 
 
   document.getElementById(
@@ -355,6 +391,13 @@ if (paymentFilter) {
       ? "block"
       : "none";
 
+  document.getElementById(
+    "transactionToDateFilterBox"
+  ).style.display =
+    isManager
+      ? "block"
+      : "none";
+
 
   /* ================= SUMMARY ================= */
 
@@ -371,17 +414,6 @@ if (managerSummary) {
       : "none";
 
 }
-
-
-  /* ================= SUBTITLE ================= */
-
-  document.getElementById(
-    "transactionHistorySubtitle"
-  ).textContent =
-    isManager
-      ? "All transactions for selected date"
-      : "Your transactions for today";
-
 
   /* ================= SHOW ================= */
 
@@ -438,16 +470,23 @@ function loadTransactionHistory() {
       <td
         colspan="7"
         class="text-center text-muted py-5"
+        role="status"
+        aria-label="Loading transactions"
       >
-        Loading transactions...
+        <div class="spinner-border spinner-border-sm text-secondary" aria-hidden="true"></div>
       </td>
     </tr>
   `;
 
 
-  const selectedDate =
+  const fromDate =
     document.getElementById(
-      "transactionHistoryDate"
+      "transactionHistoryFromDate"
+    ).value;
+
+  const toDate =
+    document.getElementById(
+      "transactionHistoryToDate"
     ).value;
 
 
@@ -461,7 +500,8 @@ function loadTransactionHistory() {
     "TRANSACTION HISTORY REQUEST:",
     {
       cashier: currentCashier,
-      date: selectedDate,
+      fromDate: fromDate,
+      toDate: toDate,
       isManager: isManager
     }
   );
@@ -567,7 +607,8 @@ function loadTransactionHistory() {
 
     .getTransactionHistory(
       currentCashier,
-      selectedDate,
+      fromDate,
+      toDate,
       isManager
     );
 
@@ -668,6 +709,66 @@ function populateTransactionPaymentFilter(
 
 }
 /* ==========================================================
+   SORT
+========================================================== */
+
+function sortTransactionHistory(key) {
+  if (transactionHistorySort.key === key) {
+    transactionHistorySort.direction = transactionHistorySort.direction === "asc"
+      ? "desc"
+      : "asc";
+  } else {
+    transactionHistorySort.key = key;
+    transactionHistorySort.direction = key === "time" || key === "total" || key === "items"
+      ? "desc"
+      : "asc";
+  }
+
+  filterTransactionHistoryTable();
+}
+
+function updateTransactionHistorySortIndicators() {
+  const keys = ["time", "receiptId", "cashier", "items", "paymentMethod", "total", "status"];
+
+  keys.forEach(function(key) {
+    const indicator = document.getElementById("transactionSort" + key.charAt(0).toUpperCase() + key.slice(1));
+    if (indicator) {
+      indicator.textContent = transactionHistorySort.key === key
+        ? (transactionHistorySort.direction === "asc" ? "↑" : "↓")
+        : "↕";
+    }
+  });
+}
+
+function getSortedTransactionHistory(items) {
+  const sorted = items.slice();
+  const key = transactionHistorySort.key;
+  const direction = transactionHistorySort.direction === "asc" ? 1 : -1;
+
+  sorted.sort(function(a, b) {
+    let first = a[key];
+    let second = b[key];
+
+    if (key === "time") {
+      first = Date.parse("1970/01/01 " + String(first || ""));
+      second = Date.parse("1970/01/01 " + String(second || ""));
+    } else if (key === "items" || key === "total") {
+      first = Number(first) || 0;
+      second = Number(second) || 0;
+    } else {
+      first = String(first || "").toLowerCase();
+      second = String(second || "").toLowerCase();
+    }
+
+    if (first < second) return -1 * direction;
+    if (first > second) return 1 * direction;
+    return 0;
+  });
+
+  return sorted;
+}
+
+/* ==========================================================
    RENDER
 ========================================================== */
 
@@ -685,6 +786,7 @@ function renderTransactionHistory(items) {
 
 
   tbody.innerHTML = "";
+  updateTransactionHistorySortIndicators();
 
 
   if (
@@ -713,9 +815,7 @@ function renderTransactionHistory(items) {
   }
 
 
-  items
-    .slice(0, TRANSACTION_HISTORY_ROW_LIMIT)
-    .forEach(function(tx) {
+  items.forEach(function(tx) {
 
     const row =
       document.createElement("tr");
@@ -816,26 +916,10 @@ function updateTransactionHistorySummary(items) {
 
   });
 
-
-  /*
-    Transaction count:
-    I recommend showing ALL transactions,
-    including voided ones.
-
-    This means the table has 2 receipts,
-    even if one is voided.
-  */
-
   document.getElementById(
     "transactionHistoryCount"
   ).textContent =
     items.length;
-
-
-  /*
-    Items Sold:
-    COMPLETED only
-  */
 
   document.getElementById(
     "transactionHistoryItems"
@@ -988,7 +1072,7 @@ function filterTransactionHistoryTable() {
 
 
   renderTransactionHistory(
-    filtered
+    getSortedTransactionHistory(filtered)
   );
 
 }

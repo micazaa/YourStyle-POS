@@ -771,7 +771,7 @@ function voidAndRefundTransactionBackend(
    TRANSACTION HISTORY
 ========================================================== */
 
-function getTransactionHistory(cashierName, reportDate, isManager) {
+function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -810,7 +810,15 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
         .toISOString()
         .split("T")[0];
 
-    const selectedDate = isManager ? reportDate : today;
+    const selectedFromDate = isManager ? String(fromDate || today) : today;
+    const selectedToDate = isManager ? String(toDate || selectedFromDate) : today;
+
+    if (selectedFromDate > selectedToDate) {
+      return {
+        success: false,
+        message: "From Date cannot be later than To Date.",
+      };
+    }
 
     /* ======================================================
        GROUP SALES LOG LINES BY RECEIPT
@@ -829,7 +837,7 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
 
       const rowDate = Utilities.formatDate(timestamp, tz, "yyyy-MM-dd");
 
-      if (rowDate !== selectedDate) {
+      if (rowDate < selectedFromDate || rowDate > selectedToDate) {
         continue;
       }
 
@@ -936,7 +944,8 @@ function getTransactionHistory(cashierName, reportDate, isManager) {
     return {
       success: true,
 
-      date: selectedDate,
+      fromDate: selectedFromDate,
+      toDate: selectedToDate,
 
       transactions: transactions,
     };
@@ -977,9 +986,38 @@ function getTransactionDetails(receiptId) {
       };
     }
 
-    const salesRange = sheet.getDataRange();
-    const data = salesRange.getValues();
-    const notes = salesRange.getNotes();
+    const lastRow = sheet.getLastRow();
+    const receiptMatches = lastRow > 1
+      ? sheet
+        .getRange(2, SALES_COL.RECEIPT_ID, lastRow - 1, 1)
+        .createTextFinder(receiptId)
+        .matchCase(false)
+        .matchEntireCell(true)
+        .findAll()
+        .map(function(cell) {
+          return cell.getRow();
+        })
+        .sort(function(a, b) {
+          return a - b;
+        })
+      : [];
+
+    if (receiptMatches.length === 0) {
+      return {
+        success: false,
+        message: "Transaction " + receiptId + " was not found.",
+      };
+    }
+
+    const rowRuns = [];
+    receiptMatches.forEach(function(rowNumber) {
+      const previousRun = rowRuns[rowRuns.length - 1];
+      if (previousRun && rowNumber === previousRun.end + 1) {
+        previousRun.end = rowNumber;
+      } else {
+        rowRuns.push({ start: rowNumber, end: rowNumber });
+      }
+    });
 
     const tz = Session.getScriptTimeZone();
 
@@ -989,8 +1027,17 @@ function getTransactionDetails(receiptId) {
        FIND ALL LINES BELONGING TO RECEIPT
     ====================================================== */
 
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
+    rowRuns.forEach(function(run) {
+      const data = sheet
+        .getRange(run.start, 1, run.end - run.start + 1, SALES_LOG_COLUMN_COUNT)
+        .getValues();
+      const statusNotes = sheet
+        .getRange(run.start, SALES_COL.STATUS, run.end - run.start + 1, 1)
+        .getNotes();
+
+      for (let offset = 0; offset < data.length; offset++) {
+        const row = data[offset];
+        const i = run.start + offset - 1;
 
       const rowReceipt = String(row[SALES_IDX.RECEIPT_ID] || "")
         .trim()
@@ -1038,7 +1085,7 @@ function getTransactionDetails(receiptId) {
 
       const itemStatus = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
       const isPartialVoid = itemStatus === "VOIDED" &&
-        String(notes[i][SALES_IDX.STATUS] || "").trim().toUpperCase() === "PARTIALLY VOIDED";
+        String(statusNotes[offset][0] || "").trim().toUpperCase() === "PARTIALLY VOIDED";
       const effectiveItemStatus = isPartialVoid ? "PARTIALLY VOIDED" : itemStatus;
 
       transaction.items.push({
@@ -1090,7 +1137,8 @@ function getTransactionDetails(receiptId) {
       if (row[SALES_IDX.VOID_REASON]) {
         transaction.voidReason = String(row[SALES_IDX.VOID_REASON]);
       }
-    }
+      }
+    });
 
     /* ======================================================
        NOT FOUND

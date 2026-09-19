@@ -157,8 +157,10 @@
             <td
               colspan="6"
               class="text-center text-muted py-4"
+              role="status"
+              aria-live="polite"
             >
-              Loading...
+              <div class="spinner-border spinner-border-sm text-secondary me-2" aria-hidden="true"></div>
             </td>
 
           </tr>
@@ -378,8 +380,10 @@ function openTransactionDetails(
       <td
         colspan="6"
         class="text-center text-muted py-4"
+        role="status"
+        aria-live="polite"
       >
-        Loading transaction...
+        <div class="spinner-border spinner-border-sm text-secondary me-2" aria-hidden="true"></div>
       </td>
     </tr>
   `;
