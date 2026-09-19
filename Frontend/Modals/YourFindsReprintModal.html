@@ -1,14 +1,28 @@
 <!-- PHASE 8: BULK REPRINT OF YOURFINDS LABELS -->
+<style>
+  #yourFindsReprintModal .reprint-header { background: #fff; }
+  #yourFindsReprintModal .reprint-toolbar { background: #faf7f7; border-bottom: 1px solid var(--border-color); }
+  #yourFindsReprintModal .reprint-toolbar .form-control,
+  #yourFindsReprintModal .reprint-toolbar .form-select { min-height: 42px; }
+  #yourFindsReprintModal .reprint-table thead th { color: var(--text-gray); font-size: .78rem; letter-spacing: .03em; text-transform: uppercase; }
+  #yourFindsReprintModal .reprint-table tbody tr:not(.table-secondary) { height: 68px; }
+  #yourFindsReprintModal .reprint-delivery-row td { background: var(--pink-light); border-top: 1px solid #efd5da; border-bottom: 1px solid #efd5da; }
+  #yourFindsReprintModal .reprint-delivery-row button { color: var(--pink-hover); }
+  #yourFindsReprintModal .reprint-selection-count { color: var(--text-gray); }
+</style>
 <div id="yourFindsReprintModal" class="generic-overlay-blur" style="display:none;">
   <div class="custom-popup-card p-0 d-flex flex-column" style="max-width:1050px;width:97%;height:92vh;max-height:760px;overflow:hidden;">
-    <div class="d-flex justify-content-between align-items-center border-bottom px-4 py-3 flex-shrink-0">
-      <h5 class="fw-bold mb-0">Reprint YourFinds Labels</h5>
+    <div class="reprint-header d-flex justify-content-between align-items-center border-bottom px-4 py-3 flex-shrink-0">
+      <div>
+        <h5 class="fw-bold mb-1">Reprint YourFinds Labels</h5>
+        <div class="small text-muted">Choose labels by delivery, type, or item.</div>
+      </div>
       <button class="btn-close" onclick="closeYourFindsReprintModal()"></button>
     </div>
 
-    <div class="border-bottom bg-light px-4 py-3 flex-shrink-0">
-      <div class="row g-2 align-items-center">
-        <div class="col-md-5">
+    <div class="reprint-toolbar px-4 py-3 flex-shrink-0">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <div class="flex-grow-1" style="min-width:260px;">
           <input
             id="yourFindsReprintSearch"
             class="form-control"
@@ -16,21 +30,28 @@
             oninput="renderYourFindsReprintItems()"
           >
         </div>
-        <div class="col-md-3">
+        <div style="width:250px;">
           <select id="yourFindsReprintType" class="form-select" onchange="changeYourFindsReprintType()">
-            <option value="COMPLETED">Completed · 40 × 30 mm</option>
-            <option value="INCOMPLETE">Incomplete · 30 × 20 mm</option>
+            <option value="ALL">All Labels</option>
+            <option value="COMPLETED">Selling Label · 40 × 30 mm</option>
+            <option value="INCOMPLETE">Initial Label · 30 × 20 mm</option>
           </select>
         </div>
-        <div class="col-md-4 d-flex gap-2 justify-content-md-end">
-          <button class="btn btn-sm btn-outline-secondary" onclick="selectVisibleYourFindsReprintItems()">Select Visible</button>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-secondary" onclick="selectVisibleYourFindsReprintItems()">Select All</button>
           <button class="btn btn-sm btn-outline-secondary" onclick="clearYourFindsReprintSelection()">Clear</button>
         </div>
+        <div style="width:230px;">
+          <select id="yourFindsReprintDeliveryFilter" class="form-select" onchange="renderYourFindsReprintItems()">
+            <option value="">All Deliveries</option>
+          </select>
+        </div>
+        <span id="yourFindsReprintVisibleCount" class="small text-muted ms-auto">0 labels</span>
       </div>
     </div>
 
     <div class="table-responsive flex-grow-1" style="min-height:0;overflow:auto;">
-      <table class="table table-hover align-middle mb-0">
+      <table class="reprint-table table table-hover align-middle mb-0">
         <thead class="table-light" style="position:sticky;top:0;z-index:2;">
           <tr>
             <th class="ps-4" style="width:52px;"></th>
@@ -38,11 +59,10 @@
             <th>Code</th>
             <th class="text-center">Size</th>
             <th class="text-end">Selling Price</th>
-            <th class="text-center pe-4">Status</th>
           </tr>
         </thead>
         <tbody id="yourFindsReprintBody">
-          <tr><td colspan="6" class="text-center text-muted py-5">Loading YourFinds items...</td></tr>
+          <tr><td colspan="5" class="text-center text-muted py-5">Loading YourFinds items...</td></tr>
         </tbody>
       </table>
     </div>
@@ -52,7 +72,7 @@
         PDF ready. <a id="yourFindsReprintResultLink" href="#" target="_blank" rel="noopener" class="alert-link">Open generated labels</a>
       </div>
       <div class="d-flex justify-content-between align-items-center">
-        <div><strong id="yourFindsReprintSelectedCount">0</strong> label(s) selected</div>
+        <div class="reprint-selection-count"><strong id="yourFindsReprintSelectedCount">0</strong> label(s) selected</div>
         <div class="d-flex gap-2">
           <button class="btn btn-outline-secondary" onclick="closeYourFindsReprintModal()">Cancel</button>
           <button id="yourFindsBulkPrintBtn" class="btn btn-pink" onclick="printSelectedYourFindsReprintLabels()" disabled>
@@ -80,7 +100,7 @@ function escapeYourFindsReprintHtml(value) {
 function openYourFindsReprintModal() {
   yourFindsReprintSelection = {};
   document.getElementById('yourFindsReprintSearch').value = '';
-  document.getElementById('yourFindsReprintType').value = 'COMPLETED';
+  document.getElementById('yourFindsReprintType').value = 'ALL';
   document.getElementById('yourFindsReprintResult').style.display = 'none';
   document.getElementById('yourFindsReprintModal').style.display = 'flex';
   document.getElementById('yourFindsReprintBody').innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">Loading YourFinds items...</td></tr>';
@@ -94,6 +114,7 @@ function openYourFindsReprintModal() {
       } else {
         yourFindsReprintItems = Array.isArray(result.items) ? result.items : [];
       }
+      populateYourFindsReprintFilters();
       renderYourFindsReprintItems();
     })
     .withFailureHandler(function(error) {
@@ -111,8 +132,10 @@ function closeYourFindsReprintModal() {
 function getVisibleYourFindsReprintItems() {
   const search = String(document.getElementById('yourFindsReprintSearch').value || '').trim().toLowerCase();
   const labelType = document.getElementById('yourFindsReprintType').value;
+  const deliveryId = document.getElementById('yourFindsReprintDeliveryFilter').value;
   return yourFindsReprintItems.filter(function(item) {
-    if (item.labelType !== labelType) return false;
+    if (labelType !== 'ALL' && item.labelType !== labelType) return false;
+    if (deliveryId && String(item.deliveryId || '') !== deliveryId) return false;
     if (!search) return true;
     return [item.code, item.description, item.size]
       .join(' ')
@@ -121,35 +144,52 @@ function getVisibleYourFindsReprintItems() {
   });
 }
 
+function populateYourFindsReprintFilters() {
+  const deliverySelect = document.getElementById('yourFindsReprintDeliveryFilter');
+  const deliveries = Array.from(new Set(yourFindsReprintItems.map(function(item) { return String(item.deliveryId || '').trim(); }).filter(Boolean))).sort();
+  deliverySelect.innerHTML = '<option value="">All Deliveries</option>' + deliveries.map(function(value) { return '<option value="' + escapeYourFindsReprintHtml(value) + '">' + escapeYourFindsReprintHtml(value) + '</option>'; }).join('');
+}
+
 function renderYourFindsReprintItems() {
   const items = getVisibleYourFindsReprintItems();
   const body = document.getElementById('yourFindsReprintBody');
   if (!items.length) {
-    const type = document.getElementById('yourFindsReprintType').value.toLowerCase();
-    body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">No ' + type + ' YourFinds labels found.</td></tr>';
+    const type = document.getElementById('yourFindsReprintType').value === 'ALL' ? 'labels' : (document.getElementById('yourFindsReprintType').value === 'INCOMPLETE' ? 'initial labels' : 'selling labels');
+    body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-5">No ' + type + ' YourFinds labels found.</td></tr>';
     updateYourFindsReprintSelection();
     return;
   }
 
+  let currentDeliveryId = '';
   body.innerHTML = items.map(function(item) {
     const code = String(item.code || '');
     const checked = yourFindsReprintSelection[code] ? ' checked' : '';
-    const statusClass = item.labelType === 'INCOMPLETE'
-      ? 'bg-warning text-dark'
-      : (String(item.status).toUpperCase() === 'ACTIVE' ? 'bg-success' : 'bg-secondary');
     const image = item.imageUrl
       ? '<img src="' + escapeYourFindsReprintHtml(item.imageUrl) + '" alt="" style="width:46px;height:46px;object-fit:cover;border-radius:7px;">'
       : '<div class="bg-light border rounded" style="width:46px;height:46px;"></div>';
-    return '<tr>' +
+    const deliveryId = String(item.deliveryId || '').trim() || 'No delivery ID';
+    const groupHeader = deliveryId !== currentDeliveryId
+      ? '<tr class="table-secondary"><td colspan="5" class="fw-semibold py-2"><button type="button" class="btn btn-link p-0 text-reset fw-semibold" onclick="selectYourFindsDeliveryItems(\'' + escapeYourFindsReprintHtml(deliveryId) + '\')">Delivery: ' + escapeYourFindsReprintHtml(deliveryId) + '</button></td></tr>'
+      : '';
+    currentDeliveryId = deliveryId;
+    return groupHeader + '<tr>' +
       '<td class="ps-4"><input class="form-check-input" type="checkbox" value="' + escapeYourFindsReprintHtml(code) + '" onchange="toggleYourFindsReprintItem(this)"' + checked + '></td>' +
       '<td><div class="d-flex align-items-center gap-2">' + image + '<div class="fw-semibold">' + escapeYourFindsReprintHtml(item.description || '—') + '</div></div></td>' +
       '<td class="font-monospace small">' + escapeYourFindsReprintHtml(code) + '</td>' +
       '<td class="text-center fw-semibold">' + escapeYourFindsReprintHtml(item.size) + '</td>' +
       '<td class="text-end fw-semibold">' + (item.labelType === 'COMPLETED' ? '₱' + (Number(item.sellingPrice) || 0).toFixed(2) : '—') + '</td>' +
-      '<td class="text-center pe-4"><span class="badge ' + statusClass + '">' + escapeYourFindsReprintHtml(item.status) + '</span></td>' +
       '</tr>';
   }).join('');
   updateYourFindsReprintSelection();
+}
+
+function selectYourFindsDeliveryItems(deliveryId) {
+  yourFindsReprintItems.forEach(function(item) {
+    if (String(item.deliveryId || '').trim() === deliveryId && (document.getElementById('yourFindsReprintType').value === 'ALL' || item.labelType === document.getElementById('yourFindsReprintType').value)) {
+      yourFindsReprintSelection[String(item.code)] = true;
+    }
+  });
+  renderYourFindsReprintItems();
 }
 
 function changeYourFindsReprintType() {
@@ -184,7 +224,7 @@ function updateYourFindsReprintSelection() {
   document.getElementById('yourFindsReprintSelectedCount').textContent = String(count);
   const button = document.getElementById('yourFindsBulkPrintBtn');
   button.disabled = count === 0;
-  button.textContent = labelType === 'INCOMPLETE' ? 'Generate 30 × 20 Labels' : 'Generate 40 × 30 Labels';
+  button.textContent = labelType === 'ALL' ? 'Generate Labels' : (labelType === 'INCOMPLETE' ? 'Generate 30 × 20 Labels' : 'Generate 40 × 30 Labels');
 }
 
 function printSelectedYourFindsReprintLabels() {
@@ -197,6 +237,22 @@ function printSelectedYourFindsReprintLabels() {
   resultBox.style.display = 'none';
   button.disabled = true;
   button.textContent = 'Generating...';
+  const selectedItems = yourFindsReprintItems.filter(function(item) { return yourFindsReprintSelection[String(item.code)] && (labelType === 'ALL' || item.labelType === labelType); });
+  const groupedCodes = { COMPLETED: [], INCOMPLETE: [] };
+  selectedItems.forEach(function(item) { groupedCodes[item.labelType].push(String(item.code)); });
+  if (labelType === 'ALL') {
+    google.script.run.withSuccessHandler(function(result) {
+        updateYourFindsReprintSelection();
+        if (!result || !result.success) { showNotificationToast(result && result.message ? result.message : 'Unable to generate labels.', true); return; }
+        const firstUrl = result.files && result.files[0] ? (result.files[0].downloadUrl || result.files[0].fileUrl) : '';
+        if (firstUrl) { document.getElementById('yourFindsReprintResultLink').href = firstUrl; window.open(firstUrl, '_blank'); }
+        (result.files || []).slice(1).forEach(function(file) { window.open(file.downloadUrl || file.fileUrl, '_blank'); });
+        resultBox.style.display = 'block';
+        showNotificationToast(result.labelCount + ' label(s) generated.');
+      }).withFailureHandler(function(error) { updateYourFindsReprintSelection(); showNotificationToast(error && error.message ? error.message : String(error), true); }).createYourFindsReprintPDFByGroups(groupedCodes.COMPLETED, groupedCodes.INCOMPLETE);
+    return;
+  }
+
   google.script.run
     .withSuccessHandler(function(result) {
       updateYourFindsReprintSelection();

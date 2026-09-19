@@ -1135,7 +1135,8 @@ function getYourFindsItemsForLabelReprint() {
         sellingPrice: item.price,
         status: status,
         labelType: status === INVENTORY_STATUS.INCOMPLETE ? "INCOMPLETE" : "COMPLETED",
-        imageUrl: item.imageUrl
+        imageUrl: item.imageUrl,
+        deliveryId: item.deliveryId || ""
       };
     })
   };
@@ -1243,6 +1244,21 @@ function createYourFindsReprintPDFByCodes(codes, labelType) {
   return labelType === "INCOMPLETE"
     ? createYourFindsLabelPDFByCodes(codes)
     : createCompletedYourFindsLabelPDFByCodes(codes);
+}
+
+function createYourFindsReprintPDFByGroups(completedCodes, incompleteCodes) {
+  const files = [];
+  let labelCount = 0;
+  if (Array.isArray(completedCodes) && completedCodes.length) {
+    files.push(createCompletedYourFindsLabelPDFByCodes(completedCodes));
+    labelCount += completedCodes.length;
+  }
+  if (Array.isArray(incompleteCodes) && incompleteCodes.length) {
+    files.push(createYourFindsLabelPDFByCodes(incompleteCodes));
+    labelCount += incompleteCodes.length;
+  }
+  if (!files.length) throw new Error("Select at least one label.");
+  return { success: true, files: files, labelCount: labelCount };
 }
 
 /* ==========================================================
