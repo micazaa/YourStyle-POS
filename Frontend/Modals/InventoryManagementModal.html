@@ -8,7 +8,7 @@
     <div class="row g-3 mb-3">
       <div class="col-md-4">
         <div class="border rounded p-2 text-center bg-light">
-          <img id="invDetailPhoto" alt="Inventory photo" style="width:100%;height:220px;object-fit:contain;display:none;">
+          <button id="invDetailPhotoButton" type="button" class="btn p-0 w-100" style="display:none;" aria-label="View full product image" onclick="openInventoryImageViewer(phase8SelectedItem)"><img id="invDetailPhoto" alt="Inventory photo" style="width:100%;height:220px;object-fit:contain;display:none;"></button>
           <div id="invDetailPhotoEmpty" class="text-muted py-5">No photo uploaded</div>
         </div>
         <div class="d-flex gap-2 mt-2">
@@ -31,7 +31,7 @@
 </div>
 
 <div id="yourFindsEditorModal" class="generic-overlay-blur" style="display:none;">
-  <div class="custom-popup-card" style="max-width:760px;width:95%;max-height:92vh;overflow:auto;">
+  <div class="custom-popup-card inventory-editor-card">
     <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
       <div>
         <h5 id="yfEditorTitle" class="fw-bold mb-1">YourFinds Selling Details</h5>
@@ -42,13 +42,11 @@
 
     <div class="row g-3">
       <div class="col-md-4">
-        <label class="form-label fw-semibold">Product Picture <span class="text-danger">*</span></label>
-        <div class="border rounded bg-light d-flex align-items-center justify-content-center overflow-hidden" style="height:220px;">
-          <img id="yfEditorPhotoPreview" alt="YourFinds product preview" style="width:100%;height:100%;object-fit:contain;display:none;">
-          <div id="yfEditorPhotoEmpty" class="small text-muted text-center px-3">Choose a product picture</div>
-        </div>
-        <input id="yfEditorPhoto" type="file" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm mt-2" onchange="previewYourFindsPhotoPhase8(this)">
-        <div class="form-text">JPG, PNG, or WEBP · maximum 5 MB</div>
+<label class="form-label fw-semibold">Product Photo <span class="text-danger">*</span></label>
+ <div class="inventory-photo-preview"><img id="yfEditorPhotoPreview" alt="Product preview" style="display:none;"><span id="yfEditorPhotoEmpty" class="small text-muted">No photo selected</span></div>
+ <input id="yfEditorPhoto" type="file" accept="image/jpeg,image/png,image/webp" class="d-none" onchange="previewYourFindsPhotoPhase8(this)">
+ <button type="button" class="btn btn-outline-secondary w-100 mt-2" onclick="document.getElementById('yfEditorPhoto').click()">Choose / Change Photo</button>
+ <div class="form-text">JPG, PNG, or WEBP · maximum 5 MB</div>
       </div>
 
       <div class="col-md-8">
@@ -101,7 +99,7 @@
   <div class="row g-2 mb-3"><div class="col-6"><label class="form-label">Action</label><select id="adjustDirection" class="form-select" onchange="updateStockAdjustmentPreviewPhase8()"><option value="ADD">+ Add Stock</option><option value="REMOVE">- Remove Stock</option></select></div><div class="col-6"><label class="form-label">Quantity</label><input id="adjustQty" type="number" min="1" step="1" value="1" class="form-control" oninput="updateStockAdjustmentPreviewPhase8()"></div></div>
   <label class="form-label">Reason</label><select id="adjustReason" class="form-select mb-3"><option>PHYSICAL COUNT CORRECTION</option><option>DAMAGED</option><option>LOST / MISSING</option><option>FOUND STOCK</option><option>DATA CORRECTION</option><option>OTHER</option></select>
   <label class="form-label">Notes</label><textarea id="adjustNotes" class="form-control mb-3" rows="2"></textarea>
-  <label class="form-label">Manager PIN</label><input id="adjustManagerPin" type="password" class="form-control mb-4" autocomplete="off">
+  <div id="adjustManagerPinWrap"><label class="form-label">Manager PIN</label><input id="adjustManagerPin" type="password" class="form-control mb-4" autocomplete="off"></div>
   <div class="d-flex gap-2"><button class="btn btn-outline-secondary flex-fill" onclick="closePhase8Modal('stockAdjustmentModal')">Cancel</button><button id="adjustConfirmBtn" class="btn btn-pink flex-fill" onclick="submitStockAdjustmentPhase8()">Confirm Adjustment</button></div>
  </div>
 </div>
@@ -117,7 +115,7 @@
   <div class="border rounded bg-light p-3 mb-3"><div class="row g-2 align-items-end"><div class="col-md-4"><label class="form-label">Quantity to Change</label><input id="changeQty" type="number" min="1" step="1" value="1" class="form-control" oninput="updateChangeItemPreviewPhase8()"></div><div class="col-md-8"><div id="changePreviewText" class="fw-semibold"></div><div id="changePreviewError" class="small text-danger"></div></div></div></div>
   <label class="form-label">Reason</label><input id="changeReason" class="form-control mb-3" value="ITEM CHANGE">
   <label class="form-label">Notes</label><textarea id="changeNotes" class="form-control mb-3" rows="2"></textarea>
-  <label class="form-label">Manager PIN</label><input id="changeManagerPin" type="password" class="form-control mb-4" autocomplete="off">
+  <div id="changeManagerPinWrap"><label class="form-label">Manager PIN</label><input id="changeManagerPin" type="password" class="form-control mb-4" autocomplete="off"></div>
   <div class="d-flex gap-2"><button class="btn btn-outline-secondary flex-fill" onclick="closePhase8Modal('changeItemModal')">Cancel</button><button id="changeConfirmBtn" class="btn btn-pink flex-fill" onclick="submitChangeItemPhase8()">Confirm Change</button></div>
  </div>
 </div>
@@ -138,12 +136,35 @@
 </div>
 
 <div id="productEditorModal" class="generic-overlay-blur" style="display:none;">
- <div class="custom-popup-card" style="max-width:650px;width:95%;">
-  <div class="d-flex justify-content-between border-bottom pb-3 mb-3"><div><h5 id="pmEditorTitle" class="fw-bold mb-1">Add Product</h5><div id="pmModeLabel" class="small text-muted">Create a PINS or OTHERS product</div></div><button class="btn-close" onclick="closePhase8Modal('productEditorModal')"></button></div>
-  <div class="row g-3"><div class="col-md-6"><label class="form-label">Product Code</label><input id="pmCode" class="form-control" placeholder="Generating..." readonly></div><div class="col-md-6"><label class="form-label">Category</label><select id="pmCategory" class="form-select"><option>PINS</option><option>OTHERS</option></select></div><div class="col-12"><label class="form-label">Description</label><input id="pmDescription" class="form-control"></div><div class="col-md-4"><label class="form-label">Selling Price</label><input id="pmPrice" type="number" min="0" class="form-control"></div><div class="col-md-4"><label class="form-label">Original Price</label><input id="pmOrig" type="number" min="0" class="form-control"></div><div class="col-md-4"><label class="form-label">Low Stock At</label><input id="pmLow" type="number" min="0" class="form-control"></div><div class="col-12"><label class="form-label">Product Photo</label><input id="pmPhoto" type="file" accept="image/jpeg,image/png,image/webp" class="form-control" onchange="previewProductPhotoPhase8(this)"><img id="pmPhotoPreview" alt="Product preview" style="display:none;max-width:120px;max-height:120px;object-fit:cover;margin-top:8px;border-radius:8px;"></div></div>
-  <div class="d-flex gap-2 mt-4"><button class="btn btn-outline-secondary flex-fill" onclick="closePhase8Modal('productEditorModal')">Cancel</button><button class="btn btn-pink flex-fill" onclick="saveProductMasterPhase8Client()">Save Product</button></div>
+ <div class="custom-popup-card inventory-editor-card">
+  <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
+   <div><h5 id="pmEditorTitle" class="fw-bold mb-1">Add Product</h5><div id="pmModeLabel" class="small text-muted"></div></div>
+   <button class="btn-close" aria-label="Close product editor" onclick="closePhase8Modal('productEditorModal')"></button>
+  </div>
+  <div class="row g-3">
+   <div class="col-md-4"><label class="form-label fw-semibold">Product Photo</label>
+ <div class="inventory-photo-preview"><img id="pmPhotoPreview" alt="Product preview" style="display:none;"><span id="pmPhotoEmpty" class="small text-muted">No photo selected</span></div>
+ <input id="pmPhoto" type="file" accept="image/jpeg,image/png,image/webp" class="d-none" onchange="previewProductPhotoPhase8(this)">
+ <button type="button" class="btn btn-outline-secondary w-100 mt-2" onclick="document.getElementById('pmPhoto').click()">Choose / Change Photo</button>
+ <div class="form-text">JPG, PNG, or WEBP · maximum 5 MB</div></div>
+   <div class="col-md-8"><div class="row g-3">
+    <div class="col-md-7"><label class="form-label">Product Code</label><input id="pmCode" class="form-control font-monospace" placeholder="Generating..." readonly></div>
+    <div class="col-md-5"><label class="form-label">Category</label><select id="pmCategory" class="form-select"><option>PINS</option><option>OTHERS</option></select></div>
+    <div class="col-12"><label class="form-label">Description <span class="text-danger">*</span></label><textarea id="pmDescription" class="form-control" rows="3"></textarea></div>
+    <div class="col-md-6"><label class="form-label">Original Price</label><div class="input-group"><span class="input-group-text">₱</span><input id="pmOrig" type="number" min="0" step="0.01" class="form-control"></div></div>
+    <div class="col-md-6"><label class="form-label">Selling Price <span class="text-danger">*</span></label><div class="input-group"><span class="input-group-text">₱</span><input id="pmPrice" type="number" min="0" step="0.01" class="form-control"></div></div>
+    <div class="col-md-6"><label class="form-label">Low Stock At</label><input id="pmLow" type="number" min="0" step="1" class="form-control"></div>
+   </div></div>
+  </div>
+  <div class="d-flex gap-2 mt-4"><button class="btn btn-outline-secondary flex-fill" onclick="closePhase8Modal('productEditorModal')">Cancel</button><button class="btn btn-pink flex-fill" onclick="saveProductMasterPhase8Client()">Save</button></div>
  </div>
 </div>
+<style>
+ .inventory-editor-card {max-width:760px;width:95%;max-height:92vh;overflow:auto;}
+ .inventory-photo-preview {height:220px;border:1px solid #dee2e6;border-radius:8px;background:#f8f9fa;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+ .inventory-photo-preview img {width:100%;height:100%;object-fit:contain;}
+ .inventory-summary-card:hover {background:#fbf1f4;}
+</style>
 
 <script>
 var phase8SelectedItem = null;
@@ -152,13 +173,30 @@ var phase8YfPhotoFileName = '';
 var phase8YfSaving = false;
 var phase8ProductPhotoDataUrl = '';
 var phase8ProductPhotoFileName = '';
+function phase8ManagerCredentials(message,pin){
+ if(inventoryIsManager()){
+   const token=currentEmployee.inventoryManagerToken;
+   if(!token){showNotificationToast('Please sign out and sign in again to authorize inventory changes.',true);return null;}
+   return {managerToken:token};
+ }
+ const entered=pin===undefined?window.prompt(message):pin;
+ if(!entered)return null;
+ return {managerPin:entered};
+}
+function phase8ReadProductPhoto(input,onLoad){
+ const file=input.files&&input.files[0];if(!file)return;
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){input.value='';showNotificationToast('Use a JPG, PNG, or WEBP image, 5 MB or smaller.',true);return;}
+ const reader=new FileReader();reader.onerror=function(){showNotificationToast('Unable to read this image. Please select it again.',true);};
+ reader.onload=function(){onLoad(String(reader.result||''),file.name);};reader.readAsDataURL(file);
+}
 function phase8Employee(){ return String((typeof currentCashier!=="undefined"&&currentCashier) ? currentCashier : (typeof currentEmployee!=="undefined"&&currentEmployee ? (currentEmployee.fullName||currentEmployee.name||"") : "")).trim(); }
 function closePhase8Modal(id){ const e=document.getElementById(id); if(e)e.style.display="none"; }
 function openInventoryDetailsPhase8(code){
  const item=(inventoryPageData||[]).find(x=>String(x.code)===String(code)); if(!item)return; phase8SelectedItem=item;
  const status=String(item.status||'').toUpperCase(); const unique=String(item.inventoryType||'').toUpperCase()==='UNIQUE'; const yourFinds=unique&&String(item.category||'').toUpperCase()==='YOURFINDS'; const incomplete=yourFinds&&status==='INCOMPLETE'; const completed=yourFinds&&!incomplete&&status!=='RETURNED'&&Number(item.stock)>0; const editable=incomplete||completed;
  document.getElementById('invDetailTitle').textContent=item.name||(incomplete?'YourFinds Item':'Inventory Item'); document.getElementById('invDetailCode').textContent=item.code;
- const display=getInventoryDisplayStatus(item); document.getElementById('invDetailBody').innerHTML=`<div class="border rounded p-3 mb-3"><div class="small text-muted">Current Stock</div><div class="fs-3 fw-bold">${Number(item.stock)||0}</div><div>${buildInventoryStatusBadge(display)}</div></div><div class="row g-3"><div class="col-6"><b>Category</b><br>${escapeInventoryHtml(item.category)}</div><div class="col-6"><b>Type</b><br>${escapeInventoryHtml(item.inventoryType)}</div><div class="col-6"><b>Size</b><br>${escapeInventoryHtml(item.size||'—')}</div><div class="col-6"><b>Selling Price</b><br>₱${(Number(item.price)||0).toFixed(2)}</div>${inventoryIsManager()?`<div class="col-6"><b>Original Price</b><br>₱${(Number(item.origPrice)||0).toFixed(2)}</div>`:''}<div class="col-6"><b>Delivered</b><br>${escapeInventoryHtml(item.dateDelivered||'—')}</div><div class="col-12"><b>Delivery ID</b><br>${escapeInventoryHtml(item.deliveryId||'—')}</div></div>`; phase8RenderInventoryPhoto_(item.imageUrl);
+ const isPins=String(item.category||'').trim().toUpperCase()==='PINS';
+ const display=getInventoryDisplayStatus(item); document.getElementById('invDetailBody').innerHTML=`<div class="border rounded p-3 mb-3"><div class="small text-muted">Current Stock</div><div class="fs-3 fw-bold">${Number(item.stock)||0}</div><div>${buildInventoryStatusBadge(display)}</div></div><div class="row g-3"><div class="col-6"><b>Category</b><br>${escapeInventoryHtml(item.category)}</div><div class="col-6"><b>Type</b><br>${escapeInventoryHtml(item.inventoryType)}</div>${isPins?'':`<div class="col-6"><b>Size</b><br>${escapeInventoryHtml(item.size||'—')}</div>`}<div class="col-6"><b>Selling Price</b><br>₱${(Number(item.price)||0).toFixed(2)}</div>${inventoryIsManager()?`<div class="col-6"><b>Original Price</b><br>₱${(Number(item.origPrice)||0).toFixed(2)}</div>`:''}${isPins?'':`<div class="col-6"><b>Delivered</b><br>${escapeInventoryHtml(item.dateDelivered||'—')}</div>`}${isPins?'':`<div class="col-12"><b>Delivery ID</b><br>${escapeInventoryHtml(item.deliveryId||'—')}</div>`}</div>`; phase8RenderInventoryPhoto_(item.imageUrl);
  document.getElementById('invAdjustBtn').style.display=unique?'none':'inline-block'; document.getElementById('invChangeBtn').style.display=unique?'none':'inline-block';
  const editBtn=document.getElementById('invYfEditBtn'); editBtn.style.display=editable&&(incomplete||inventoryIsManager())?'inline-block':'none'; editBtn.textContent=incomplete?'Add Selling Details':'Edit Selling Details';
  document.getElementById('invLabelBtn').style.display=completed?'inline-block':'none';
@@ -179,7 +217,7 @@ function openYourFindsEditorPhase8(){
  document.getElementById('yfEditorOriginalPrice').value=inventoryIsManager()?(Number(phase8SelectedItem.origPrice)||0):'';
  document.getElementById('yfEditorSellingPrice').value=Number(phase8SelectedItem.price)||'';
  document.getElementById('yfEditorManagerPin').value='';
- document.getElementById('yfEditorManagerPinWrap').style.display=incomplete?'none':'block';
+ document.getElementById('yfEditorManagerPinWrap').style.display=incomplete||inventoryIsManager()?'none':'block';
  document.getElementById('yfEditorPhoto').value='';
  renderYourFindsEditorPhotoPhase8(phase8SelectedItem.imageUrl||'');
  document.getElementById('yfEditorCompletionNote').style.display=incomplete?'block':'none';
@@ -194,11 +232,7 @@ function renderYourFindsEditorPhotoPhase8(url){
 }
 
 function previewYourFindsPhotoPhase8(input){
- const file=input.files&&input.files[0]; if(!file)return;
- if(file.size>5*1024*1024){input.value='';showNotificationToast('Image must be 5 MB or smaller.',true);return;}
- const reader=new FileReader();
- reader.onload=function(){phase8YfPhotoDataUrl=String(reader.result||'');phase8YfPhotoFileName=file.name;renderYourFindsEditorPhotoPhase8(phase8YfPhotoDataUrl);};
- reader.readAsDataURL(file);
+ phase8ReadProductPhoto(input,function(url,name){phase8YfPhotoDataUrl=url;phase8YfPhotoFileName=name;renderYourFindsEditorPhotoPhase8(url);});
 }
 
 function setYourFindsSavingPhase8(saving,generateLabel){
@@ -219,9 +253,10 @@ function saveYourFindsDetailsClientPhase8(generateLabel){
  if(!description)return showNotificationToast('Description is required.',true);
  if(!Number.isFinite(sellingPrice)||sellingPrice<=0)return showNotificationToast('Selling Price must be greater than zero.',true);
  if(!phase8SelectedItem.imageUrl&&!phase8YfPhotoDataUrl)return showNotificationToast('Choose a product picture.',true);
- if(!incomplete&&!managerPin)return showNotificationToast('Manager PIN is required to edit saved selling details.',true);
+ const auth=(inventoryIsManager()||!incomplete)?phase8ManagerCredentials('Manager PIN to save selling details:',managerPin):{};
+ if(!auth)return;
  const payload={
-   code:phase8SelectedItem.code,description:description,sellingPrice:sellingPrice,managerPin:managerPin,fileName:phase8YfPhotoFileName,dataUrl:phase8YfPhotoDataUrl
+   code:phase8SelectedItem.code,description:description,sellingPrice:sellingPrice,...auth,fileName:phase8YfPhotoFileName,dataUrl:phase8YfPhotoDataUrl
  };
  if(inventoryIsManager()){
    const originalPrice=Number(document.getElementById('yfEditorOriginalPrice').value);
@@ -253,7 +288,7 @@ function printCompletedYourFindsLabelPhase8(code,afterCompletion){
 function openStockAdjustmentPhase8(){
  if(!phase8SelectedItem)return;
  document.getElementById('adjustItemLabel').textContent=`${phase8SelectedItem.name} · ${phase8SelectedItem.code}`;
- document.getElementById('adjustDirection').value='ADD'; document.getElementById('adjustQty').value=1; document.getElementById('adjustManagerPin').value='';
+ document.getElementById('adjustDirection').value='ADD'; document.getElementById('adjustQty').value=1; document.getElementById('adjustManagerPinWrap').style.display=inventoryIsManager()?'none':'block';document.getElementById('adjustManagerPin').value='';
  updateStockAdjustmentPreviewPhase8(); document.getElementById('stockAdjustmentModal').style.display='flex';
 }
 function updateStockAdjustmentPreviewPhase8(){
@@ -261,20 +296,20 @@ function updateStockAdjustmentPreviewPhase8(){
  document.getElementById('adjustCurrentStock').textContent=current; document.getElementById('adjustAfterStock').textContent=after;
  const invalid=!Number.isInteger(qty)||qty<1||after<0; const msg=document.getElementById('adjustPreviewMessage'); msg.textContent=after<0?`Cannot remove ${qty}; only ${current} available.`:`${dir==='ADD'?'+':'-'}${qty} stock · ${current} → ${after}`; msg.className=invalid?'small text-center mt-2 text-danger':'small text-center mt-2 text-muted'; document.getElementById('adjustConfirmBtn').disabled=invalid;
 }
-function submitStockAdjustmentPhase8(){ google.script.run.withSuccessHandler(r=>{ if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Adjustment failed',true);return;} closePhase8Modal('stockAdjustmentModal');closePhase8Modal('inventoryDetailsModal');showNotificationToast(`Adjustment saved · ${r.referenceId}`);loadInventoryPage(); }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).adjustInventoryStockPhase8({code:phase8SelectedItem.code,direction:document.getElementById('adjustDirection').value,quantity:Number(document.getElementById('adjustQty').value),reason:document.getElementById('adjustReason').value,notes:document.getElementById('adjustNotes').value,managerPin:document.getElementById('adjustManagerPin').value,employee:phase8Employee()}); }
+function submitStockAdjustmentPhase8(){const auth=phase8ManagerCredentials('Manager PIN:',document.getElementById('adjustManagerPin').value);if(!auth)return; google.script.run.withSuccessHandler(r=>{ if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Adjustment failed',true);return;} closePhase8Modal('stockAdjustmentModal');closePhase8Modal('inventoryDetailsModal');showNotificationToast(`Adjustment saved · ${r.referenceId}`);loadInventoryPage(); }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).adjustInventoryStockPhase8({code:phase8SelectedItem.code,direction:document.getElementById('adjustDirection').value,quantity:Number(document.getElementById('adjustQty').value),reason:document.getElementById('adjustReason').value,notes:document.getElementById('adjustNotes').value,...auth,employee:phase8Employee()}); }
 function openChangeItemPhase8(){
  if(!phase8SelectedItem)return; const s=document.getElementById('changeToCode'); const choices=(inventoryPageData||[]).filter(x=>String(x.inventoryType).toUpperCase()==='STOCK'&&String(x.code)!==String(phase8SelectedItem.code)&&String(x.status).toUpperCase()==='ACTIVE');
  s.innerHTML=choices.map(x=>`<option value="${escapeInventoryHtml(x.code)}">${escapeInventoryHtml(x.code)} — ${escapeInventoryHtml(x.name)}</option>`).join('');
- document.getElementById('changeFromName').textContent=phase8SelectedItem.name||'—'; document.getElementById('changeFromCode').textContent=phase8SelectedItem.code||'—'; document.getElementById('changeQty').value=1; document.getElementById('changeManagerPin').value=''; updateChangeItemPreviewPhase8(); document.getElementById('changeItemModal').style.display='flex';
+ document.getElementById('changeFromName').textContent=phase8SelectedItem.name||'—'; document.getElementById('changeFromCode').textContent=phase8SelectedItem.code||'—'; document.getElementById('changeQty').value=1; document.getElementById('changeManagerPinWrap').style.display=inventoryIsManager()?'none':'block';document.getElementById('changeManagerPin').value=''; updateChangeItemPreviewPhase8(); document.getElementById('changeItemModal').style.display='flex';
 }
 function updateChangeItemPreviewPhase8(){
  if(!phase8SelectedItem)return; const to=(inventoryPageData||[]).find(x=>String(x.code)===String(document.getElementById('changeToCode').value)); const qty=Number(document.getElementById('changeQty').value)||0; const fc=Number(phase8SelectedItem.stock)||0; const tc=to?(Number(to.stock)||0):0; const fa=fc-qty; const ta=tc+qty;
  document.getElementById('changeFromCurrent').textContent=fc; document.getElementById('changeFromAfter').textContent=fa; document.getElementById('changeToName').textContent=to?`${to.name} · ${to.category}`:'No destination available'; document.getElementById('changeToCurrent').textContent=tc; document.getElementById('changeToAfter').textContent=ta; document.getElementById('changePreviewText').textContent=to?`${phase8SelectedItem.name}: ${fc} → ${fa}   |   ${to.name}: ${tc} → ${ta}`:'';
  const invalid=!to||!Number.isInteger(qty)||qty<1||fa<0; document.getElementById('changePreviewError').textContent=fa<0?`Insufficient ${phase8SelectedItem.name} stock.`:(!to?'Choose a destination product.':''); document.getElementById('changeConfirmBtn').disabled=invalid;
 }
-function submitChangeItemPhase8(){ google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Change failed',true);return;} closePhase8Modal('changeItemModal');closePhase8Modal('inventoryDetailsModal');showNotificationToast(`Item change saved · ${r.referenceId}`);loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).changeInventoryItemPhase8({fromCode:phase8SelectedItem.code,toCode:document.getElementById('changeToCode').value,quantity:Number(document.getElementById('changeQty').value),reason:document.getElementById('changeReason').value,notes:document.getElementById('changeNotes').value,managerPin:document.getElementById('changeManagerPin').value,employee:phase8Employee()}); }
+function submitChangeItemPhase8(){const auth=phase8ManagerCredentials('Manager PIN:',document.getElementById('changeManagerPin').value);if(!auth)return; google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Change failed',true);return;} closePhase8Modal('changeItemModal');closePhase8Modal('inventoryDetailsModal');showNotificationToast(`Item change saved · ${r.referenceId}`);loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).changeInventoryItemPhase8({fromCode:phase8SelectedItem.code,toCode:document.getElementById('changeToCode').value,quantity:Number(document.getElementById('changeQty').value),reason:document.getElementById('changeReason').value,notes:document.getElementById('changeNotes').value,...auth,employee:phase8Employee()}); }
 function openMovementHistoryPhase8(){ if(!phase8SelectedItem)return; document.getElementById('movementHistoryLabel').textContent=`${phase8SelectedItem.name} · ${phase8SelectedItem.code}`; document.getElementById('movementHistoryBody').innerHTML='<tr><td colspan="8" class="text-center text-muted">Loading...</td></tr>'; document.getElementById('movementHistoryModal').style.display='flex'; google.script.run.withSuccessHandler(r=>{const a=r&&r.movements?r.movements:[];document.getElementById('movementHistoryBody').innerHTML=a.length?a.map(m=>`<tr><td>${escapeInventoryHtml(m.timestamp)}</td><td class="fw-bold">${m.qtyChange>0?'+':''}${m.qtyChange}</td><td>${m.stockBefore}</td><td>${m.stockAfter}</td><td>${escapeInventoryHtml(m.source)}</td><td>${escapeInventoryHtml(m.referenceId)}</td><td>${escapeInventoryHtml(m.employee)}</td><td>${escapeInventoryHtml((m.reason||'')+(m.notes?' · '+m.notes:''))}</td></tr>`).join(''):'<tr><td colspan="8" class="text-center text-muted">No movements found.</td></tr>';}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).getInventoryMovementHistoryByCode(phase8SelectedItem.code); }
-function toggleInventoryStatusPhase8(){ if(!phase8SelectedItem)return; const target=String(phase8SelectedItem.status).toUpperCase()==='ACTIVE'?'INACTIVE':'ACTIVE'; const pin=window.prompt(`Manager PIN to set ${target}:`); if(!pin)return; google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Status change failed',true);return;}closePhase8Modal('inventoryDetailsModal');showNotificationToast(`Inventory set to ${target}`);loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).setInventoryAdministrativeStatusPhase8({code:phase8SelectedItem.code,status:target,managerPin:pin}); }
+function toggleInventoryStatusPhase8(){ if(!phase8SelectedItem)return; const target=String(phase8SelectedItem.status).toUpperCase()==='ACTIVE'?'INACTIVE':'ACTIVE'; const auth=phase8ManagerCredentials('Manager PIN to change status:');if(!auth)return; google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Status change failed',true);return;}closePhase8Modal('inventoryDetailsModal');showNotificationToast(`Inventory set to ${target}`);loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).setInventoryAdministrativeStatusPhase8({code:phase8SelectedItem.code,status:target,...auth}); }
 function openProductMasterPhase8(){document.getElementById('productMasterModal').style.display='flex';loadProductMasterPhase8();}
 function loadProductMasterPhase8(){google.script.run.withSuccessHandler(products=>{window.phase8Products=products||[];renderProductMasterPhase8();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).getProductMaster();}
 function renderProductMasterPhase8(){const products=window.phase8Products||[];const search=String(document.getElementById('pmSearch')?.value||'').trim().toLowerCase();const cat=String(document.getElementById('pmListCategory')?.value||'').toUpperCase();const stat=String(document.getElementById('pmListStatus')?.value||'').toUpperCase();const a=products.filter(p=>{const active=p.active?'ACTIVE':'INACTIVE';return(!search||`${p.productCode||''} ${p.description||''}`.toLowerCase().includes(search))&&(!cat||String(p.category||'').toUpperCase()===cat)&&(!stat||active===stat);});document.getElementById('productMasterBody').innerHTML=a.length?a.map(p=>`<tr><td class="ps-4 font-monospace">${escapeInventoryHtml(p.productCode)}</td><td class="fw-semibold">${escapeInventoryHtml(p.description)}</td><td>${escapeInventoryHtml(p.category)}</td><td class="text-end">₱${(Number(p.defaultPrice)||0).toFixed(2)}</td><td class="text-center">${Number(p.lowStockAt)||0}</td><td class="text-center"><span class="badge ${p.active?'bg-success':'bg-secondary'}">${p.active?'ACTIVE':'INACTIVE'}</span></td><td class="text-end pe-4"><button class="btn btn-sm btn-outline-secondary" onclick="editProductMasterPhase8('${escapeInventoryHtml(p.productCode)}')">Edit</button></td></tr>`).join(''):'<tr><td colspan="7" class="text-center text-muted py-5">No products found.</td></tr>';}
@@ -291,20 +326,16 @@ function openProductEditorPhase8(){
  }).generateProductMasterCodePhase8();
 }
 function previewProductPhotoPhase8(input){
- const file=input.files&&input.files[0]; if(!file)return;
- if(file.size>5*1024*1024){input.value='';showNotificationToast('Image must be 5 MB or smaller.',true);return;}
- phase8ProductPhotoFileName=file.name;
- const reader=new FileReader();
- reader.onload=function(){phase8ProductPhotoDataUrl=String(reader.result||'');const preview=document.getElementById('pmPhotoPreview');preview.src=phase8ProductPhotoDataUrl;preview.style.display='block';};
- reader.readAsDataURL(file);
+ phase8ReadProductPhoto(input,function(url,name){phase8ProductPhotoDataUrl=url;phase8ProductPhotoFileName=name;document.getElementById('pmPhotoPreview').src=url;document.getElementById('pmPhotoPreview').style.display='block';document.getElementById('pmPhotoEmpty').style.display='none';});
 }
-function editProductMasterPhase8(code){if(!inventoryIsManager())return;const p=(window.phase8Products||[]).find(x=>String(x.productCode)===String(code));if(!p)return;document.getElementById('pmCode').dataset.editing='true';document.getElementById('pmEditorTitle').textContent='Edit Product';document.getElementById('pmModeLabel').textContent='Editing '+p.productCode+' — Product Code is locked';document.getElementById('pmCode').value=p.productCode;document.getElementById('pmCode').readOnly=true;document.getElementById('pmDescription').value=p.description;document.getElementById('pmCategory').value=p.category;document.getElementById('pmPrice').value=p.defaultPrice;document.getElementById('pmOrig').value=p.originalPrice;document.getElementById('pmLow').value=p.lowStockAt;if(p.imageUrl){document.getElementById('pmPhotoPreview').src=p.imageUrl;document.getElementById('pmPhotoPreview').style.display='block';}document.getElementById('productEditorModal').style.display='flex';}
-function clearProductMasterFormPhase8(){document.getElementById('pmCode').dataset.editing='false';document.getElementById('pmModeLabel').textContent='Create a PINS or OTHERS product';['pmCode','pmDescription','pmPrice','pmOrig','pmLow'].forEach(id=>document.getElementById(id).value='');document.getElementById('pmPhoto').value='';document.getElementById('pmPhotoPreview').removeAttribute('src');document.getElementById('pmPhotoPreview').style.display='none';phase8ProductPhotoDataUrl='';phase8ProductPhotoFileName='';document.getElementById('pmCode').readOnly=true;document.getElementById('pmCategory').value='PINS';}
-function saveProductMasterPhase8Client(){if(!inventoryIsManager())return;const pin=window.prompt('Manager PIN to save this product:');if(!pin)return;google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Save failed',true);return;}showNotificationToast(`Product ${r.productCode} saved`);closePhase8Modal('productEditorModal');clearProductMasterFormPhase8();loadProductMasterPhase8();loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).saveProductMasterPhase8({managerPin:pin,isNew:document.getElementById('pmCode').dataset.editing!=='true',productCode:document.getElementById('pmCode').value,description:document.getElementById('pmDescription').value,category:document.getElementById('pmCategory').value,defaultPrice:Number(document.getElementById('pmPrice').value),originalPrice:Number(document.getElementById('pmOrig').value),lowStockAt:Number(document.getElementById('pmLow').value),imageDataUrl:phase8ProductPhotoDataUrl,imageFileName:phase8ProductPhotoFileName});}
+function editProductMasterPhase8(code){if(!inventoryIsManager())return;const p=(window.phase8Products||[]).find(x=>String(x.productCode)===String(code));if(!p)return;document.getElementById('pmCode').dataset.editing='true';document.getElementById('pmEditorTitle').textContent='Edit Product';document.getElementById('pmModeLabel').textContent='Editing '+p.productCode+' — Product Code is locked';document.getElementById('pmCode').value=p.productCode;document.getElementById('pmCode').readOnly=true;document.getElementById('pmDescription').value=p.description;document.getElementById('pmCategory').value=p.category;document.getElementById('pmPrice').value=p.defaultPrice;document.getElementById('pmOrig').value=p.originalPrice;document.getElementById('pmLow').value=p.lowStockAt;if(p.imageUrl){document.getElementById('pmPhotoEmpty').style.display='none';document.getElementById('pmPhotoPreview').src=p.imageUrl;document.getElementById('pmPhotoPreview').style.display='block';}document.getElementById('productEditorModal').style.display='flex';}
+function clearProductMasterFormPhase8(){document.getElementById('pmCode').dataset.editing='false';document.getElementById('pmModeLabel').textContent='Create a PINS or OTHERS product';['pmCode','pmDescription','pmPrice','pmOrig','pmLow'].forEach(id=>document.getElementById(id).value='');document.getElementById('pmPhotoEmpty').style.display='block';document.getElementById('pmPhoto').value='';document.getElementById('pmPhotoPreview').removeAttribute('src');document.getElementById('pmPhotoPreview').style.display='none';phase8ProductPhotoDataUrl='';phase8ProductPhotoFileName='';document.getElementById('pmCode').readOnly=true;document.getElementById('pmCategory').value='PINS';}
+function saveProductMasterPhase8Client(){if(!inventoryIsManager())return;const auth=phase8ManagerCredentials('Manager PIN to save this product:');if(!auth)return;google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Save failed',true);return;}showNotificationToast(`Product ${r.productCode} saved`);closePhase8Modal('productEditorModal');clearProductMasterFormPhase8();loadProductMasterPhase8();loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).saveProductMasterPhase8({...auth,isNew:document.getElementById('pmCode').dataset.editing!=='true',productCode:document.getElementById('pmCode').value,description:document.getElementById('pmDescription').value,category:document.getElementById('pmCategory').value,defaultPrice:Number(document.getElementById('pmPrice').value),originalPrice:Number(document.getElementById('pmOrig').value),lowStockAt:Number(document.getElementById('pmLow').value),imageDataUrl:phase8ProductPhotoDataUrl,imageFileName:phase8ProductPhotoFileName});}
 function phase8RenderInventoryPhoto_(url){
   const img=document.getElementById('invDetailPhoto'), empty=document.getElementById('invDetailPhotoEmpty'), remove=document.getElementById('invRemovePhotoBtn');
   const value=String(url||'').trim();
   const completedYourFinds=phase8SelectedItem&&String(phase8SelectedItem.category||'').toUpperCase()==='YOURFINDS'&&String(phase8SelectedItem.inventoryType||'').toUpperCase()==='UNIQUE'&&String(phase8SelectedItem.status||'').toUpperCase()!=='INCOMPLETE';
+  document.getElementById('invDetailPhotoButton').style.display=value?'block':'none';
   if(value){img.src=value;img.style.display='block';empty.style.display='none';remove.style.display=completedYourFinds?'none':'inline-block';}
   else{img.removeAttribute('src');img.style.display='none';empty.style.display='block';remove.style.display='none';}
 }
@@ -313,24 +344,24 @@ function uploadInventoryPhotoPhase8(input){
   if(!phase8SelectedItem||!input.files||!input.files[0])return;
   const file=input.files[0];
   if(file.size>5*1024*1024){showNotificationToast('Image must be 5 MB or smaller.',true);return;}
-  const pin=window.prompt('Manager PIN to upload/change photo:'); if(!pin)return;
+  const auth=phase8ManagerCredentials('Manager PIN to upload/change photo:');if(!auth)return;
   const reader=new FileReader();
   reader.onload=function(){
     showNotificationToast('Uploading photo...');
     google.script.run.withSuccessHandler(function(r){
       if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Photo upload failed.',true);return;}
-      phase8SelectedItem.imageUrl=r.imageUrl; phase8RenderInventoryPhoto_(r.imageUrl); showNotificationToast('Photo saved to Inventory Column A.'); loadInventoryPage();
-    }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).saveInventoryPhotoPhase8({code:phase8SelectedItem.code,fileName:file.name,dataUrl:reader.result,managerPin:pin});
+      phase8SelectedItem.imageUrl=r.imageUrl; phase8RenderInventoryPhoto_(r.imageUrl); showNotificationToast('Photo saved.'); loadInventoryPage();
+    }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).saveInventoryPhotoPhase8({code:phase8SelectedItem.code,fileName:file.name,dataUrl:reader.result,...auth});
   };
   reader.readAsDataURL(file);
 }
 function removeInventoryPhotoClientPhase8(){
   if(!phase8SelectedItem)return;
-  const pin=window.prompt('Manager PIN to remove photo:'); if(!pin)return;
+  const auth=phase8ManagerCredentials('Manager PIN to remove photo:');if(!auth)return;
   google.script.run.withSuccessHandler(function(r){
     if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Unable to remove photo.',true);return;}
-    phase8SelectedItem.imageUrl=''; phase8RenderInventoryPhoto_(''); showNotificationToast('Photo removed from Inventory Column A.'); loadInventoryPage();
-  }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).removeInventoryPhotoPhase8({code:phase8SelectedItem.code,managerPin:pin});
+    phase8SelectedItem.imageUrl=''; phase8RenderInventoryPhoto_(''); showNotificationToast('Photo removed.'); loadInventoryPage();
+  }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).removeInventoryPhotoPhase8({code:phase8SelectedItem.code,...auth});
 }
 
 </script>

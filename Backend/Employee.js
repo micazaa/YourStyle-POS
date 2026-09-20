@@ -45,7 +45,9 @@ function verifyEmployee(employeeName, pin) {
         employeeId: employeeId,
         fullName: fullName,
         role: role,
-        accessLevel: accessLevel
+        accessLevel: accessLevel,
+        inventoryManagerToken: Number.isFinite(accessLevel) && accessLevel <= 1
+          ? createInventoryManagerSession_(employeeId, fullName) : ""
       };
     }
   }
@@ -250,4 +252,40 @@ function getEmployees() {
   }
 
   return employees;
+}
+// Inventory authorization is issued only after a successful employee login.
+// Cache expiry requires signing in again; client role flags are never trusted.
+function createInventoryManagerSession_(employeeId, fullName) {
+  const token = Utilities.getUuid() + Utilities.getUuid();
+  CacheService.getScriptCache().put("inventory-manager:" + token, JSON.stringify({
+    employeeId: String(employeeId), fullName: fullName
+  }), 21600);
+  return token;
+}
+
+function verifyInventoryManagerSession_(token) {
+  token = String(token || "");
+  if (!/^[a-f0-9-]{72}$/i.test(token)) throw new Error("Please sign out and sign in again to authorize inventory changes.");
+  const key = "inventory-manager:" + token;
+  const cache = CacheService.getScriptCache();
+  const raw = cache.get(key);
+  if (!raw) throw new Error("Your manager session expired. Please sign out and sign in again.");
+  const session = JSON.parse(raw);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.EMPLOYEES);
+  if (!sheet) throw new Error("Employees sheet not found.");
+  const employee = sheet.getDataRange().getValues().slice(1).find(function(row) {
+    return String(row[0]) === session.employeeId && (row[1] + " " + row[2]) === session.fullName;
+  });
+  if (!employee || String(employee[6]).toUpperCase() !== "TRUE" ||
+      String(employee[5]).trim() === "" || !Number.isFinite(Number(employee[5])) || Number(employee[5]) > 1) {
+    cache.remove(key);
+    throw new Error("An active manager account is required for this change.");
+  }
+  return { success: true, managerName: session.fullName };
+}
+
+function revokeInventoryManagerSession(token) {
+  token = String(token || "");
+  if (/^[a-f0-9-]{72}$/i.test(token)) CacheService.getScriptCache().remove("inventory-manager:" + token);
+  return { success: true };
 }

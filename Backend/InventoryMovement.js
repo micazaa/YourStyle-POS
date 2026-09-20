@@ -132,7 +132,8 @@ function getInventoryMovementType(category, inventoryType) {
    PHASE 8 - INVENTORY MANAGEMENT & STOCK OPERATIONS
 ========================================================== */
 
-function phase8RequireManager_(pin) {
+function phase8RequireManager_(pin, token) {
+  if (token) return verifyInventoryManagerSession_(token);
   const auth = verifyManagerPin(pin);
   if (!auth || !auth.success) throw new Error(auth && auth.message ? auth.message : "Manager authorization failed.");
   return auth;
@@ -170,7 +171,7 @@ function getInventoryMovementHistoryByCode(code) {
 
 function adjustInventoryStockPhase8(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin);
+  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   const direction = String(payload.direction || "").trim().toUpperCase();
   const qty = Number(payload.quantity);
@@ -200,7 +201,7 @@ function adjustInventoryStockPhase8(payload) {
 function changeInventoryItemPhase8(payload) {
   payload = payload || {};
 
-  const auth = phase8RequireManager_(payload.managerPin);
+  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
   const fromCode = String(payload.fromCode || "").trim();
   const toCode = String(payload.toCode || "").trim();
   const qty = Number(payload.quantity);
@@ -387,7 +388,7 @@ function generateProductMasterCodePhase8() {
 
 function saveProductMasterPhase8(payload) {
   payload = payload || {};
-  phase8RequireManager_(payload.managerPin);
+  phase8RequireManager_(payload.managerPin, payload.managerToken);
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try { return saveProductMasterLockedPhase8_(payload); }
@@ -460,7 +461,7 @@ function saveProductMasterLockedPhase8_(payload) {
 
 function setInventoryAdministrativeStatusPhase8(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin);
+  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   const status = String(payload.status || "").trim().toUpperCase();
   if (![INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].includes(status)) throw new Error("Status must be ACTIVE or INACTIVE.");
@@ -496,7 +497,7 @@ function setInventoryAdministrativeStatusPhase8(payload) {
 // exchanges, delivery reports and stock movement reconciliation.
 function deleteUnusedInventoryItemPhase8(payload) {
   payload = payload || {};
-  phase8RequireManager_(payload.managerPin);
+  phase8RequireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   if (!code) throw new Error("Inventory Code is required.");
   const lock = LockService.getScriptLock();
@@ -638,9 +639,9 @@ function saveYourFindsItemDetailsPhase8(payload) {
      * Receiving staff may complete a new item without manager approval.
      * Corrections to an already completed item remain manager-controlled.
      */
-    const auth = currentStatus === INVENTORY_STATUS.INCOMPLETE
+    const auth = currentStatus === INVENTORY_STATUS.INCOMPLETE && !hasOriginalPrice
       ? null
-      : phase8RequireManager_(payload.managerPin);
+      : phase8RequireManager_(payload.managerPin, payload.managerToken);
 
     oldImageUrl = String(item.imageUrl || "").trim();
     if (decodedImage) {
@@ -704,7 +705,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
 
 function saveInventoryPhotoPhase8(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin);
+  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   const dataUrl = String(payload.dataUrl || "").trim();
   const originalName = String(payload.fileName || "photo").trim();
@@ -738,7 +739,7 @@ function saveInventoryPhotoPhase8(payload) {
 
 function removeInventoryPhotoPhase8(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin);
+  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   const itemResult = getInventoryItemByCode(code);
   if (!itemResult || !itemResult.success || !itemResult.item) throw new Error("Inventory item not found.");

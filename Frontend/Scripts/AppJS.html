@@ -88,6 +88,10 @@
 
 
   function clearSession() {
+    if (currentEmployee && currentEmployee.inventoryManagerToken) {
+      google.script.run.withFailureHandler(function() {}).revokeInventoryManagerSession(currentEmployee.inventoryManagerToken);
+      delete currentEmployee.inventoryManagerToken;
+    }
     localStorage.removeItem("ys_pos_session");
   }
 

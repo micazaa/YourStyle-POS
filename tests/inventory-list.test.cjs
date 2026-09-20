@@ -88,7 +88,7 @@ test('valid inline status change writes once and releases lock', () => {
 function yourFindsEditor(manager=false) {
   const {context:c}=frontend();
   vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Modals/InventoryManagementModal.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
-  c.currentEmployee={accessLevel:manager?1:2};
+  c.currentEmployee={accessLevel:manager?1:2,inventoryManagerToken:manager?"test-session":""};
   c.phase8SelectedItem={code:'YF1',name:'Sample',size:'M',category:'YOURFINDS',inventoryType:'UNIQUE',status:'INCOMPLETE',imageUrl:'photo',origPrice:45,price:90};
   c.document.getElementById('yfEditorDescription').value='Sample';
   c.document.getElementById('yfEditorSellingPrice').value='90';
@@ -149,4 +149,55 @@ test('item view includes original price only for managers',()=>{
     assert.equal(c.document.getElementById('invDetailBody').innerHTML.includes('Original Price'),manager);
     assert.equal(c.document.getElementById('invYfEditBtn').textContent,'Add Selling Details');
   }
+});
+test('category, search and summary cards use the same matching items',()=>{
+  const {context:c}=frontend();
+  c.inventoryPageData=[{code:'1',name:'Black pin',category:'PINS',stock:1,lowStockAt:2},{code:'2',name:'White pin',category:'PINS',stock:0},{code:'3',name:'Box',category:'YOURFINDS',stock:1}];
+  assert.equal(c.getFilteredInventoryItems().length,3);
+  c.document.getElementById('inventoryCategoryFilter').value='PINS';
+  assert.deepEqual(Array.from(c.getInventorySummaryItems('products'),x=>x.code),['1','2']);
+  assert.deepEqual(Array.from(c.getInventorySummaryItems('low'),x=>x.code),['1']);
+  assert.deepEqual(Array.from(c.getInventorySummaryItems('sold'),x=>x.code),['2']);
+  c.document.getElementById('inventorySearch').value='white';
+  assert.equal(c.getInventorySummaryItems('stock').length,0);
+});
+test('PINS detail view omits size and delivery metadata',()=>{
+  const {c}=yourFindsEditor(true);
+  c.phase8SelectedItem.category='PINS';c.phase8SelectedItem.inventoryType='STOCK';
+  c.inventoryPageData=[c.phase8SelectedItem];c.phase8RenderInventoryPhoto_=()=>{};
+  c.openInventoryDetailsPhase8('YF1');
+  const html=c.document.getElementById('invDetailBody').innerHTML;
+  for(const label of ['<b>Size</b>','<b>Delivered</b>','<b>Delivery ID</b>'])assert.equal(html.includes(label),false);
+  assert.match(html,/Selling Price/);
+});
+test('manager inventory credentials use session without prompting for PIN',()=>{
+  const {c}=yourFindsEditor(true);
+  c.window={prompt(){throw Error('Unexpected PIN prompt');}};
+  assert.equal(c.phase8ManagerCredentials('PIN').managerToken,'test-session');
+  delete c.currentEmployee.inventoryManagerToken;
+  assert.equal(c.phase8ManagerCredentials('PIN'),null);
+});
+function managerSessionHarness(){
+  const entries=new Map();
+  const rows=[['id','first','last','pin','role','level','active'],['1','Test','Manager','1234','Manager',1,true],['2','Test','Cashier','5678','Cashier',2,true]];
+  const cache={put(key,value){entries.set(key,value);},get(key){return entries.get(key)||null;},remove(key){entries.delete(key);}};
+  const c=vm.createContext({CacheService:{getScriptCache(){return cache;}},Utilities:{getUuid(){return '11111111-1111-4111-8111-111111111111';}},SHEETS:{EMPLOYEES:'Employees'},SpreadsheetApp:{getActiveSpreadsheet(){return {getSheetByName(){return {getDataRange(){return {getValues(){return rows;}};}};}};}}});
+  vm.runInContext(fs.readFileSync(path.join(root,'Backend/Employee.js'),'utf8'),c);
+  vm.runInContext(fs.readFileSync(path.join(root,'Backend/InventoryMovement.js'),'utf8'),c);
+  return {c,rows,entries};
+}
+test('only successful manager login issues a usable inventory authorization token',()=>{
+  const {c,entries}=managerSessionHarness();
+  assert.equal(c.verifyEmployee('Test Manager','wrong').success,false);assert.equal(entries.size,0);
+  assert.equal(c.verifyEmployee('Test Cashier','5678').inventoryManagerToken,'');
+  const token=c.verifyEmployee('Test Manager','1234').inventoryManagerToken;
+  assert.equal(c.phase8RequireManager_('',token).managerName,'Test Manager');
+  assert.throws(()=>c.phase8RequireManager_('','forged'),/sign out/);
+});
+test('manager authorization rejects expired, revoked and demoted sessions',()=>{
+  const {c,rows,entries}=managerSessionHarness();
+  let token=c.verifyEmployee('Test Manager','1234').inventoryManagerToken;
+  c.revokeInventoryManagerSession(token);assert.throws(()=>c.verifyInventoryManagerSession_(token),/expired/);
+  token=c.verifyEmployee('Test Manager','1234').inventoryManagerToken;
+  rows[1][5]=2;assert.throws(()=>c.verifyInventoryManagerSession_(token),/active manager/);assert.equal(entries.size,0);
 });
