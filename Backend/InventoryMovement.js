@@ -387,6 +387,15 @@ function generateProductMasterCodePhase8() {
 
 function saveProductMasterPhase8(payload) {
   payload = payload || {};
+  phase8RequireManager_(payload.managerPin);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try { return saveProductMasterLockedPhase8_(payload); }
+  finally { lock.releaseLock(); }
+}
+
+function saveProductMasterLockedPhase8_(payload) {
+  payload = payload || {};
   let code = String(payload.productCode || "").trim();
   const description = String(payload.description || "").trim();
   const category = String(payload.category || "").trim().toUpperCase();
@@ -404,6 +413,11 @@ function saveProductMasterPhase8(payload) {
 
   if (!existing && !code) {
     code = generateProductMasterCodePhase8_();
+  }
+  if (payload.isNew === true && existing) throw new Error("This barcode is already in use. Reopen Add Product to generate another.");
+  if (payload.isNew === false && !existing) throw new Error("Product Master entry no longer exists. Reload inventory.");
+  if (!existing && getFullInventory().some(function(item) { return String(item.code) === code; })) {
+    throw new Error("This barcode already exists in Inventory. Reopen Add Product.");
   }
   const active = existing
     ? existing.active !== false
@@ -430,6 +444,7 @@ function saveProductMasterPhase8(payload) {
     const codes = inv.getRange(2, INV_COL.CODE, inv.getLastRow() - 1, 1).getDisplayValues();
     for (let i = 0; i < codes.length; i++) if (String(codes[i][0]).trim() === code) {
       const r = i + 2;
+      if (imageUrl) inv.getRange(r, INV_COL.IMAGE).setValue(imageUrl);
       inv.getRange(r, INV_COL.DESCRIPTION).setValue(description);
       inv.getRange(r, INV_COL.ORIG_PRICE).setValue(originalPrice);
       inv.getRange(r, INV_COL.YS_PRICE).setValue(defaultPrice);
@@ -448,27 +463,69 @@ function setInventoryAdministrativeStatusPhase8(payload) {
   const auth = phase8RequireManager_(payload.managerPin);
   const code = String(payload.code || "").trim();
   const status = String(payload.status || "").trim().toUpperCase();
-  if (status !== INVENTORY_STATUS.ACTIVE && status !== INVENTORY_STATUS.INACTIVE) throw new Error("Status must be ACTIVE or INACTIVE.");
-  const result = getInventoryItemByCode(code); if (!result.success) throw new Error(result.message || "Inventory item not found.");
-  const item = result.item;
-  const isYourFindsUnique =
-    String(item.category || "").trim().toUpperCase() === "YOURFINDS" &&
-    String(item.inventoryType || "").trim().toUpperCase() === INVENTORY_TYPE.UNIQUE;
+  if (![INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].includes(status)) throw new Error("Status must be ACTIVE or INACTIVE.");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const result = getInventoryItemByCode(code);
+    if (!result.success) throw new Error(result.message || "Inventory item not found.");
+    const item = result.item;
+    if (![INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].includes(String(item.status).toUpperCase())) {
+      throw new Error("Only active or inactive items can be changed here. Complete unfinished items first.");
+    }
+    if (String(item.category).toUpperCase() === "YOURFINDS" && String(item.inventoryType).toUpperCase() === INVENTORY_TYPE.UNIQUE && status === INVENTORY_STATUS.ACTIVE) {
+      phase8AssertCompletedYourFinds_(item);
+    }
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+    const row = sheet.getRange(item.rowNumber, 1, 1, INVENTORY_COLUMN_COUNT).getValues()[0];
+    row[INV_IDX.STATUS] = status;
+    row[INV_IDX.UPDATED_AT] = new Date();
+    const master = getProductMaster().find(function(product) { return String(product.productCode) === code; });
+    const masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.PRODUCT_MASTER);
+    if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(status === INVENTORY_STATUS.ACTIVE);
+    try { sheet.getRange(item.rowNumber, 1, 1, INVENTORY_COLUMN_COUNT).setValues([row]); }
+    catch (error) {
+      if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(master.active);
+      throw error;
+    }
+    return { success: true, status: status, manager: auth.managerName };
+  } finally { lock.releaseLock(); }
+}
 
-  if (
-    isYourFindsUnique &&
-    String(item.status || "").trim().toUpperCase() === INVENTORY_STATUS.INCOMPLETE
-  ) {
-    throw new Error("Use Complete Item before changing this YourFinds item's status.");
-  }
-
-  if (isYourFindsUnique && status === INVENTORY_STATUS.ACTIVE) {
-    phase8AssertCompletedYourFinds_(item);
-  }
-  const ss = SpreadsheetApp.getActiveSpreadsheet(); const sheet = ss.getSheetByName(SHEETS.INVENTORY);
-  sheet.getRange(result.item.rowNumber, INV_COL.STATUS).setValue(status);
-  sheet.getRange(result.item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
-  return { success: true, status: status, manager: auth.managerName };
+// Delete only unused records. Historical rows remain available to receipts,
+// exchanges, delivery reports and stock movement reconciliation.
+function deleteUnusedInventoryItemPhase8(payload) {
+  payload = payload || {};
+  phase8RequireManager_(payload.managerPin);
+  const code = String(payload.code || "").trim();
+  if (!code) throw new Error("Inventory Code is required.");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const matches = getFullInventory().filter(function(item) { return String(item.code) === code; });
+    if (matches.length !== 1) throw new Error("Item is missing or its barcode is duplicated. Reload inventory.");
+    const item = matches[0];
+    if (Number(item.stock) !== 0) throw new Error("Only zero-stock items can be deleted. Use a stock adjustment first.");
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const excluded = [SHEETS.INVENTORY, SHEETS.PRODUCT_MASTER, SHEETS.EMPLOYEES];
+    ss.getSheets().forEach(function(sheet) {
+      if (excluded.includes(sheet.getName()) || sheet.getLastRow() < 2) return;
+      const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getDisplayValues();
+      if (rows.some(function(row) { return row.some(function(value) { return String(value).includes(code); }); })) {
+        throw new Error("This item has existing records and cannot be deleted. Set it to Inactive instead.");
+      }
+    });
+    // Keep the master definition inactive so it cannot receive a new delivery.
+    const master = getProductMaster().find(function(product) { return String(product.productCode) === code; });
+    const masterSheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
+    if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(false);
+    try { ss.getSheetByName(SHEETS.INVENTORY).deleteRow(item.rowNumber); }
+    catch (error) {
+      if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(master.active);
+      throw error;
+    }
+    return { success: true, code: code };
+  } finally { lock.releaseLock(); }
 }
 
 /* ==========================================================
