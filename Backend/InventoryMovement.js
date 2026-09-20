@@ -595,7 +595,8 @@ function saveYourFindsItemDetailsPhase8(payload) {
   payload = payload || {};
   const code = String(payload.code || "").trim();
   const description = String(payload.description || "").trim();
-  const originalPrice = Number(payload.originalPrice);
+  const hasOriginalPrice = Object.prototype.hasOwnProperty.call(payload, "originalPrice");
+  const requestedOriginalPrice = Number(payload.originalPrice);
   const sellingPrice = Number(payload.sellingPrice);
   const decodedImage = phase8DecodeInventoryImage_(payload.dataUrl);
   const originalName = String(payload.fileName || "photo").trim();
@@ -603,7 +604,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
   if (!code) throw new Error("Inventory Code is required.");
   if (!description) throw new Error("Description is required.");
   if (description.length > 120) throw new Error("Description must be 120 characters or fewer.");
-  if (!Number.isFinite(originalPrice) || originalPrice < 0) {
+  if (hasOriginalPrice && (!Number.isFinite(requestedOriginalPrice) || requestedOriginalPrice < 0)) {
     throw new Error("Original Price must be a valid non-negative amount.");
   }
   if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
@@ -623,6 +624,8 @@ function saveYourFindsItemDetailsPhase8(payload) {
     }
 
     const item = itemResult.item;
+    // Cashier saves omit this manager-only field and preserve the stored value.
+    const originalPrice = hasOriginalPrice ? requestedOriginalPrice : (Number(item.origPrice) || 0);
     const currentStatus = String(item.status || "").trim().toUpperCase();
     if ([INVENTORY_STATUS.INCOMPLETE, INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].indexOf(currentStatus) === -1) {
       throw new Error("This YourFinds item cannot be edited here.");

@@ -320,7 +320,7 @@ function renderInventoryTable(items) {
       button.addEventListener('click', callback); actions.appendChild(button);
     }
     if (inventoryIsManager() && (!inventoryIsYourFinds(item) || (['ACTIVE','INACTIVE','INCOMPLETE'].includes(state) && Number(item.stock)>0))) {
-      action('edit', state==='INCOMPLETE'?'Complete item':'Edit item', () => editInventoryRow(item));
+      action('edit', state==='INCOMPLETE'?'Add selling details':'Edit item', () => editInventoryRow(item));
     }
     action('view', 'View item', () => openInventoryDetailsPhase8(item.code));
     if (inventoryIsManager()) action('delete', 'Delete item', () => deleteInventoryRow(item));

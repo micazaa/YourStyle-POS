@@ -85,3 +85,68 @@ test('valid inline status change writes once and releases lock', () => {
   assert.equal(c.setInventoryAdministrativeStatusPhase8({code:'123456',status:'INACTIVE',managerPin:'valid'}).status,'INACTIVE');
   assert.deepEqual(state(),{deleted:false,released:true,writes:1});
 });
+function yourFindsEditor(manager=false) {
+  const {context:c}=frontend();
+  vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Modals/InventoryManagementModal.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
+  c.currentEmployee={accessLevel:manager?1:2};
+  c.phase8SelectedItem={code:'YF1',name:'Sample',size:'M',category:'YOURFINDS',inventoryType:'UNIQUE',status:'INCOMPLETE',imageUrl:'photo',origPrice:45,price:90};
+  c.document.getElementById('yfEditorDescription').value='Sample';
+  c.document.getElementById('yfEditorSellingPrice').value='90';
+  c.document.getElementById('yfEditorOriginalPrice').value='45';
+  c.showNotificationToast=()=>{};c.loadInventoryPage=()=>{};
+  const calls={saves:0,prints:0};
+  c.printCompletedYourFindsLabelPhase8=()=>{calls.prints++;};
+  c.google={script:{run:{
+    withSuccessHandler(fn){calls.success=fn;return this;},
+    withFailureHandler(fn){calls.failure=fn;return this;},
+    saveYourFindsItemDetailsPhase8(payload){calls.saves++;calls.payload=payload;},
+  }}};
+  return {c,calls};
+}
+test('cashier Save omits original price, blocks double submits and skips labels',()=>{
+  const {c,calls}=yourFindsEditor();
+  c.saveYourFindsDetailsClientPhase8(false);
+  c.saveYourFindsDetailsClientPhase8(true);
+  assert.equal(calls.saves,1);assert.equal(Object.hasOwn(calls.payload,'originalPrice'),false);
+  assert.equal(c.document.getElementById('yfEditorSaveLabelBtn').disabled,true);
+  calls.success({success:true,code:'YF1',wasCompleted:true});
+  assert.equal(calls.prints,0);assert.equal(c.phase8YfSaving,false);
+});
+test('Save & Generate requests a label only after a successful save',()=>{
+  const {c,calls}=yourFindsEditor(true);
+  c.saveYourFindsDetailsClientPhase8(true);
+  assert.equal(calls.payload.originalPrice,45);assert.equal(calls.prints,0);
+  calls.failure({message:'Save failed'});
+  assert.equal(calls.prints,0);assert.equal(c.document.getElementById('yfEditorSaveBtn').disabled,false);
+  c.saveYourFindsDetailsClientPhase8(true);
+  calls.success({success:true,code:'YF1',wasCompleted:true});
+  assert.equal(calls.prints,1);
+});
+test('original price editor is hidden and blank for cashiers, visible for managers',()=>{
+  for (const manager of [false,true]) {
+    const {c}=yourFindsEditor(manager);
+    c.openYourFindsEditorPhase8();
+    assert.equal(c.document.getElementById('yfEditorOriginalPriceWrap').style.display,manager?'block':'none');
+    assert.equal(c.document.getElementById('yfEditorOriginalPrice').value,manager?45:'');
+  }
+});
+test('backend preserves omitted original price when saving an unfinished item',()=>{
+  const {c}=backend({status:'INCOMPLETE',stock:1});
+  let saved;
+  c.INV_IDX={IMAGE:0,DESCRIPTION:1,ORIG_PRICE:3,YS_PRICE:4,STATUS:5,UPDATED_AT:14};
+  c.INVENTORY_STATUS.INCOMPLETE='INCOMPLETE';
+  c.getYourFindsItemForCompletion=()=>({success:true,item:{code:'YF1',rowNumber:2,status:'INCOMPLETE',stock:1,size:'M',origPrice:45,imageUrl:'photo'}});
+  c.SpreadsheetApp={flush(){},getActiveSpreadsheet(){return {getSheetByName(){return {getRange(){return {getValues(){return [Array(15).fill('')];},setValues(rows){saved=rows[0];}};}};}};}};
+  const result=c.saveYourFindsItemDetailsPhase8({code:'YF1',description:'Sample',sellingPrice:90});
+  assert.equal(result.success,true);assert.equal(saved[3],45);assert.equal(saved[5],'ACTIVE');
+});
+test('item view includes original price only for managers',()=>{
+  for(const manager of [false,true]){
+    const {c}=yourFindsEditor(manager);
+    c.inventoryPageData=[c.phase8SelectedItem];
+    c.phase8RenderInventoryPhoto_=()=>{};
+    c.openInventoryDetailsPhase8('YF1');
+    assert.equal(c.document.getElementById('invDetailBody').innerHTML.includes('Original Price'),manager);
+    assert.equal(c.document.getElementById('invYfEditBtn').textContent,'Add Selling Details');
+  }
+});
