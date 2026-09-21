@@ -506,6 +506,7 @@ function openCustomerExchangeModal(
   prefilledReceiptId
 ) {
 
+  document.getElementById('exchangeManagerPin').parentElement.style.display=inventoryIsManager()?'none':'block';
   /* RESET STATE */
 
   phase9ExchangeReceipt =
@@ -1713,7 +1714,7 @@ function updateExchangeCalculation() {
 
   if (
     valid &&
-    !pin
+    !pin && !inventoryIsManager()
   ) {
 
     valid =
@@ -1830,7 +1831,7 @@ function confirmCustomerExchange() {
         ).value
       ) || 0,
 
-    managerPin:
+    managerPin: getManagerSessionCredential() ||
       document.getElementById(
         "exchangeManagerPin"
       ).value,

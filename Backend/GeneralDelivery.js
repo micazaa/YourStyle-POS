@@ -154,6 +154,16 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
         String(codes[i][0] || "").trim() ===
         productCode
       ) {
+        const existingProduct = getProductMaster().find(function(item) {
+          return String(item.productCode || item.code || "").trim() === productCode;
+        });
+
+        if (existingProduct && existingProduct.imageUrl) {
+          inventorySheet
+            .getRange(i + 2, INV_COL.IMAGE)
+            .setValue(existingProduct.imageUrl);
+        }
+
         return {
           success: true,
           created: false,
@@ -230,7 +240,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
   const now = new Date();
 
   const row = [
-    "",                                                   // A Image
+    String(product.imageUrl || "").trim(),                // A Image
     String(product.description || "").trim(),             // B Description
     "",                                                   // C Size
     Number(product.originalPrice) || 0,                   // D Original Price

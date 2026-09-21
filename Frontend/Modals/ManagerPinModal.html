@@ -38,7 +38,13 @@
 <script>
   let _managerPinCallback = null;
 
+  function getManagerSessionCredential() {
+    return inventoryIsManager() ? {managerToken:currentEmployee.inventoryManagerToken || ''} : null;
+  }
   function requestManagerPin(message, callback) {
+    const credential = getManagerSessionCredential();
+    if (credential) { callback(credential); return; }
+
     document.getElementById("managerPinModalMessage").textContent = message;
     document.getElementById("managerPinModalInput").value = "";
     _managerPinCallback = callback;

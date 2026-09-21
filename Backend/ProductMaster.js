@@ -106,6 +106,8 @@ function getProductMaster() {
 
       active: active,
 
+      imageUrl: String(displayRow[PRODUCT_IDX.IMAGE] || "").trim(),
+
       createdAt: formatProductMasterDateForClient(row[PRODUCT_IDX.CREATED_AT]),
 
       updatedAt: formatProductMasterDateForClient(row[PRODUCT_IDX.UPDATED_AT]),

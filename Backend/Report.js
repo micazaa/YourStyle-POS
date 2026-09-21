@@ -877,7 +877,7 @@ function phase10DateString_(v) {
 
 function regenerateCashierReportPhase10(reportId, managerPin) {
   try {
-    const auth = verifyManagerPin(String(managerPin || ''));
+    const auth = verifyManagerPin(managerPin);
     if (!auth || !auth.success)
       throw new Error(auth && auth.message ? auth.message : 'Invalid Manager PIN.');
     const got = getClosedCashReportPhase10(reportId);
@@ -891,7 +891,7 @@ function regenerateCashierReportPhase10(reportId, managerPin) {
 function correctClosedCashReportPhase10(payload) {
   payload = payload || {};
   try {
-    const auth = verifyManagerPin(String(payload.managerPin || ''));
+    const auth = verifyManagerPin(payload.managerPin);
     if (!auth || !auth.success)
       throw new Error(auth && auth.message ? auth.message : 'Invalid Manager PIN.');
     const explanation = String(payload.correctionExplanation || '').trim();

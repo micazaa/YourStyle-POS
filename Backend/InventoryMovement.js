@@ -132,7 +132,8 @@ function getInventoryMovementType(category, inventoryType) {
    PHASE 8 - INVENTORY MANAGEMENT & STOCK OPERATIONS
 ========================================================== */
 
-function phase8RequireManager_(pin) {
+function phase8RequireManager_(pin, token) {
+  if (token) return verifyInventoryManagerSession_(token);
   const auth = verifyManagerPin(pin);
   if (!auth || !auth.success) throw new Error(auth && auth.message ? auth.message : "Manager authorization failed.");
   return auth;
@@ -170,7 +171,7 @@ function getInventoryMovementHistoryByCode(code) {
 
 function adjustInventoryStockPhase8(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin);
+  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   const direction = String(payload.direction || "").trim().toUpperCase();
   const qty = Number(payload.quantity);
@@ -200,7 +201,7 @@ function adjustInventoryStockPhase8(payload) {
 function changeInventoryItemPhase8(payload) {
   payload = payload || {};
 
-  const auth = phase8RequireManager_(payload.managerPin);
+  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
   const fromCode = String(payload.fromCode || "").trim();
   const toCode = String(payload.toCode || "").trim();
   const qty = Number(payload.quantity);
@@ -366,29 +367,77 @@ function changeInventoryItemPhase8(payload) {
   }
 }
 
+function generateProductMasterCodePhase8_() {
+  const usedCodes = {};
+  getProductMaster().forEach(function(product) {
+    const code = String(product.productCode || "").trim();
+    if (code) usedCodes[code] = true;
+  });
+
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    if (!usedCodes[code]) return code;
+  }
+
+  throw new Error("Unable to generate a unique Product Code.");
+}
+
+function generateProductMasterCodePhase8() {
+  return generateProductMasterCodePhase8_();
+}
+
 function saveProductMasterPhase8(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin);
-  const code = String(payload.productCode || "").trim();
+  phase8RequireManager_(payload.managerPin, payload.managerToken);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try { return saveProductMasterLockedPhase8_(payload); }
+  finally { lock.releaseLock(); }
+}
+
+function saveProductMasterLockedPhase8_(payload) {
+  payload = payload || {};
+  let code = String(payload.productCode || "").trim();
   const description = String(payload.description || "").trim();
   const category = String(payload.category || "").trim().toUpperCase();
   const defaultPrice = Number(payload.defaultPrice), originalPrice = Number(payload.originalPrice), lowStockAt = Number(payload.lowStockAt);
-  const active = payload.active !== false;
-  if (!code || !description) throw new Error("Product Code and Description are required.");
+  if (!description) throw new Error("Description is required.");
   if (category !== "PINS" && category !== "OTHERS") throw new Error("Category must be PINS or OTHERS.");
   if (!Number.isFinite(defaultPrice) || defaultPrice < 0 || !Number.isFinite(originalPrice) || originalPrice < 0) throw new Error("Prices must be valid non-negative numbers.");
   if (!Number.isInteger(lowStockAt) || lowStockAt < 0) throw new Error("Low Stock At must be a non-negative whole number.");
   const ss = SpreadsheetApp.getActiveSpreadsheet(); const sheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
   if (!sheet) throw new Error("Product Master sheet not found.");
-  const products = getProductMaster(); const existing = products.find(function(p){ return String(p.productCode) === code; });
+  const products = getProductMaster();
+  const existing = code
+    ? products.find(function(p){ return String(p.productCode) === code; })
+    : null;
+
+  if (!existing && !code) {
+    code = generateProductMasterCodePhase8_();
+  }
+  if (payload.isNew === true && existing) throw new Error("This barcode is already in use. Reopen Add Product to generate another.");
+  if (payload.isNew === false && !existing) throw new Error("Product Master entry no longer exists. Reload inventory.");
+  if (!existing && getFullInventory().some(function(item) { return String(item.code) === code; })) {
+    throw new Error("This barcode already exists in Inventory. Reopen Add Product.");
+  }
+  const active = existing
+    ? existing.active !== false
+    : true;
+  const imageDataUrl = String(payload.imageDataUrl || "").trim();
+  const imageFileName = String(payload.imageFileName || "product-photo").trim();
+  const createdImage = imageDataUrl
+    ? phase8CreateInventoryImage_(code, imageFileName, phase8DecodeInventoryImage_(imageDataUrl))
+    : null;
+  const imageUrl = createdImage ? createdImage.imageUrl : (existing ? String(existing.imageUrl || "") : "");
   const now = new Date();
   if (existing) {
     sheet.getRange(existing.rowNumber, PRODUCT_COL.DESCRIPTION, 1, 7).setValues([[
       description, category, defaultPrice, originalPrice, INVENTORY_TYPE.STOCK, lowStockAt, active
     ]]);
     sheet.getRange(existing.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(now);
+    sheet.getRange(existing.rowNumber, PRODUCT_COL.IMAGE).setValue(imageUrl);
   } else {
-    sheet.appendRow([code, description, category, defaultPrice, originalPrice, INVENTORY_TYPE.STOCK, lowStockAt, active, now, now]);
+    sheet.appendRow([code, description, category, defaultPrice, originalPrice, INVENTORY_TYPE.STOCK, lowStockAt, active, now, now, imageUrl]);
   }
   // Sync safe metadata into existing STOCK Inventory row if present.
   const inv = ss.getSheetByName(SHEETS.INVENTORY);
@@ -396,6 +445,7 @@ function saveProductMasterPhase8(payload) {
     const codes = inv.getRange(2, INV_COL.CODE, inv.getLastRow() - 1, 1).getDisplayValues();
     for (let i = 0; i < codes.length; i++) if (String(codes[i][0]).trim() === code) {
       const r = i + 2;
+      if (imageUrl) inv.getRange(r, INV_COL.IMAGE).setValue(imageUrl);
       inv.getRange(r, INV_COL.DESCRIPTION).setValue(description);
       inv.getRange(r, INV_COL.ORIG_PRICE).setValue(originalPrice);
       inv.getRange(r, INV_COL.YS_PRICE).setValue(defaultPrice);
@@ -406,35 +456,77 @@ function saveProductMasterPhase8(payload) {
       break;
     }
   }
-  return { success: true, productCode: code, manager: auth.managerName };
+  return { success: true, productCode: code };
 }
 
 function setInventoryAdministrativeStatusPhase8(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin);
+  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   const status = String(payload.status || "").trim().toUpperCase();
-  if (status !== INVENTORY_STATUS.ACTIVE && status !== INVENTORY_STATUS.INACTIVE) throw new Error("Status must be ACTIVE or INACTIVE.");
-  const result = getInventoryItemByCode(code); if (!result.success) throw new Error(result.message || "Inventory item not found.");
-  const item = result.item;
-  const isYourFindsUnique =
-    String(item.category || "").trim().toUpperCase() === "YOURFINDS" &&
-    String(item.inventoryType || "").trim().toUpperCase() === INVENTORY_TYPE.UNIQUE;
+  if (![INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].includes(status)) throw new Error("Status must be ACTIVE or INACTIVE.");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const result = getInventoryItemByCode(code);
+    if (!result.success) throw new Error(result.message || "Inventory item not found.");
+    const item = result.item;
+    if (![INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].includes(String(item.status).toUpperCase())) {
+      throw new Error("Only active or inactive items can be changed here. Complete unfinished items first.");
+    }
+    if (String(item.category).toUpperCase() === "YOURFINDS" && String(item.inventoryType).toUpperCase() === INVENTORY_TYPE.UNIQUE && status === INVENTORY_STATUS.ACTIVE) {
+      phase8AssertCompletedYourFinds_(item);
+    }
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+    const row = sheet.getRange(item.rowNumber, 1, 1, INVENTORY_COLUMN_COUNT).getValues()[0];
+    row[INV_IDX.STATUS] = status;
+    row[INV_IDX.UPDATED_AT] = new Date();
+    const master = getProductMaster().find(function(product) { return String(product.productCode) === code; });
+    const masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.PRODUCT_MASTER);
+    if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(status === INVENTORY_STATUS.ACTIVE);
+    try { sheet.getRange(item.rowNumber, 1, 1, INVENTORY_COLUMN_COUNT).setValues([row]); }
+    catch (error) {
+      if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(master.active);
+      throw error;
+    }
+    return { success: true, status: status, manager: auth.managerName };
+  } finally { lock.releaseLock(); }
+}
 
-  if (
-    isYourFindsUnique &&
-    String(item.status || "").trim().toUpperCase() === INVENTORY_STATUS.INCOMPLETE
-  ) {
-    throw new Error("Use Complete Item before changing this YourFinds item's status.");
-  }
-
-  if (isYourFindsUnique && status === INVENTORY_STATUS.ACTIVE) {
-    phase8AssertCompletedYourFinds_(item);
-  }
-  const ss = SpreadsheetApp.getActiveSpreadsheet(); const sheet = ss.getSheetByName(SHEETS.INVENTORY);
-  sheet.getRange(result.item.rowNumber, INV_COL.STATUS).setValue(status);
-  sheet.getRange(result.item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
-  return { success: true, status: status, manager: auth.managerName };
+// Delete only unused records. Historical rows remain available to receipts,
+// exchanges, delivery reports and stock movement reconciliation.
+function deleteUnusedInventoryItemPhase8(payload) {
+  payload = payload || {};
+  phase8RequireManager_(payload.managerPin, payload.managerToken);
+  const code = String(payload.code || "").trim();
+  if (!code) throw new Error("Inventory Code is required.");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const matches = getFullInventory().filter(function(item) { return String(item.code) === code; });
+    if (matches.length !== 1) throw new Error("Item is missing or its barcode is duplicated. Reload inventory.");
+    const item = matches[0];
+    if (Number(item.stock) !== 0) throw new Error("Only zero-stock items can be deleted. Use a stock adjustment first.");
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const excluded = [SHEETS.INVENTORY, SHEETS.PRODUCT_MASTER, SHEETS.EMPLOYEES];
+    ss.getSheets().forEach(function(sheet) {
+      if (excluded.includes(sheet.getName()) || sheet.getLastRow() < 2) return;
+      const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getDisplayValues();
+      if (rows.some(function(row) { return row.some(function(value) { return String(value).includes(code); }); })) {
+        throw new Error("This item has existing records and cannot be deleted. Set it to Inactive instead.");
+      }
+    });
+    // Keep the master definition inactive so it cannot receive a new delivery.
+    const master = getProductMaster().find(function(product) { return String(product.productCode) === code; });
+    const masterSheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
+    if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(false);
+    try { ss.getSheetByName(SHEETS.INVENTORY).deleteRow(item.rowNumber); }
+    catch (error) {
+      if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(master.active);
+      throw error;
+    }
+    return { success: true, code: code };
+  } finally { lock.releaseLock(); }
 }
 
 /* ==========================================================
@@ -504,7 +596,8 @@ function saveYourFindsItemDetailsPhase8(payload) {
   payload = payload || {};
   const code = String(payload.code || "").trim();
   const description = String(payload.description || "").trim();
-  const originalPrice = Number(payload.originalPrice);
+  const hasOriginalPrice = Object.prototype.hasOwnProperty.call(payload, "originalPrice");
+  const requestedOriginalPrice = Number(payload.originalPrice);
   const sellingPrice = Number(payload.sellingPrice);
   const decodedImage = phase8DecodeInventoryImage_(payload.dataUrl);
   const originalName = String(payload.fileName || "photo").trim();
@@ -512,7 +605,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
   if (!code) throw new Error("Inventory Code is required.");
   if (!description) throw new Error("Description is required.");
   if (description.length > 120) throw new Error("Description must be 120 characters or fewer.");
-  if (!Number.isFinite(originalPrice) || originalPrice < 0) {
+  if (hasOriginalPrice && (!Number.isFinite(requestedOriginalPrice) || requestedOriginalPrice < 0)) {
     throw new Error("Original Price must be a valid non-negative amount.");
   }
   if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
@@ -532,6 +625,8 @@ function saveYourFindsItemDetailsPhase8(payload) {
     }
 
     const item = itemResult.item;
+    // Cashier saves omit this manager-only field and preserve the stored value.
+    const originalPrice = hasOriginalPrice ? requestedOriginalPrice : (Number(item.origPrice) || 0);
     const currentStatus = String(item.status || "").trim().toUpperCase();
     if ([INVENTORY_STATUS.INCOMPLETE, INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].indexOf(currentStatus) === -1) {
       throw new Error("This YourFinds item cannot be edited here.");
@@ -545,8 +640,8 @@ function saveYourFindsItemDetailsPhase8(payload) {
      * Corrections to an already completed item remain manager-controlled.
      */
     const auth = currentStatus === INVENTORY_STATUS.INCOMPLETE
-      ? null
-      : phase8RequireManager_(payload.managerPin);
+      ? (hasOriginalPrice ? phase8RequireManager_(payload.managerPin, payload.managerToken) : null)
+      : phase8RequireManager_(payload.managerPin, payload.managerToken);
 
     oldImageUrl = String(item.imageUrl || "").trim();
     if (decodedImage) {
@@ -610,7 +705,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
 
 function saveInventoryPhotoPhase8(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin);
+  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   const dataUrl = String(payload.dataUrl || "").trim();
   const originalName = String(payload.fileName || "photo").trim();
@@ -644,7 +739,7 @@ function saveInventoryPhotoPhase8(payload) {
 
 function removeInventoryPhotoPhase8(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin);
+  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   const itemResult = getInventoryItemByCode(code);
   if (!itemResult || !itemResult.success || !itemResult.item) throw new Error("Inventory item not found.");
