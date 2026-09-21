@@ -201,6 +201,7 @@ function toggleVoidModal(show) {
 
 
 function openVoidReceiptModal(receiptId, itemCode, itemRowIndex) {
+  document.getElementById('managerVoidPin').parentElement.style.display=inventoryIsManager()?'none':'block';
 
   const modal =
     document.getElementById(
@@ -460,10 +461,7 @@ function processRefundRequest() {
   const itemRowIndex = itemRowIndexInput && itemRowIndexInput.value !== "" ? Number(itemRowIndexInput.value) : "";
 
 
-  const pin =
-    pinInput
-      ? pinInput.value.trim()
-      : "";
+  const pin = getManagerSessionCredential() || (pinInput ? pinInput.value.trim() : "");
 
   const reasonInput =
   document.getElementById(

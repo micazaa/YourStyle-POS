@@ -218,7 +218,7 @@ function openYourFindsEditorPhase8(){
  document.getElementById('yfEditorOriginalPrice').value=inventoryIsManager()?(Number(phase8SelectedItem.origPrice)||0):'';
  document.getElementById('yfEditorSellingPrice').value=Number(phase8SelectedItem.price)||'';
  document.getElementById('yfEditorManagerPin').value='';
- document.getElementById('yfEditorManagerPinWrap').style.display=incomplete?'none':'block';
+ document.getElementById('yfEditorManagerPinWrap').style.display=incomplete||inventoryIsManager()?'none':'block';
  document.getElementById('yfEditorPhoto').value='';
  renderYourFindsEditorPhotoPhase8(phase8SelectedItem.imageUrl||'');
  document.getElementById('yfEditorCompletionNote').style.display=incomplete?'block':'none';
@@ -254,8 +254,8 @@ function saveYourFindsDetailsClientPhase8(generateLabel){
  if(!description)return showNotificationToast('Description is required.',true);
  if(!Number.isFinite(sellingPrice)||sellingPrice<=0)return showNotificationToast('Selling Price must be greater than zero.',true);
  if(!phase8SelectedItem.imageUrl&&!phase8YfPhotoDataUrl)return showNotificationToast('Choose a product picture.',true);
- if(!incomplete&&!managerPin)return showNotificationToast('Enter a manager PIN to save changes to selling details.',true);
- const auth=incomplete?(inventoryIsManager()?phase8ManagerCredentials('Manager authorization'):{}):{managerPin:managerPin};
+ if(!incomplete&&!inventoryIsManager()&&!managerPin)return showNotificationToast('Enter a manager PIN to save changes to selling details.',true);
+ const auth=inventoryIsManager()?phase8ManagerCredentials('Manager authorization'):(incomplete?{}:{managerPin:managerPin});
  if(!auth)return;
  const payload={
    code:phase8SelectedItem.code,description:description,sellingPrice:sellingPrice,...auth,fileName:phase8YfPhotoFileName,dataUrl:phase8YfPhotoDataUrl

@@ -59,6 +59,11 @@ function verifyEmployee(employeeName, pin) {
 }
 
 function verifyManagerPin(pin) {
+  if (pin && typeof pin === "object") {
+    try { return verifyInventoryManagerSession_(pin.managerToken); }
+    catch (error) { return { success: false, message: error.message || String(error) }; }
+  }
+
 
   const ss =
     SpreadsheetApp.getActiveSpreadsheet();

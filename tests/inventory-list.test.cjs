@@ -4,14 +4,17 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
+function fakeClassList() {
+ const values=new Set();return {contains:key=>values.has(key),remove:key=>values.delete(key),add:key=>values.add(key),toggle(key,force){const enabled=force===undefined?!values.has(key):force;if(enabled)values.add(key);else values.delete(key);return enabled;}};
+}
 function frontend() {
   const elements = {};
   function element() {
-    return { style: {}, dataset: {}, value: '', children: [], innerHTML: '',
+    return { classList:fakeClassList(), style: {}, dataset: {}, value: '', children: [], innerHTML: '',
       appendChild(child) { this.children.push(child); }, setAttribute() {}, addEventListener() {},
       querySelector(selector) { if (selector === '.inventory-actions') return this.actions || (this.actions = element()); return null; } };
   }
-  const context = vm.createContext({currentEmployee:{accessLevel:1}, document:{
+  const context = vm.createContext({currentEmployee:{accessLevel:1}, document:{body:{classList:fakeClassList()},
     getElementById(id) { return elements[id] || (elements[id] = element()); },
     querySelectorAll() { return []; }, createElement:element,
   }});
@@ -241,14 +244,15 @@ test('group stock sorting is numeric in both directions and ignores returned qua
   c.inventorySummarySort.direction=-1;
   assert.deepEqual(Array.from(c.sortInventorySummaryGroups(groups),x=>x.stock),[10,2]);
 });
-test('saved selling details require PIN even for signed-in managers',()=>{
-  const {c,calls}=yourFindsEditor(true);c.phase8SelectedItem.status='ACTIVE';
-  c.openYourFindsEditorPhase8();
-  assert.equal(c.document.getElementById('yfEditorManagerPinWrap').style.display,'block');
-  c.saveYourFindsDetailsClientPhase8(false);assert.equal(calls.saves,0);
-  c.document.getElementById('yfEditorManagerPin').value='1234';
-  c.saveYourFindsDetailsClientPhase8(false);assert.equal(calls.saves,1);
-  assert.equal(calls.payload.managerPin,'1234');assert.equal(calls.payload.managerToken,undefined);
+test('saved selling details use manager session, while cashiers still need PIN',()=>{
+  for(const manager of [true,false]){
+    const {c,calls}=yourFindsEditor(manager);c.phase8SelectedItem.status='ACTIVE';
+    c.openYourFindsEditorPhase8();
+    assert.equal(c.document.getElementById('yfEditorManagerPinWrap').style.display,manager?'none':'block');
+    c.saveYourFindsDetailsClientPhase8(false);assert.equal(calls.saves,manager?1:0);
+    if(manager)assert.equal(calls.payload.managerToken,'test-session');
+    else{c.document.getElementById('yfEditorManagerPin').value='1234';c.saveYourFindsDetailsClientPhase8(false);assert.equal(calls.payload.managerPin,'1234');}
+  }
 });
 test('saved YourFinds view shows the corner edit icon and hides initial details button',()=>{
   const {c}=yourFindsEditor(false);c.phase8SelectedItem.status='ACTIVE';c.phase8SelectedItem.stock=1;
@@ -257,11 +261,11 @@ test('saved YourFinds view shows the corner edit icon and hides initial details 
   assert.equal(c.document.getElementById('invDetailEditSellingBtn').style.display,'inline-block');
   assert.equal(c.document.getElementById('invYfEditBtn').style.display,'none');
 });
-test('backend rejects session-only authorization for already saved selling details',()=>{
+test('backend rejects invalid session authorization for saved selling details',()=>{
   const {c}=backend({authorized:false,status:'ACTIVE',stock:1});
   c.getYourFindsItemForCompletion=()=>({success:true,item:{code:'YF1',rowNumber:2,status:'ACTIVE',stock:1,size:'M',origPrice:45,imageUrl:'photo'}});
-  c.verifyInventoryManagerSession_=()=>{throw Error('Session must not be used');};
-  assert.throws(()=>c.saveYourFindsItemDetailsPhase8({code:'YF1',description:'Saved',sellingPrice:90,managerToken:'valid-session'}),/authorization/);
+  c.verifyInventoryManagerSession_=()=>{throw Error('Manager session invalid');};
+  assert.throws(()=>c.saveYourFindsItemDetailsPhase8({code:'YF1',description:'Saved',sellingPrice:90,managerToken:'invalid-session'}),/session invalid/);
 });
 function reprintClient(){
   const {context:c}=frontend();
@@ -308,4 +312,33 @@ test('bulk label backend deduplicates codes and validates both groups before gen
   assert.throws(()=>c.createYourFindsReprintPDFByGroups(['A'],['missing']),/no longer available/);assert.equal(calls.length,0);
   const result=c.createYourFindsReprintPDFByGroups(['A','A'],[' B ']);
   assert.equal(result.labelCount,2);assert.equal(result.files.length,2);assert.equal(result.files[1].labelType,'INCOMPLETE');
+});
+test('desktop sidebar collapse persists and navigation does not dismiss it',()=>{
+  const {context:c}=frontend();const store=new Map();let desktop=true;
+  c.window={matchMedia(){return {matches:desktop};},addEventListener(){}};
+  c.localStorage={getItem:key=>store.get(key)||null,setItem:(key,value)=>store.set(key,value)};
+  vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Layout/Sidebar.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
+  c.restoreSidebarLayout();assert.equal(c.document.body.classList.contains('pos-session-active'),true);
+  c.toggleSidebar();assert.equal(store.get('ys_pos_sidebar_collapsed'),'true');
+  c.toggleSidebar(false);assert.equal(store.get('ys_pos_sidebar_collapsed'),'true');
+  c.toggleSidebar();assert.equal(store.get('ys_pos_sidebar_collapsed'),'false');
+  desktop=false;c.toggleSidebar();assert.equal(c.document.getElementById('sidebarOverlay').classList.contains('show'),true);
+  c.toggleSidebar(false);assert.equal(c.document.getElementById('sidebarOverlay').classList.contains('show'),false);
+});
+test('shared PIN authorization accepts only valid manager session credentials',()=>{
+  const {c}=managerSessionHarness();
+  const token=c.verifyEmployee('Test Manager','1234').inventoryManagerToken;
+  assert.equal(c.verifyManagerPin({managerToken:token}).success,true);
+  assert.equal(c.verifyManagerPin({managerToken:'forged'}).success,false);
+  assert.equal(c.verifyManagerPin('1234').success,true);
+  c.revokeInventoryManagerSession(token);
+  assert.equal(c.verifyManagerPin({managerToken:token}).success,false);
+});
+test('report actions are in cashier page; sidebar has petty cash and no accept delivery',()=>{
+  const sidebar=fs.readFileSync(path.join(root,'Frontend/Layout/Sidebar.html'),'utf8');
+  const cashier=fs.readFileSync(path.join(root,'Frontend/Pages/CashierPage.html'),'utf8');
+  assert.doesNotMatch(sidebar,/openAcceptDeliveryTypeModal|openManagerReportModal/);
+  assert.match(sidebar,/openPettyCashSidebar/);
+  assert.match(cashier,/id="cashierManagerReportBtn"/);
+  assert.match(cashier,/toggleShiftReportModal\(true\)/);
 });

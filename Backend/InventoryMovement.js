@@ -641,7 +641,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
      */
     const auth = currentStatus === INVENTORY_STATUS.INCOMPLETE
       ? (hasOriginalPrice ? phase8RequireManager_(payload.managerPin, payload.managerToken) : null)
-      : phase8RequireManager_(payload.managerPin);
+      : phase8RequireManager_(payload.managerPin, payload.managerToken);
 
     oldImageUrl = String(item.imageUrl || "").trim();
     if (decodedImage) {

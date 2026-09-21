@@ -1,449 +1,70 @@
-<html>
-	<head></head>
-	<body>
-		<div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar(false)">
-		</div>
-		<div id="appSidebar" class="app-sidebar" style="display:none;">
-			
-			<!-- Header -->
-			<div class="sidebar-header">
-				<div class="sidebar-profile">
-					<div id="sidebarAvatar" class="sidebar-avatar">
-						--
-					</div>
-					<div>
-						<div id="sidebarEmployeeName" class="sidebar-name">
-							Not Logged In
-						</div>
-						<div id="sidebarEmployeeRole" class="sidebar-role">
-							Employee
-						</div>
-					</div>
-				</div>
-				<button class="btn-close" onclick="toggleSidebar(false)">
-				</button>
-			</div>
-      <!-- ================= MENU ================= -->
-
-<div class="sidebar-menu">
-
-
-  <!-- DASHBOARD -->
-
-  <button
-    class="sidebar-item active"
-    data-page="dashboardPage"
-    onclick="
-      activateMenu(this);
-      showPage('dashboardPage');
-      toggleSidebar(false);
-    "
-  >
-    <span>🏠 Dashboard</span>
-  </button>
-
-
-  <!-- CASHIER -->
-
-  <button
-    class="sidebar-item"
-    data-page="posPage"
-    onclick="
-      activateMenu(this);
-      showPage('posPage');
-      toggleSidebar(false);
-    "
-  >
-    <span>🛒 Cashier</span>
-  </button>
-
-
-<!-- ================= INVENTORY ================= -->
-
-<button
-  class="sidebar-item sidebar-parent"
-  onclick="
-    toggleSidebarGroup(
-      'inventoryMenu',
-      this
-    )
-  "
->
-
-  <span>
-    📦 Inventory
-  </span>
-
-  <span class="sidebar-arrow">
-    ▸
-  </span>
-
-</button>
-
-
-<div
-  id="inventoryMenu"
-  class="sidebar-submenu"
->
-
-  <!-- VIEW INVENTORY -->
-
-  <button
-    class="sidebar-subitem"
-    onclick="
-      showPage('inventoryPage');
-      toggleSidebar(false);
-    "
-  >
-    View Inventory
-  </button>
-
-  <!-- DELIVERIES -->
-
-  <button
-    class="sidebar-subitem"
-    onclick="
-      toggleSidebar(false);
-      showPage('deliveriesPage');
-      loadDeliveriesPage();
-    "
-  >
-    Deliveries
-  </button>
-
-
-<!-- ACCEPT DELIVERY -->
-
-<button
-  class="sidebar-subitem"
-  onclick="
-    openAcceptDeliveryTypeModal();
-    toggleSidebar(false);
-  "
->
-  Accept Delivery
-</button>
+<div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
+<aside id="appSidebar" class="app-sidebar" style="display:none;" aria-label="Main navigation">
+ <div class="sidebar-header"><div class="sidebar-profile"><div id="sidebarAvatar" class="sidebar-avatar">--</div><div class="sidebar-label"><div id="sidebarEmployeeName" class="sidebar-name">Not Logged In</div><div id="sidebarEmployeeRole" class="sidebar-role">Employee</div></div></div></div>
+ <button id="sidebarCollapseBtn" type="button" class="sidebar-item" title="Collapse or expand navigation" aria-label="Collapse or expand navigation" onclick="toggleSidebar()"><span class="nav-icon" aria-hidden="true">☰</span><span class="sidebar-label">Collapse menu</span></button>
+ <nav class="sidebar-menu">
+<button type="button" class="sidebar-item" data-page="dashboardPage" title="Dashboard" aria-label="Dashboard" onclick="navigateSidebar('dashboardPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg><span class="sidebar-label">Dashboard</span></button>
+<button type="button" class="sidebar-item" data-page="posPage" title="Cashier" aria-label="Cashier" onclick="navigateSidebar('posPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 4h2l3 12h11l2-8H6M9 20h1m7 0h1"/></svg><span class="sidebar-label">Cashier</span></button>
+<button type="button" class="sidebar-item" data-page="inventoryPage" title="Inventory" aria-label="Inventory" onclick="navigateSidebar('inventoryPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m3 7 9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/></svg><span class="sidebar-label">Inventory</span></button>
+<button type="button" class="sidebar-item" data-page="deliveriesPage" title="Deliveries" aria-label="Deliveries" onclick="navigateSidebar('deliveriesPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 5h12v12H2zM14 10h4l4 4v3h-8"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/></svg><span class="sidebar-label">Deliveries</span></button>
+<button type="button" class="sidebar-item"  title="Petty Cash" aria-label="Petty Cash" onclick="openPettyCashSidebar();toggleSidebar(false)"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg><span class="sidebar-label">Petty Cash</span></button>
+<button type="button" class="sidebar-item"  title="Void Receipt" aria-label="Void Receipt" onclick="toggleVoidModal(true);toggleSidebar(false)"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m6 6 12 12"/></svg><span class="sidebar-label">Void Receipt</span></button>
+<button type="button" class="sidebar-item"  title="Customer Exchange" aria-label="Customer Exchange" onclick="openCustomerExchangeModal();toggleSidebar(false)"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16l-4-4M20 17H4l4 4"/></svg><span class="sidebar-label">Customer Exchange</span></button>
+</nav><button type="button" class="sidebar-item text-danger mt-auto" title="Logout" aria-label="Logout" onclick="triggerCleanLogout()"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 3H3v18h6M9 12h12l-4-4M21 12l-4 4"/></svg><span class="sidebar-label">Logout</span></button></aside>
+<div id="pettyCashSidebarModal" class="generic-overlay-blur" style="display:none;">
+ <div class="custom-popup-card" style="width:94%;max-width:540px;">
+  <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3"><h5 class="fw-bold mb-0">Petty Cash</h5><button class="btn-close" aria-label="Close petty cash" onclick="closePhase8Modal('pettyCashSidebarModal')"></button></div>
+  <div class="border rounded p-3 mb-3"><span class="text-muted">Received this shift</span><div id="pettyCashShiftAmount" class="fs-3 fw-bold"></div></div>
+  <div class="border rounded p-3 mb-3"><span class="text-muted">Latest closed-shift handover</span><div id="pettyCashHandoverAmount" class="fs-4 fw-bold"></div><div id="pettyCashHandoverReference" class="small text-muted"></div></div>
+  <button class="btn btn-pink w-100" onclick="closePhase8Modal('pettyCashSidebarModal');toggleShiftReportModal(true)">Count / Return Petty Cash</button>
+ </div>
 </div>
-
-  <!-- TRANSACTIONS -->
-
-  <button
-    class="sidebar-item sidebar-parent"
-    onclick="toggleSidebarGroup('transactionMenu', this)"
-  >
-    <span>💰 Transactions</span>
-
-    <span class="sidebar-arrow">
-      ▸
-    </span>
-  </button>
-
-
-  <div
-    id="transactionMenu"
-    class="sidebar-submenu"
-  >
-
-    <button
-      class="sidebar-subitem"
-      onclick="
-        toggleVoidModal(true);
-        toggleSidebar(false);
-      "
-    >
-      Void Receipt
-    </button>
-
-
-    <button
-      class="sidebar-subitem"
-      onclick="
-        openCustomerExchangeModal();
-        toggleSidebar(false);
-      "
-    >
-      Customer Exchange
-    </button>
-
-  </div>
-
-
-  <!-- REPORTS -->
-
-  <button
-    class="sidebar-item sidebar-parent"
-    onclick="toggleSidebarGroup('reportMenu', this)"
-  >
-    <span>📊 Reports</span>
-
-    <span class="sidebar-arrow">
-      ▸
-    </span>
-  </button>
-
-
-  <div
-    id="reportMenu"
-    class="sidebar-submenu"
-  >
-
-    <button
-      class="sidebar-subitem"
-      onclick="
-        toggleShiftReportModal(true);
-        toggleSidebar(false);
-      "
-    >
-      Cashier Shift Report
-    </button>
-
-
-    <button
-      id="sidebarManagerReportBtn"
-      class="sidebar-subitem"
-      style="display:none;"
-      onclick="
-        openManagerReportModal();
-        toggleSidebar(false);
-      "
-    >
-      Manager Daily Report
-    </button>
-
-  </div>
-
-
-  <hr>
-
-
-  <!-- SETTINGS -->
-
-  <button
-    class="sidebar-item"
-    disabled
-  >
-    ⚙ Settings
-  </button>
-
-
-  <!-- LOGOUT -->
-
-  <button
-    class="sidebar-item text-danger"
-    onclick="triggerCleanLogout()"
-  >
-    🚪 Logout
-  </button>
-
-
-</div>
-		</div>
-	</body>
-</html>
-
 <script>
-  function updateSidebarProfile(employee) {
-    if (!employee) return;
-
-    const nameEl = document.getElementById("sidebarEmployeeName");
-    const roleEl = document.getElementById("sidebarEmployeeRole");
-    const avatarEl = document.getElementById("sidebarAvatar");
-    const navbarEl = document.getElementById("navbarEmployeeName");
-
-    if (nameEl) {
-      nameEl.textContent = employee.fullName;
-    }
-
-    if (navbarEl) {
-      navbarEl.textContent = employee.fullName;
-    }
-
-    const role = employee.accessLevel <= 1 ? "Manager" : "Cashier";
-
-    if (roleEl) {
-      roleEl.textContent = role;
-    }
-
-    const initials = (employee.fullName || "")
-      .split(" ")
-      .filter(Boolean)
-      .map(name => name.charAt(0))
-      .join("")
-      .substring(0, 2)
-      .toUpperCase();
-
-    if (avatarEl) {
-      avatarEl.textContent = initials;
-    }
-  }
-
-  function toggleSidebar(show = true) {
-    document.getElementById("appSidebar").classList.toggle("show", show);
-    document.getElementById("sidebarOverlay").classList.toggle("show", show);
-  }
-
-  function toggleSidebarGroup(menuId, button) {
-    const menu = document.getElementById(menuId);
-    const arrow = button.querySelector(".sidebar-arrow");
-    const isOpen = menu.classList.contains("show");
-
-    document.querySelectorAll(".sidebar-submenu").forEach((sub) => {
-      sub.classList.remove("show");
-    });
-
-    document.querySelectorAll(".sidebar-arrow").forEach((a) => {
-      a.classList.remove("rotate");
-    });
-
-    if (!isOpen) {
-      menu.classList.add("show");
-
-      if (arrow) {
-        arrow.classList.add("rotate");
-      }
-    }
-  }
-function activateMenu(button) {
-
-  // Remove active state from all main sidebar items
-  document
-    .querySelectorAll(".sidebar-item")
-    .forEach(function(item) {
-      item.classList.remove("active");
-    });
-
-  // Activate clicked menu
-  if (button) {
-    button.classList.add("active");
-  }
-
-  // Save active menu
-  const pageId =
-    button?.dataset?.page;
-
-  if (pageId) {
-    localStorage.setItem(
-      "ys_pos_active_page",
-      pageId
-    );
-  }
+function restoreSidebarLayout(){
+ document.body.classList.toggle('pos-session-active',!!currentEmployee);
+ document.body.classList.toggle('sidebar-collapsed',localStorage.getItem('ys_pos_sidebar_collapsed')==='true');
+ document.getElementById('sidebarCollapseBtn').setAttribute('aria-expanded',localStorage.getItem('ys_pos_sidebar_collapsed')!=='true');
 }
-
-function showPage(pageId) {
-
-  const pages = [
-    "dashboardPage",
-    "posPage",
-    "inventoryPage",
-    "deliveriesPage"
-  ];
-
-
-  // Hide every main page
-  pages.forEach(function(id) {
-
-    const page =
-      document.getElementById(id);
-
-
-    if (page) {
-
-      page.style.display =
-        "none";
-
-    }
-
-  });
-
-
-  // Show selected page
-  const selectedPage =
-    document.getElementById(
-      pageId
-    );
-
-
-  if (!selectedPage) {
-
-    console.error(
-      "Page not found:",
-      pageId
-    );
-
-    return;
-
-  }
-
-
-  selectedPage.style.display =
-    "block";
-
-  localStorage.setItem(
-    "ys_pos_active_page",
-    pageId
-  );
-
-  if (pageId === "inventoryPage" && typeof loadInventoryPage === "function") {
-    loadInventoryPage();
-  }
-
+function updateSidebarProfile(employee){
+ if(!employee)return;
+ document.getElementById('sidebarEmployeeName').textContent=employee.fullName;
+ document.getElementById('navbarEmployeeName').textContent=employee.fullName;
+ document.getElementById('sidebarEmployeeRole').textContent=employee.accessLevel<=1?'Manager':'Cashier';
+ document.getElementById('sidebarAvatar').textContent=String(employee.fullName||'').split(' ').map(n=>n[0]||'').join('').slice(0,2).toUpperCase();
+ restoreSidebarLayout();
 }
-
-  function updateSidebarProfile(employee) {
-    if (!employee) return;
-
-    document.getElementById("sidebarEmployeeName").textContent = employee.fullName;
-    document.getElementById("navbarEmployeeName").textContent = employee.fullName;
-    document.getElementById("sidebarEmployeeRole").textContent = employee.accessLevel <= 1 ? "Manager" : "Cashier";
-
-    const initials = employee.fullName
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .substring(0, 2)
-      .toUpperCase();
-
-    document.getElementById("sidebarAvatar").textContent = initials;
-  }
-
-  function restoreActivePage() {
-
-  const savedPage =
-    localStorage.getItem(
-      "ys_pos_active_page"
-    );
-
-  const validPages = [
-    "dashboardPage",
-    "posPage",
-    "inventoryPage",
-    "deliveriesPage"
-  ];
-
-  const pageId = validPages.includes(savedPage)
-    ? savedPage
-    : "posPage";
-
-  showPage(pageId);
-
-  const button =
-    document.querySelector(
-      `.sidebar-item[data-page="${pageId}"]`
-    );
-
-  if (button) {
-
-    document
-      .querySelectorAll(".sidebar-item")
-      .forEach(function(item) {
-        item.classList.remove("active");
-      });
-
-    button.classList.add("active");
-  }
-
+function toggleSidebar(show){
+ const sidebar=document.getElementById('appSidebar'),overlay=document.getElementById('sidebarOverlay');
+ if(window.matchMedia('(min-width: 992px)').matches){
+   sidebar.classList.remove('show');overlay.classList.remove('show');
+   if(show===false)return;
+   const collapsed=show===true?false:!document.body.classList.contains('sidebar-collapsed');
+   localStorage.setItem('ys_pos_sidebar_collapsed',String(collapsed));restoreSidebarLayout();
+ }else{
+   const open=show===undefined?!sidebar.classList.contains('show'):show;
+   sidebar.classList.toggle('show',open);overlay.classList.toggle('show',open);
+ }
 }
-
+function activateMenu(button){document.querySelectorAll('.sidebar-item[data-page]').forEach(item=>item.classList.toggle('active',item===button));}
+function navigateSidebar(page){showPage(page);toggleSidebar(false);}
+function showPage(pageId){
+ const pages=['dashboardPage','posPage','inventoryPage','deliveriesPage'];if(!pages.includes(pageId))return;
+ pages.forEach(id=>{const page=document.getElementById(id);if(page)page.style.display=id===pageId?'block':'none';});
+ localStorage.setItem('ys_pos_active_page',pageId);
+ activateMenu(document.querySelector('.sidebar-item[data-page="'+pageId+'"]'));
+ if(pageId==='inventoryPage')loadInventoryPage();
+ if(pageId==='deliveriesPage')loadDeliveriesPage();
+}
+function restoreActivePage(){restoreSidebarLayout();const saved=localStorage.getItem('ys_pos_active_page');showPage(['dashboardPage','posPage','inventoryPage','deliveriesPage'].includes(saved)?saved:'posPage');}
+function openPettyCashSidebar(){
+ document.getElementById('pettyCashShiftAmount').textContent='₱'+(Number(currentShiftPettyCash)||0).toFixed(2);
+ document.getElementById('pettyCashHandoverAmount').textContent='Loading...';document.getElementById('pettyCashHandoverReference').textContent='';
+ document.getElementById('pettyCashSidebarModal').style.display='flex';
+ google.script.run.withSuccessHandler(function(result){
+   document.getElementById('pettyCashHandoverAmount').textContent=result&&result.success?'₱'+(Number(result.received)||0).toFixed(2):'Unavailable';
+   document.getElementById('pettyCashHandoverReference').textContent=result&&result.previousReportId||'No previous handover';
+ }).withFailureHandler(function(error){document.getElementById('pettyCashHandoverAmount').textContent='Unavailable';showNotificationToast(error.message||String(error),true);}).getLatestPettyHandoverPhase10();
+}
   function triggerCleanLogout() {
     if (confirm("Are you sure you want to log out?")) {
       // The sidebar backdrop sits above login; always dismiss it first.
@@ -454,13 +75,14 @@ function showPage(pageId) {
       document.querySelectorAll('dialog[open]').forEach(function(dialog) { dialog.close(); });
       clearSession();
       currentEmployee = null;
+      document.body.classList.remove("pos-session-active");
       localStorage.removeItem("ys_pos_active_page");
       currentCashier = "";
       currentShiftPettyCash = 0;
       cart = [];
       document.getElementById("cashierSelect").value = "";
       document.getElementById("cashierPin").value = "";
-      document.getElementById("sidebarManagerReportBtn").style.display = "none";
+      document.getElementById("cashierManagerReportBtn").style.display = "none";
       document.getElementById("navbarEmployeeName").textContent = "Offline";
 
       document.getElementById("sidebarEmployeeName").textContent =
@@ -473,7 +95,7 @@ function showPage(pageId) {
 
       document.getElementById("sidebarEmployeeRole").textContent = "Employee";
 
-      document.getElementById("sidebarManagerReportBtn").style.display = "none";
+      document.getElementById("cashierManagerReportBtn").style.display = "none";
 
       document.getElementById("appSidebar").style.display = "none";
       renderCart();
@@ -481,9 +103,6 @@ function showPage(pageId) {
     }
   }
 
-  window.addEventListener("click", function (e) {
-    if (e.target.classList.contains("sidebar-overlay")) {
-      toggleSidebar(false);
-    }
-  });
+  window.addEventListener("click",function(event){if(event.target.classList.contains('sidebar-overlay'))toggleSidebar(false);});
+window.addEventListener('resize',function(){if(window.matchMedia('(min-width: 992px)').matches){document.getElementById('sidebarOverlay').classList.remove('show');document.getElementById('appSidebar').classList.remove('show');}});
 </script>
