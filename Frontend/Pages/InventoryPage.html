@@ -47,10 +47,9 @@
     ====================================================== -->
 
     <div class="row g-3 mb-4">
-      <div class="col-sm-6 col-lg-3"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start inventory-summary-card" onclick="openInventorySummary('products')" aria-label="View total products details"><span class="card-body"><span class="d-block small text-muted">Total Products</span><span id="inventoryTotalProducts" class="d-block fs-4 fw-bold">0</span></span></button></div>
-      <div class="col-sm-6 col-lg-3"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start inventory-summary-card" onclick="openInventorySummary('stock')" aria-label="View total stock details"><span class="card-body"><span class="d-block small text-muted">Total Stock</span><span id="inventoryTotalStock" class="d-block fs-4 fw-bold">0</span></span></button></div>
-      <div class="col-sm-6 col-lg-3"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start inventory-summary-card" onclick="openInventorySummary('low')" aria-label="View low stock details"><span class="card-body"><span class="d-block small text-muted">Low Stock</span><span id="inventoryLowStock" class="d-block fs-4 fw-bold">0</span></span></button></div>
-      <div class="col-sm-6 col-lg-3"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start inventory-summary-card" onclick="openInventorySummary('sold')" aria-label="View sold out details"><span class="card-body"><span class="d-block small text-muted">Sold Out</span><span id="inventorySoldOut" class="d-block fs-4 fw-bold">0</span></span></button></div>
+      <div class="col-sm-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start inventory-summary-card" onclick="openInventorySummary('products')" aria-label="View total products details"><span class="card-body"><span class="d-block small text-muted">Total Products</span><span id="inventoryTotalProducts" class="d-block fs-4 fw-bold">0</span></span></button></div>
+      <div class="col-sm-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start inventory-summary-card" onclick="openInventorySummary('low')" aria-label="View low stock details"><span class="card-body"><span class="d-block small text-muted">Low Stock</span><span id="inventoryLowStock" class="d-block fs-4 fw-bold">0</span></span></button></div>
+      <div class="col-sm-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start inventory-summary-card" onclick="openInventorySummary('sold')" aria-label="View sold out details"><span class="card-body"><span class="d-block small text-muted">Sold Out</span><span id="inventorySoldOut" class="d-block fs-4 fw-bold">0</span></span></button></div>
     </div>
 
     <div class="card border-0 shadow-sm mb-3">
@@ -492,7 +491,6 @@ function buildInventoryStatusBadge(status) {
 function updateInventorySummary() {
   const groups = getInventorySummaryItems('products');
   document.getElementById('inventoryTotalProducts').textContent = groups.length;
-  document.getElementById('inventoryTotalStock').textContent = groups.reduce((sum,group)=>sum+group.stock,0);
   document.getElementById('inventoryLowStock').textContent = groups.filter(group=>group.status==='LOW STOCK').length;
   document.getElementById('inventorySoldOut').textContent = groups.filter(group=>group.status==='SOLD OUT').length;
 }

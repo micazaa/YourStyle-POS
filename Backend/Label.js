@@ -1247,18 +1247,25 @@ function createYourFindsReprintPDFByCodes(codes, labelType) {
 }
 
 function createYourFindsReprintPDFByGroups(completedCodes, incompleteCodes) {
+  const normalize = function(codes) { return Array.from(new Set((Array.isArray(codes) ? codes : []).map(function(code) { return String(code || "").trim(); }).filter(Boolean))); };
+  const groups = { COMPLETED: normalize(completedCodes), INCOMPLETE: normalize(incompleteCodes) };
+  if (!groups.COMPLETED.length && !groups.INCOMPLETE.length) throw new Error("Select at least one label.");
+  const available = {};
+  getYourFindsItemsForLabelReprint().items.forEach(function(item) { available[item.code] = item.labelType; });
+  Object.keys(groups).forEach(function(type) {
+    groups[type].forEach(function(code) {
+      if (available[code] !== type) throw new Error("Item " + code + " changed or is no longer available. Reopen the label list.");
+    });
+  });
   const files = [];
-  let labelCount = 0;
-  if (Array.isArray(completedCodes) && completedCodes.length) {
-    files.push(createCompletedYourFindsLabelPDFByCodes(completedCodes));
-    labelCount += completedCodes.length;
-  }
-  if (Array.isArray(incompleteCodes) && incompleteCodes.length) {
-    files.push(createYourFindsLabelPDFByCodes(incompleteCodes));
-    labelCount += incompleteCodes.length;
-  }
-  if (!files.length) throw new Error("Select at least one label.");
-  return { success: true, files: files, labelCount: labelCount };
+  Object.keys(groups).forEach(function(type) {
+    if (!groups[type].length) return;
+    const file = createYourFindsReprintPDFByCodes(groups[type], type);
+    if (!file || !file.success) throw new Error(file && file.message || "Unable to generate labels.");
+    file.labelType = type;
+    files.push(file);
+  });
+  return { success: true, files: files, labelCount: files.reduce(function(total, file) { return total + file.labelCount; }, 0) };
 }
 
 /* ==========================================================

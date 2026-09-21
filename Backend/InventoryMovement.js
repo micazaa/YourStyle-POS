@@ -639,9 +639,9 @@ function saveYourFindsItemDetailsPhase8(payload) {
      * Receiving staff may complete a new item without manager approval.
      * Corrections to an already completed item remain manager-controlled.
      */
-    const auth = currentStatus === INVENTORY_STATUS.INCOMPLETE && !hasOriginalPrice
-      ? null
-      : phase8RequireManager_(payload.managerPin, payload.managerToken);
+    const auth = currentStatus === INVENTORY_STATUS.INCOMPLETE
+      ? (hasOriginalPrice ? phase8RequireManager_(payload.managerPin, payload.managerToken) : null)
+      : phase8RequireManager_(payload.managerPin);
 
     oldImageUrl = String(item.imageUrl || "").trim();
     if (decodedImage) {

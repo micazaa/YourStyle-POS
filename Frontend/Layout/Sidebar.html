@@ -446,7 +446,14 @@ function showPage(pageId) {
 
   function triggerCleanLogout() {
     if (confirm("Are you sure you want to log out?")) {
+      // The sidebar backdrop sits above login; always dismiss it first.
+      toggleSidebar(false);
+      document.querySelectorAll('.generic-overlay-blur').forEach(function(overlay) {
+        if (overlay.id !== 'loginOverlay') overlay.style.display = 'none';
+      });
+      document.querySelectorAll('dialog[open]').forEach(function(dialog) { dialog.close(); });
       clearSession();
+      currentEmployee = null;
       localStorage.removeItem("ys_pos_active_page");
       currentCashier = "";
       currentShiftPettyCash = 0;
@@ -470,6 +477,7 @@ function showPage(pageId) {
 
       document.getElementById("appSidebar").style.display = "none";
       renderCart();
+      initializeLoginPhase10();
     }
   }
 

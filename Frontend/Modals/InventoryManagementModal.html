@@ -3,7 +3,7 @@
   <div class="custom-popup-card" style="max-width:850px;width:95%;max-height:92vh;overflow:auto;">
     <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
       <div><h5 id="invDetailTitle" class="fw-bold mb-1">Inventory Item</h5><div id="invDetailCode" class="small text-muted font-monospace"></div></div>
-      <button class="btn-close" onclick="closePhase8Modal('inventoryDetailsModal')"></button>
+      <div class="d-flex align-items-center gap-2"><button id="invDetailEditSellingBtn" type="button" class="btn btn-sm btn-outline-secondary" style="display:none;" title="Edit selling details" aria-label="Edit selling details" onclick="openYourFindsEditorPhase8()"></button><button class="btn-close" aria-label="Close item" onclick="closePhase8Modal('inventoryDetailsModal')"></button></div>
     </div>
     <div class="row g-3 mb-3">
       <div class="col-md-4">
@@ -198,7 +198,8 @@ function openInventoryDetailsPhase8(code){
  const isPins=String(item.category||'').trim().toUpperCase()==='PINS';
  const display=getInventoryDisplayStatus(item); document.getElementById('invDetailBody').innerHTML=`<div class="border rounded p-3 mb-3"><div class="small text-muted">Current Stock</div><div class="fs-3 fw-bold">${Number(item.stock)||0}</div><div>${buildInventoryStatusBadge(display)}</div></div><div class="row g-3"><div class="col-6"><b>Category</b><br>${escapeInventoryHtml(item.category)}</div><div class="col-6"><b>Type</b><br>${escapeInventoryHtml(item.inventoryType)}</div>${isPins?'':`<div class="col-6"><b>Size</b><br>${escapeInventoryHtml(item.size||'—')}</div>`}<div class="col-6"><b>Selling Price</b><br>₱${(Number(item.price)||0).toFixed(2)}</div>${inventoryIsManager()?`<div class="col-6"><b>Original Price</b><br>₱${(Number(item.origPrice)||0).toFixed(2)}</div>`:''}${isPins?'':`<div class="col-6"><b>Delivered</b><br>${escapeInventoryHtml(item.dateDelivered||'—')}</div>`}${isPins?'':`<div class="col-12"><b>Delivery ID</b><br>${escapeInventoryHtml(item.deliveryId||'—')}</div>`}</div>`; phase8RenderInventoryPhoto_(item.imageUrl);
  document.getElementById('invAdjustBtn').style.display=unique?'none':'inline-block'; document.getElementById('invChangeBtn').style.display=unique?'none':'inline-block';
- const editBtn=document.getElementById('invYfEditBtn'); editBtn.style.display=editable&&(incomplete||inventoryIsManager())?'inline-block':'none'; editBtn.textContent=incomplete?'Add Selling Details':'Edit Selling Details';
+ const editIcon=document.getElementById('invDetailEditSellingBtn');editIcon.innerHTML=inventoryIcon('edit');editIcon.style.display=completed?'inline-block':'none';
+ const editBtn=document.getElementById('invYfEditBtn'); editBtn.style.display=incomplete?'inline-block':'none'; editBtn.textContent=incomplete?'Add Selling Details':'Edit Selling Details';
  document.getElementById('invLabelBtn').style.display=completed?'inline-block':'none';
  const statusBtn=document.getElementById('invStatusBtn'); statusBtn.style.display=!inventoryIsManager()||incomplete||status==='RETURNED'?'none':'inline-block'; statusBtn.textContent=status==='ACTIVE'?'Deactivate':'Reactivate';
  document.getElementById('inventoryDetailsModal').style.display='flex';
@@ -217,7 +218,7 @@ function openYourFindsEditorPhase8(){
  document.getElementById('yfEditorOriginalPrice').value=inventoryIsManager()?(Number(phase8SelectedItem.origPrice)||0):'';
  document.getElementById('yfEditorSellingPrice').value=Number(phase8SelectedItem.price)||'';
  document.getElementById('yfEditorManagerPin').value='';
- document.getElementById('yfEditorManagerPinWrap').style.display=incomplete||inventoryIsManager()?'none':'block';
+ document.getElementById('yfEditorManagerPinWrap').style.display=incomplete?'none':'block';
  document.getElementById('yfEditorPhoto').value='';
  renderYourFindsEditorPhotoPhase8(phase8SelectedItem.imageUrl||'');
  document.getElementById('yfEditorCompletionNote').style.display=incomplete?'block':'none';
@@ -253,7 +254,8 @@ function saveYourFindsDetailsClientPhase8(generateLabel){
  if(!description)return showNotificationToast('Description is required.',true);
  if(!Number.isFinite(sellingPrice)||sellingPrice<=0)return showNotificationToast('Selling Price must be greater than zero.',true);
  if(!phase8SelectedItem.imageUrl&&!phase8YfPhotoDataUrl)return showNotificationToast('Choose a product picture.',true);
- const auth=(inventoryIsManager()||!incomplete)?phase8ManagerCredentials('Manager PIN to save selling details:',managerPin):{};
+ if(!incomplete&&!managerPin)return showNotificationToast('Enter a manager PIN to save changes to selling details.',true);
+ const auth=incomplete?(inventoryIsManager()?phase8ManagerCredentials('Manager authorization'):{}):{managerPin:managerPin};
  if(!auth)return;
  const payload={
    code:phase8SelectedItem.code,description:description,sellingPrice:sellingPrice,...auth,fileName:phase8YfPhotoFileName,dataUrl:phase8YfPhotoDataUrl

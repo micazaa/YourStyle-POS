@@ -228,7 +228,6 @@ test('searching one YourFinds barcode retains full size total and category count
   assert.equal(group.stock,5);assert.equal(group.status,'IN STOCK');
   c.updateInventorySummary();
   assert.equal(c.document.getElementById('inventoryTotalProducts').textContent,1);
-  assert.equal(c.document.getElementById('inventoryTotalStock').textContent,5);
   c.openInventorySummary('products');
   assert.match(c.document.getElementById('inventorySummaryCategoryCounts').innerHTML,/5 units/);
   assert.match(c.document.getElementById('inventorySummaryCategoryCounts').innerHTML,/1 sizes/);
@@ -241,4 +240,72 @@ test('group stock sorting is numeric in both directions and ignores returned qua
   assert.deepEqual(Array.from(c.sortInventorySummaryGroups(groups),x=>x.stock),[2,10]);
   c.inventorySummarySort.direction=-1;
   assert.deepEqual(Array.from(c.sortInventorySummaryGroups(groups),x=>x.stock),[10,2]);
+});
+test('saved selling details require PIN even for signed-in managers',()=>{
+  const {c,calls}=yourFindsEditor(true);c.phase8SelectedItem.status='ACTIVE';
+  c.openYourFindsEditorPhase8();
+  assert.equal(c.document.getElementById('yfEditorManagerPinWrap').style.display,'block');
+  c.saveYourFindsDetailsClientPhase8(false);assert.equal(calls.saves,0);
+  c.document.getElementById('yfEditorManagerPin').value='1234';
+  c.saveYourFindsDetailsClientPhase8(false);assert.equal(calls.saves,1);
+  assert.equal(calls.payload.managerPin,'1234');assert.equal(calls.payload.managerToken,undefined);
+});
+test('saved YourFinds view shows the corner edit icon and hides initial details button',()=>{
+  const {c}=yourFindsEditor(false);c.phase8SelectedItem.status='ACTIVE';c.phase8SelectedItem.stock=1;
+  c.inventoryPageData=[c.phase8SelectedItem];c.phase8RenderInventoryPhoto_=()=>{};
+  c.openInventoryDetailsPhase8('YF1');
+  assert.equal(c.document.getElementById('invDetailEditSellingBtn').style.display,'inline-block');
+  assert.equal(c.document.getElementById('invYfEditBtn').style.display,'none');
+});
+test('backend rejects session-only authorization for already saved selling details',()=>{
+  const {c}=backend({authorized:false,status:'ACTIVE',stock:1});
+  c.getYourFindsItemForCompletion=()=>({success:true,item:{code:'YF1',rowNumber:2,status:'ACTIVE',stock:1,size:'M',origPrice:45,imageUrl:'photo'}});
+  c.verifyInventoryManagerSession_=()=>{throw Error('Session must not be used');};
+  assert.throws(()=>c.saveYourFindsItemDetailsPhase8({code:'YF1',description:'Saved',sellingPrice:90,managerToken:'valid-session'}),/authorization/);
+});
+function reprintClient(){
+  const {context:c}=frontend();
+  vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Modals/YourFindsReprintModal.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
+  c.document.getElementById('yourFindsReprintType').value='ALL';
+  c.yourFindsReprintItems=[{code:'A',description:'Bag',labelType:'COMPLETED',deliveryId:'D1',sellingPrice:10},{code:'B',description:'Box',labelType:'INCOMPLETE',deliveryId:'D1'},{code:'C',description:'Shoe',labelType:'COMPLETED',deliveryId:'D2',sellingPrice:2}];
+  c.showNotificationToast=()=>{};
+  return c;
+}
+test('reprint select-all selects only filtered rows and reports hidden selection',()=>{
+  const c=reprintClient();c.document.getElementById('yourFindsReprintSearch').value='Bag';
+  c.selectVisibleYourFindsReprintItems(true);assert.deepEqual(Object.keys(c.yourFindsReprintSelection),['A']);
+  c.document.getElementById('yourFindsReprintSearch').value='Box';c.renderYourFindsReprintItems();
+  assert.match(c.document.getElementById('yourFindsReprintSelectedCount').textContent,/1 hidden/);
+  c.selectVisibleYourFindsReprintItems(true);assert.deepEqual(Object.keys(c.yourFindsReprintSelection),['A','B']);
+  c.selectVisibleYourFindsReprintItems(false);assert.deepEqual(Object.keys(c.yourFindsReprintSelection),['A']);
+});
+test('mixed reprint locks duplicate submissions and exposes both download links',()=>{
+  const c=reprintClient();let requests=0,success;
+  c.yourFindsReprintSelection={A:true,B:true};
+  c.google={script:{run:{withSuccessHandler(fn){success=fn;return this;},withFailureHandler(){return this;},createYourFindsReprintPDFByGroups(done,initial){requests++;assert.deepEqual(Array.from(done),['A']);assert.deepEqual(Array.from(initial),['B']);}}}};
+  c.printSelectedYourFindsReprintLabels();c.printSelectedYourFindsReprintLabels();assert.equal(requests,1);
+  assert.equal(c.document.getElementById('yourFindsReprintControls').disabled,true);
+  success({success:true,labelCount:2,files:[{labelType:'COMPLETED',labelCount:1,fileUrl:'https://example.com/selling'},{labelType:'INCOMPLETE',labelCount:1,fileUrl:'https://example.com/initial'}]});
+  const links=c.document.getElementById('yourFindsReprintResult').children;
+  assert.equal(links.length,2);assert.match(links[0].textContent,/40 × 30/);assert.match(links[1].textContent,/30 × 20/);
+  assert.equal(c.yourFindsReprintBusy,false);
+});
+test('logout dismisses sidebar and item overlays before displaying login',()=>{
+  const {context:c}=frontend();const overlays=[{id:'inventoryDetailsModal',style:{display:'flex'}}];let sidebarClosed=false,refreshed=false;
+  c.document.querySelectorAll=selector=>selector==='.generic-overlay-blur'?overlays:[];
+  c.confirm=()=>true;c.toggleSidebar=show=>{sidebarClosed=!show;};c.clearSession=()=>{};
+  c.localStorage={removeItem(){}};c.renderCart=()=>{};c.initializeLoginPhase10=()=>{refreshed=true;};
+  const source=fs.readFileSync(path.join(root,'Frontend/Layout/Sidebar.html'),'utf8');
+  vm.runInContext(source.slice(source.indexOf('function triggerCleanLogout()'),source.indexOf('  window.addEventListener("click"')),c);
+  c.triggerCleanLogout();
+  assert.equal(sidebarClosed,true);assert.equal(overlays[0].style.display,'none');assert.equal(c.document.getElementById('loginOverlay').style.display,'flex');assert.equal(c.currentEmployee,null);assert.equal(refreshed,true);
+});
+test('bulk label backend deduplicates codes and validates both groups before generating',()=>{
+  const c=vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(root,'Backend/Label.js'),'utf8'),c);
+  c.getYourFindsItemsForLabelReprint=()=>({items:[{code:'A',labelType:'COMPLETED'},{code:'B',labelType:'INCOMPLETE'}]});
+  const calls=[];c.createYourFindsReprintPDFByCodes=(codes,type)=>{calls.push(type);return {success:true,labelCount:codes.length,fileUrl:'https://example.com/'+type};};
+  assert.throws(()=>c.createYourFindsReprintPDFByGroups(['A'],['missing']),/no longer available/);assert.equal(calls.length,0);
+  const result=c.createYourFindsReprintPDFByGroups(['A','A'],[' B ']);
+  assert.equal(result.labelCount,2);assert.equal(result.files.length,2);assert.equal(result.files[1].labelType,'INCOMPLETE');
 });
