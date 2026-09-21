@@ -120,8 +120,9 @@
       <h5 id="inventorySummaryTitle" class="fw-bold mb-0"></h5>
       <button type="button" class="btn-close" aria-label="Close summary" onclick="closePhase8Modal('inventorySummaryModal')"></button>
     </div>
+    <div id="inventorySummaryCategoryCounts" class="row g-2 mb-3"></div>
     <div id="inventorySummaryCount" class="small text-muted mb-3"></div>
-    <div class="table-responsive" style="overflow:auto;"><table class="table align-middle"><thead><tr><th>Code</th><th>Product</th><th>Category</th><th class="text-end">Stock</th><th>Status</th><th></th></tr></thead><tbody id="inventorySummaryBody"></tbody></table></div>
+    <div class="table-responsive" style="overflow:auto;"><table class="table align-middle"><thead><tr><th data-summary-sort="category" aria-sort="none"><button type="button" class="btn btn-link p-0 text-reset fw-semibold text-decoration-none text-nowrap" onclick="sortInventorySummary('category')">Category <span class="summary-sort-marker" aria-hidden="true">↕</span></button></th><th data-summary-sort="name" aria-sort="none"><button type="button" class="btn btn-link p-0 text-reset fw-semibold text-decoration-none text-nowrap" onclick="sortInventorySummary('name')">Product / Size <span class="summary-sort-marker" aria-hidden="true">↕</span></button></th><th data-summary-sort="stock" aria-sort="none"><button type="button" class="btn btn-link p-0 text-reset fw-semibold text-decoration-none text-nowrap" onclick="sortInventorySummary('stock')">Stock <span class="summary-sort-marker" aria-hidden="true">↕</span></button></th><th data-summary-sort="status" aria-sort="none"><button type="button" class="btn btn-link p-0 text-reset fw-semibold text-decoration-none text-nowrap" onclick="sortInventorySummary('status')">Status <span class="summary-sort-marker" aria-hidden="true">↕</span></button></th></tr></thead><tbody id="inventorySummaryBody"></tbody></table></div>
   </div>
 </div>
 <dialog id="inventoryImageViewer" style="border:0;border-radius:16px;max-width:92vw;padding:20px;">
@@ -139,6 +140,8 @@
 <script>
 var inventoryPageData = [];
 var inventorySort = { key: 'name', direction: 1 };
+var inventorySummaryKind = 'products';
+var inventorySummarySort = { key: 'category', direction: 1 };
 function inventoryIsManager() {
   return typeof currentEmployee !== 'undefined' && currentEmployee &&
     currentEmployee.accessLevel !== null && currentEmployee.accessLevel !== '' &&
@@ -171,29 +174,83 @@ function getFilteredInventoryItems() {
       [item.code, item.name, item.category, item.size].join(' ').toLowerCase().includes(search);
   });
 }
+function inventorySummaryGroupKey(item) {
+  const category = String(item.category || 'OTHERS').trim().toUpperCase();
+  const name = String(category === 'YOURFINDS' ? (item.size || 'Unspecified size') : (item.name || 'Unnamed item')).trim().replace(/\s+/g, ' ');
+  return JSON.stringify([category, name.toUpperCase()]);
+}
+function buildInventorySummaryGroups(items) {
+  const groups = new Map();
+  items.forEach(function(item) {
+    const key = inventorySummaryGroupKey(item);
+    const category = String(item.category || 'OTHERS').trim().toUpperCase();
+    if (!groups.has(key)) groups.set(key, {
+      key:key, category:category,
+      name:String(category === 'YOURFINDS' ? (item.size || 'Unspecified size') : (item.name || 'Unnamed item')).trim().replace(/\s+/g, ' '),
+      stock:0, lowStockAt:0
+    });
+    const group = groups.get(key);
+    // Count physical units, including unfinished/inactive stock, but not returns.
+    if (String(item.status || '').trim().toUpperCase() !== 'RETURNED') {
+      group.stock += Math.max(0, Number(item.stock) || 0);
+    }
+    group.lowStockAt = Math.max(group.lowStockAt, Number(item.lowStockAt) || 0);
+  });
+  return Array.from(groups.values()).map(function(group) {
+    group.status = group.stock === 0 ? 'SOLD OUT' :
+      (group.category === 'YOURFINDS' ? group.stock < 5 : group.lowStockAt > 0 && group.stock <= group.lowStockAt) ? 'LOW STOCK' : 'IN STOCK';
+    return group;
+  });
+}
 function getInventorySummaryItems(kind) {
-  return getFilteredInventoryItems().filter(function(item) {
-    if (kind === 'stock') return Number(item.stock) > 0;
-    if (kind === 'low') return getInventoryDisplayStatus(item) === 'LOW STOCK';
-    if (kind === 'sold') return getInventoryDisplayStatus(item) === 'SOLD OUT';
+  // Match search/category against individual records, then show the whole group.
+  // Searching one barcode must not turn a well-stocked size into a low-stock size.
+  const matchingKeys = new Set(getFilteredInventoryItems().map(inventorySummaryGroupKey));
+  return buildInventorySummaryGroups(inventoryPageData).filter(function(group) {
+    if (!matchingKeys.has(group.key)) return false;
+    if (kind === 'stock') return group.stock > 0;
+    if (kind === 'low') return group.status === 'LOW STOCK';
+    if (kind === 'sold') return group.status === 'SOLD OUT';
     return true;
   });
 }
-function openInventorySummary(kind) {
-  const items = getInventorySummaryItems(kind);
-  const titles = {products:'Total Products',stock:'Total Stock',low:'Low Stock',sold:'Sold Out'};
-  document.getElementById('inventorySummaryTitle').textContent = titles[kind] || 'Inventory';
-  document.getElementById('inventorySummaryCount').textContent = items.length + ' product(s) · ' + items.reduce((sum,item)=>sum+(Number(item.stock)||0),0) + ' units';
-  const body = document.getElementById('inventorySummaryBody'); body.innerHTML = '';
-  if (!items.length) body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No matching items.</td></tr>';
-  items.forEach(function(item) {
-    const row = document.createElement('tr');
-    row.innerHTML = `<td class="font-monospace small">${escapeInventoryHtml(item.code)}</td><td>${escapeInventoryHtml(item.name||'Unnamed item')}</td><td>${escapeInventoryHtml(item.category)}</td><td class="text-end">${Number(item.stock)||0}</td><td>${buildInventoryStatusBadge(getInventoryDisplayStatus(item))}</td><td></td>`;
-    const view = document.createElement('button');view.type='button';view.className='btn btn-sm btn-outline-secondary';view.textContent='View';
-    view.addEventListener('click',function(){closePhase8Modal('inventorySummaryModal');openInventoryDetailsPhase8(item.code);});
-    row.lastElementChild.appendChild(view);body.appendChild(row);
+function sortInventorySummary(key) {
+  if (!['category','name','stock','status'].includes(key)) return;
+  inventorySummarySort.direction = inventorySummarySort.key === key ? -inventorySummarySort.direction : 1;
+  inventorySummarySort.key = key;
+  renderInventorySummary();
+}
+function sortInventorySummaryGroups(items) {
+  return items.slice().sort(function(a,b) {
+    const key = inventorySummarySort.key;
+    const comparison = key === 'stock' ? a.stock - b.stock : String(a[key]).localeCompare(String(b[key]), undefined, {numeric:true,sensitivity:'base'});
+    return comparison * inventorySummarySort.direction || a.key.localeCompare(b.key, undefined, {numeric:true});
   });
+}
+function openInventorySummary(kind) {
+  inventorySummaryKind = kind;
+  renderInventorySummary();
   document.getElementById('inventorySummaryModal').style.display='flex';
+}
+function renderInventorySummary() {
+  const items = sortInventorySummaryGroups(getInventorySummaryItems(inventorySummaryKind));
+  const titles = {products:'Total Products',stock:'Total Stock',low:'Low Stock',sold:'Sold Out'};
+  document.getElementById('inventorySummaryTitle').textContent = titles[inventorySummaryKind] || 'Inventory';
+  document.getElementById('inventorySummaryCount').textContent = items.length + ' product / size group(s) · ' + items.reduce((sum,item)=>sum+item.stock,0) + ' units';
+  document.getElementById('inventorySummaryCategoryCounts').innerHTML = ['PINS','OTHERS','YOURFINDS'].map(function(category) {
+    const groups = items.filter(item=>item.category === category);
+    const units = groups.reduce((sum,item)=>sum+item.stock,0);
+    const label = category === 'YOURFINDS' ? 'YourFinds' : category === 'OTHERS' ? 'Others' : 'PINS';
+    return `<div class="col-sm-4"><div class="border rounded p-3 h-100"><div class="small text-muted">${label}</div><strong class="fs-5">${units} units</strong><div class="small text-muted">${groups.length} ${category==='YOURFINDS'?'sizes':'products'}</div></div></div>`;
+  }).join('');
+  document.querySelectorAll('[data-summary-sort]').forEach(function(header) {
+    const selected = header.dataset.summarySort === inventorySummarySort.key;
+    header.setAttribute('aria-sort', selected ? (inventorySummarySort.direction === 1 ? 'ascending' : 'descending') : 'none');
+    header.querySelector('.summary-sort-marker').textContent = selected ? (inventorySummarySort.direction === 1 ? '↑' : '↓') : '↕';
+  });
+  document.getElementById('inventorySummaryBody').innerHTML = items.length ? items.map(function(item) {
+    return `<tr><td>${escapeInventoryHtml(item.category === 'YOURFINDS' ? 'YourFinds' : item.category)}</td><td class="fw-semibold">${escapeInventoryHtml(item.name)}</td><td class="text-end fw-semibold">${item.stock}</td><td>${buildInventoryStatusBadge(item.status)}</td></tr>`;
+  }).join('') : '<tr><td colspan="4" class="text-center text-muted py-4">No matching items.</td></tr>';
 }
 function inventorySortValue(item, key) {
   if (key === 'price' || key === 'stock') return Number(item[key]) || 0;
@@ -208,7 +265,7 @@ function sortInventoryTable(key) {
 }
 function filterInventoryTable() {
   const items = getFilteredInventoryItems();
-  updateInventorySummary(items);
+  updateInventorySummary();
   items.sort(function(a, b) {
     const left = inventorySortValue(a, inventorySort.key), right = inventorySortValue(b, inventorySort.key);
     const comparison = typeof left === 'number' ? left - right : left.localeCompare(right, undefined, {numeric:true, sensitivity:'base'});
@@ -432,69 +489,12 @@ function buildInventoryStatusBadge(status) {
    SUMMARY
 ========================================================== */
 
-function updateInventorySummary(items) {
-
-  let totalStock = 0;
-  let lowStock = 0;
-  let soldOut = 0;
-
-
-  items.forEach(
-    function(item) {
-
-      const stock =
-        Number(item.stock) || 0;
-
-
-      const status =
-        getInventoryDisplayStatus(
-          item
-        );
-
-
-      totalStock += stock;
-
-
-      if (status === "SOLD OUT") {
-
-        soldOut++;
-
-      }
-
-
-      if (status === "LOW STOCK") {
-
-        lowStock++;
-
-      }
-
-    }
-  );
-
-
-  document.getElementById(
-    "inventoryTotalProducts"
-  ).textContent =
-    items.length;
-
-
-  document.getElementById(
-    "inventoryTotalStock"
-  ).textContent =
-    totalStock;
-
-
-  document.getElementById(
-    "inventoryLowStock"
-  ).textContent =
-    lowStock;
-
-
-  document.getElementById(
-    "inventorySoldOut"
-  ).textContent =
-    soldOut;
-
+function updateInventorySummary() {
+  const groups = getInventorySummaryItems('products');
+  document.getElementById('inventoryTotalProducts').textContent = groups.length;
+  document.getElementById('inventoryTotalStock').textContent = groups.reduce((sum,group)=>sum+group.stock,0);
+  document.getElementById('inventoryLowStock').textContent = groups.filter(group=>group.status==='LOW STOCK').length;
+  document.getElementById('inventorySoldOut').textContent = groups.filter(group=>group.status==='SOLD OUT').length;
 }
 
 

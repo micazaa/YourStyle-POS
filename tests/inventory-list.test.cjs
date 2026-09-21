@@ -155,9 +155,9 @@ test('category, search and summary cards use the same matching items',()=>{
   c.inventoryPageData=[{code:'1',name:'Black pin',category:'PINS',stock:1,lowStockAt:2},{code:'2',name:'White pin',category:'PINS',stock:0},{code:'3',name:'Box',category:'YOURFINDS',stock:1}];
   assert.equal(c.getFilteredInventoryItems().length,3);
   c.document.getElementById('inventoryCategoryFilter').value='PINS';
-  assert.deepEqual(Array.from(c.getInventorySummaryItems('products'),x=>x.code),['1','2']);
-  assert.deepEqual(Array.from(c.getInventorySummaryItems('low'),x=>x.code),['1']);
-  assert.deepEqual(Array.from(c.getInventorySummaryItems('sold'),x=>x.code),['2']);
+  assert.deepEqual(Array.from(c.getInventorySummaryItems('products'),x=>x.name),['Black pin','White pin']);
+  assert.deepEqual(Array.from(c.getInventorySummaryItems('low'),x=>x.name),['Black pin']);
+  assert.deepEqual(Array.from(c.getInventorySummaryItems('sold'),x=>x.name),['White pin']);
   c.document.getElementById('inventorySearch').value='white';
   assert.equal(c.getInventorySummaryItems('stock').length,0);
 });
@@ -200,4 +200,45 @@ test('manager authorization rejects expired, revoked and demoted sessions',()=>{
   c.revokeInventoryManagerSession(token);assert.throws(()=>c.verifyInventoryManagerSession_(token),/expired/);
   token=c.verifyEmployee('Test Manager','1234').inventoryManagerToken;
   rows[1][5]=2;assert.throws(()=>c.verifyInventoryManagerSession_(token),/active manager/);assert.equal(entries.size,0);
+});
+test('summary groups YourFinds by size and other products by normalized name within category',()=>{
+  const {context:c}=frontend();
+  const groups=c.buildInventorySummaryGroups([
+    {category:'YOURFINDS',size:'SNE',name:'Shoe',stock:1},
+    {category:'YourFinds',size:' sne ',name:'Bag',stock:3,status:'INCOMPLETE'},
+    {category:'PINS',name:'Black',stock:2},{category:'PINS',name:' black ',stock:3},
+    {category:'OTHERS',name:'Black',stock:10}
+  ]);
+  assert.equal(groups.length,3);
+  assert.equal(groups.find(x=>x.category==='YOURFINDS').stock,4);
+  assert.equal(groups.find(x=>x.category==='PINS').stock,5);
+  assert.equal(groups.find(x=>x.category==='OTHERS').stock,10);
+});
+test('YourFinds aggregate status uses zero, below five, and five-plus boundaries',()=>{
+  const {context:c}=frontend();
+  for(const [stock,status] of [[0,'SOLD OUT'],[1,'LOW STOCK'],[4,'LOW STOCK'],[5,'IN STOCK'],[10,'IN STOCK']]){
+    assert.equal(c.buildInventorySummaryGroups([{category:'YOURFINDS',size:'SNE',stock}])[0].status,status);
+  }
+});
+test('searching one YourFinds barcode retains full size total and category counters',()=>{
+  const {context:c}=frontend();
+  c.inventoryPageData=Array.from({length:5},(_,i)=>({code:'YF'+i,category:'YOURFINDS',size:'SNE',stock:1}));
+  c.document.getElementById('inventorySearch').value='YF0';
+  const group=c.getInventorySummaryItems('products')[0];
+  assert.equal(group.stock,5);assert.equal(group.status,'IN STOCK');
+  c.updateInventorySummary();
+  assert.equal(c.document.getElementById('inventoryTotalProducts').textContent,1);
+  assert.equal(c.document.getElementById('inventoryTotalStock').textContent,5);
+  c.openInventorySummary('products');
+  assert.match(c.document.getElementById('inventorySummaryCategoryCounts').innerHTML,/5 units/);
+  assert.match(c.document.getElementById('inventorySummaryCategoryCounts').innerHTML,/1 sizes/);
+  assert.doesNotMatch(c.document.getElementById('inventorySummaryBody').innerHTML,/YF0|<button/);
+});
+test('group stock sorting is numeric in both directions and ignores returned quantities',()=>{
+  const {context:c}=frontend();
+  const groups=c.buildInventorySummaryGroups([{category:'PINS',name:'A',stock:2},{category:'PINS',name:'B',stock:10},{category:'PINS',name:'A',stock:99,status:'RETURNED'}]);
+  c.inventorySummarySort={key:'stock',direction:1};
+  assert.deepEqual(Array.from(c.sortInventorySummaryGroups(groups),x=>x.stock),[2,10]);
+  c.inventorySummarySort.direction=-1;
+  assert.deepEqual(Array.from(c.sortInventorySummaryGroups(groups),x=>x.stock),[10,2]);
 });
