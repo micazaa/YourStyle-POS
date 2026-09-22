@@ -832,4 +832,9 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 /* Alignment follows each numeric column, including its sort button. */
 .table th.text-end button {text-align:right;}
 .table th.text-center button {text-align:center;}
+
+.sidebar-petty-cash {display:flex;flex-direction:column;gap:4px;margin:0 16px 16px;padding:12px;border-radius:10px;background:#f9edf0;}
+.sidebar-petty-cash strong {font-size:1.05rem;color:#784451;overflow-wrap:anywhere;}
+.inventory-workspace-tabs .active {background:var(--pink-main);color:white;}
+@media(min-width:992px){body.sidebar-collapsed .sidebar-petty-cash {margin:0 4px 12px;padding:6px 2px;text-align:center;}body.sidebar-collapsed .sidebar-petty-cash strong{font-size:.65rem;}}
 </style>

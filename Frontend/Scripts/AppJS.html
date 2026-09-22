@@ -56,6 +56,7 @@
 
     currentCashier = session.currentCashier;
     currentShiftPettyCash = session.currentShiftPettyCash;
+    updateSidebarPettyCash();
     cart = session.cart || [];
 
     document.getElementById("cashierSelect").value = currentCashier;
