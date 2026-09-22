@@ -11,7 +11,7 @@ function frontend() {
   const elements = {};
   function element() {
     return { classList:fakeClassList(), style: {}, dataset: {}, value: '', children: [], innerHTML: '',
-      appendChild(child) { this.children.push(child); }, setAttribute() {}, addEventListener() {},
+      appendChild(child) { this.children.push(child); }, setAttribute() {}, removeAttribute() {}, addEventListener() {},
       querySelector(selector) { if (selector === '.inventory-actions') return this.actions || (this.actions = element()); return null; } };
   }
   const context = vm.createContext({currentEmployee:{accessLevel:1}, document:{body:{classList:fakeClassList()},
@@ -32,7 +32,7 @@ test('search and numeric sorting compose without changing source inventory', () 
   assert.deepEqual(Array.from(c.visible, x=>x.code),['2','1']);
   assert.deepEqual(c.inventoryPageData.map(x=>x.code),['2','1','3']);
 });
-test('cashiers get view only; managers get edit, view, delete and active column', () => {
+test('cashiers can edit and view; only managers get delete and active column', () => {
   const {context:c,elements} = frontend();
   const item={code:'100001',name:'Pin',category:'PINS',stock:2,status:'ACTIVE',price:10};
   c.renderInventoryTable([item]);
@@ -41,7 +41,7 @@ test('cashiers get view only; managers get edit, view, delete and active column'
   assert.match(row.innerHTML,/inventory-active/);
   c.currentEmployee={accessLevel:2};
   c.renderInventoryTable([item]);row=elements.inventoryTableBody.children.at(-1);
-  assert.deepEqual(row.actions.children.map(b=>b.title),['View item']);
+  assert.deepEqual(row.actions.children.map(b=>b.title),['Edit item','View item']);
   assert.doesNotMatch(row.innerHTML,/inventory-active/);
   c.currentEmployee={accessLevel:''};assert.equal(c.inventoryIsManager(),false);
 });
@@ -106,11 +106,11 @@ function yourFindsEditor(manager=false) {
   }}};
   return {c,calls};
 }
-test('cashier Save omits original price, blocks double submits and skips labels',()=>{
+test('cashier Save sends original price but no cost, blocks duplicate submits and skips labels',()=>{
   const {c,calls}=yourFindsEditor();
   c.saveYourFindsDetailsClientPhase8(false);
   c.saveYourFindsDetailsClientPhase8(true);
-  assert.equal(calls.saves,1);assert.equal(Object.hasOwn(calls.payload,'originalPrice'),false);
+  assert.equal(calls.saves,1);assert.equal(calls.payload.originalPrice,45);assert.equal(Object.hasOwn(calls.payload,'costPrice'),false);
   assert.equal(c.document.getElementById('yfEditorSaveLabelBtn').disabled,true);
   calls.success({success:true,code:'YF1',wasCompleted:true});
   assert.equal(calls.prints,0);assert.equal(c.phase8YfSaving,false);
@@ -125,12 +125,12 @@ test('Save & Generate requests a label only after a successful save',()=>{
   calls.success({success:true,code:'YF1',wasCompleted:true});
   assert.equal(calls.prints,1);
 });
-test('original price editor is hidden and blank for cashiers, visible for managers',()=>{
+test('YF original price is editable by both roles; only managers see cost',()=>{
   for (const manager of [false,true]) {
     const {c}=yourFindsEditor(manager);
     c.openYourFindsEditorPhase8();
-    assert.equal(c.document.getElementById('yfEditorOriginalPriceWrap').style.display,manager?'block':'none');
-    assert.equal(c.document.getElementById('yfEditorOriginalPrice').value,manager?45:'');
+    assert.equal(c.document.getElementById('yfEditorOriginalPriceWrap').style.display,'block');assert.equal(c.document.getElementById('yfEditorCostPriceWrap').style.display,manager?'block':'none');
+    assert.equal(c.document.getElementById('yfEditorOriginalPrice').value,45);
   }
 });
 test('backend preserves omitted original price when saving an unfinished item',()=>{
@@ -143,13 +143,13 @@ test('backend preserves omitted original price when saving an unfinished item',(
   const result=c.saveYourFindsItemDetailsPhase8({code:'YF1',description:'Sample',sellingPrice:90});
   assert.equal(result.success,true);assert.equal(saved[3],45);assert.equal(saved[5],'ACTIVE');
 });
-test('item view includes original price only for managers',()=>{
+test('YF view includes original price for both roles and cost only for managers',()=>{
   for(const manager of [false,true]){
     const {c}=yourFindsEditor(manager);
     c.inventoryPageData=[c.phase8SelectedItem];
     c.phase8RenderInventoryPhoto_=()=>{};
     c.openInventoryDetailsPhase8('YF1');
-    assert.equal(c.document.getElementById('invDetailBody').innerHTML.includes('Original Price'),manager);
+    assert.equal(c.document.getElementById('invDetailBody').innerHTML.includes('Original Price'),true);assert.equal(c.document.getElementById('invDetailBody').innerHTML.includes('Cost Price'),manager);
     assert.equal(c.document.getElementById('invYfEditBtn').textContent,'Add Selling Details');
   }
 });
@@ -291,7 +291,7 @@ test('mixed reprint locks duplicate submissions and exposes both download links'
   assert.equal(c.document.getElementById('yourFindsReprintControls').disabled,true);
   success({success:true,labelCount:2,files:[{labelType:'COMPLETED',labelCount:1,fileUrl:'https://example.com/selling'},{labelType:'INCOMPLETE',labelCount:1,fileUrl:'https://example.com/initial'}]});
   const links=c.document.getElementById('yourFindsReprintResult').children;
-  assert.equal(links.length,2);assert.match(links[0].textContent,/40 × 30/);assert.match(links[1].textContent,/30 × 20/);
+  assert.equal(links.length,2);assert.match(links[0].textContent,/Click here to print/);assert.match(links[0].textContent,/40 × 30/);assert.match(links[1].textContent,/30 × 20/);
   assert.equal(c.yourFindsReprintBusy,false);
 });
 test('logout dismisses sidebar and item overlays before displaying login',()=>{
@@ -334,11 +334,91 @@ test('shared PIN authorization accepts only valid manager session credentials',(
   c.revokeInventoryManagerSession(token);
   assert.equal(c.verifyManagerPin({managerToken:token}).success,false);
 });
-test('report actions are in cashier page; sidebar has petty cash and no accept delivery',()=>{
+test('report actions are in cashier page; sidebar displays petty cash and cashier has void/exchange',()=>{
   const sidebar=fs.readFileSync(path.join(root,'Frontend/Layout/Sidebar.html'),'utf8');
   const cashier=fs.readFileSync(path.join(root,'Frontend/Pages/CashierPage.html'),'utf8');
   assert.doesNotMatch(sidebar,/openAcceptDeliveryTypeModal|openManagerReportModal/);
-  assert.match(sidebar,/openPettyCashSidebar/);
+  assert.match(sidebar,/id="sidebarPettyCash"/);
+  assert.doesNotMatch(sidebar,/sidebarCollapseBtn|openPettyCashSidebar|onclick="toggleVoidModal|onclick="openCustomerExchangeModal/);
+  assert.match(cashier,/onclick="toggleVoidModal\(true\)"/);assert.match(cashier,/onclick="openCustomerExchangeModal\(\)"/);
   assert.match(cashier,/id="cashierManagerReportBtn"/);
   assert.match(cashier,/toggleShiftReportModal\(true\)/);
+});
+
+function costHarness() {
+  const {c}=backend();
+  const records={
+    Inventory:[['Image','Name','','Original','Selling','','Code','','','','','','','','','Cost Price'],['photo','YF','M',45,90,'INCOMPLETE','YF1',1,'YOURFINDS','UNIQUE',0,'','','','',30]],
+    'Product Master':[['Code','','','','','','','','','','','Cost Price'],['123456','Pin','PINS',100,70,'STOCK',5,true,'','','',40]]
+  };
+  function sheet(name){return {getName:()=>name,getMaxColumns:()=>26,getLastRow:()=>records[name].length,
+    getRange(row,col,height=1,width=1){return {
+      getValue(){return records[name][row-1]?.[col-1]??'';},
+      getValues(){return Array.from({length:height},(_,i)=>Array.from({length:width},(_,j)=>records[name][row+i-1]?.[col+j-1]??''));},
+      getDisplayValues(){return this.getValues().map(r=>r.map(String));},
+      setValue(value){records[name][row-1][col-1]=value;},
+      setValues(values){values.forEach((r,i)=>r.forEach((v,j)=>records[name][row+i-1][col+j-1]=v));}
+    };},appendRow(row){records[name].push(row);}};}
+  c.SpreadsheetApp={flush(){},getActiveSpreadsheet(){return {getSheetByName:sheet};}};
+  c.verifyInventoryManagerSession_=token=>{if(token!=='manager')throw Error('Manager session invalid');return {success:true,managerName:'Manager'};};
+  c.INV_COL={CODE:7,DESCRIPTION:2,ORIG_PRICE:4,YS_PRICE:5,CATEGORY:9,LOW_STOCK_AT:11,STATUS:6,UPDATED_AT:15,IMAGE:1};
+  c.PRODUCT_COL={PRODUCT_CODE:1,DESCRIPTION:2,UPDATED_AT:10,IMAGE:11};
+  c.INV_IDX={IMAGE:0,DESCRIPTION:1,ORIG_PRICE:3,YS_PRICE:4,STATUS:5,UPDATED_AT:14};
+  c.INVENTORY_STATUS.INCOMPLETE='INCOMPLETE';c.INVENTORY_TYPE.STOCK='STOCK';
+  c.getFullInventory=()=>[{code:'YF1',category:'YOURFINDS'},{code:'123456',category:'PINS'}];
+  c.getProductMaster=()=>[{rowNumber:2,productCode:'123456',description:'Pin',category:'PINS',defaultPrice:100,originalPrice:70,active:true}];
+  c.getYourFindsItemForCompletion=()=>({success:true,item:{code:'YF1',rowNumber:2,status:records.Inventory[1][5],stock:1,size:'M',origPrice:records.Inventory[1][3],imageUrl:'photo'}});
+  return {c,records};
+}
+test('cost reads require a valid manager session; ordinary reads omit costs',()=>{
+  const {c}=costHarness();
+  assert.equal(Object.hasOwn(c.getInventoryForManagementPhase8('')[0],'costPrice'),false);
+  assert.equal(Object.hasOwn(c.getProductMasterForManagementPhase8('')[0],'costPrice'),false);
+  assert.throws(()=>c.getInventoryForManagementPhase8('cashier'),/session invalid/);
+  assert.throws(()=>c.getProductMasterForManagementPhase8('cashier'),/session invalid/);
+  assert.deepEqual(Array.from(c.getInventoryForManagementPhase8('manager'),item=>item.costPrice),[30,40]);
+  assert.equal(c.getProductMasterForManagementPhase8('manager')[0].costPrice,40);
+});
+test('cashier completion saves original and selling prices without PIN, preserves cost',()=>{
+  const {c,records}=costHarness();
+  c.phase8RequireManager_=()=>{throw Error('Unexpected PIN prompt');};
+  c.saveYourFindsItemDetailsPhase8({code:'YF1',description:'YF',originalPrice:55,sellingPrice:95});
+  assert.equal(records.Inventory[1][3],55);assert.equal(records.Inventory[1][4],95);
+  assert.equal(records.Inventory[1][15],30);assert.equal(records.Inventory[1][5],'ACTIVE');
+});
+test('manager saves YF cost independently; forged and negative cost writes fail before changes',()=>{
+  const {c,records}=costHarness();
+  for(const payload of [{costPrice:5,managerPin:'approved'},{costPrice:-1,managerToken:'manager'}]){
+    assert.throws(()=>c.saveYourFindsItemDetailsPhase8({code:'YF1',description:'YF',sellingPrice:100,...payload}),/session invalid|non-negative/);
+    assert.equal(records.Inventory[1][4],90);assert.equal(records.Inventory[1][15],30);
+  }
+  c.saveYourFindsItemDetailsPhase8({code:'YF1',description:'YF',originalPrice:55,sellingPrice:100,costPrice:35,managerToken:'manager'});
+  assert.equal(records.Inventory[1][15],35);assert.equal(records.Inventory[1][3],55);
+});
+test('PINS edit preserves historical original price and omitted cost; manager cost is separate',()=>{
+  const {c,records}=costHarness();
+  const payload={productCode:'123456',description:'Pin',category:'PINS',defaultPrice:110,lowStockAt:5,isNew:false,managerPin:'approved'};
+  c.saveProductMasterPhase8(payload);
+  assert.equal(records['Product Master'][1][3],110);assert.equal(records['Product Master'][1][4],70);assert.equal(records['Product Master'][1][11],40);
+  c.saveProductMasterPhase8({...payload,costPrice:50,managerToken:'manager'});
+  assert.equal(records['Product Master'][1][11],50);
+  assert.throws(()=>c.saveProductMasterPhase8({...payload,costPrice:1}),/session invalid/);
+});
+test('missing legacy costs stay unknown rather than being inferred from original price',()=>{
+  const {c,records}=costHarness();records.Inventory[0][15]='';records['Product Master'][0][11]='';
+  assert.deepEqual(Array.from(c.getInventoryForManagementPhase8('manager'),item=>item.costPrice),[null,null]);
+  assert.equal(c.phase8CostPayload_({costPrice:0,managerToken:'manager'}),0);
+  assert.equal(c.phase8CostPayload_({costPrice:'',managerToken:'manager'}),'');
+  records.Inventory[0][15]='Other field';
+  assert.throws(()=>c.phase8PrepareCostColumn_(c.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Inventory')),/already used/);
+});
+test('inventory workspace remembers Delivery when leaving and returning',()=>{
+  const {context:c}=frontend();const store=new Map();let loaded='';
+  c.document.querySelector=()=>null;c.window={matchMedia:()=>({matches:true}),addEventListener(){}};
+  c.localStorage={getItem:key=>store.get(key)||null,setItem:(key,value)=>store.set(key,value)};
+  c.loadDeliveriesPage=()=>{loaded='delivery';};c.loadInventoryPage=()=>{loaded='inventory';};
+  vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Layout/Sidebar.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
+  c.showPage('deliveriesPage');c.showPage('posPage');c.openInventoryWorkspace();
+  assert.equal(loaded,'delivery');assert.equal(store.get('ys_pos_active_page'),'deliveriesPage');
+  c.showPage('inventoryPage');c.showPage('dashboardPage');c.openInventoryWorkspace();assert.equal(loaded,'inventory');
 });

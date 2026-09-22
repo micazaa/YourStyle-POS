@@ -386,6 +386,65 @@ function generateProductMasterCodePhase8() {
   return generateProductMasterCodePhase8_();
 }
 
+// Cost is an optional appended field: Inventory P (YourFinds), Product Master L
+// (PINS/Others). Keep public A:O / A:K readers free of manager-only costs.
+function phase8CostColumn_(sheet) {
+  return sheet.getName() === SHEETS.INVENTORY ? 16 : 12;
+}
+function phase8PrepareCostColumn_(sheet) {
+  const column = phase8CostColumn_(sheet);
+  if (sheet.getMaxColumns() < column) sheet.insertColumnsAfter(sheet.getMaxColumns(), column - sheet.getMaxColumns());
+  const header = String(sheet.getRange(1, column).getValue() || '').trim();
+  if (header && header.toLowerCase() !== 'cost price') throw new Error('The Cost Price column is already used by another field.');
+  if (!header) sheet.getRange(1, column).setValue('Cost Price');
+  return column;
+}
+function phase8CostPayload_(payload) {
+  if (!Object.prototype.hasOwnProperty.call(payload, 'costPrice')) return undefined;
+  const auth = verifyInventoryManagerSession_(payload.managerToken);
+  if (!auth || !auth.success) throw new Error('Sign in as a manager to change Cost Price.');
+  if (payload.costPrice === '' || payload.costPrice === null) return '';
+  const value = Number(payload.costPrice);
+  if (!Number.isFinite(value) || value < 0) throw new Error('Cost Price must be a valid non-negative amount.');
+  return value;
+}
+function phase8ReadCostMap_(sheet, codeColumn) {
+  const map = {};
+  if (!sheet || sheet.getLastRow() < 2) return map;
+  const column = phase8CostColumn_(sheet);
+  if (sheet.getMaxColumns() < column || String(sheet.getRange(1, column).getValue() || '').trim().toLowerCase() !== 'cost price') return map;
+  const codes = sheet.getRange(2, codeColumn, sheet.getLastRow()-1, 1).getDisplayValues();
+  const values = sheet.getRange(2, column, sheet.getLastRow()-1, 1).getValues();
+  codes.forEach(function(row, i) {
+    const raw = values[i][0], value = Number(raw);
+    map[String(row[0]).trim()] = raw === '' || raw === null || !Number.isFinite(value) || value < 0 ? null : value;
+  });
+  return map;
+}
+function getInventoryForManagementPhase8(managerToken) {
+  if (!managerToken) return getFullInventory();
+  const auth = verifyInventoryManagerSession_(managerToken);
+  if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const uniqueCosts = phase8ReadCostMap_(ss.getSheetByName(SHEETS.INVENTORY), INV_COL.CODE);
+  const stockCosts = phase8ReadCostMap_(ss.getSheetByName(SHEETS.PRODUCT_MASTER), PRODUCT_COL.PRODUCT_CODE);
+  return getFullInventory().map(function(item) {
+    const map = String(item.category).toUpperCase() === 'YOURFINDS' ? uniqueCosts : stockCosts;
+    item.costPrice = Object.prototype.hasOwnProperty.call(map, item.code) ? map[item.code] : null;
+    return item;
+  });
+}
+function getProductMasterForManagementPhase8(managerToken) {
+  if (!managerToken) return getProductMaster();
+  const auth = verifyInventoryManagerSession_(managerToken);
+  if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
+  const map = phase8ReadCostMap_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.PRODUCT_MASTER), PRODUCT_COL.PRODUCT_CODE);
+  return getProductMaster().map(function(product) {
+    product.costPrice = Object.prototype.hasOwnProperty.call(map, product.productCode) ? map[product.productCode] : null;
+    return product;
+  });
+}
+
 function saveProductMasterPhase8(payload) {
   payload = payload || {};
   phase8RequireManager_(payload.managerPin, payload.managerToken);
@@ -400,10 +459,11 @@ function saveProductMasterLockedPhase8_(payload) {
   let code = String(payload.productCode || "").trim();
   const description = String(payload.description || "").trim();
   const category = String(payload.category || "").trim().toUpperCase();
-  const defaultPrice = Number(payload.defaultPrice), originalPrice = Number(payload.originalPrice), lowStockAt = Number(payload.lowStockAt);
+  const defaultPrice = Number(payload.defaultPrice), lowStockAt = Number(payload.lowStockAt);
+  const costPrice = phase8CostPayload_(payload);
   if (!description) throw new Error("Description is required.");
   if (category !== "PINS" && category !== "OTHERS") throw new Error("Category must be PINS or OTHERS.");
-  if (!Number.isFinite(defaultPrice) || defaultPrice < 0 || !Number.isFinite(originalPrice) || originalPrice < 0) throw new Error("Prices must be valid non-negative numbers.");
+  if (!Number.isFinite(defaultPrice) || defaultPrice < 0) throw new Error("Prices must be valid non-negative numbers.");
   if (!Number.isInteger(lowStockAt) || lowStockAt < 0) throw new Error("Low Stock At must be a non-negative whole number.");
   const ss = SpreadsheetApp.getActiveSpreadsheet(); const sheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
   if (!sheet) throw new Error("Product Master sheet not found.");
@@ -411,6 +471,8 @@ function saveProductMasterLockedPhase8_(payload) {
   const existing = code
     ? products.find(function(p){ return String(p.productCode) === code; })
     : null;
+  const originalPrice = existing ? Number(existing.originalPrice) || 0 : 0;
+  if (costPrice !== undefined) phase8PrepareCostColumn_(sheet);
 
   if (!existing && !code) {
     code = generateProductMasterCodePhase8_();
@@ -439,6 +501,7 @@ function saveProductMasterLockedPhase8_(payload) {
   } else {
     sheet.appendRow([code, description, category, defaultPrice, originalPrice, INVENTORY_TYPE.STOCK, lowStockAt, active, now, now, imageUrl]);
   }
+  if (costPrice !== undefined) sheet.getRange(existing ? existing.rowNumber : sheet.getLastRow(), 12).setValue(costPrice);
   // Sync safe metadata into existing STOCK Inventory row if present.
   const inv = ss.getSheetByName(SHEETS.INVENTORY);
   if (inv && inv.getLastRow() >= 2) {
@@ -596,6 +659,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
   payload = payload || {};
   const code = String(payload.code || "").trim();
   const description = String(payload.description || "").trim();
+  const costPrice = phase8CostPayload_(payload);
   const hasOriginalPrice = Object.prototype.hasOwnProperty.call(payload, "originalPrice");
   const requestedOriginalPrice = Number(payload.originalPrice);
   const sellingPrice = Number(payload.sellingPrice);
@@ -625,7 +689,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
     }
 
     const item = itemResult.item;
-    // Cashier saves omit this manager-only field and preserve the stored value.
+    // Omitted original prices retain their stored value.
     const originalPrice = hasOriginalPrice ? requestedOriginalPrice : (Number(item.origPrice) || 0);
     const currentStatus = String(item.status || "").trim().toUpperCase();
     if ([INVENTORY_STATUS.INCOMPLETE, INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].indexOf(currentStatus) === -1) {
@@ -640,7 +704,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
      * Corrections to an already completed item remain manager-controlled.
      */
     const auth = currentStatus === INVENTORY_STATUS.INCOMPLETE
-      ? (hasOriginalPrice ? phase8RequireManager_(payload.managerPin, payload.managerToken) : null)
+      ? null
       : phase8RequireManager_(payload.managerPin, payload.managerToken);
 
     oldImageUrl = String(item.imageUrl || "").trim();
@@ -662,6 +726,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
     const sheet = ss.getSheetByName(SHEETS.INVENTORY);
     if (!sheet) throw new Error("Inventory sheet not found.");
 
+    if (costPrice !== undefined) phase8PrepareCostColumn_(sheet);
     const row = sheet.getRange(item.rowNumber, 1, 1, INVENTORY_COLUMN_COUNT).getValues()[0];
     row[INV_IDX.IMAGE] = finalImageUrl;
     row[INV_IDX.DESCRIPTION] = description;
@@ -671,7 +736,8 @@ function saveYourFindsItemDetailsPhase8(payload) {
       ? INVENTORY_STATUS.ACTIVE
       : currentStatus;
     row[INV_IDX.UPDATED_AT] = new Date();
-    sheet.getRange(item.rowNumber, 1, 1, INVENTORY_COLUMN_COUNT).setValues([row]);
+    if (costPrice !== undefined) row.push(costPrice);
+    sheet.getRange(item.rowNumber, 1, 1, row.length).setValues([row]);
     inventorySaved = true;
     SpreadsheetApp.flush();
 
