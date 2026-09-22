@@ -11,11 +11,7 @@
           <button id="invDetailPhotoButton" type="button" class="btn p-0 w-100" style="display:none;" aria-label="View full product image" onclick="openInventoryImageViewer(phase8SelectedItem)"><img id="invDetailPhoto" alt="Inventory photo" style="width:100%;height:220px;object-fit:contain;display:none;"></button>
           <div id="invDetailPhotoEmpty" class="text-muted py-5">No photo uploaded</div>
         </div>
-        <div class="d-flex gap-2 mt-2">
-          <button class="btn btn-sm btn-outline-primary flex-fill" onclick="chooseInventoryPhotoPhase8()">Upload / Change Photo</button>
-          <button id="invRemovePhotoBtn" class="btn btn-sm btn-outline-danger" onclick="removeInventoryPhotoClientPhase8()">Remove</button>
-        </div>
-        <input id="invPhotoInput" type="file" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="uploadInventoryPhotoPhase8(this)">
+
       </div>
       <div class="col-md-8"><div id="invDetailBody"></div></div>
     </div>
@@ -64,6 +60,7 @@
             <textarea id="yfEditorDescription" class="form-control" rows="3" maxlength="120" placeholder="Describe the item for POS and the completed sticker"></textarea>
             <div class="form-text">Maximum 120 characters.</div>
           </div>
+          <div id="yfEditorCostPriceWrap" class="col-md-6" style="display:none;"><label class="form-label">Cost Price</label><div class="input-group"><span class="input-group-text">₱</span><input id="yfEditorCostPrice" type="number" min="0" step="0.01" class="form-control" placeholder="Not recorded"></div></div>
           <div id="yfEditorOriginalPriceWrap" class="col-md-6" style="display:none;">
             <label class="form-label">Original Price</label>
             <div class="input-group"><span class="input-group-text">₱</span><input id="yfEditorOriginalPrice" type="number" min="0" step="0.01" class="form-control"></div>
@@ -151,7 +148,7 @@
     <div class="col-md-7"><label class="form-label">Product Code</label><input id="pmCode" class="form-control font-monospace" placeholder="Generating..." readonly></div>
     <div class="col-md-5"><label class="form-label">Category</label><select id="pmCategory" class="form-select"><option>PINS</option><option>OTHERS</option></select></div>
     <div class="col-12"><label class="form-label">Description <span class="text-danger">*</span></label><textarea id="pmDescription" class="form-control" rows="3"></textarea></div>
-    <div class="col-md-6"><label class="form-label">Original Price</label><div class="input-group"><span class="input-group-text">₱</span><input id="pmOrig" type="number" min="0" step="0.01" class="form-control"></div></div>
+    <div id="pmCostWrap" class="col-md-6" style="display:none;"><label class="form-label">Cost Price</label><div class="input-group"><span class="input-group-text">₱</span><input id="pmCost" type="number" min="0" step="0.01" class="form-control"></div></div>
     <div class="col-md-6"><label class="form-label">Selling Price <span class="text-danger">*</span></label><div class="input-group"><span class="input-group-text">₱</span><input id="pmPrice" type="number" min="0" step="0.01" class="form-control"></div></div>
     <div class="col-md-6"><label class="form-label">Low Stock At</label><input id="pmLow" type="number" min="0" step="1" class="form-control"></div>
    </div></div>
@@ -196,7 +193,7 @@ function openInventoryDetailsPhase8(code){
  const status=String(item.status||'').toUpperCase(); const unique=String(item.inventoryType||'').toUpperCase()==='UNIQUE'; const yourFinds=unique&&String(item.category||'').toUpperCase()==='YOURFINDS'; const incomplete=yourFinds&&status==='INCOMPLETE'; const completed=yourFinds&&!incomplete&&status!=='RETURNED'&&Number(item.stock)>0; const editable=incomplete||completed;
  document.getElementById('invDetailTitle').textContent=item.name||(incomplete?'YourFinds Item':'Inventory Item'); document.getElementById('invDetailCode').textContent=item.code;
  const isPins=String(item.category||'').trim().toUpperCase()==='PINS';
- const display=getInventoryDisplayStatus(item); document.getElementById('invDetailBody').innerHTML=`<div class="border rounded p-3 mb-3"><div class="small text-muted">Current Stock</div><div class="fs-3 fw-bold">${Number(item.stock)||0}</div><div>${buildInventoryStatusBadge(display)}</div></div><div class="row g-3"><div class="col-6"><b>Category</b><br>${escapeInventoryHtml(item.category)}</div><div class="col-6"><b>Type</b><br>${escapeInventoryHtml(item.inventoryType)}</div>${isPins?'':`<div class="col-6"><b>Size</b><br>${escapeInventoryHtml(item.size||'—')}</div>`}<div class="col-6"><b>Selling Price</b><br>₱${(Number(item.price)||0).toFixed(2)}</div>${inventoryIsManager()?`<div class="col-6"><b>Original Price</b><br>₱${(Number(item.origPrice)||0).toFixed(2)}</div>`:''}${isPins?'':`<div class="col-6"><b>Delivered</b><br>${escapeInventoryHtml(item.dateDelivered||'—')}</div>`}${isPins?'':`<div class="col-12"><b>Delivery ID</b><br>${escapeInventoryHtml(item.deliveryId||'—')}</div>`}</div>`; phase8RenderInventoryPhoto_(item.imageUrl);
+ const display=getInventoryDisplayStatus(item); document.getElementById('invDetailBody').innerHTML=`<div class="border rounded p-3 mb-3"><div class="small text-muted">Current Stock</div><div class="fs-3 fw-bold">${Number(item.stock)||0}</div><div>${buildInventoryStatusBadge(display)}</div></div><div class="row g-3"><div class="col-6"><b>Category</b><br>${escapeInventoryHtml(item.category)}</div><div class="col-6"><b>Type</b><br>${escapeInventoryHtml(item.inventoryType)}</div>${isPins?'':`<div class="col-6"><b>Size</b><br>${escapeInventoryHtml(item.size||'—')}</div>`}<div class="col-6"><b>Selling Price</b><br>₱${(Number(item.price)||0).toFixed(2)}</div>${yourFinds?`<div class="col-6"><b>Original Price</b><br>₱${(Number(item.origPrice)||0).toFixed(2)}</div>`:''}${inventoryIsManager()?`<div class="col-6"><b>Cost Price</b><br>${inventoryCostText(item.costPrice)}</div>`:''}${isPins?'':`<div class="col-6"><b>Delivered</b><br>${escapeInventoryHtml(item.dateDelivered||'—')}</div>`}${isPins?'':`<div class="col-12"><b>Delivery ID</b><br>${escapeInventoryHtml(item.deliveryId||'—')}</div>`}</div>`; phase8RenderInventoryPhoto_(item.imageUrl);
  document.getElementById('invAdjustBtn').style.display=unique?'none':'inline-block'; document.getElementById('invChangeBtn').style.display=unique?'none':'inline-block';
  const editIcon=document.getElementById('invDetailEditSellingBtn');editIcon.innerHTML=inventoryIcon('edit');editIcon.style.display=completed?'inline-block':'none';
  const editBtn=document.getElementById('invYfEditBtn'); editBtn.style.display=incomplete?'inline-block':'none'; editBtn.textContent=incomplete?'Add Selling Details':'Edit Selling Details';
@@ -214,8 +211,10 @@ function openYourFindsEditorPhase8(){
  document.getElementById('yfEditorCode').value=phase8SelectedItem.code||'';
  document.getElementById('yfEditorSize').value=phase8SelectedItem.size||'';
  document.getElementById('yfEditorDescription').value=phase8SelectedItem.name||'';
- document.getElementById('yfEditorOriginalPriceWrap').style.display=inventoryIsManager()?'block':'none';
- document.getElementById('yfEditorOriginalPrice').value=inventoryIsManager()?(Number(phase8SelectedItem.origPrice)||0):'';
+ document.getElementById('yfEditorCostPriceWrap').style.display=inventoryIsManager()?'block':'none';
+ document.getElementById('yfEditorCostPrice').value=inventoryIsManager()?(phase8SelectedItem.costPrice??''):'';
+ document.getElementById('yfEditorOriginalPriceWrap').style.display='block';
+ document.getElementById('yfEditorOriginalPrice').value=Number(phase8SelectedItem.origPrice)||0;
  document.getElementById('yfEditorSellingPrice').value=Number(phase8SelectedItem.price)||'';
  document.getElementById('yfEditorManagerPin').value='';
  document.getElementById('yfEditorManagerPinWrap').style.display=incomplete||inventoryIsManager()?'none':'block';
@@ -260,11 +259,10 @@ function saveYourFindsDetailsClientPhase8(generateLabel){
  const payload={
    code:phase8SelectedItem.code,description:description,sellingPrice:sellingPrice,...auth,fileName:phase8YfPhotoFileName,dataUrl:phase8YfPhotoDataUrl
  };
- if(inventoryIsManager()){
-   const originalPrice=Number(document.getElementById('yfEditorOriginalPrice').value);
-   if(!Number.isFinite(originalPrice)||originalPrice<0)return showNotificationToast('Enter a valid Original Price.',true);
-   payload.originalPrice=originalPrice;
- }
+ const originalPrice=Number(document.getElementById('yfEditorOriginalPrice').value);
+ if(!Number.isFinite(originalPrice)||originalPrice<0)return showNotificationToast('Enter a valid Original Price.',true);
+ payload.originalPrice=originalPrice;
+ if(inventoryIsManager())payload.costPrice=document.getElementById('yfEditorCostPrice').value;
  setYourFindsSavingPhase8(true,generateLabel);
  google.script.run.withSuccessHandler(function(result){
    setYourFindsSavingPhase8(false);
@@ -313,7 +311,7 @@ function submitChangeItemPhase8(){const auth=phase8ManagerCredentials('Manager P
 function openMovementHistoryPhase8(){ if(!phase8SelectedItem)return; document.getElementById('movementHistoryLabel').textContent=`${phase8SelectedItem.name} · ${phase8SelectedItem.code}`; document.getElementById('movementHistoryBody').innerHTML='<tr><td colspan="8" class="text-center text-muted">Loading...</td></tr>'; document.getElementById('movementHistoryModal').style.display='flex'; google.script.run.withSuccessHandler(r=>{const a=r&&r.movements?r.movements:[];document.getElementById('movementHistoryBody').innerHTML=a.length?a.map(m=>`<tr><td>${escapeInventoryHtml(m.timestamp)}</td><td class="fw-bold">${m.qtyChange>0?'+':''}${m.qtyChange}</td><td>${m.stockBefore}</td><td>${m.stockAfter}</td><td>${escapeInventoryHtml(m.source)}</td><td>${escapeInventoryHtml(m.referenceId)}</td><td>${escapeInventoryHtml(m.employee)}</td><td>${escapeInventoryHtml((m.reason||'')+(m.notes?' · '+m.notes:''))}</td></tr>`).join(''):'<tr><td colspan="8" class="text-center text-muted">No movements found.</td></tr>';}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).getInventoryMovementHistoryByCode(phase8SelectedItem.code); }
 function toggleInventoryStatusPhase8(){ if(!phase8SelectedItem)return; const target=String(phase8SelectedItem.status).toUpperCase()==='ACTIVE'?'INACTIVE':'ACTIVE'; const auth=phase8ManagerCredentials('Manager PIN to change status:');if(!auth)return; google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Status change failed',true);return;}closePhase8Modal('inventoryDetailsModal');showNotificationToast(`Inventory set to ${target}`);loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).setInventoryAdministrativeStatusPhase8({code:phase8SelectedItem.code,status:target,...auth}); }
 function openProductMasterPhase8(){document.getElementById('productMasterModal').style.display='flex';loadProductMasterPhase8();}
-function loadProductMasterPhase8(){google.script.run.withSuccessHandler(products=>{window.phase8Products=products||[];renderProductMasterPhase8();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).getProductMaster();}
+function loadProductMasterPhase8(){const readToken=inventoryManagerReadToken();google.script.run.withSuccessHandler(products=>{if(!currentEmployee||readToken!==inventoryManagerReadToken())return;window.phase8Products=products||[];renderProductMasterPhase8();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).getProductMasterForManagementPhase8(readToken);}
 function renderProductMasterPhase8(){const products=window.phase8Products||[];const search=String(document.getElementById('pmSearch')?.value||'').trim().toLowerCase();const cat=String(document.getElementById('pmListCategory')?.value||'').toUpperCase();const stat=String(document.getElementById('pmListStatus')?.value||'').toUpperCase();const a=products.filter(p=>{const active=p.active?'ACTIVE':'INACTIVE';return(!search||`${p.productCode||''} ${p.description||''}`.toLowerCase().includes(search))&&(!cat||String(p.category||'').toUpperCase()===cat)&&(!stat||active===stat);});document.getElementById('productMasterBody').innerHTML=a.length?a.map(p=>`<tr><td class="ps-4 font-monospace">${escapeInventoryHtml(p.productCode)}</td><td class="fw-semibold">${escapeInventoryHtml(p.description)}</td><td>${escapeInventoryHtml(p.category)}</td><td class="text-end">₱${(Number(p.defaultPrice)||0).toFixed(2)}</td><td class="text-center">${Number(p.lowStockAt)||0}</td><td class="text-center"><span class="badge ${p.active?'bg-success':'bg-secondary'}">${p.active?'ACTIVE':'INACTIVE'}</span></td><td class="text-end pe-4"><button class="btn btn-sm btn-outline-secondary" onclick="editProductMasterPhase8('${escapeInventoryHtml(p.productCode)}')">Edit</button></td></tr>`).join(''):'<tr><td colspan="7" class="text-center text-muted py-5">No products found.</td></tr>';}
 function openProductEditorPhase8(){
  if(!inventoryIsManager())return;
@@ -330,40 +328,14 @@ function openProductEditorPhase8(){
 function previewProductPhotoPhase8(input){
  phase8ReadProductPhoto(input,function(url,name){phase8ProductPhotoDataUrl=url;phase8ProductPhotoFileName=name;document.getElementById('pmPhotoPreview').src=url;document.getElementById('pmPhotoPreview').style.display='block';document.getElementById('pmPhotoEmpty').style.display='none';});
 }
-function editProductMasterPhase8(code){if(!inventoryIsManager())return;const p=(window.phase8Products||[]).find(x=>String(x.productCode)===String(code));if(!p)return;document.getElementById('pmCode').dataset.editing='true';document.getElementById('pmEditorTitle').textContent='Edit Product';document.getElementById('pmModeLabel').textContent='Editing '+p.productCode+' — Product Code is locked';document.getElementById('pmCode').value=p.productCode;document.getElementById('pmCode').readOnly=true;document.getElementById('pmDescription').value=p.description;document.getElementById('pmCategory').value=p.category;document.getElementById('pmPrice').value=p.defaultPrice;document.getElementById('pmOrig').value=p.originalPrice;document.getElementById('pmLow').value=p.lowStockAt;if(p.imageUrl){document.getElementById('pmPhotoEmpty').style.display='none';document.getElementById('pmPhotoPreview').src=p.imageUrl;document.getElementById('pmPhotoPreview').style.display='block';}document.getElementById('productEditorModal').style.display='flex';}
-function clearProductMasterFormPhase8(){document.getElementById('pmCode').dataset.editing='false';document.getElementById('pmModeLabel').textContent='Create a PINS or OTHERS product';['pmCode','pmDescription','pmPrice','pmOrig','pmLow'].forEach(id=>document.getElementById(id).value='');document.getElementById('pmPhotoEmpty').style.display='block';document.getElementById('pmPhoto').value='';document.getElementById('pmPhotoPreview').removeAttribute('src');document.getElementById('pmPhotoPreview').style.display='none';phase8ProductPhotoDataUrl='';phase8ProductPhotoFileName='';document.getElementById('pmCode').readOnly=true;document.getElementById('pmCategory').value='PINS';}
-function saveProductMasterPhase8Client(){if(!inventoryIsManager())return;const auth=phase8ManagerCredentials('Manager PIN to save this product:');if(!auth)return;google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Save failed',true);return;}showNotificationToast(`Product ${r.productCode} saved`);closePhase8Modal('productEditorModal');clearProductMasterFormPhase8();loadProductMasterPhase8();loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).saveProductMasterPhase8({...auth,isNew:document.getElementById('pmCode').dataset.editing!=='true',productCode:document.getElementById('pmCode').value,description:document.getElementById('pmDescription').value,category:document.getElementById('pmCategory').value,defaultPrice:Number(document.getElementById('pmPrice').value),originalPrice:Number(document.getElementById('pmOrig').value),lowStockAt:Number(document.getElementById('pmLow').value),imageDataUrl:phase8ProductPhotoDataUrl,imageFileName:phase8ProductPhotoFileName});}
+function editProductMasterPhase8(code){const p=(window.phase8Products||[]).find(x=>String(x.productCode)===String(code));if(!p)return;document.getElementById('pmCode').dataset.editing='true';document.getElementById('pmEditorTitle').textContent='Edit Product';document.getElementById('pmModeLabel').textContent='Editing '+p.productCode+' — Product Code is locked';document.getElementById('pmCode').value=p.productCode;document.getElementById('pmCode').readOnly=true;document.getElementById('pmDescription').value=p.description;document.getElementById('pmCategory').value=p.category;document.getElementById('pmPrice').value=p.defaultPrice;document.getElementById('pmCost').value=inventoryIsManager()?(p.costPrice??''):'';document.getElementById('pmCostWrap').style.display=inventoryIsManager()?'block':'none';document.getElementById('pmLow').value=p.lowStockAt;if(p.imageUrl){document.getElementById('pmPhotoEmpty').style.display='none';document.getElementById('pmPhotoPreview').src=p.imageUrl;document.getElementById('pmPhotoPreview').style.display='block';}document.getElementById('productEditorModal').style.display='flex';}
+function clearProductMasterFormPhase8(){document.getElementById('pmCostWrap').style.display=inventoryIsManager()?'block':'none';document.getElementById('pmCode').dataset.editing='false';document.getElementById('pmModeLabel').textContent='Create a PINS or OTHERS product';['pmCode','pmDescription','pmPrice','pmCost','pmLow'].forEach(id=>document.getElementById(id).value='');document.getElementById('pmPhotoEmpty').style.display='block';document.getElementById('pmPhoto').value='';document.getElementById('pmPhotoPreview').removeAttribute('src');document.getElementById('pmPhotoPreview').style.display='none';phase8ProductPhotoDataUrl='';phase8ProductPhotoFileName='';document.getElementById('pmCode').readOnly=true;document.getElementById('pmCategory').value='PINS';}
+function saveProductMasterPhase8Client(){if(!inventoryIsManager()&&document.getElementById('pmCode').dataset.editing!=='true')return;const auth=phase8ManagerCredentials('Manager PIN to save this product:');if(!auth)return;google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Save failed',true);return;}showNotificationToast(`Product ${r.productCode} saved`);closePhase8Modal('productEditorModal');clearProductMasterFormPhase8();loadProductMasterPhase8();loadInventoryPage();}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).saveProductMasterPhase8({...auth,isNew:document.getElementById('pmCode').dataset.editing!=='true',productCode:document.getElementById('pmCode').value,description:document.getElementById('pmDescription').value,category:document.getElementById('pmCategory').value,defaultPrice:Number(document.getElementById('pmPrice').value),...(inventoryIsManager()?{costPrice:document.getElementById('pmCost').value}:{}),lowStockAt:Number(document.getElementById('pmLow').value),imageDataUrl:phase8ProductPhotoDataUrl,imageFileName:phase8ProductPhotoFileName});}
 function phase8RenderInventoryPhoto_(url){
-  const img=document.getElementById('invDetailPhoto'), empty=document.getElementById('invDetailPhotoEmpty'), remove=document.getElementById('invRemovePhotoBtn');
-  const value=String(url||'').trim();
-  const completedYourFinds=phase8SelectedItem&&String(phase8SelectedItem.category||'').toUpperCase()==='YOURFINDS'&&String(phase8SelectedItem.inventoryType||'').toUpperCase()==='UNIQUE'&&String(phase8SelectedItem.status||'').toUpperCase()!=='INCOMPLETE';
-  document.getElementById('invDetailPhotoButton').style.display=value?'block':'none';
-  if(value){img.src=value;img.style.display='block';empty.style.display='none';remove.style.display=completedYourFinds?'none':'inline-block';}
-  else{img.removeAttribute('src');img.style.display='none';empty.style.display='block';remove.style.display='none';}
+ const img=document.getElementById('invDetailPhoto'), empty=document.getElementById('invDetailPhotoEmpty');
+ const value=String(url||'').trim();
+ document.getElementById('invDetailPhotoButton').style.display=value?'block':'none';
+ if(value){img.src=value;img.style.display='block';empty.style.display='none';}
+ else{img.removeAttribute('src');img.style.display='none';empty.style.display='block';}
 }
-function chooseInventoryPhotoPhase8(){const input=document.getElementById('invPhotoInput');if(input){input.value='';input.click();}}
-function uploadInventoryPhotoPhase8(input){
-  if(!phase8SelectedItem||!input.files||!input.files[0])return;
-  const file=input.files[0];
-  if(file.size>5*1024*1024){showNotificationToast('Image must be 5 MB or smaller.',true);return;}
-  const auth=phase8ManagerCredentials('Manager PIN to upload/change photo:');if(!auth)return;
-  const reader=new FileReader();
-  reader.onload=function(){
-    showNotificationToast('Uploading photo...');
-    google.script.run.withSuccessHandler(function(r){
-      if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Photo upload failed.',true);return;}
-      phase8SelectedItem.imageUrl=r.imageUrl; phase8RenderInventoryPhoto_(r.imageUrl); showNotificationToast('Photo saved.'); loadInventoryPage();
-    }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).saveInventoryPhotoPhase8({code:phase8SelectedItem.code,fileName:file.name,dataUrl:reader.result,...auth});
-  };
-  reader.readAsDataURL(file);
-}
-function removeInventoryPhotoClientPhase8(){
-  if(!phase8SelectedItem)return;
-  const auth=phase8ManagerCredentials('Manager PIN to remove photo:');if(!auth)return;
-  google.script.run.withSuccessHandler(function(r){
-    if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Unable to remove photo.',true);return;}
-    phase8SelectedItem.imageUrl=''; phase8RenderInventoryPhoto_(''); showNotificationToast('Photo removed.'); loadInventoryPage();
-  }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).removeInventoryPhotoPhase8({code:phase8SelectedItem.code,...auth});
-}
-
 </script>

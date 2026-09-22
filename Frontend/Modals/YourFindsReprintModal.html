@@ -132,7 +132,7 @@ function printSelectedYourFindsReprintLabels(){
    box.innerHTML='';
    (result.files||[]).forEach(function(file){
      const link=document.createElement('a');link.href=file.downloadUrl||file.fileUrl;link.target='_blank';link.rel='noopener';link.className='d-block alert-link py-1';
-     link.textContent=(file.labelType==='INCOMPLETE'?'Initial labels · 30 × 20 mm':'Selling labels · 40 × 30 mm')+' ('+file.labelCount+')';box.appendChild(link);
+     link.textContent='Click here to print — '+(file.labelType==='INCOMPLETE'?'Initial labels · 30 × 20 mm':'Selling labels · 40 × 30 mm')+' ('+file.labelCount+')';box.appendChild(link);
    });
    box.style.display='block';showNotificationToast(result.labelCount+' labels ready. Open the PDFs below.');
  }).withFailureHandler(function(error){setYourFindsReprintBusy(false);showNotificationToast(error.message||String(error),true);}).createYourFindsReprintPDFByGroups(groups.COMPLETED,groups.INCOMPLETE);
