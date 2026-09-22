@@ -9,7 +9,7 @@
    <div class="px-4 py-3 border-bottom flex-shrink-0">
     <div class="row g-2">
      <div class="col-md-6"><input id="yourFindsReprintSearch" type="search" class="form-control" aria-label="Search labels" placeholder="Search code, item, size, or delivery..." oninput="renderYourFindsReprintItems()"></div>
-     <div class="col-md-3"><select id="yourFindsReprintType" class="form-select" aria-label="Label type" onchange="changeYourFindsReprintType()"><option value="ALL">All Labels</option><option value="COMPLETED">Selling · 40 × 30 mm</option><option value="INCOMPLETE">Initial · 30 × 20 mm</option></select></div>
+     <div class="col-md-3"><select id="yourFindsReprintType" class="form-select" aria-label="Label type" onchange="changeYourFindsReprintType()"><option value="ALL">All Labels</option><option value="COMPLETED">Ready · 40 × 30 mm</option><option value="INCOMPLETE">Drafted · 30 × 20 mm</option></select></div>
      <div class="col-md-3"><select id="yourFindsReprintDeliveryFilter" class="form-select" aria-label="Delivery" onchange="renderYourFindsReprintItems()"><option value="">All Deliveries</option></select></div>
     </div>
     <div class="d-flex justify-content-between align-items-center mt-3 gap-2"><span id="yourFindsReprintVisibleCount" class="small text-muted">0 labels</span><button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearYourFindsReprintSelection()">Clear Selection</button></div>
