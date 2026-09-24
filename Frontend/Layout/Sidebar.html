@@ -1,7 +1,7 @@
 <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
-<aside id="appSidebar" class="app-sidebar" style="display:none;" aria-label="Main navigation">
+<aside id="appSidebar" class="app-sidebar" style="display:none;" aria-label="Main navigation; press Enter or Space to expand or collapse" tabindex="0" onclick="if(!event.target.closest('button, a, input, select'))toggleSidebar()" onkeydown="if(event.target===this &amp;&amp; (event.key==='Enter'||event.key===' ')){event.preventDefault();toggleSidebar()}">
  <div class="sidebar-header"><div class="sidebar-profile"><div id="sidebarAvatar" class="sidebar-avatar">--</div><div class="sidebar-label"><div id="sidebarEmployeeName" class="sidebar-name">Not Logged In</div><div id="sidebarEmployeeRole" class="sidebar-role">Employee</div></div></div></div>
- <div class="sidebar-petty-cash"><span class="sidebar-label small text-muted">Petty cash received this shift</span><strong id="sidebarPettyCash">₱0.00</strong></div>
+ <div class="sidebar-petty-cash"><span class="sidebar-label small text-muted">Petty Cash</span><strong id="sidebarPettyCash">₱0.00</strong></div>
  <nav class="sidebar-menu">
 <button type="button" class="sidebar-item" data-page="dashboardPage" title="Dashboard" aria-label="Dashboard" onclick="navigateSidebar('dashboardPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg><span class="sidebar-label">Dashboard</span></button>
 <button type="button" class="sidebar-item" data-page="posPage" title="Cashier" aria-label="Cashier" onclick="navigateSidebar('posPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 4h2l3 12h11l2-8H6M9 20h1m7 0h1"/></svg><span class="sidebar-label">Cashier</span></button>
@@ -44,6 +44,8 @@ function showPage(pageId){
  if(inventoryWorkspace)localStorage.setItem('ys_pos_inventory_tab',pageId);
  document.querySelectorAll('[data-inventory-tab]').forEach(function(button){const active=button.dataset.inventoryTab===pageId;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
  activateMenu(document.querySelector('.sidebar-item[data-page="'+(inventoryWorkspace?'inventoryPage':pageId)+'"]'));
+ document.getElementById('inventoryWorkspaceNav').hidden=!inventoryWorkspace;
+ if(pageId==='dashboardPage')loadDashboardPage();
  if(pageId==='inventoryPage')loadInventoryPage();
  if(pageId==='deliveriesPage')loadDeliveriesPage();
 }
@@ -78,6 +80,7 @@ function openInventoryWorkspace(){
       localStorage.removeItem("ys_pos_active_page");
       currentCashier = "";
       currentShiftPettyCash = 0;
+      updateSidebarPettyCash();
       cart = [];
       document.getElementById("cashierSelect").value = "";
       document.getElementById("cashierPin").value = "";

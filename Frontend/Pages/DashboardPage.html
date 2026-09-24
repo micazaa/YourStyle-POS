@@ -1,17 +1,605 @@
-<div id="dashboardPage" style="display:none;">
-  <div class="container-fluid p-4">
-    <div class="card shadow-sm">
-      <div class="card-body text-center py-5">
-        <h2 class="fw-bold">
-          Dashboard
-        </h2>
-        <p class="text-muted">
-          Welcome to YourStyle POS
-        </p>
-        <small class="text-secondary">
-                    Dashboard coming soon...
-                </small>
+<div id="dashboardPage" style="display: none">
+  <div class="container-fluid p-4 dashboard-shell">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+      <div>
+        <p class="dashboard-eyebrow">YOUR STORE AT A GLANCE</p>
+        <h2 id="dashboardGreeting">Welcome to YourStyle</h2>
+        <p id="dashboardEncouragement" class="text-muted">A little progress, together.</p>
+      </div>
+      <button class="btn btn-pink" id="dashboardRefresh" onclick="loadDashboardPage()">
+        ↻ Refresh
+      </button>
+    </div>
+    <div id="dashboardDates" class="dashboard-panel mb-3" hidden>
+      <div class="d-flex flex-wrap align-items-end gap-2">
+        <label
+          >Period<select id="dashboardPreset" class="form-select" onchange="dashboardApplyPreset()">
+            <option>Today</option>
+            <option>Yesterday</option>
+            <option>This Week</option>
+            <option>This Month</option>
+            <option>Custom</option>
+          </select></label
+        >
+        <label
+          >From<input
+            id="dashboardStart"
+            class="form-control"
+            type="date"
+            onchange="document.getElementById('dashboardPreset').value = 'Custom'"
+        /></label>
+        <label
+          >Through<input
+            id="dashboardEnd"
+            class="form-control"
+            type="date"
+            onchange="document.getElementById('dashboardPreset').value = 'Custom'"
+        /></label>
+        <label class="p-2"
+          ><input id="dashboardCompare" type="checkbox" /> Compare preceding period</label
+        ><button class="btn btn-outline-pink" onclick="loadDashboardPage(true)">Apply</button>
       </div>
     </div>
+    <p id="dashboardStatus" role="status" aria-live="polite"></p>
+    <div id="dashboardContent" hidden></div>
   </div>
 </div>
+<dialog id="dashboardTaskDialog" class="dashboard-dialog">
+  <form
+    id="dashboardTaskForm"
+    onsubmit="
+      event.preventDefault();
+      dashboardSaveTask();
+    "
+  >
+    <div class="d-flex justify-content-between gap-3 mb-3">
+      <h4 id="dashboardTaskHeading">New task</h4>
+      <button
+        type="button"
+        class="btn-close"
+        aria-label="Close task editor"
+        onclick="document.getElementById('dashboardTaskDialog').close()"
+      ></button>
+    </div>
+    <label class="w-100 mb-3"
+      >Title<input id="dashboardTaskTitle" class="form-control" required maxlength="120"
+    /></label>
+    <label class="w-100 mb-3"
+      >Instructions<textarea
+        id="dashboardTaskInstructions"
+        class="form-control"
+        maxlength="2000"
+        rows="3"
+      ></textarea>
+    </label>
+    <label class="w-100 mb-3"
+      >Assigned to<select id="dashboardTaskAssignee" class="form-select"></select
+    ></label>
+    <div class="d-flex flex-wrap gap-3 mb-3">
+      <label
+        >Priority<select id="dashboardTaskPriority" class="form-select">
+          <option>Normal</option>
+          <option>High</option>
+        </select></label
+      ><label
+        >Due date (optional)<input id="dashboardTaskDue" type="date" class="form-control" /></label
+      ><label
+        >Status<select id="dashboardTaskStatus" class="form-select">
+          <option>Open</option>
+          <option>In Progress</option>
+          <option>Done</option>
+        </select></label
+      >
+    </div>
+    <p id="dashboardTaskError" role="alert" class="text-danger"></p>
+    <button id="dashboardTaskSave" class="btn btn-pink">Save task</button>
+  </form>
+</dialog>
+<style>
+  .dashboard-shell {
+    max-width: 1500px;
+    margin: auto;
+  }
+  .dashboard-eyebrow {
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    color: #975466;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .dashboard-panel {
+    min-width: 0;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 22px;
+  }
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-bottom: 18px;
+  }
+  .dashboard-metrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .dashboard-metric {
+    font-size: 1.8rem;
+    font-weight: 750;
+    color: #784451;
+  }
+  .dashboard-panel h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 18px;
+  }
+  .dashboard-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 9px 0;
+    border-bottom: 1px solid #f5ecee;
+    overflow-wrap: anywhere;
+  }
+  .dashboard-line > span {
+    min-width: 0;
+  }
+  .dashboard-line strong {
+    flex-shrink: 0;
+  }
+  .dashboard-bar {
+    height: 6px;
+    border-radius: 8px;
+    background: #f8e9ee;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .dashboard-bar span {
+    display: block;
+    height: 100%;
+    background: #d97488;
+  }
+  .dashboard-activity {
+    display: flex;
+    align-items: stretch;
+    gap: 3px;
+    height: 155px;
+    overflow-x: auto;
+    padding: 8px 0;
+  }
+  .dashboard-column {
+    flex: 1;
+    min-width: 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    text-align: center;
+    font-size: 9px;
+  }
+  .dashboard-column i {
+    display: block;
+    background: #e8899b;
+    border-radius: 4px 4px 0 0;
+    min-height: 1px;
+  }
+  .dashboard-column.negative i {
+    background: #9e5365;
+  }
+  .dashboard-column span {
+    min-height: 26px;
+    writing-mode: vertical-rl;
+    margin: 4px auto 0;
+  }
+  .dashboard-task {
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 14px;
+    margin: 10px 0;
+  }
+  .dashboard-task.overdue {
+    border-left: 4px solid #bd5265;
+  }
+  .dashboard-task p {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .dashboard-task h4 {
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+  }
+  .dashboard-dialog {
+    width: min(94vw, 580px);
+    max-height: 90vh;
+    overflow: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 24px;
+  }
+  .dashboard-dialog::backdrop {
+    background: #30212c88;
+  }
+  .dashboard-own {
+    background: #fceef2;
+    border-radius: 8px;
+    padding: 10px;
+  }
+  .dashboard-reminders {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .dashboard-reminders button {
+    flex: 1;
+    min-width: 180px;
+    text-align: left;
+  }
+  .dashboard-subtitle {
+    font-size: 0.8rem;
+    color: #767a85;
+  }
+  .dashboard-panel select {
+    max-width: 100%;
+  }
+  @media (max-width: 767px) {
+    .dashboard-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .dashboard-metrics {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .dashboard-panel {
+      padding: 16px;
+    }
+    .dashboard-metric {
+      font-size: 1.35rem;
+    }
+    .dashboard-shell {
+      padding: 16px !important;
+    }
+    #dashboardDates label {
+      max-width: 100%;
+    }
+  }
+</style>
+<script>
+  var dashboardData = null,
+    dashboardGeneration = 0,
+    dashboardEditingTask = null,
+    dashboardOwner = '',
+    dashboardBusy = false;
+  var dashboardBestSort = 'units',
+    dashboardStyleCategory = 'PINS',
+    dashboardFindsGroup = 'sizes';
+  function dashboardEscape(value) {
+    return String(value == null ? '' : value).replace(
+      /[&<>"']/g,
+      (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+    );
+  }
+  function dashboardMoney(value) {
+    return (Number(value) || 0).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
+  }
+  function clearDashboardState() {
+    dashboardInventoryReminder = '';
+    inventoryIncompleteOnly = false;
+    dashboardGeneration++;
+    dashboardData = null;
+    dashboardOwner = '';
+    dashboardEditingTask = null;
+    dashboardBusy = false;
+    document.getElementById('dashboardTaskSave').disabled = false;
+    document.getElementById('dashboardContent').innerHTML = '';
+    document.getElementById('dashboardContent').hidden = true;
+    document.getElementById('dashboardDates').hidden = true;
+    document.getElementById('dashboardStatus').textContent = '';
+    document.getElementById('dashboardGreeting').textContent = 'Welcome to YourStyle';
+    document.getElementById('dashboardEncouragement').textContent = 'A little progress, together.';
+    document.getElementById('dashboardTaskDialog').close();
+    document.getElementById('dashboardTaskForm').reset();
+    document.getElementById('dashboardTaskAssignee').innerHTML = '';
+    document.getElementById('dashboardTaskError').textContent = '';
+    document.getElementById('dashboardCompare').checked = false;
+    document.getElementById('dashboardPreset').value = 'Today';
+    document.getElementById('dashboardStart').value = '';
+    document.getElementById('dashboardEnd').value = '';
+  }
+  function loadDashboardPage(apply) {
+    if (dashboardBusy) return;
+    const token = currentEmployee && currentEmployee.dashboardToken;
+    if (dashboardOwner !== token) {
+      clearDashboardState();
+      dashboardOwner = token;
+    }
+    const generation = ++dashboardGeneration;
+    document.getElementById('dashboardContent').hidden = true;
+    document.getElementById('dashboardDates').hidden = true;
+    const status = document.getElementById('dashboardStatus');
+    status.textContent = 'Loading your store…';
+    if (!token) {
+      status.textContent = 'Please sign out and sign in again to access the dashboard.';
+      return;
+    }
+    const request = { token: token };
+    if (dashboardData && dashboardData.employee.manager) {
+      if (apply) {
+        request.start = document.getElementById('dashboardStart').value;
+        request.end = document.getElementById('dashboardEnd').value;
+        request.compare = document.getElementById('dashboardCompare').checked;
+      } else if (document.getElementById('dashboardPreset').value !== 'Today') {
+        request.start = dashboardData.period.start;
+        request.end = dashboardData.period.end;
+        request.compare = !!dashboardData.comparison;
+      } else request.compare = document.getElementById('dashboardCompare').checked;
+    }
+    google.script.run
+      .withSuccessHandler(function (data) {
+        if (
+          generation !== dashboardGeneration ||
+          !currentEmployee ||
+          token !== currentEmployee.dashboardToken
+        )
+          return;
+        dashboardData = data;
+        document.getElementById('dashboardDates').hidden = !data.employee.manager;
+        ['dashboardStart', 'dashboardEnd'].forEach(
+          (id) => (document.getElementById(id).max = data.today)
+        );
+        document.getElementById('dashboardStart').value = data.period.start;
+        document.getElementById('dashboardEnd').value = data.period.end;
+        document.getElementById('dashboardGreeting').textContent =
+          (data.hour < 12 ? 'Good morning' : data.hour < 18 ? 'Good afternoon' : 'Good evening') +
+          ', ' +
+          data.employee.firstName;
+        document.getElementById('dashboardEncouragement').textContent = data.analytics.transactions
+          ? data.analytics.transactions +
+            ' completed receipts in this period. Thank you for helping the store!'
+          : 'Ready for the next customer. Every day starts somewhere.';
+        status.textContent =
+          data.period.start +
+          ' – ' +
+          data.period.end +
+          ' · ' +
+          data.timezone +
+          ' · Refreshed ' +
+          data.refreshed;
+        renderDashboard();
+      })
+      .withFailureHandler(function (error) {
+        if (
+          generation !== dashboardGeneration ||
+          !currentEmployee ||
+          token !== currentEmployee.dashboardToken
+        )
+          return;
+        dashboardData = null;
+        document.getElementById('dashboardContent').innerHTML = '';
+        status.textContent = error.message || String(error);
+      })
+      .getDashboard(request);
+  }
+  function dashboardApplyPreset() {
+    if (!dashboardData) return;
+    const preset = document.getElementById('dashboardPreset').value,
+      today = dashboardData.today;
+    const date = new Date(today + 'T00:00:00Z');
+    let start = today,
+      end = today;
+    if (preset === 'Custom') return;
+    if (preset === 'Yesterday') {
+      date.setUTCDate(date.getUTCDate() - 1);
+      start = end = date.toISOString().slice(0, 10);
+    }
+    if (preset === 'This Week') {
+      date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+      start = date.toISOString().slice(0, 10);
+    }
+    if (preset === 'This Month') start = today.slice(0, 8) + '01';
+    document.getElementById('dashboardStart').value = start;
+    document.getElementById('dashboardEnd').value = end;
+    loadDashboardPage(true);
+  }
+  function dashboardProductList(items) {
+    return (
+      items
+        .slice()
+        .sort((a, b) => b[dashboardBestSort] - a[dashboardBestSort] || a.name.localeCompare(b.name))
+        .slice(0, 5)
+        .map(
+          (p) =>
+            '<div class="dashboard-line"><span>' +
+            dashboardEscape(p.name) +
+            (p.category
+              ? ' <small class="text-muted">' + dashboardEscape(p.category) + '</small>'
+              : '') +
+            '</span><span>' +
+            p.units +
+            ' units · <strong>' +
+            dashboardMoney(p.sales) +
+            '</strong></span></div>'
+        )
+        .join('') || '<p class="text-muted">No completed sales in this period.</p>'
+    );
+  }
+  function renderDashboard() {
+    if (!dashboardData) return;
+    const d = dashboardData,
+      a = d.analytics,
+      esc = dashboardEscape;
+    const metrics = [
+      ['Net Sales', dashboardMoney(a.netSales)],
+      ['Units Sold', a.units],
+      ['Transactions', a.transactions],
+      ['Average Transaction Value', dashboardMoney(a.average)],
+    ];
+    const max = Math.max(1, ...a.activity.map((b) => Math.abs(b.sales)));
+    const style = a.products.filter((p) => p.category === dashboardStyleCategory),
+      finds = a.products.filter((p) => p.category === 'YOURFINDS');
+    const totals = (list) =>
+      list.reduce((s, p) => ({ sales: s.sales + p.sales, units: s.units + p.units }), {
+        sales: 0,
+        units: 0,
+      });
+    const ys = totals(style),
+      yf = totals(finds);
+    document.getElementById('dashboardContent').innerHTML = `
+ <div class="dashboard-grid dashboard-metrics">${metrics.map(([label, value]) => `<section class="dashboard-panel"><div class="dashboard-subtitle">${label}</div><div class="dashboard-metric">${value}</div></section>`).join('')}</div>
+ <p class="dashboard-subtitle">Units count positive sold/replacement quantities. Exchange adjustment: <strong>${dashboardMoney(a.exchangeAdjustment)}</strong> (included in Net Sales).</p>
+ ${d.comparison ? `<div class="dashboard-panel mb-3">Compared with ${d.comparison.period.start} – ${d.comparison.period.end}: <strong>${dashboardMoney(d.comparison.change)}</strong> ${d.comparison.percent === null ? '· Percentage unavailable for a zero or negative baseline.' : '(' + d.comparison.percent + '%)'} · Previous net sales ${dashboardMoney(d.comparison.netSales)}</div>` : ''}
+ <div class="dashboard-grid"><section class="dashboard-panel"><h3>Sales activity · ${d.period.start === d.period.end ? 'hourly' : 'daily'}</h3><div class="dashboard-activity" role="img" aria-label="Sales activity; exact amounts available in the data table below">${a.activity.map((b) => `<div class="dashboard-column ${b.sales < 0 ? 'negative' : ''}" title="${esc(b.label)}: ${dashboardMoney(b.sales)}"><i style="height:${(Math.abs(b.sales) / max) * 115}px"></i><span>${esc(b.label)}</span></div>`).join('')}</div><details><summary class="small">View amounts (negative bars are adjustments)</summary>${a.activity.map((b) => `<div class="dashboard-line"><span>${esc(b.label)}</span><strong>${dashboardMoney(b.sales)}</strong></div>`).join('')}</details></section>
+ <section class="dashboard-panel"><h3>Category breakdown</h3>${a.categories.map((c) => `<div class="dashboard-line"><span>${c.name === 'YOURFINDS' ? 'YourFinds' : c.name === 'OTHERS' ? 'Others' : 'PINS'}</span><strong>${dashboardMoney(c.sales)} · ${c.share.toFixed(1)}%</strong></div><div class="dashboard-bar"><span style="width:${c.share}%"></span></div>`).join('')}<small class="text-muted">Shares use positive category totals only; negative adjustments remain in net sales.</small></section></div>
+ <section class="dashboard-panel mb-3"><div class="d-flex justify-content-between gap-2"><h3>Best sellers · top five</h3><label>Rank by <select aria-label="Best seller ranking" onchange="dashboardBestSort=this.value;renderDashboard()"><option value="units" ${dashboardBestSort === 'units' ? 'selected' : ''}>Quantity</option><option value="sales" ${dashboardBestSort === 'sales' ? 'selected' : ''}>Sales</option></select></label></div>${dashboardProductList(a.products)}</section>
+ <div class="dashboard-grid"><section class="dashboard-panel"><div class="d-flex justify-content-between"><h3>YourStyle</h3><select aria-label="YourStyle category" onchange="dashboardStyleCategory=this.value;renderDashboard()"><option ${dashboardStyleCategory === 'PINS' ? 'selected' : ''}>PINS</option><option value="OTHERS" ${dashboardStyleCategory === 'OTHERS' ? 'selected' : ''}>Others</option></select></div><p>${dashboardMoney(ys.sales)} · ${ys.units} units</p>${dashboardProductList(style)}</section>
+ <section class="dashboard-panel"><div class="d-flex justify-content-between"><h3>YourFinds</h3><select aria-label="YourFinds ranking" onchange="dashboardFindsGroup=this.value;renderDashboard()"><option value="sizes" ${dashboardFindsGroup === 'sizes' ? 'selected' : ''}>By size</option><option value="products" ${dashboardFindsGroup === 'products' ? 'selected' : ''}>By product</option></select></div><p>${dashboardMoney(yf.sales)} · ${yf.units} units</p>${dashboardProductList(dashboardFindsGroup === 'sizes' ? a.sizes : finds)}</section></div>
+ <section class="dashboard-panel mb-3"><h3>Inventory reminders <small class="text-muted">· current stock</small></h3><div class="dashboard-reminders">${[
+   ['incomplete', 'YourFinds needing details'],
+   ['low', 'Low-stock groups'],
+   ['sold', 'Sold-out groups'],
+ ]
+   .map(
+     ([key, label]) =>
+       `<button class="btn btn-outline-pink" onclick="openDashboardInventory('${key}')"><strong class="fs-4 d-block">${d.inventory[key]}</strong>${label} →</button>`
+   )
+   .join('')}</div></section>
+ <div class="dashboard-grid"><section class="dashboard-panel"><h3>Cashier leaderboard</h3><p class="dashboard-subtitle">Ranked by net sales. Every shift has different selling opportunities.</p>${a.leaderboard.map((row) => `<div class="dashboard-line ${row.own ? 'dashboard-own' : ''}"><span>${row.rank <= 3 ? ['🥇', '🥈', '🥉'][row.rank - 1] : '#' + row.rank} ${esc(row.name)}${row.own ? ' (you)' : ''}</span><span>${row.sales === undefined ? 'Rank only' : `<strong>${dashboardMoney(row.sales)}</strong><br><small>${row.units} units · ${row.transactions} receipts</small>`}</span></div>`).join('') || '<p class="text-muted">No cashier activity yet.</p>'}</section>
+ <section class="dashboard-panel"><div class="d-flex justify-content-between gap-2"><h3>Store To-Do Board</h3>${d.employee.manager ? '<button class="btn btn-sm btn-pink" onclick="dashboardEditTask()">+ New task</button>' : ''}</div><p class="dashboard-subtitle">Everyone tasks are shared and completed once. Tasks stay here across days.</p>${dashboardTaskBoard()}</section></div>`;
+    document.getElementById('dashboardContent').hidden = false;
+  }
+  function dashboardTaskBoard() {
+    const d = dashboardData,
+      order = { Open: 0, 'In Progress': 1, Done: 2 };
+    const tasks = d.tasks
+      .slice()
+      .sort(
+        (a, b) =>
+          order[a.status] - order[b.status] ||
+          (a.priority === 'High' ? -1 : 1) - (b.priority === 'High' ? -1 : 1) ||
+          (a.due || '9999').localeCompare(b.due || '9999')
+      );
+    function card(t) {
+      const index = d.tasks.indexOf(t),
+        overdue = t.due && t.due < d.today && t.status !== 'Done',
+        assignee = t.assignee
+          ? (
+              d.employees.find((e) => e.id === t.assignee) || {
+                name: t.assignee === d.employee.id ? 'You' : 'Inactive employee',
+              }
+            ).name
+          : 'Everyone';
+      return `<article class="dashboard-task ${overdue ? 'overdue' : ''}"><h4>${dashboardEscape(t.title)}</h4><p class="small mb-2">${dashboardEscape(t.instructions)}</p><p class="dashboard-subtitle">${dashboardEscape(assignee)} · ${dashboardEscape(t.priority)}${t.due ? ' · ' + (overdue ? 'Overdue: ' : 'Due ') + dashboardEscape(t.due) : ''}</p><div class="d-flex flex-wrap gap-2"><select aria-label="Status for ${dashboardEscape(t.title)}" onchange="dashboardChangeStatus(${index},this.value)" ${dashboardBusy ? 'disabled' : ''}>${['Open', 'In Progress', 'Done'].map((s) => `<option ${s === t.status ? 'selected' : ''}>${s}</option>`).join('')}</select>${d.employee.manager ? `<button class="btn btn-sm btn-outline-pink" onclick="dashboardEditTask(${index})">Edit</button><button class="btn btn-sm btn-outline-danger" onclick="dashboardDeleteTask(${index})">Delete</button>` : ''}</div>${t.completedAt ? `<p class="dashboard-subtitle mt-2 mb-0">Completed by ${dashboardEscape(t.completedBy)} · ${dashboardEscape(t.completedAt)}</p>` : ''}</article>`;
+    }
+    return (
+      (tasks
+        .filter((t) => t.status !== 'Done')
+        .map(card)
+        .join('') || '<p class="text-muted">No open tasks. Thank you, team!</p>') +
+      `<details><summary>Completed (${tasks.filter((t) => t.status === 'Done').length})</summary>${tasks
+        .filter((t) => t.status === 'Done')
+        .map(card)
+        .join('')}</details>`
+    );
+  }
+  function dashboardEditTask(index) {
+    if (!dashboardData || !dashboardData.employee.manager) return;
+    dashboardEditingTask = index === undefined ? null : dashboardData.tasks[index];
+    const t = dashboardEditingTask || {
+      title: '',
+      instructions: '',
+      assignee: '',
+      priority: 'Normal',
+      due: '',
+      status: 'Open',
+    };
+    document.getElementById('dashboardTaskHeading').textContent = dashboardEditingTask
+      ? 'Edit task'
+      : 'New task';
+    document.getElementById('dashboardTaskAssignee').innerHTML =
+      '<option value="">Everyone</option>' +
+      dashboardData.employees
+        .map(
+          (e) =>
+            '<option value="' + dashboardEscape(e.id) + '">' + dashboardEscape(e.name) + '</option>'
+        )
+        .join('');
+    if (t.assignee && !dashboardData.employees.some((e) => e.id === t.assignee)) {
+      document.getElementById('dashboardTaskAssignee').innerHTML +=
+        '<option disabled value="' +
+        dashboardEscape(t.assignee) +
+        '">Inactive employee — choose an assignee</option>';
+    }
+    ['title', 'instructions', 'assignee', 'priority', 'due', 'status'].forEach(
+      (k) =>
+        (document.getElementById('dashboardTask' + k[0].toUpperCase() + k.slice(1)).value = t[k])
+    );
+    document.getElementById('dashboardTaskError').textContent = '';
+    document.getElementById('dashboardTaskDialog').showModal();
+  }
+  function dashboardSaveTask() {
+    const task = dashboardEditingTask
+      ? { id: dashboardEditingTask.id, version: dashboardEditingTask.version }
+      : {};
+    ['title', 'instructions', 'assignee', 'priority', 'due', 'status'].forEach(
+      (k) =>
+        (task[k] = document.getElementById('dashboardTask' + k[0].toUpperCase() + k.slice(1)).value)
+    );
+    dashboardMutateTask(task, false);
+  }
+  function dashboardChangeStatus(index, status) {
+    const t = dashboardData.tasks[index];
+    dashboardMutateTask(
+      dashboardData.employee.manager
+        ? { ...t, status: status }
+        : { id: t.id, version: t.version, status: status },
+      false
+    );
+  }
+  function dashboardDeleteTask(index) {
+    const t = dashboardData.tasks[index];
+    if (confirm('Delete task “' + t.title + '”?'))
+      dashboardMutateTask({ id: t.id, version: t.version }, true);
+  }
+  function dashboardMutateTask(task, remove) {
+    if (dashboardBusy) return;
+    dashboardBusy = true;
+    document.getElementById('dashboardTaskSave').disabled = true;
+    const token = currentEmployee && currentEmployee.dashboardToken,
+      generation = dashboardGeneration;
+    google.script.run
+      .withSuccessHandler(function () {
+        if (
+          generation !== dashboardGeneration ||
+          !currentEmployee ||
+          token !== currentEmployee.dashboardToken
+        )
+          return;
+        dashboardBusy = false;
+        document.getElementById('dashboardTaskSave').disabled = false;
+        document.getElementById('dashboardTaskDialog').close();
+        loadDashboardPage();
+      })
+      .withFailureHandler(function (error) {
+        if (
+          generation !== dashboardGeneration ||
+          !currentEmployee ||
+          token !== currentEmployee.dashboardToken
+        )
+          return;
+        dashboardBusy = false;
+        document.getElementById('dashboardTaskSave').disabled = false;
+        if (/session|account|Only managers|today only/i.test(error.message || String(error))) {
+          clearDashboardState();
+          document.getElementById('dashboardStatus').textContent = error.message || String(error);
+          return;
+        }
+        document.getElementById('dashboardTaskError').textContent = error.message || String(error);
+        document.getElementById('dashboardStatus').textContent = error.message || String(error);
+        renderDashboard();
+      })
+      .saveDashboardTask({ token: token, task: task, remove: remove });
+  }
+  function openDashboardInventory(kind) {
+    document.getElementById('inventorySearch').value = '';
+    document.getElementById('inventoryCategoryFilter').value = '';
+    dashboardInventoryReminder = kind;
+    navigateSidebar('inventoryPage');
+  }
+</script>

@@ -1,9 +1,6 @@
 <div id="inventoryPage" style="display:none;">
   <div class="container-fluid px-5 py-4">
-    <div class="btn-group mb-4 inventory-workspace-tabs" role="group" aria-label="Inventory workspace">
-      <button type="button" class="btn btn-outline-pink" data-inventory-tab="inventoryPage" aria-pressed="false" onclick="showPage('inventoryPage')">Inventory</button>
-      <button type="button" class="btn btn-outline-pink" data-inventory-tab="deliveriesPage" aria-pressed="false" onclick="showPage('deliveriesPage')">Delivery</button>
-    </div>
+
 
 
     <!-- =====================================================
@@ -58,6 +55,7 @@
 
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-body d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-pink" onclick="inventoryIncompleteOnly=false;filterInventoryTable()">Show all statuses</button>
         <select id="inventoryCategoryFilter" class="form-select" style="width:180px;" aria-label="Inventory category" onchange="filterInventoryTable()">
           <option value="">All</option><option value="YOURFINDS">YourFinds (YF)</option><option value="PINS">PINS</option><option value="OTHERS">Others</option>
         </select>
@@ -142,6 +140,8 @@
 </style>
 <script>
 var inventoryPageData = [];
+var dashboardInventoryReminder = '';
+var inventoryIncompleteOnly = false;
 var inventorySort = { key: 'name', direction: 1 };
 var inventorySummaryKind = 'products';
 var inventorySummarySort = { key: 'category', direction: 1 };
@@ -157,6 +157,7 @@ function inventoryColumnCount() { return inventoryIsManager() ? 11 : 9; }
 function inventoryManagerReadToken(){return inventoryIsManager()?(currentEmployee.inventoryManagerToken||'expired'):'';}
 function inventoryCostText(value){return value===null||value===undefined||value===''?'—':'₱'+Number(value).toFixed(2);}
 function loadInventoryPage() {
+  inventoryIncompleteOnly = dashboardInventoryReminder === 'incomplete';
   document.getElementById('inventoryAddProductButton').style.display = inventoryIsManager() ? 'inline-block' : 'none';
   document.getElementById('inventoryCostHeading').style.display = inventoryIsManager() ? '' : 'none';
   document.getElementById('inventoryActiveHeading').style.display = inventoryIsManager() ? '' : 'none';
@@ -167,6 +168,8 @@ function loadInventoryPage() {
     if(!currentEmployee || readToken!==inventoryManagerReadToken())return;
     inventoryPageData = Array.isArray(items) ? items : [];
     filterInventoryTable();
+    if(dashboardInventoryReminder==='low'||dashboardInventoryReminder==='sold')openInventorySummary(dashboardInventoryReminder);
+    dashboardInventoryReminder='';
 
   }).withFailureHandler(function(error) {
     inventoryPageData = [];
@@ -178,6 +181,7 @@ function getFilteredInventoryItems() {
   const search = document.getElementById('inventorySearch').value.trim().toLowerCase();
   const category = document.getElementById('inventoryCategoryFilter').value;
   return inventoryPageData.filter(function(item) {
+    if(inventoryIncompleteOnly && !(String(item.category).toUpperCase()==='YOURFINDS' && String(item.status).toUpperCase()==='INCOMPLETE'))return false;
     return (!category || String(item.category || '').trim().toUpperCase() === category) &&
       [item.code, item.name, item.category, item.size].join(' ').toLowerCase().includes(search);
   });
