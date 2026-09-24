@@ -40,10 +40,7 @@
             </button>
           </div>
           <div class="pane-body">
-            <div class="d-flex flex-wrap gap-2 mb-3">
-              <button type="button" class="btn btn-sm btn-outline-danger" onclick="toggleVoidModal(true)">Void</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openCustomerExchangeModal()">Exchange</button>
-            </div>
+
 
             <div class="mb-4">
               <label class="form-label">Scan Barcode Here</label>
@@ -73,6 +70,10 @@
               </div>
               <button type="button" class="btn btn-outline-pink btn-sm w-100" onclick="addCustomItem()">Add Custom Item</button>
             </div>
+          </div>
+          <div class="cashier-actions-footer">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="toggleVoidModal(true)"><span aria-hidden="true">⊘</span> Void</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openCustomerExchangeModal()"><span aria-hidden="true">⇄</span> Exchange</button>
           </div>
         </div>
       </div>

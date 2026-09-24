@@ -42,6 +42,7 @@ function verifyEmployee(employeeName, pin) {
 
       return {
         success: true,
+        dashboardToken: createDashboardSession_(employeeId, fullName),
         employeeId: employeeId,
         fullName: fullName,
         role: role,

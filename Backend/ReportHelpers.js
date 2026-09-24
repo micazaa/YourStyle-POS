@@ -430,9 +430,11 @@ function collectSalesMetrics(
   reportDate,
   cashierName,
   shiftStart,
-  shiftEnd
+  shiftEnd,
+  options
 ) {
   const tz = Session.getScriptTimeZone();
+  options = options || {};
 
   const metrics = {
     items: {},
@@ -519,7 +521,7 @@ function collectSalesMetrics(
       'yyyy-MM-dd'
     );
 
-    if (reportingDate !== reportDate) continue;
+    if (options.endDate ? (reportingDate < reportDate || reportingDate > options.endDate) : reportingDate !== reportDate) continue;
     if (cashierName && reportingCashier !== cashierName) continue;
 
     if (
@@ -611,6 +613,10 @@ function collectSalesMetrics(
       reason !== 'EXCHANGE RETURN' && qty > 0 ? qty : 0;
 
     metrics.itemsCount += countedQty;
+    if (options.onIncludedRow) options.onIncludedRow({
+      timestamp: reportingTimestamp, date: reportingDate, category: category,
+      name: name, size: size, units: countedQty, sales: netTotal, exchange: exchange
+    });
 
     if (!metrics.payments[paymentMethod]) {
       metrics.payments[paymentMethod] = { gross: 0, count: 0 };

@@ -89,6 +89,11 @@
 
 
   function clearSession() {
+    clearDashboardState();
+    if (currentEmployee && currentEmployee.dashboardToken) {
+      google.script.run.withFailureHandler(function() {}).revokeDashboardSession(currentEmployee.dashboardToken);
+      delete currentEmployee.dashboardToken;
+    }
     if (currentEmployee && currentEmployee.inventoryManagerToken) {
       google.script.run.withFailureHandler(function() {}).revokeInventoryManagerSession(currentEmployee.inventoryManagerToken);
       delete currentEmployee.inventoryManagerToken;

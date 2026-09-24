@@ -817,8 +817,8 @@ thead th {
 @media(min-width:992px){
  .pos-session-active .app-sidebar {left:0;}
  .pos-session-active #appMain,.pos-session-active .navbar-custom {margin-left:240px;}
- .pos-session-active.sidebar-collapsed .app-sidebar {width:72px;}
- .pos-session-active.sidebar-collapsed #appMain,.pos-session-active.sidebar-collapsed .navbar-custom {margin-left:72px;}
+ .pos-session-active.sidebar-collapsed .app-sidebar {width:88px;}
+ .pos-session-active.sidebar-collapsed #appMain,.pos-session-active.sidebar-collapsed .navbar-custom {margin-left:88px;}
  .sidebar-collapsed .sidebar-label {display:none;}
  .sidebar-collapsed .sidebar-item {justify-content:center;padding:12px;}
  .sidebar-collapsed .sidebar-profile {justify-content:center;width:100%;}
@@ -835,6 +835,15 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 
 .sidebar-petty-cash {display:flex;flex-direction:column;gap:4px;margin:0 16px 16px;padding:12px;border-radius:10px;background:#f9edf0;}
 .sidebar-petty-cash strong {font-size:1.05rem;color:#784451;overflow-wrap:anywhere;}
-.inventory-workspace-tabs .active {background:var(--pink-main);color:white;}
+.inventory-workspace-nav .active {background:var(--pink-main);color:white;}
 @media(min-width:992px){body.sidebar-collapsed .sidebar-petty-cash {margin:0 4px 12px;padding:6px 2px;text-align:center;}body.sidebar-collapsed .sidebar-petty-cash strong{font-size:.65rem;}}
+
+.navbar-custom{position:sticky;top:0;z-index:920;min-height:65px}
+.inventory-workspace-nav{position:sticky;top:65px;z-index:910;text-align:center;padding:12px;background:var(--bg-main);border-bottom:1px solid var(--border-color)}
+.inventory-workspace-nav[hidden]{display:none}
+.cashier-actions-footer{display:flex;justify-content:center;gap:12px;padding:14px;border-top:1px solid var(--border-color);flex-shrink:0}
+#appSidebar:focus-visible{outline:3px solid var(--pink-hover);outline-offset:-3px}
+.sidebar-petty-cash .sidebar-label{display:block!important}
+@media(min-width:992px){#menuToggleBtn{display:none}body.sidebar-collapsed .sidebar-petty-cash strong{font-size:.72rem;white-space:nowrap;overflow-x:auto}body.sidebar-collapsed .sidebar-petty-cash .sidebar-label{font-size:.65rem}}
+@media(max-width:575px){.navbar-custom{padding:8px 4px}.navbar-brand-custom{font-size:1rem}.navbar-logo{height:28px;width:28px}#navbarEmployeeName{max-width:95px;font-size:.75rem}.inventory-workspace-nav{top:65px}}
 </style>

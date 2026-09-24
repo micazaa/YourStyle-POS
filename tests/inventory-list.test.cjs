@@ -185,6 +185,7 @@ function managerSessionHarness(){
   const rows=[['id','first','last','pin','role','level','active'],['1','Test','Manager','1234','Manager',1,true],['2','Test','Cashier','5678','Cashier',2,true]];
   const cache={put(key,value){entries.set(key,value);},get(key){return entries.get(key)||null;},remove(key){entries.delete(key);}};
   const c=vm.createContext({CacheService:{getScriptCache(){return cache;}},Utilities:{getUuid(){return '11111111-1111-4111-8111-111111111111';}},SHEETS:{EMPLOYEES:'Employees'},SpreadsheetApp:{getActiveSpreadsheet(){return {getSheetByName(){return {getDataRange(){return {getValues(){return rows;}};}};}};}}});
+  vm.runInContext(fs.readFileSync(path.join(root,'Backend/Dashboard.js'),'utf8'),c);
   vm.runInContext(fs.readFileSync(path.join(root,'Backend/Employee.js'),'utf8'),c);
   vm.runInContext(fs.readFileSync(path.join(root,'Backend/InventoryMovement.js'),'utf8'),c);
   return {c,rows,entries};
@@ -202,7 +203,7 @@ test('manager authorization rejects expired, revoked and demoted sessions',()=>{
   let token=c.verifyEmployee('Test Manager','1234').inventoryManagerToken;
   c.revokeInventoryManagerSession(token);assert.throws(()=>c.verifyInventoryManagerSession_(token),/expired/);
   token=c.verifyEmployee('Test Manager','1234').inventoryManagerToken;
-  rows[1][5]=2;assert.throws(()=>c.verifyInventoryManagerSession_(token),/active manager/);assert.equal(entries.size,0);
+  rows[1][5]=2;assert.throws(()=>c.verifyInventoryManagerSession_(token),/active manager/);assert.equal([...entries.keys()].filter(key=>key.startsWith('inventory-manager:')).length,0);
 });
 test('summary groups YourFinds by size and other products by normalized name within category',()=>{
   const {context:c}=frontend();
@@ -297,7 +298,7 @@ test('mixed reprint locks duplicate submissions and exposes both download links'
 test('logout dismisses sidebar and item overlays before displaying login',()=>{
   const {context:c}=frontend();const overlays=[{id:'inventoryDetailsModal',style:{display:'flex'}}];let sidebarClosed=false,refreshed=false;
   c.document.querySelectorAll=selector=>selector==='.generic-overlay-blur'?overlays:[];
-  c.confirm=()=>true;c.toggleSidebar=show=>{sidebarClosed=!show;};c.clearSession=()=>{};
+  c.updateSidebarPettyCash=()=>{};c.confirm=()=>true;c.toggleSidebar=show=>{sidebarClosed=!show;};c.clearSession=()=>{};
   c.localStorage={removeItem(){}};c.renderCart=()=>{};c.initializeLoginPhase10=()=>{refreshed=true;};
   const source=fs.readFileSync(path.join(root,'Frontend/Layout/Sidebar.html'),'utf8');
   vm.runInContext(source.slice(source.indexOf('function triggerCleanLogout()'),source.indexOf('  window.addEventListener("click"')),c);
@@ -416,7 +417,7 @@ test('inventory workspace remembers Delivery when leaving and returning',()=>{
   const {context:c}=frontend();const store=new Map();let loaded='';
   c.document.querySelector=()=>null;c.window={matchMedia:()=>({matches:true}),addEventListener(){}};
   c.localStorage={getItem:key=>store.get(key)||null,setItem:(key,value)=>store.set(key,value)};
-  c.loadDeliveriesPage=()=>{loaded='delivery';};c.loadInventoryPage=()=>{loaded='inventory';};
+  c.loadDashboardPage=()=>{loaded='dashboard';};c.loadDeliveriesPage=()=>{loaded='delivery';};c.loadInventoryPage=()=>{loaded='inventory';};
   vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Layout/Sidebar.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
   c.showPage('deliveriesPage');c.showPage('posPage');c.openInventoryWorkspace();
   assert.equal(loaded,'delivery');assert.equal(store.get('ys_pos_active_page'),'deliveriesPage');
