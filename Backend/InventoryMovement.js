@@ -11,6 +11,7 @@ function changeInventoryStock(options) {
   const code = String(options.code || "").trim();
   const qtyChange = Number(options.qtyChange);
   const referenceId = String(options.referenceId || "").trim();
+  const sourceLineId = String(options.sourceLineId || "").trim();
   const employee = String(options.employee || "").trim();
   const item = String(options.item || "").trim();
   const reason = String(options.reason || "").trim();
@@ -48,11 +49,7 @@ function changeInventoryStock(options) {
   const stockCell = inventorySheet.getRange(inventoryRow, INV_COL.STOCK);
   const stockBefore = Number(stockCell.getValue()) || 0;
   const stockAfter = stockBefore + qtyChange;
-  if (stockAfter < 0) {
-    throw new Error("Insufficient stock for " + code + ". Available: " + stockBefore + ", change requested: " + qtyChange);
-  }
 
-  stockCell.setValue(stockAfter);
   try {
     logInventoryMovement({
       code: code,
@@ -61,6 +58,7 @@ function changeInventoryStock(options) {
       stockBefore: stockBefore,
       stockAfter: stockAfter,
       referenceId: referenceId,
+      sourceLineId: sourceLineId,
       employee: employee,
       item: item,
       reason: reason,
@@ -69,10 +67,9 @@ function changeInventoryStock(options) {
       remainingBundleQty: remainingBundleQty,
       notes: notes
     });
+    inventorySheet.getRange(inventoryRow, INV_COL.UPDATED_AT).setValue(new Date());
   } catch (movementError) {
-    stockCell.setValue(stockBefore);
-    SpreadsheetApp.flush();
-    throw new Error("Inventory movement failed. Stock was restored. " + (movementError && movementError.message ? movementError.message : String(movementError)));
+    throw new Error("Inventory movement failed. " + (movementError && movementError.message ? movementError.message : String(movementError)));
   }
 
   SpreadsheetApp.flush();
@@ -87,18 +84,21 @@ function logInventoryMovement(movement) {
   if (!sheet) {
     sheet = ss.insertSheet(SHEETS.INVENTORY_MOVEMENT_LOG);
     sheet.getRange(1, 1, 1, MOVEMENT_LOG_COLUMN_COUNT).setValues([[
-      "Timestamp", "Code", "Type", "Qty Change", "Stock Before", "Stock After",
-      "Reference ID", "Employee", "Item", "Reason", "Source", "Bundle No.",
+      "Movement ID", "Timestamp", "Source", "Reference ID", "Source Line ID",
+      "Product Code", "Item Name", "Inventory Type", "Quantity Change",
+      "Stock Before", "Stock After", "Employee", "Reason", "Bundle No.",
       "Remaining Bundle Qty", "Notes"
     ]]);
   }
 
+  const movementId = String(movement.movementId || generateInventoryMovementId()).trim();
   const code = String(movement.code || "").trim();
   const type = String(movement.type || "").trim().toUpperCase();
   const qtyChange = Number(movement.qtyChange);
   const stockBefore = Number(movement.stockBefore) || 0;
   const stockAfter = Number(movement.stockAfter) || 0;
   const referenceId = String(movement.referenceId || "").trim();
+  const sourceLineId = String(movement.sourceLineId || "").trim();
   const employee = String(movement.employee || "").trim();
   const item = String(movement.item || "").trim();
   const reason = String(movement.reason || "").trim();
@@ -112,8 +112,8 @@ function logInventoryMovement(movement) {
   if (!Number.isFinite(qtyChange) || qtyChange === 0) throw new Error("Inventory movement quantity must be non-zero.");
   if (!source) throw new Error("Inventory movement Source is required.");
 
-  const row = [new Date(), code, type, qtyChange, stockBefore, stockAfter, referenceId, employee, item, reason, source, bundleNo, remainingBundleQty, notes];
-  if (row.length !== MOVEMENT_LOG_COLUMN_COUNT) throw new Error("Inventory Movement row does not match A:N mapping.");
+  const row = [movementId, new Date(), source, referenceId, sourceLineId, code, item, type, qtyChange, stockBefore, stockAfter, employee, reason, bundleNo, remainingBundleQty, notes];
+  if (row.length !== MOVEMENT_LOG_COLUMN_COUNT) throw new Error("Inventory Movement row does not match A:P mapping.");
   sheet.appendRow(row);
   return true;
 }
@@ -156,10 +156,10 @@ function getInventoryMovementHistoryByCode(code) {
     const d = display[i];
     if (String(d[MOVE_IDX.CODE] || "").trim() !== code) return;
     movements.push({
-      timestamp: String(d[MOVE_IDX.TIMESTAMP] || ""), code: code,
+      movementId: String(d[MOVE_IDX.MOVEMENT_ID] || ""), timestamp: String(d[MOVE_IDX.TIMESTAMP] || ""), code: code,
       type: String(d[MOVE_IDX.TYPE] || ""), qtyChange: Number(row[MOVE_IDX.QTY_CHANGE]) || 0,
       stockBefore: Number(row[MOVE_IDX.STOCK_BEFORE]) || 0, stockAfter: Number(row[MOVE_IDX.STOCK_AFTER]) || 0,
-      referenceId: String(d[MOVE_IDX.REFERENCE_ID] || ""), employee: String(d[MOVE_IDX.EMPLOYEE] || ""),
+      referenceId: String(d[MOVE_IDX.REFERENCE_ID] || ""), sourceLineId: String(d[MOVE_IDX.SOURCE_LINE_ID] || ""), employee: String(d[MOVE_IDX.EMPLOYEE] || ""),
       item: String(d[MOVE_IDX.ITEM] || ""), reason: String(d[MOVE_IDX.REASON] || ""),
       source: String(d[MOVE_IDX.SOURCE] || ""), bundleNo: String(d[MOVE_IDX.BUNDLE_NO] || ""),
       remainingBundleQty: String(d[MOVE_IDX.REMAINING_BUNDLE_QTY] || ""), notes: String(d[MOVE_IDX.NOTES] || "")
@@ -220,8 +220,6 @@ function changeInventoryItemPhase8(payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
 
-  let fromCell = null;
-  let toCell = null;
   let fromBefore = null;
   let toBefore = null;
   let movementStart = 0;
@@ -266,11 +264,8 @@ function changeInventoryItemPhase8(payload) {
 
     movementStart = mov.getLastRow();
 
-    fromCell = inv.getRange(fromItem.rowNumber, INV_COL.STOCK);
-    toCell = inv.getRange(toItem.rowNumber, INV_COL.STOCK);
-
-    fromBefore = Number(fromCell.getValue()) || 0;
-    toBefore = Number(toCell.getValue()) || 0;
+    fromBefore = Number(inv.getRange(fromItem.rowNumber, INV_COL.STOCK).getValue()) || 0;
+    toBefore = Number(inv.getRange(toItem.rowNumber, INV_COL.STOCK).getValue()) || 0;
 
     if (fromBefore < qty) {
       throw new Error(
@@ -281,9 +276,6 @@ function changeInventoryItemPhase8(payload) {
     const fromAfter = fromBefore - qty;
     const toAfter = toBefore + qty;
     const referenceId = phase8AdjustmentId_();
-
-    fromCell.setValue(fromAfter);
-    toCell.setValue(toAfter);
 
     logInventoryMovement({
       code: fromCode,
@@ -336,17 +328,6 @@ function changeInventoryItemPhase8(payload) {
     };
 
   } catch (err) {
-    /* Restore both stock cells if this transaction changed them. */
-    try {
-      if (fromCell && fromBefore !== null) {
-        fromCell.setValue(fromBefore);
-      }
-
-      if (toCell && toBefore !== null) {
-        toCell.setValue(toBefore);
-      }
-    } catch (rollbackStockError) {}
-
     /* Remove only movement rows created by this locked transaction. */
     try {
       if (mov && mov.getLastRow() > movementStart) {
@@ -386,10 +367,11 @@ function generateProductMasterCodePhase8() {
   return generateProductMasterCodePhase8_();
 }
 
-// Cost is an optional appended field: Inventory P (YourFinds), Product Master L
-// (PINS/Others). Keep public A:O / A:K readers free of manager-only costs.
 function phase8CostColumn_(sheet) {
-  return sheet.getName() === SHEETS.INVENTORY ? 16 : 12;
+  if (!sheet || sheet.getName() !== SHEETS.PRODUCT_MASTER) {
+    throw new Error('Cost Price is stored only in Product Master.');
+  }
+  return PRODUCT_COL.COST_PRICE;
 }
 function phase8PrepareCostColumn_(sheet) {
   const column = phase8CostColumn_(sheet);
@@ -421,16 +403,29 @@ function phase8ReadCostMap_(sheet, codeColumn) {
   });
   return map;
 }
+function phase8ReadYourFindsCostBySize_() {
+  const map = {};
+  getProductMaster().forEach(function(product) {
+    if (String(product.category || '').trim().toUpperCase() !== 'YOURFINDS') return;
+    const size = String(product.description || '').trim().toUpperCase();
+    const raw = product.costPrice;
+    const value = Number(raw);
+    if (size) map[size] = raw === '' || raw === null || !Number.isFinite(value) || value < 0 ? null : value;
+  });
+  return map;
+}
 function getInventoryForManagementPhase8(managerToken) {
   if (!managerToken) return getFullInventory();
   const auth = verifyInventoryManagerSession_(managerToken);
   if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const uniqueCosts = phase8ReadCostMap_(ss.getSheetByName(SHEETS.INVENTORY), INV_COL.CODE);
   const stockCosts = phase8ReadCostMap_(ss.getSheetByName(SHEETS.PRODUCT_MASTER), PRODUCT_COL.PRODUCT_CODE);
+  const uniqueCosts = phase8ReadYourFindsCostBySize_();
   return getFullInventory().map(function(item) {
-    const map = String(item.category).toUpperCase() === 'YOURFINDS' ? uniqueCosts : stockCosts;
-    item.costPrice = Object.prototype.hasOwnProperty.call(map, item.code) ? map[item.code] : null;
+    const yourFinds = String(item.category).toUpperCase() === 'YOURFINDS';
+    const key = yourFinds ? String(item.size || '').trim().toUpperCase() : item.code;
+    const map = yourFinds ? uniqueCosts : stockCosts;
+    item.costPrice = Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;
     return item;
   });
 }
@@ -438,11 +433,7 @@ function getProductMasterForManagementPhase8(managerToken) {
   if (!managerToken) return getProductMaster();
   const auth = verifyInventoryManagerSession_(managerToken);
   if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
-  const map = phase8ReadCostMap_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.PRODUCT_MASTER), PRODUCT_COL.PRODUCT_CODE);
-  return getProductMaster().map(function(product) {
-    product.costPrice = Object.prototype.hasOwnProperty.call(map, product.productCode) ? map[product.productCode] : null;
-    return product;
-  });
+  return getProductMaster();
 }
 
 function saveProductMasterPhase8(payload) {
@@ -471,7 +462,7 @@ function saveProductMasterLockedPhase8_(payload) {
   const existing = code
     ? products.find(function(p){ return String(p.productCode) === code; })
     : null;
-  const originalPrice = existing ? Number(existing.originalPrice) || 0 : 0;
+  const storedCostPrice = existing && existing.costPrice !== null ? Number(existing.costPrice) || 0 : "";
   if (costPrice !== undefined) phase8PrepareCostColumn_(sheet);
 
   if (!existing && !code) {
@@ -494,14 +485,15 @@ function saveProductMasterLockedPhase8_(payload) {
   const now = new Date();
   if (existing) {
     sheet.getRange(existing.rowNumber, PRODUCT_COL.DESCRIPTION, 1, 7).setValues([[
-      description, category, defaultPrice, originalPrice, INVENTORY_TYPE.STOCK, lowStockAt, active
+      description, category, INVENTORY_TYPE.STOCK, defaultPrice,
+      costPrice !== undefined ? costPrice : storedCostPrice, lowStockAt, active
     ]]);
     sheet.getRange(existing.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(now);
     sheet.getRange(existing.rowNumber, PRODUCT_COL.IMAGE).setValue(imageUrl);
   } else {
-    sheet.appendRow([code, description, category, defaultPrice, originalPrice, INVENTORY_TYPE.STOCK, lowStockAt, active, now, now, imageUrl]);
+    sheet.appendRow([code, description, category, INVENTORY_TYPE.STOCK, defaultPrice,
+      costPrice !== undefined ? costPrice : "", lowStockAt, active, imageUrl, now, now]);
   }
-  if (costPrice !== undefined) sheet.getRange(existing ? existing.rowNumber : sheet.getLastRow(), 12).setValue(costPrice);
   // Sync safe metadata into existing STOCK Inventory row if present.
   const inv = ss.getSheetByName(SHEETS.INVENTORY);
   if (inv && inv.getLastRow() >= 2) {
@@ -510,10 +502,8 @@ function saveProductMasterLockedPhase8_(payload) {
       const r = i + 2;
       if (imageUrl) inv.getRange(r, INV_COL.IMAGE).setValue(imageUrl);
       inv.getRange(r, INV_COL.DESCRIPTION).setValue(description);
-      inv.getRange(r, INV_COL.ORIG_PRICE).setValue(originalPrice);
       inv.getRange(r, INV_COL.YS_PRICE).setValue(defaultPrice);
       inv.getRange(r, INV_COL.CATEGORY).setValue(category);
-      inv.getRange(r, INV_COL.LOW_STOCK_AT).setValue(lowStockAt);
       inv.getRange(r, INV_COL.STATUS).setValue(active ? INVENTORY_STATUS.ACTIVE : INVENTORY_STATUS.INACTIVE);
       inv.getRange(r, INV_COL.UPDATED_AT).setValue(now);
       break;
@@ -541,13 +531,13 @@ function setInventoryAdministrativeStatusPhase8(payload) {
       phase8AssertCompletedYourFinds_(item);
     }
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
-    const row = sheet.getRange(item.rowNumber, 1, 1, INVENTORY_COLUMN_COUNT).getValues()[0];
-    row[INV_IDX.STATUS] = status;
-    row[INV_IDX.UPDATED_AT] = new Date();
     const master = getProductMaster().find(function(product) { return String(product.productCode) === code; });
     const masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.PRODUCT_MASTER);
     if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(status === INVENTORY_STATUS.ACTIVE);
-    try { sheet.getRange(item.rowNumber, 1, 1, INVENTORY_COLUMN_COUNT).setValues([row]); }
+    try {
+      sheet.getRange(item.rowNumber, INV_COL.STATUS).setValue(status);
+      sheet.getRange(item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
+    }
     catch (error) {
       if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(master.active);
       throw error;
@@ -597,7 +587,7 @@ function deleteUnusedInventoryItemPhase8(payload) {
    Inventory Column A is the image source of truth.
 ========================================================== */
 
-const PHASE8_PRODUCT_IMAGES_FOLDER_ID = "1NB2QYbRXJT2yn9AY6l-1hrFtoQKjWEOf";
+const PHASE8_PRODUCT_IMAGES_FOLDER_ID = "1Jm-OdXcmg17KgHW5Ed_NRwwTKvrbpWC3";
 
 function phase8DecodeInventoryImage_(dataUrl) {
   dataUrl = String(dataUrl || "").trim();
@@ -659,7 +649,6 @@ function saveYourFindsItemDetailsPhase8(payload) {
   payload = payload || {};
   const code = String(payload.code || "").trim();
   const description = String(payload.description || "").trim();
-  const costPrice = phase8CostPayload_(payload);
   const hasOriginalPrice = Object.prototype.hasOwnProperty.call(payload, "originalPrice");
   const requestedOriginalPrice = Number(payload.originalPrice);
   const sellingPrice = Number(payload.sellingPrice);
@@ -726,18 +715,15 @@ function saveYourFindsItemDetailsPhase8(payload) {
     const sheet = ss.getSheetByName(SHEETS.INVENTORY);
     if (!sheet) throw new Error("Inventory sheet not found.");
 
-    if (costPrice !== undefined) phase8PrepareCostColumn_(sheet);
-    const row = sheet.getRange(item.rowNumber, 1, 1, INVENTORY_COLUMN_COUNT).getValues()[0];
-    row[INV_IDX.IMAGE] = finalImageUrl;
-    row[INV_IDX.DESCRIPTION] = description;
-    row[INV_IDX.ORIG_PRICE] = originalPrice;
-    row[INV_IDX.YS_PRICE] = sellingPrice;
-    row[INV_IDX.STATUS] = currentStatus === INVENTORY_STATUS.INCOMPLETE
+    const finalStatus = currentStatus === INVENTORY_STATUS.INCOMPLETE
       ? INVENTORY_STATUS.ACTIVE
       : currentStatus;
-    row[INV_IDX.UPDATED_AT] = new Date();
-    if (costPrice !== undefined) row.push(costPrice);
-    sheet.getRange(item.rowNumber, 1, 1, row.length).setValues([row]);
+    sheet.getRange(item.rowNumber, INV_COL.IMAGE).setValue(finalImageUrl);
+    sheet.getRange(item.rowNumber, INV_COL.DESCRIPTION).setValue(description);
+    sheet.getRange(item.rowNumber, INV_COL.ORIG_PRICE).setValue(originalPrice);
+    sheet.getRange(item.rowNumber, INV_COL.YS_PRICE).setValue(sellingPrice);
+    sheet.getRange(item.rowNumber, INV_COL.STATUS).setValue(finalStatus);
+    sheet.getRange(item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
     inventorySaved = true;
     SpreadsheetApp.flush();
 
@@ -751,7 +737,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
     return {
       success: true,
       code: code,
-      status: row[INV_IDX.STATUS],
+      status: finalStatus,
       wasCompleted: currentStatus === INVENTORY_STATUS.INCOMPLETE,
       imageUrl: finalImageUrl,
       description: description,

@@ -12,13 +12,14 @@
    A  Product Code
    B  Description
    C  Category
-   D  Default Price
-   E  Original Price
-   F  Inventory Type
+   D  Inventory Type
+   E  Selling Price
+   F  Cost Price
    G  Low Stock At
    H  Active
-   I  Created At
-   J  Updated At
+   I  Image
+   J  Created At
+   K  Updated At
 ========================================================== */
 
 function getProductMaster() {
@@ -94,9 +95,13 @@ function getProductMaster() {
 
       category: String(displayRow[PRODUCT_IDX.CATEGORY] || "").trim(),
 
-      defaultPrice: Number(row[PRODUCT_IDX.DEFAULT_PRICE]) || 0,
+      sellingPrice: Number(row[PRODUCT_IDX.SELLING_PRICE]) || 0,
 
-      originalPrice: Number(row[PRODUCT_IDX.ORIGINAL_PRICE]) || 0,
+      defaultPrice: Number(row[PRODUCT_IDX.SELLING_PRICE]) || 0,
+
+      costPrice: row[PRODUCT_IDX.COST_PRICE] === "" || row[PRODUCT_IDX.COST_PRICE] === null
+        ? null
+        : Number(row[PRODUCT_IDX.COST_PRICE]) || 0,
 
       inventoryType: String(displayRow[PRODUCT_IDX.INVENTORY_TYPE] || "")
         .trim()
@@ -242,6 +247,8 @@ function validateProductMaster() {
     ).trim();
 
     const category = String(displayRow[PRODUCT_IDX.CATEGORY] || "").trim();
+    const normalizedCategory = category.toUpperCase();
+    const isYourFinds = normalizedCategory === "YOURFINDS";
 
     /*
       Ignore completely empty rows.
@@ -255,9 +262,9 @@ function validateProductMaster() {
 
     /* ================= PRODUCT CODE ================= */
 
-    if (!productCode) {
+    if (!productCode && !isYourFinds) {
       errors.push("Row " + sheetRow + ": Product Code is missing.");
-    } else {
+    } else if (productCode) {
       /*
         Our regular Product Master uses
         6-digit numeric codes.
@@ -306,7 +313,7 @@ function validateProductMaster() {
 
     const defaultPrice = Number(defaultPriceRaw);
 
-    if (defaultPriceRaw === "" || defaultPriceRaw === null) {
+    if ((defaultPriceRaw === "" || defaultPriceRaw === null) && !isYourFinds) {
       errors.push("Row " + sheetRow + ": Default Price is missing.");
     } else if (!Number.isFinite(defaultPrice) || defaultPrice < 0) {
       errors.push("Row " + sheetRow + ": Default Price is invalid.");
@@ -314,7 +321,7 @@ function validateProductMaster() {
 
     /* ================= ORIGINAL PRICE ================= */
 
-    const originalPriceRaw = row[PRODUCT_IDX.ORIGINAL_PRICE];
+    const costPriceRaw = row[PRODUCT_IDX.COST_PRICE];
 
     /*
       Blank Original Price is allowed.
@@ -322,11 +329,11 @@ function validateProductMaster() {
       Existing migrated products may not have one.
     */
 
-    if (originalPriceRaw !== "" && originalPriceRaw !== null) {
-      const originalPrice = Number(originalPriceRaw);
+    if (costPriceRaw !== "" && costPriceRaw !== null) {
+      const costPrice = Number(costPriceRaw);
 
-      if (!Number.isFinite(originalPrice) || originalPrice < 0) {
-        errors.push("Row " + sheetRow + ": Original Price is invalid.");
+      if (!Number.isFinite(costPrice) || costPrice < 0) {
+        errors.push("Row " + sheetRow + ": Cost Price is invalid.");
       }
     }
 
@@ -344,6 +351,9 @@ function validateProductMaster() {
         "Row " + sheetRow + ": Invalid Inventory Type '" + inventoryType + "'."
       );
     }
+    if (isYourFinds && inventoryType !== INVENTORY_TYPE.UNIQUE) {
+      errors.push("Row " + sheetRow + ": YourFinds size definitions must use UNIQUE inventory.");
+    }
 
     /* ================= LOW STOCK ================= */
 
@@ -351,7 +361,7 @@ function validateProductMaster() {
 
     const lowStockAt = Number(lowStockRaw);
 
-    if (lowStockRaw === "" || lowStockRaw === null) {
+    if ((lowStockRaw === "" || lowStockRaw === null) && !isYourFinds) {
       warnings.push("Row " + sheetRow + ": Low Stock At is blank.");
     } else if (!Number.isFinite(lowStockAt) || lowStockAt < 0) {
       errors.push("Row " + sheetRow + ": Low Stock At is invalid.");
@@ -721,8 +731,8 @@ function getProductMasterInventoryOverview() {
         defaultPrice:
           product.defaultPrice,
 
-        originalPrice:
-          product.originalPrice,
+        costPrice:
+          product.costPrice,
 
         inventoryType:
           product.inventoryType,
@@ -874,40 +884,23 @@ function createInventoryFromProductMaster(
 
 
     /* ======================================================
-       BUILD A:O INVENTORY ROW
+       BUILD A:M INVENTORY ROW
     ====================================================== */
 
     const row = [
-
-      "",                         // A Image
-
+      product.productCode,        // A Product Code
       product.description,        // B Description
-
       "",                         // C Size
-
-      product.originalPrice || 0, // D OrigPrice
-
-      product.defaultPrice || 0,  // E YS Price
-
+      product.category,           // D Category
+      product.inventoryType,      // E Inventory Type
       INVENTORY_STATUS.ACTIVE,    // F Status
-
-      product.productCode,        // G Code
-
-      0,                          // H Stock
-
-      product.category,           // I Category
-
-      product.inventoryType,      // J Inventory Type
-
-      product.lowStockAt || 0,    // K Low Stock At
-
-      "",                         // L Date Delivered
-
-      "",                         // M Delivery ID
-
-      now,                        // N Created At
-
-      now                         // O Updated At
+      "",                         // G Current Stock formula
+      "",                         // H Stock Status formula
+      product.defaultPrice || 0,  // I Selling Price
+      0,                          // J Original Price
+      product.imageUrl || "",     // K Image
+      now,                        // L Created At
+      now                         // M Updated At
 
     ];
 
@@ -946,6 +939,8 @@ function createInventoryFromProductMaster(
       .setValues([
         row
       ]);
+
+    setInventoryCalculatedFields_(inventorySheet, newRowNumber, 1);
 
 
     SpreadsheetApp.flush();

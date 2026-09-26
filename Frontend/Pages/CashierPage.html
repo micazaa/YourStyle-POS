@@ -400,6 +400,12 @@ document
   function updateQty(index, val) {
     let qty = parseInt(val) || 1;
     cart[index].quantity = qty <= 0 ? 1 : qty;
+    if (!cart[index].isCustom && cart[index].quantity > (Number(cart[index].stock) || 0)) {
+      showNotificationToast(
+        `Warning: only ${Number(cart[index].stock) || 0} available. Sale is still allowed.`,
+        true,
+      );
+    }
     renderCart();
   }
 
@@ -811,6 +817,17 @@ function addItemToCart(
 
     });
 
+  }
+
+  if (!isCustom) {
+    const availableStock = Number(product.stock) || 0;
+    const requestedQuantity = existingItem ? existingItem.quantity : 1;
+    if (requestedQuantity > availableStock) {
+      showNotificationToast(
+        `Warning: ${product.name || productCode} has ${availableStock} available. Sale is still allowed.`,
+        true,
+      );
+    }
   }
 
 

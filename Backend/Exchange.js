@@ -124,26 +124,24 @@ function completeCustomerExchange(payload) {
     const salesStart=sales.getLastRow(), movementStart=mov.getLastRow();
     const returnResult=getInventoryItemByCode(returnCode); if(!returnResult||!returnResult.success) throw new Error("Returned inventory item was not found.");
     const returnItem=returnResult.item;
-    const returnCell=inv.getRange(returnItem.rowNumber,INV_COL.STOCK), replacementCell=inv.getRange(replacement.rowNumber,INV_COL.STOCK);
-    const returnBefore=Number(returnCell.getValue())||0, replacementBefore=Number(replacementCell.getValue())||0;
-    if(replacementBefore<replacementQty) throw new Error("Replacement stock changed. Available: "+replacementBefore+".");
+    const returnBefore=Number(returnItem.stock)||0, replacementBefore=Number(replacement.stock)||0;
+    const replacementStockBefore=returnCode===replacementCode?returnBefore+returnQty:replacementBefore;
+    const returnSalesLineId=generateSalesLineId(), replacementSalesLineId=generateSalesLineId();
+    if(replacementStockBefore<replacementQty) throw new Error("Replacement stock changed. Available: "+replacementStockBefore+".");
     try {
       // Physical stock: return comes back, replacement leaves.
-      returnCell.setValue(returnBefore+returnQty);
-      replacementCell.setValue(replacementBefore-replacementQty);
-      logInventoryMovement({code:returnCode,type:getInventoryMovementType(returnItem.category,returnItem.inventoryType),qtyChange:returnQty,stockBefore:returnBefore,stockAfter:returnBefore+returnQty,referenceId:exchangeId,employee:employee,item:returnItem.name,reason:EXCHANGE_REASON.RETURN,source:INVENTORY_MOVEMENT_SOURCE.EXCHANGE,notes:"Original receipt: "+originalReceiptId+(notes?" | "+notes:"")});
-      logInventoryMovement({code:replacementCode,type:getInventoryMovementType(replacement.category,replacement.inventoryType),qtyChange:-replacementQty,stockBefore:replacementBefore,stockAfter:replacementBefore-replacementQty,referenceId:exchangeId,employee:employee,item:replacement.name,reason:EXCHANGE_REASON.REPLACEMENT,source:INVENTORY_MOVEMENT_SOURCE.EXCHANGE,notes:"Original receipt: "+originalReceiptId+(notes?" | "+notes:"")});
+      logInventoryMovement({code:returnCode,type:getInventoryMovementType(returnItem.category,returnItem.inventoryType),qtyChange:returnQty,stockBefore:returnBefore,stockAfter:returnBefore+returnQty,referenceId:exchangeId,sourceLineId:returnSalesLineId,employee:employee,item:returnItem.name,reason:EXCHANGE_REASON.RETURN,source:INVENTORY_MOVEMENT_SOURCE.EXCHANGE,notes:"Original receipt: "+originalReceiptId+(notes?" | "+notes:"")});
+      logInventoryMovement({code:replacementCode,type:getInventoryMovementType(replacement.category,replacement.inventoryType),qtyChange:-replacementQty,stockBefore:replacementStockBefore,stockAfter:replacementStockBefore-replacementQty,referenceId:exchangeId,sourceLineId:replacementSalesLineId,employee:employee,item:replacement.name,reason:EXCHANGE_REASON.REPLACEMENT,source:INVENTORY_MOVEMENT_SOURCE.EXCHANGE,notes:"Original receipt: "+originalReceiptId+(notes?" | "+notes:"")});
       const now=new Date();
       const commonPayment=paymentMethod||"Cash";
       const rows=[
-        [now,exchangeId,employee,returnCode,returned.name,returned.size,returned.category,-returnQty,returnUnitValue,0,0,0,-returnValue,commonPayment,paymentMethod==="Cash"?"N/A":paymentReference,"COMPLETED",0,0,auth.managerName,EXCHANGE_REASON.RETURN,originalReceiptId],
-        [now,exchangeId,employee,replacementCode,replacement.name,replacement.size,replacement.category,replacementQty,replacementPrice,0,0,0,replacementValue,commonPayment,paymentMethod==="Cash"?"N/A":paymentReference,"COMPLETED",paymentMethod==="Cash"?cashReceived:0,changeGiven,auth.managerName,EXCHANGE_REASON.REPLACEMENT,originalReceiptId]
+        [now,exchangeId,employee,returnCode,returned.name,returned.size,returned.category,-returnQty,returnUnitValue,0,0,0,-returnValue,commonPayment,paymentMethod==="Cash"?"N/A":paymentReference,"COMPLETED",0,0,auth.managerName,EXCHANGE_REASON.RETURN,originalReceiptId,returnSalesLineId,"POS","PROCESSED",now,""],
+        [now,exchangeId,employee,replacementCode,replacement.name,replacement.size,replacement.category,replacementQty,replacementPrice,0,0,0,replacementValue,commonPayment,paymentMethod==="Cash"?"N/A":paymentReference,"COMPLETED",paymentMethod==="Cash"?cashReceived:0,changeGiven,auth.managerName,EXCHANGE_REASON.REPLACEMENT,originalReceiptId,replacementSalesLineId,"POS","PROCESSED",now,""]
       ];
       sales.getRange(sales.getLastRow()+1,1,rows.length,SALES_LOG_COLUMN_COUNT).setValues(rows);
       SpreadsheetApp.flush();
       return {success:true,exchangeId:exchangeId,originalReceiptId:originalReceiptId,returnValue:returnValue,replacementValue:replacementValue,amountDue:amountDue,paymentMethod:commonPayment,cashReceived:paymentMethod==="Cash"?cashReceived:0,changeGiven:changeGiven,authorizedBy:auth.managerName};
     } catch(writeErr) {
-      try{returnCell.setValue(returnBefore);replacementCell.setValue(replacementBefore);}catch(e){}
       if(mov.getLastRow()>movementStart) mov.deleteRows(movementStart+1,mov.getLastRow()-movementStart);
       if(sales.getLastRow()>salesStart) sales.deleteRows(salesStart+1,sales.getLastRow()-salesStart);
       SpreadsheetApp.flush(); throw writeErr;

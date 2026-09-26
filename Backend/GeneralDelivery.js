@@ -39,8 +39,9 @@ function validateUniversalDeliveryDatabase() {
   ]);
 
   validateSheetHeaders(movementSheet, [
-    "Timestamp", "Code", "Type", "Qty Change", "Stock Before", "Stock After", "Reference ID", "Employee",
-    "Item", "Reason", "Source", "Bundle No.", "Remaining Bundle Qty", "Notes"
+    "Movement ID", "Timestamp", "Source", "Reference ID", "Source Line ID", "Product Code",
+    "Item Name", "Inventory Type", "Quantity Change", "Stock Before", "Stock After", "Employee",
+    "Reason", "Bundle No.", "Remaining Bundle Qty", "Notes"
   ]);
 
   return { success: true, deliveryLog: "OK", movementLog: "OK" };
@@ -164,6 +165,8 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
             .setValue(existingProduct.imageUrl);
         }
 
+        inventorySheet.getRange(i + 2, INV_COL.UPDATED_AT).setValue(new Date());
+
         return {
           success: true,
           created: false,
@@ -240,21 +243,19 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
   const now = new Date();
 
   const row = [
-    String(product.imageUrl || "").trim(),                // A Image
+    productCode,                                          // A Product Code
     String(product.description || "").trim(),             // B Description
     "",                                                   // C Size
-    Number(product.originalPrice) || 0,                   // D Original Price
-    Number(product.defaultPrice) || 0,                    // E YS Price
+    category,                                             // D Category
+    INVENTORY_TYPE.STOCK,                                 // E Inventory Type
     INVENTORY_STATUS.ACTIVE,                              // F Status
-    productCode,                                          // G Code
-    0,                                                    // H Stock
-    category,                                             // I Category
-    INVENTORY_TYPE.STOCK,                                 // J Inventory Type
-    Number(product.lowStockAt) || 0,                      // K Low Stock At
-    deliveryDate || "",                                   // L Date Delivered
-    deliveryId || "",                                     // M Delivery ID
-    now,                                                  // N Created At
-    now                                                   // O Updated At
+    "",                                                   // G Current Stock formula
+    "",                                                   // H Stock Status formula
+    Number(product.defaultPrice) || 0,                    // I Selling Price
+    0,                                                    // J Original Price
+    String(product.imageUrl || "").trim(),                // K Image
+    now,                                                  // L Created At
+    now                                                   // M Updated At
   ];
 
   if (
@@ -262,16 +263,18 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
     INVENTORY_COLUMN_COUNT
   ) {
     throw new Error(
-      "Inventory row does not match A:O mapping."
+      "Inventory row does not match A:M mapping."
     );
   }
 
-  inventorySheet.appendRow(row);
+  const newRowNumber = inventorySheet.getLastRow() + 1;
+  inventorySheet.getRange(newRowNumber, 1, 1, INVENTORY_COLUMN_COUNT).setValues([row]);
+  setInventoryCalculatedFields_(inventorySheet, newRowNumber, 1);
 
   return {
     success: true,
     created: true,
-    rowNumber: inventorySheet.getLastRow()
+    rowNumber: newRowNumber
   };
 }
 
@@ -285,7 +288,6 @@ function acceptYourStyleDelivery(payload) {
   const inventorySheet = ss.getSheetByName(SHEETS.INVENTORY);
   const deliveryStartRow = deliverySheet ? deliverySheet.getLastRow() : 0;
   const movementStartRow = movementSheet ? movementSheet.getLastRow() : 0;
-  const stockRollbacks = [];
   const createdInventoryRows = [];
 
   try {
@@ -419,11 +421,6 @@ function acceptYourStyleDelivery(payload) {
         const ensured = ensureYourStyleInventoryProduct(line.productCode, deliveryDate, identifiers.deliveryId);
         if (ensured.created) createdInventoryRows.push(ensured.rowNumber);
 
-        /* Capture the current stock so a later failure in this delivery can restore it. */
-        const stockCell = inventorySheet.getRange(ensured.rowNumber, INV_COL.STOCK);
-        const before = Number(stockCell.getValue()) || 0;
-        stockRollbacks.push({ cell: stockCell, value: before });
-
         changeInventoryStock({
           code: line.productCode,
           qtyChange: line.quantity,
@@ -466,11 +463,6 @@ function acceptYourStyleDelivery(payload) {
       lineCount: lines.length
     };
   } catch (err) {
-    /* Restore pre-existing/newly-created stock values first. */
-    stockRollbacks.reverse().forEach(function(entry) {
-      try { entry.cell.setValue(entry.value); } catch (e) {}
-    });
-
     /* Remove movement and delivery rows created by this attempt. */
     if (movementSheet && movementSheet.getLastRow() > movementStartRow) {
       movementSheet.deleteRows(movementStartRow + 1, movementSheet.getLastRow() - movementStartRow);
@@ -741,7 +733,6 @@ function distributeBulkBundle(payload) {
   const movementSheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
   const inventorySheet = ss.getSheetByName(SHEETS.INVENTORY);
   const movementStartRow = movementSheet ? movementSheet.getLastRow() : 0;
-  const stockRollbacks = [];
   const createdInventoryRows = [];
   let holderRollback = null;
 
@@ -792,8 +783,6 @@ function distributeBulkBundle(payload) {
     lines.forEach(function(line){
       const ensured=ensureYourStyleInventoryProduct(line.productCode,holder.deliveryDate,deliveryId);
       if (ensured.created) createdInventoryRows.push(ensured.rowNumber);
-      const stockCell=inventorySheet.getRange(ensured.rowNumber,INV_COL.STOCK);
-      stockRollbacks.push({cell:stockCell,value:Number(stockCell.getValue())||0});
     });
 
     const bulkMovementType=holderType === "PINS" ? INVENTORY_MOVEMENT_TYPE.BULK_PINS : INVENTORY_MOVEMENT_TYPE.BULK_OTHERS;
@@ -811,7 +800,6 @@ function distributeBulkBundle(payload) {
     const progress=getBulkBundleProgress_(deliveryId,sheetRow,holderType,Number(holder.bundleQty));
     return {success:true,deliveryId:deliveryId,deliveryNo:holder.deliveryNo,bundleNo:bundleNo,distributionActual:distributionActual,bundleActual:(progress.bundles[bundleNo-1]||{}).actualQuantity||0,actualQuantity:newActual,remainingQuantity:newRemaining,currentVariance:currentVariance,status:DELIVERY_STATUS.PARTIAL,bundles:progress.bundles};
   } catch(err) {
-    stockRollbacks.reverse().forEach(function(entry){try{entry.cell.setValue(entry.value);}catch(e){}});
     if (holderRollback && deliverySheet && Number(payload.sheetRow)>=2) {try{deliverySheet.getRange(Number(payload.sheetRow),DELIVERY_COL.ACTUAL_QTY,1,5).setValues([holderRollback]);}catch(e){}}
     if (movementSheet && movementSheet.getLastRow()>movementStartRow) movementSheet.deleteRows(movementStartRow+1,movementSheet.getLastRow()-movementStartRow);
     createdInventoryRows.sort(function(a,b){return b-a;}).forEach(function(r){try{if(r>=2&&r<=inventorySheet.getLastRow())inventorySheet.deleteRow(r);}catch(e){}});

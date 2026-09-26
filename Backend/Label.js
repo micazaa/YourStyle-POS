@@ -1536,22 +1536,18 @@ function getYourFindsLabelItemsByDeliveryId(
 ========================================================== */
 
 function buildYourFindsDeliverySummaryFromInventory(deliveryId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(SHEETS.INVENTORY);
-  if (!sheet || sheet.getLastRow() < 2) return { quantities: {}, totalQty: 0, firstCode: "", lastCode: "" };
-
-  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, INVENTORY_COLUMN_COUNT).getDisplayValues();
-  const items = rows.filter(function(row) {
-    return String(row[INV_IDX.DELIVERY_ID] || "").trim().toUpperCase() === String(deliveryId || "").trim().toUpperCase() &&
-      (String(row[INV_IDX.CATEGORY] || "").trim().toUpperCase() === "YOURFINDS" || String(row[INV_IDX.INVENTORY_TYPE] || "").trim().toUpperCase() === "UNIQUE");
+  const normalizedDeliveryId = String(deliveryId || "").trim().toUpperCase();
+  const items = getFullInventory().filter(function(item) {
+    return String(item.deliveryId || "").trim().toUpperCase() === normalizedDeliveryId &&
+      (String(item.category || "").trim().toUpperCase() === "YOURFINDS" || String(item.inventoryType || "").trim().toUpperCase() === "UNIQUE");
   });
 
   const quantities = {};
   const codes = [];
-  items.forEach(function(row) {
-    const size = String(row[INV_IDX.SIZE] || "UNKNOWN").trim().toUpperCase() || "UNKNOWN";
+  items.forEach(function(item) {
+    const size = String(item.size || "UNKNOWN").trim().toUpperCase() || "UNKNOWN";
     quantities[size] = (quantities[size] || 0) + 1;
-    const code = String(row[INV_IDX.CODE] || "").trim();
+    const code = String(item.code || "").trim();
     if (code) codes.push(code);
   });
 

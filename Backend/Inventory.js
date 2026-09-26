@@ -17,6 +17,43 @@ function formatInventoryDateForClient(value) {
   return String(value).trim();
 }
 
+function getInventoryDeliveryMetadataByCode_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
+  const metadata = {};
+  if (!sheet || sheet.getLastRow() < 2) return metadata;
+
+  const rows = sheet.getRange(2, MOVE_COL.TIMESTAMP, sheet.getLastRow() - 1, 5).getValues();
+  rows.forEach(function(row) {
+    const source = String(row[1] || "").trim().toUpperCase();
+    const referenceId = String(row[2] || "").trim();
+    const code = String(row[4] || "").trim();
+    if (source !== INVENTORY_MOVEMENT_SOURCE.DELIVERY || !referenceId || !code) return;
+    metadata[code] = { timestamp: row[0], deliveryId: referenceId };
+  });
+  return metadata;
+}
+
+function setInventoryCalculatedFields_(sheet, startRow, rowCount) {
+  if (!sheet || !Number.isInteger(startRow) || startRow < 2 || !Number.isInteger(rowCount) || rowCount < 1) {
+    return;
+  }
+
+  const stockFormulas = [];
+  const statusFormulas = [];
+  for (let rowNumber = startRow; rowNumber < startRow + rowCount; rowNumber++) {
+    stockFormulas.push([
+      '=IF(A' + rowNumber + '="","",SUMIF(\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$I$2:$I))'
+    ]);
+    statusFormulas.push([
+      '=IF(A' + rowNumber + '="","",IF(G' + rowNumber + '<0,"NEGATIVE STOCK",IF(G' + rowNumber + '=0,"SOLD OUT",IF(OR(E' + rowNumber + '="UNIQUE",UPPER(D' + rowNumber + ')="YOURFINDS"),"IN STOCK",IF(G' + rowNumber + '<=IFNA(XLOOKUP(A' + rowNumber + ',\'Product Master\'!$A$2:$A,\'Product Master\'!$G$2:$G),0),"LOW STOCK","IN STOCK")))))'
+    ]);
+  }
+
+  sheet.getRange(startRow, INV_COL.STOCK, rowCount, 1).setFormulas(stockFormulas);
+  sheet.getRange(startRow, INV_COL.STOCK_STATUS, rowCount, 1).setFormulas(statusFormulas);
+}
+
 function getFullInventory() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -32,8 +69,14 @@ function getFullInventory() {
     return [];
   }
 
+  const lowStockByCode = {};
+  getProductMaster().forEach(function(product) {
+    lowStockByCode[String(product.productCode || "").trim()] = Number(product.lowStockAt) || 0;
+  });
+  const deliveryMetadataByCode = getInventoryDeliveryMetadataByCode_();
+
   /* ========================================================
-     READ INVENTORY A:O
+     READ INVENTORY A:M
   ======================================================== */
 
   const data = sheet
@@ -104,7 +147,7 @@ function getFullInventory() {
 
       rowNumber: i + 2,
 
-      /* A — Image */
+      /* L — Image */
 
       imageUrl: String(displayRow[INV_IDX.IMAGE] || "").trim(),
 
@@ -116,11 +159,11 @@ function getFullInventory() {
 
       size: String(displayRow[INV_IDX.SIZE] || "").trim(),
 
-      /* D — Original Price */
+      /* K — Original Price */
 
       origPrice: Number(row[INV_IDX.ORIG_PRICE]) || 0,
 
-      /* E — YS Price */
+      /* J — Selling Price */
 
       price: Number(row[INV_IDX.YS_PRICE]) || 0,
 
@@ -128,39 +171,43 @@ function getFullInventory() {
 
       status: status,
 
-      /* G — Code */
+      /* A — Product Code */
 
       code: code,
 
-      /* H — Stock */
+      /* G — Current Stock */
 
       stock: Number(row[INV_IDX.STOCK]) || 0,
 
-      /* I — Category */
+      stockStatus: String(displayRow[INV_IDX.STOCK_STATUS] || "").trim(),
+
+      /* D — Category */
 
       category: String(displayRow[INV_IDX.CATEGORY] || "Others").trim(),
 
-      /* J — Inventory Type */
+      /* E — Inventory Type */
 
       inventoryType: inventoryType,
 
-      /* K — Low Stock At */
+      /* Low-stock threshold lives only in Product Master. */
 
-      lowStockAt: Number(row[INV_IDX.LOW_STOCK_AT]) || 0,
+      lowStockAt: inventoryType === INVENTORY_TYPE.UNIQUE ? 0 : (lowStockByCode[code] || 0),
 
-      /* L — Date Delivered */
+      /* Delivery metadata is derived from the movement ledger. */
 
-      dateDelivered: formatInventoryDateForClient(row[INV_IDX.DATE_DELIVERED]),
+      dateDelivered: formatInventoryDateForClient(
+        deliveryMetadataByCode[code] ? deliveryMetadataByCode[code].timestamp : ""
+      ),
 
-      /* M — Delivery ID */
+      deliveryId: deliveryMetadataByCode[code]
+        ? deliveryMetadataByCode[code].deliveryId
+        : "",
 
-      deliveryId: String(displayRow[INV_IDX.DELIVERY_ID] || "").trim(),
-
-      /* N — Created At */
+      /* L — Created At */
 
       createdAt: formatInventoryDateForClient(row[INV_IDX.CREATED_AT]),
 
-      /* O — Updated At */
+      /* M — Updated At */
 
       updatedAt: formatInventoryDateForClient(row[INV_IDX.UPDATED_AT]),
     });
@@ -865,7 +912,7 @@ function acceptYourFindsDelivery(
 
 
       /* ======================================================
-         BUILD INVENTORY ROWS A:O
+         BUILD INVENTORY ROWS A:M
       ====================================================== */
 
       const now =
@@ -888,81 +935,19 @@ function acceptYourFindsDelivery(
             function (code) {
 
               const row = [
-
-                "",
-
-                // A Image
-
-
-                "",
-
-                // B Description
-                // Completed later
-
-
-                size === "CUSTOM" ? customSizeLabel : size,
-
-                // C Size
-
-
-                0,
-
-                // D OrigPrice
-
-
-                0,
-
-                // E YS Price
-
-
-                INVENTORY_STATUS.INCOMPLETE,
-
-                // F Status
-
-
-                code,
-
-                // G Code
-
-
-                1,
-
-                // H Stock
-
-
-                "YourFinds",
-
-                // I Category
-
-
-                INVENTORY_TYPE.UNIQUE,
-
-                // J Inventory Type
-
-
-                0,
-
-                // K Low Stock At
-
-
-                deliveryDate,
-
-                // L Date Delivered
-
-
-                deliveryId,
-
-                // M Delivery ID
-
-
-                now,
-
-                // N Created At
-
-
-                now
-
-                // O Updated At
+                code,                                            // A Product Code
+                "",                                              // B Description (completed later)
+                size === "CUSTOM" ? customSizeLabel : size,      // C Size
+                "YourFinds",                                     // D Category
+                INVENTORY_TYPE.UNIQUE,                            // E Inventory Type
+                INVENTORY_STATUS.INCOMPLETE,                      // F Status
+                "",                                              // G Current Stock formula
+                "",                                              // H Stock Status formula
+                0,                                               // I Selling Price
+                0,                                               // J Original Price
+                "",                                              // K Image
+                now,                                             // L Created At
+                now                                              // M Updated At
 
               ];
 
@@ -973,7 +958,7 @@ function acceptYourFindsDelivery(
               ) {
 
                 throw new Error(
-                  "YourFinds Inventory row does not match Inventory A:O mapping."
+                  "YourFinds Inventory row does not match Inventory A:M mapping."
                 );
 
               }
@@ -1054,6 +1039,12 @@ function acceptYourFindsDelivery(
         .setValues(
           inventoryRows
         );
+
+      setInventoryCalculatedFields_(
+        inventorySheet,
+        inventoryStartRow,
+        inventoryRows.length
+      );
 
 
       /* ======================================================
@@ -1341,9 +1332,7 @@ function getSellableInventory() {
       .trim()
       .toUpperCase();
 
-    const stock = Number(item.stock) || 0;
-
-    return status === INVENTORY_STATUS.ACTIVE && stock > 0;
+    return status === INVENTORY_STATUS.ACTIVE;
   });
 }
 
@@ -1374,9 +1363,15 @@ function getInventoryDisplayStatus(item) {
     return "INACTIVE";
   }
 
+  /* ================= NEGATIVE STOCK ================= */
+
+  if (stock < 0) {
+    return "NEGATIVE STOCK";
+  }
+
   /* ================= SOLD OUT ================= */
 
-  if (stock <= 0) {
+  if (stock === 0) {
     return "SOLD OUT";
   }
 
@@ -1493,6 +1488,7 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
     code: code,
     qtyChange: -quantitySold,
     referenceId: receiptId,
+    sourceLineId: String(item.salesLineId || "").trim(),
     employee: employeeName,
     item: String(item.name || "").trim(),
     reason: "",
@@ -1836,4 +1832,3 @@ function testYourFindsCompletionLookup() {
   );
 
 }
-

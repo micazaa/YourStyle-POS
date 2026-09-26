@@ -101,9 +101,11 @@ function executeCheckoutBackend(
       l.feeCharged = roundToTwo(totalFeeCharged * share);
       l.feeAbsorbed = roundToTwo(totalFeeAbsorbed * share);
       l.netTotal = roundToTwo(l.lineNet - l.feeAbsorbed); // true revenue for this line
+      l.salesLineId = generateSalesLineId();
     });
 
-    // 4) Write Sales Log rows (A–R), repeating Cash Received/Change on every line
+    // 4) Write Sales Log rows (A–Z), repeating Cash Received/Change on every line.
+    // POS writes are already inventory-synchronized, so mark them PROCESSED.
     const timestamp = new Date();
     const rows = lines.map((l) => [
       timestamp, // A Timestamp
@@ -130,6 +132,11 @@ function executeCheckoutBackend(
       "", // S Authorized By
       "", // T Reason / Void Reason
       "", // U Original Receipt ID
+      l.salesLineId, // V Sales Line ID
+      "POS", // W Entry Source
+      "PROCESSED", // X Sync Status
+      timestamp, // Y Processed At
+      "", // Z Sync Error
     ]);
     salesLogSheet
       .getRange(
@@ -141,7 +148,7 @@ function executeCheckoutBackend(
       .setValues(rows);
 
     // 5) Decrement inventory stock for non-custom items
-    deductInventoryStock(cart, receiptId, cashierName);
+    deductInventoryStock(lines, receiptId, cashierName);
 
     return JSON.stringify({
       success: true,
@@ -629,6 +636,7 @@ function voidAndRefundTransactionBackend(
             code: code,
             qtyChange: voidQty,
             referenceId: receiptId,
+            sourceLineId: String(row[SALES_IDX.SALES_LINE_ID] || "").trim(),
             employee: authorizedBy,
             item: itemName,
             reason: voidReason,

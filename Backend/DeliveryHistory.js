@@ -12,7 +12,6 @@ function getDeliveryHistoryFast() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const deliverySheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
-    const inventorySheet = ss.getSheetByName(SHEETS.INVENTORY);
 
     if (!deliverySheet) {
       throw new Error("Delivery Log sheet not found.");
@@ -34,38 +33,24 @@ function getDeliveryHistoryFast() {
 
     const yourFindsInventory = {};
 
-    if (
-      inventorySheet &&
-      inventorySheet.getLastRow() >= 2
-    ) {
-      const inventoryRows =
-        inventorySheet
-          .getRange(
-            2,
-            1,
-            inventorySheet.getLastRow() - 1,
-            INVENTORY_COLUMN_COUNT
-          )
-          .getDisplayValues();
-
-      inventoryRows.forEach(function(row) {
+    getFullInventory().forEach(function(item) {
         const deliveryId =
           String(
-            row[INV_IDX.DELIVERY_ID] || ""
+            item.deliveryId || ""
           ).trim();
 
         if (!deliveryId) return;
 
         const category =
           String(
-            row[INV_IDX.CATEGORY] || ""
+            item.category || ""
           )
             .trim()
             .toUpperCase();
 
         const inventoryType =
           String(
-            row[INV_IDX.INVENTORY_TYPE] || ""
+            item.inventoryType || ""
           )
             .trim()
             .toUpperCase();
@@ -90,7 +75,7 @@ function getDeliveryHistoryFast() {
 
         const size =
           String(
-            row[INV_IDX.SIZE] || "UNKNOWN"
+            item.size || "UNKNOWN"
           )
             .trim()
             .toUpperCase() ||
@@ -98,7 +83,7 @@ function getDeliveryHistoryFast() {
 
         const code =
           String(
-            row[INV_IDX.CODE] || ""
+            item.code || ""
           ).trim();
 
         summary.quantities[size] =
@@ -110,7 +95,6 @@ function getDeliveryHistoryFast() {
           summary.codes.push(code);
         }
       });
-    }
 
     /* ========================================================
        DELIVERY LOG - ONE READ

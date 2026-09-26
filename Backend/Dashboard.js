@@ -195,7 +195,7 @@ function dashboardInventory_() {
     low: list.filter(
       (g) =>
         g.stock > 0 &&
-        (g.category === 'YOURFINDS' ? g.stock < 5 : g.threshold > 0 && g.stock <= g.threshold)
+        g.category !== 'YOURFINDS' && g.threshold > 0 && g.stock <= g.threshold
     ).length,
     sold: list.filter((g) => g.stock === 0).length,
   };

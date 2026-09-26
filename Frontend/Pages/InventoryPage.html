@@ -210,7 +210,7 @@ function buildInventorySummaryGroups(items) {
   });
   return Array.from(groups.values()).map(function(group) {
     group.status = group.stock === 0 ? 'SOLD OUT' :
-      (group.category === 'YOURFINDS' ? group.stock < 5 : group.lowStockAt > 0 && group.stock <= group.lowStockAt) ? 'LOW STOCK' : 'IN STOCK';
+      (group.category !== 'YOURFINDS' && group.lowStockAt > 0 && group.stock <= group.lowStockAt) ? 'LOW STOCK' : 'IN STOCK';
     return group;
   });
 }
@@ -416,11 +416,20 @@ function getInventoryDisplayStatus(
 
   if (status === "RETURNED") return "RETURNED";
 
-  if (stock <= 0) {
+  if (stock < 0) {
+
+    return "NEGATIVE STOCK";
+
+  }
+
+
+  if (stock === 0) {
 
     return "SOLD OUT";
 
   }
+
+  if (inventoryIsYourFinds(item)) return "IN STOCK";
 
 
   if (
@@ -444,6 +453,8 @@ function getInventoryDisplayStatus(
 
 function buildInventoryStatusBadge(status) {
   if (status === "RETURNED") return '<span class="badge bg-secondary">Returned</span>';
+
+  if (status === "NEGATIVE STOCK") return '<span class="badge bg-danger">Negative Stock</span>';
 
   if (
   status === "INCOMPLETE"

@@ -31,49 +31,59 @@ const SHEETS = {
 
 /* ==========================================================
    INVENTORY
+
+   A  Product Code
+   B  Description
+   C  Size
+   D  Category
+   E  Inventory Type
+   F  Status
+   G  Current Stock
+   H  Stock Status
+   I  Selling Price
+   J  Original Price
+   K  Image
+   L  Created At
+   M  Updated At
 ========================================================== */
 
 const INV_IDX = {
 
-  IMAGE: 0,
+  CODE: 0,
   DESCRIPTION: 1,
   SIZE: 2,
-  ORIG_PRICE: 3,
-  YS_PRICE: 4,
+  CATEGORY: 3,
+  INVENTORY_TYPE: 4,
   STATUS: 5,
-  CODE: 6,
-  STOCK: 7,
-  CATEGORY: 8,
-  INVENTORY_TYPE: 9,
-  LOW_STOCK_AT: 10,
-  DATE_DELIVERED: 11,
-  DELIVERY_ID: 12,
-  CREATED_AT: 13,
-  UPDATED_AT: 14
+  STOCK: 6,
+  STOCK_STATUS: 7,
+  YS_PRICE: 8,
+  ORIG_PRICE: 9,
+  IMAGE: 10,
+  CREATED_AT: 11,
+  UPDATED_AT: 12
 
 };
 
 const INV_COL = {
 
-  IMAGE: 1,
+  CODE: 1,
   DESCRIPTION: 2,
   SIZE: 3,
-  ORIG_PRICE: 4,
-  YS_PRICE: 5,
+  CATEGORY: 4,
+  INVENTORY_TYPE: 5,
   STATUS: 6,
-  CODE: 7,
-  STOCK: 8,
-  CATEGORY: 9,
-  INVENTORY_TYPE: 10,
-  LOW_STOCK_AT: 11,
-  DATE_DELIVERED: 12,
-  DELIVERY_ID: 13,
-  CREATED_AT: 14,
-  UPDATED_AT: 15
+  STOCK: 7,
+  STOCK_STATUS: 8,
+  YS_PRICE: 9,
+  ORIG_PRICE: 10,
+  IMAGE: 11,
+  CREATED_AT: 12,
+  UPDATED_AT: 13
 
 };
 
-const INVENTORY_COLUMN_COUNT = 15;
+const INVENTORY_COLUMN_COUNT = 13;
 
 
 /* ==========================================================
@@ -98,6 +108,13 @@ const INVENTORY_COLUMN_COUNT = 15;
    Q  Cash Received
    R  Change
    S  Authorized By
+   T  Reason / Void Reason
+   U  Original Receipt ID
+   V  Sales Line ID
+   W  Entry Source
+   X  Sync Status
+   Y  Processed At
+   Z  Sync Error
 ========================================================== */
 
 
@@ -125,7 +142,12 @@ const SALES_IDX = {
 
   VOID_REASON: 19,
   REASON: 19,
-  ORIGINAL_RECEIPT_ID: 20
+  ORIGINAL_RECEIPT_ID: 20,
+  SALES_LINE_ID: 21,
+  ENTRY_SOURCE: 22,
+  SYNC_STATUS: 23,
+  PROCESSED_AT: 24,
+  SYNC_ERROR: 25
 
 };
 
@@ -154,67 +176,80 @@ const SALES_COL = {
 
   VOID_REASON: 20,
   REASON: 20,
-  ORIGINAL_RECEIPT_ID: 21
+  ORIGINAL_RECEIPT_ID: 21,
+  SALES_LINE_ID: 22,
+  ENTRY_SOURCE: 23,
+  SYNC_STATUS: 24,
+  PROCESSED_AT: 25,
+  SYNC_ERROR: 26
 
 };
 
 
-const SALES_LOG_COLUMN_COUNT = 21;
+const SALES_LOG_COLUMN_COUNT = 26;
 
 
 /* ==========================================================
    INVENTORY MOVEMENT LOG
 
-   A  Timestamp
-   B  Code
-   C  Type
-   D  Qty Change
-   E  Stock Before
-   F  Stock After
-   G  Reference ID
-   H  Employee
-   I  Item
-   J  Reason
-   K  Source
-   L  Notes
+   A  Movement ID
+   B  Timestamp
+   C  Source
+   D  Reference ID
+   E  Source Line ID
+   F  Product Code
+   G  Item Name
+   H  Inventory Type
+   I  Quantity Change
+   J  Stock Before
+   K  Stock After
+   L  Employee
+   M  Reason
+   N  Bundle No.
+   O  Remaining Bundle Qty
+   P  Notes
 ========================================================== */
 
 
 const MOVE_IDX = {
-  TIMESTAMP: 0,
-  CODE: 1,
-  TYPE: 2,
-  QTY_CHANGE: 3,
-  STOCK_BEFORE: 4,
-  STOCK_AFTER: 5,
-  REFERENCE_ID: 6,
-  EMPLOYEE: 7,
-  ITEM: 8,
-  REASON: 9,
-  SOURCE: 10,
-  BUNDLE_NO: 11,
-  REMAINING_BUNDLE_QTY: 12,
-  NOTES: 13
+  MOVEMENT_ID: 0,
+  TIMESTAMP: 1,
+  SOURCE: 2,
+  REFERENCE_ID: 3,
+  SOURCE_LINE_ID: 4,
+  CODE: 5,
+  ITEM: 6,
+  TYPE: 7,
+  QTY_CHANGE: 8,
+  STOCK_BEFORE: 9,
+  STOCK_AFTER: 10,
+  EMPLOYEE: 11,
+  REASON: 12,
+  BUNDLE_NO: 13,
+  REMAINING_BUNDLE_QTY: 14,
+  NOTES: 15
 };
 
 const MOVE_COL = {
-  TIMESTAMP: 1,
-  CODE: 2,
-  TYPE: 3,
-  QTY_CHANGE: 4,
-  STOCK_BEFORE: 5,
-  STOCK_AFTER: 6,
-  REFERENCE_ID: 7,
-  EMPLOYEE: 8,
-  ITEM: 9,
-  REASON: 10,
-  SOURCE: 11,
-  BUNDLE_NO: 12,
-  REMAINING_BUNDLE_QTY: 13,
-  NOTES: 14
+  MOVEMENT_ID: 1,
+  TIMESTAMP: 2,
+  SOURCE: 3,
+  REFERENCE_ID: 4,
+  SOURCE_LINE_ID: 5,
+  CODE: 6,
+  ITEM: 7,
+  TYPE: 8,
+  QTY_CHANGE: 9,
+  STOCK_BEFORE: 10,
+  STOCK_AFTER: 11,
+  EMPLOYEE: 12,
+  REASON: 13,
+  BUNDLE_NO: 14,
+  REMAINING_BUNDLE_QTY: 15,
+  NOTES: 16
 };
 
-const MOVEMENT_LOG_COLUMN_COUNT = 14;
+const MOVEMENT_LOG_COLUMN_COUNT = 16;
 
 
 /* ==========================================================
@@ -444,13 +479,14 @@ const INVENTORY_MOVEMENT_SOURCE = {
    A  Product Code
    B  Description
    C  Category
-   D  Default Price
-   E  Original Price
-   F  Inventory Type
+   D  Inventory Type
+   E  Selling Price
+   F  Cost Price
    G  Low Stock At
    H  Active
-   I  Created At
-   J  Updated At
+   I  Image
+   J  Created At
+   K  Updated At
 ========================================================== */
 
 const PRODUCT_IDX = {
@@ -458,14 +494,15 @@ const PRODUCT_IDX = {
   PRODUCT_CODE: 0,
   DESCRIPTION: 1,
   CATEGORY: 2,
-  DEFAULT_PRICE: 3,
-  ORIGINAL_PRICE: 4,
-  INVENTORY_TYPE: 5,
+  INVENTORY_TYPE: 3,
+  SELLING_PRICE: 4,
+  DEFAULT_PRICE: 4,
+  COST_PRICE: 5,
   LOW_STOCK_AT: 6,
   ACTIVE: 7,
-  CREATED_AT: 8,
-  UPDATED_AT: 9,
-  IMAGE: 10
+  IMAGE: 8,
+  CREATED_AT: 9,
+  UPDATED_AT: 10
 
 };
 
@@ -475,14 +512,15 @@ const PRODUCT_COL = {
   PRODUCT_CODE: 1,
   DESCRIPTION: 2,
   CATEGORY: 3,
-  DEFAULT_PRICE: 4,
-  ORIGINAL_PRICE: 5,
-  INVENTORY_TYPE: 6,
+  INVENTORY_TYPE: 4,
+  SELLING_PRICE: 5,
+  DEFAULT_PRICE: 5,
+  COST_PRICE: 6,
   LOW_STOCK_AT: 7,
   ACTIVE: 8,
-  CREATED_AT: 9,
-  UPDATED_AT: 10,
-  IMAGE: 11
+  IMAGE: 9,
+  CREATED_AT: 10,
+  UPDATED_AT: 11
 
 };
 

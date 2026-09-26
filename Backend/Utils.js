@@ -2,6 +2,14 @@ function roundToTwo(num) {
   return Math.round((num + Number.EPSILON) * 100) / 100;
 }
 
+function generateSalesLineId() {
+  return "SL-" + Utilities.getUuid().toUpperCase();
+}
+
+function generateInventoryMovementId() {
+  return "IM-" + Utilities.getUuid().toUpperCase();
+}
+
 function toProperCase(str) {
   if (!str) return "";
   return str.toString().toLowerCase().replace(/(^|[\s\-\/])([a-z])/g, (m, sep, chr) => sep + chr.toUpperCase());
