@@ -884,23 +884,26 @@ function createInventoryFromProductMaster(
 
 
     /* ======================================================
-       BUILD A:M INVENTORY ROW
+       BUILD A:P INVENTORY ROW
     ====================================================== */
 
     const row = [
       product.productCode,        // A Product Code
       product.description,        // B Description
       "",                         // C Size
-      product.category,           // D Category
+      normalizeInventoryCategoryValue_(product.category), // D Category
       product.inventoryType,      // E Inventory Type
       INVENTORY_STATUS.ACTIVE,    // F Status
-      "",                         // G Current Stock formula
-      "",                         // H Stock Status formula
-      product.defaultPrice || 0,  // I Selling Price
-      0,                          // J Original Price
-      product.imageUrl || "",     // K Image
-      now,                        // L Created At
-      now                         // M Updated At
+      "",                         // G Total Delivered formula
+      "",                         // H Total Sold formula
+      "",                         // I Total Returned formula
+      "",                         // J Current Stock formula
+      "",                         // K Stock Status formula
+      product.defaultPrice || 0,  // L Selling Price
+      0,                          // M Original Price
+      product.imageUrl || "",     // N Image
+      now,                        // O Created At
+      now                         // P Updated At
 
     ];
 
@@ -988,4 +991,53 @@ function createInventoryFromProductMaster(
 
   }
 
+}
+
+function repairIncompleteInventoryFromProductMaster_(product, inventoryRowNumber) {
+  if (!product || !Number.isInteger(inventoryRowNumber) || inventoryRowNumber < 2) {
+    throw new Error("A valid Product Master item and Inventory row are required.");
+  }
+
+  const inventorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+  if (!inventorySheet) throw new Error("Inventory sheet not found.");
+
+  const existing = inventorySheet
+    .getRange(inventoryRowNumber, 1, 1, INVENTORY_COLUMN_COUNT)
+    .getDisplayValues()[0];
+  const hasRequiredFields =
+    String(existing[INV_IDX.CATEGORY] || "").trim() &&
+    String(existing[INV_IDX.INVENTORY_TYPE] || "").trim() &&
+    String(existing[INV_IDX.STATUS] || "").trim();
+
+  if (hasRequiredFields) {
+    return { repaired: false, rowNumber: inventoryRowNumber };
+  }
+
+  const now = new Date();
+  const row = [
+    String(product.productCode || "").trim(),
+    String(product.description || "").trim(),
+    "",
+    normalizeInventoryCategoryValue_(product.category),
+    String(product.inventoryType || INVENTORY_TYPE.STOCK).trim().toUpperCase(),
+    INVENTORY_STATUS.ACTIVE,
+    "",
+    "",
+    "",
+    "",
+    "",
+    Number(product.defaultPrice) || 0,
+    0,
+    String(product.imageUrl || "").trim(),
+    now,
+    now
+  ];
+
+  inventorySheet
+    .getRange(inventoryRowNumber, 1, 1, INVENTORY_COLUMN_COUNT)
+    .setValues([row]);
+  setInventoryCalculatedFields_(inventorySheet, inventoryRowNumber, 1);
+  SpreadsheetApp.flush();
+
+  return { repaired: true, rowNumber: inventoryRowNumber };
 }

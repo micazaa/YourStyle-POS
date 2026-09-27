@@ -84,8 +84,8 @@ function logInventoryMovement(movement) {
   if (!sheet) {
     sheet = ss.insertSheet(SHEETS.INVENTORY_MOVEMENT_LOG);
     sheet.getRange(1, 1, 1, MOVEMENT_LOG_COLUMN_COUNT).setValues([[
-      "Movement ID", "Timestamp", "Source", "Reference ID", "Source Line ID",
-      "Product Code", "Item Name", "Inventory Type", "Quantity Change",
+      "Movement ID", "Timestamp", "Movement Source", "Reference ID", "Source Line ID",
+      "Product Code", "Item Name", "Category", "Quantity Change",
       "Stock Before", "Stock After", "Employee", "Reason", "Bundle No.",
       "Remaining Bundle Qty", "Notes"
     ]]);
@@ -423,7 +423,7 @@ function getInventoryForManagementPhase8(managerToken) {
   const uniqueCosts = phase8ReadYourFindsCostBySize_();
   return getFullInventory().map(function(item) {
     const yourFinds = String(item.category).toUpperCase() === 'YOURFINDS';
-    const key = yourFinds ? String(item.size || '').trim().toUpperCase() : item.code;
+    const key = yourFinds ? normalizeYourFindsSaleSize_(item.size) : item.code;
     const map = yourFinds ? uniqueCosts : stockCosts;
     item.costPrice = Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;
     return item;

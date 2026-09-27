@@ -34,13 +34,13 @@ function validateUniversalDeliveryDatabase() {
 
   validateSheetHeaders(deliverySheet, [
     "Delivery ID", "Delivery Date", "Timestamp", "Driver Name", "Plate No.", "Accepted By",
-    "Delivery Type", "Type", "Category", "Receive Mode", "Description", "Bundle Qty", "Estimated Quantity",
+    "Delivery Type", "Category", "Size / Group", "Receive Mode", "Item Name", "Bundle Qty", "Estimated Quantity",
     "Actual Quantity", "Remaining Quantity", "Remaining Bundle Qty", "Variance", "Status", "Remarks"
   ]);
 
   validateSheetHeaders(movementSheet, [
-    "Movement ID", "Timestamp", "Source", "Reference ID", "Source Line ID", "Product Code",
-    "Item Name", "Inventory Type", "Quantity Change", "Stock Before", "Stock After", "Employee",
+    "Movement ID", "Timestamp", "Movement Source", "Reference ID", "Source Line ID", "Product Code",
+    "Item Name", "Category", "Quantity Change", "Stock Before", "Stock After", "Employee",
     "Reason", "Bundle No.", "Remaining Bundle Qty", "Notes"
   ]);
 
@@ -246,16 +246,19 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
     productCode,                                          // A Product Code
     String(product.description || "").trim(),             // B Description
     "",                                                   // C Size
-    category,                                             // D Category
+    normalizeInventoryCategoryValue_(category),           // D Category
     INVENTORY_TYPE.STOCK,                                 // E Inventory Type
     INVENTORY_STATUS.ACTIVE,                              // F Status
-    "",                                                   // G Current Stock formula
-    "",                                                   // H Stock Status formula
-    Number(product.defaultPrice) || 0,                    // I Selling Price
-    0,                                                    // J Original Price
-    String(product.imageUrl || "").trim(),                // K Image
-    now,                                                  // L Created At
-    now                                                   // M Updated At
+    "",                                                   // G Total Delivered formula
+    "",                                                   // H Total Sold formula
+    "",                                                   // I Total Returned formula
+    "",                                                   // J Current Stock formula
+    "",                                                   // K Stock Status formula
+    Number(product.defaultPrice) || 0,                    // L Selling Price
+    0,                                                    // M Original Price
+    String(product.imageUrl || "").trim(),                // N Image
+    now,                                                  // O Created At
+    now                                                   // P Updated At
   ];
 
   if (
@@ -263,7 +266,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
     INVENTORY_COLUMN_COUNT
   ) {
     throw new Error(
-      "Inventory row does not match A:M mapping."
+      "Inventory row does not match A:P mapping."
     );
   }
 

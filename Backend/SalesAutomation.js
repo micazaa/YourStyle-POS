@@ -205,12 +205,34 @@ function salesMovementLineIds_() {
  * movement below can make the calculated stock negative. Unknown/inactive
  * codes still fail instead of creating an incomplete inventory record.
  */
-function ensureManualSaleInventoryItem_(code) {
+function ensureManualSaleInventoryItem_(item) {
+  item = item || {};
+  const code = String(item.code || "").trim();
+  const category = String(item.category || "").trim().toUpperCase();
+
+  if (category === "YOURFINDS") {
+    return ensureCustomYourFindsInventoryItem_(item);
+  }
+
+  if (code.toUpperCase().startsWith("CUSTOM-")) {
+    return { created: false, skipMovement: true };
+  }
+
   const status = getProductInventoryStatus(code);
   if (!status || !status.success) {
     throw new Error(status && status.message ? status.message : "Unable to check Inventory.");
   }
-  if (status.existsInInventory) return { created: false };
+  if (status.existsInInventory) {
+    const repair = repairIncompleteInventoryFromProductMaster_(
+      status.product,
+      status.inventoryItem.rowNumber
+    );
+    return {
+      created: false,
+      repaired: repair.repaired,
+      rowNumber: repair.rowNumber
+    };
+  }
 
   const created = createInventoryFromProductMaster(code);
   if (!created || !created.success) {
@@ -264,7 +286,10 @@ function processSalesRows_(sheet, rowNumbers) {
         const cashier = String(row[SALES_IDX.CASHIER] || "").trim();
         const code = String(row[SALES_IDX.CODE] || "").trim();
         const itemName = String(row[SALES_IDX.ITEM_NAME] || "").trim();
+        const size = String(row[SALES_IDX.SIZE] || "").trim();
+        const category = String(row[SALES_IDX.CATEGORY] || "").trim();
         const quantity = Number(row[SALES_IDX.QUANTITY]);
+        const price = Number(row[SALES_IDX.PRICE]);
         const saleStatus = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
 
         if (!row[SALES_IDX.TIMESTAMP]) throw new Error("Timestamp is required.");
@@ -274,18 +299,26 @@ function processSalesRows_(sheet, rowNumbers) {
         if (!saleStatus) throw new Error("Status is required.");
 
         if (saleStatus === "COMPLETED" && code && !movementIds[salesLineId]) {
-          ensureManualSaleInventoryItem_(code);
-          changeInventoryStock({
+          const inventoryResolution = ensureManualSaleInventoryItem_({
             code: code,
-            qtyChange: -quantity,
-            referenceId: receiptId,
-            sourceLineId: salesLineId,
-            employee: cashier,
-            item: itemName,
-            reason: "",
-            source: INVENTORY_MOVEMENT_SOURCE.SALE,
-            notes: "Manual Sales Log entry"
+            name: itemName,
+            size: size,
+            category: category,
+            price: price
           });
+          if (!inventoryResolution.skipMovement) {
+            changeInventoryStock({
+              code: code,
+              qtyChange: -quantity,
+              referenceId: receiptId,
+              sourceLineId: salesLineId,
+              employee: cashier,
+              item: itemName,
+              reason: "",
+              source: INVENTORY_MOVEMENT_SOURCE.SALE,
+              notes: "Manual Sales Log entry"
+            });
+          }
           movementIds[salesLineId] = true;
         }
 

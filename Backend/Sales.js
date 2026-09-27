@@ -622,16 +622,13 @@ function voidAndRefundTransactionBackend(
         /* ====================================================
            INVENTORY RESTORE
 
-           Custom items don't exist in Inventory.
+           Custom YourFinds items exist in Inventory after checkout.
         ==================================================== */
 
-        if (
-          code &&
-          !code.startsWith(
-            "CUSTOM-"
-          ) &&
-          voidQty > 0
-        ) {
+        const category = String(row[SALES_IDX.CATEGORY] || "").trim().toUpperCase();
+        const restoresInventory = !code.startsWith("CUSTOM-") || category === "YOURFINDS";
+
+        if (code && restoresInventory && voidQty > 0) {
           changeInventoryStock({
             code: code,
             qtyChange: voidQty,

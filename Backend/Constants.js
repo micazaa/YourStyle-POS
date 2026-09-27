@@ -38,13 +38,16 @@ const SHEETS = {
    D  Category
    E  Inventory Type
    F  Status
-   G  Current Stock
-   H  Stock Status
-   I  Selling Price
-   J  Original Price
-   K  Image
-   L  Created At
-   M  Updated At
+   G  Total Delivered
+   H  Total Sold
+   I  Total Returned
+   J  Current Stock
+   K  Stock Status
+   L  Selling Price
+   M  Original Price
+   N  Image
+   O  Created At
+   P  Updated At
 ========================================================== */
 
 const INV_IDX = {
@@ -55,13 +58,16 @@ const INV_IDX = {
   CATEGORY: 3,
   INVENTORY_TYPE: 4,
   STATUS: 5,
-  STOCK: 6,
-  STOCK_STATUS: 7,
-  YS_PRICE: 8,
-  ORIG_PRICE: 9,
-  IMAGE: 10,
-  CREATED_AT: 11,
-  UPDATED_AT: 12
+  TOTAL_DELIVERED: 6,
+  TOTAL_SOLD: 7,
+  TOTAL_RETURNED: 8,
+  STOCK: 9,
+  STOCK_STATUS: 10,
+  YS_PRICE: 11,
+  ORIG_PRICE: 12,
+  IMAGE: 13,
+  CREATED_AT: 14,
+  UPDATED_AT: 15
 
 };
 
@@ -73,17 +79,20 @@ const INV_COL = {
   CATEGORY: 4,
   INVENTORY_TYPE: 5,
   STATUS: 6,
-  STOCK: 7,
-  STOCK_STATUS: 8,
-  YS_PRICE: 9,
-  ORIG_PRICE: 10,
-  IMAGE: 11,
-  CREATED_AT: 12,
-  UPDATED_AT: 13
+  TOTAL_DELIVERED: 7,
+  TOTAL_SOLD: 8,
+  TOTAL_RETURNED: 9,
+  STOCK: 10,
+  STOCK_STATUS: 11,
+  YS_PRICE: 12,
+  ORIG_PRICE: 13,
+  IMAGE: 14,
+  CREATED_AT: 15,
+  UPDATED_AT: 16
 
 };
 
-const INVENTORY_COLUMN_COUNT = 13;
+const INVENTORY_COLUMN_COUNT = 16;
 
 
 /* ==========================================================
