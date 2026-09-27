@@ -787,11 +787,7 @@ function acceptYourFindsDelivery(
       }
 
 
-      const deliveryNo =
-        buildYourFindsDeliveryNo(
-          deliveryDate,
-          deliverySequence
-        );
+      const deliveryNo = deliveryId;
 
       /* ======================================================
          GENERATE ITEM CODES
@@ -988,7 +984,6 @@ function acceptYourFindsDelivery(
         const category = size === "CUSTOM" ? customSizeLabel : size;
         const deliveryRow = [
           deliveryId,
-          deliveryNo,
           deliveryDate,
           now,
           driverName,
@@ -1010,7 +1005,7 @@ function acceptYourFindsDelivery(
         ];
 
         if (deliveryRow.length !== DELIVERY_LOG_COLUMN_COUNT) {
-          throw new Error("YourFinds Delivery row does not match universal A:T mapping.");
+          throw new Error("YourFinds Delivery row does not match universal A:S mapping.");
         }
 
         deliveryRows.push(deliveryRow);
@@ -1110,7 +1105,7 @@ function acceptYourFindsDelivery(
               source: INVENTORY_MOVEMENT_SOURCE.DELIVERY,
               bundleNo: "",
               remainingBundleQty: "",
-              notes: deliveryNo ? "Delivery No: " + deliveryNo : ""
+              notes: deliveryId ? "Delivery ID: " + deliveryId : ""
             });
 
           }
@@ -1677,11 +1672,7 @@ function getNextYourFindsDeliveryNumber(
     }
 
 
-    const deliveryNo =
-      buildYourFindsDeliveryNo(
-        deliveryDate,
-        deliverySequence
-      );
+    const deliveryNo = deliveryId;
 
 
     return {

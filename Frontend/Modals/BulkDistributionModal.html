@@ -116,7 +116,7 @@ function closeBulkDistributionModal() {
 
 function renderBulkDistributionHolder() {
   const h=bulkDistributionHolder; if(!h)return;
-  document.getElementById("bulkDistributionDeliveryNo").textContent=h.deliveryNo||h.deliveryId||"—";
+  document.getElementById("bulkDistributionDeliveryNo").textContent=h.deliveryId||"—";
   document.getElementById("bulkDistributionType").textContent=h.type||"—";
   document.getElementById("bulkDistributionBundleCount").textContent=h.bundleQty||0;
   document.getElementById("bulkDistributionStatus").textContent=h.status||"—";
