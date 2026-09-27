@@ -10,6 +10,14 @@ function generateInventoryMovementId() {
   return "IM-" + Utilities.getUuid().toUpperCase();
 }
 
+function normalizeInventoryCategoryValue_(category) {
+  const normalized = String(category || "").trim().toUpperCase();
+  if (normalized === "PINS") return "PINS";
+  if (normalized === "OTHERS" || normalized === "OTHER") return "Others";
+  if (normalized === "YOURFINDS" || normalized === "YOUR FINDS") return "YourFinds";
+  return String(category || "").trim();
+}
+
 function toProperCase(str) {
   if (!str) return "";
   return str.toString().toLowerCase().replace(/(^|[\s\-\/])([a-z])/g, (m, sep, chr) => sep + chr.toUpperCase());

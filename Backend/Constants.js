@@ -38,13 +38,16 @@ const SHEETS = {
    D  Category
    E  Inventory Type
    F  Status
-   G  Current Stock
-   H  Stock Status
-   I  Selling Price
-   J  Original Price
-   K  Image
-   L  Created At
-   M  Updated At
+   G  Total Delivered
+   H  Total Sold
+   I  Total Returned
+   J  Current Stock
+   K  Stock Status
+   L  Selling Price
+   M  Original Price
+   N  Image
+   O  Created At
+   P  Updated At
 ========================================================== */
 
 const INV_IDX = {
@@ -55,13 +58,16 @@ const INV_IDX = {
   CATEGORY: 3,
   INVENTORY_TYPE: 4,
   STATUS: 5,
-  STOCK: 6,
-  STOCK_STATUS: 7,
-  YS_PRICE: 8,
-  ORIG_PRICE: 9,
-  IMAGE: 10,
-  CREATED_AT: 11,
-  UPDATED_AT: 12
+  TOTAL_DELIVERED: 6,
+  TOTAL_SOLD: 7,
+  TOTAL_RETURNED: 8,
+  STOCK: 9,
+  STOCK_STATUS: 10,
+  YS_PRICE: 11,
+  ORIG_PRICE: 12,
+  IMAGE: 13,
+  CREATED_AT: 14,
+  UPDATED_AT: 15
 
 };
 
@@ -73,17 +79,20 @@ const INV_COL = {
   CATEGORY: 4,
   INVENTORY_TYPE: 5,
   STATUS: 6,
-  STOCK: 7,
-  STOCK_STATUS: 8,
-  YS_PRICE: 9,
-  ORIG_PRICE: 10,
-  IMAGE: 11,
-  CREATED_AT: 12,
-  UPDATED_AT: 13
+  TOTAL_DELIVERED: 7,
+  TOTAL_SOLD: 8,
+  TOTAL_RETURNED: 9,
+  STOCK: 10,
+  STOCK_STATUS: 11,
+  YS_PRICE: 12,
+  ORIG_PRICE: 13,
+  IMAGE: 14,
+  CREATED_AT: 15,
+  UPDATED_AT: 16
 
 };
 
-const INVENTORY_COLUMN_COUNT = 13;
+const INVENTORY_COLUMN_COUNT = 16;
 
 
 /* ==========================================================
@@ -258,6 +267,29 @@ const MOVEMENT_LOG_COLUMN_COUNT = 16;
 
 const DELIVERY_IDX = {
   DELIVERY_ID: 0,
+  DELIVERY_NO: 0, // Compatibility alias: Delivery ID is the only delivery number.
+  DELIVERY_DATE: 1,
+  TIMESTAMP: 2,
+  DRIVER_NAME: 3,
+  PLATE_NO: 4,
+  ACCEPTED_BY: 5,
+  DELIVERY_TYPE: 6,
+  TYPE: 7,
+  CATEGORY: 8,
+  RECEIVE_MODE: 9,
+  DESCRIPTION: 10,
+  BUNDLE_QTY: 11,
+  ESTIMATED_QTY: 12,
+  ACTUAL_QTY: 13,
+  REMAINING_QTY: 14,
+  REMAINING_BUNDLE_QTY: 15,
+  VARIANCE: 16,
+  STATUS: 17,
+  REMARKS: 18
+};
+
+const DELIVERY_COL = {
+  DELIVERY_ID: 1,
   DELIVERY_NO: 1,
   DELIVERY_DATE: 2,
   TIMESTAMP: 3,
@@ -279,30 +311,7 @@ const DELIVERY_IDX = {
   REMARKS: 19
 };
 
-const DELIVERY_COL = {
-  DELIVERY_ID: 1,
-  DELIVERY_NO: 2,
-  DELIVERY_DATE: 3,
-  TIMESTAMP: 4,
-  DRIVER_NAME: 5,
-  PLATE_NO: 6,
-  ACCEPTED_BY: 7,
-  DELIVERY_TYPE: 8,
-  TYPE: 9,
-  CATEGORY: 10,
-  RECEIVE_MODE: 11,
-  DESCRIPTION: 12,
-  BUNDLE_QTY: 13,
-  ESTIMATED_QTY: 14,
-  ACTUAL_QTY: 15,
-  REMAINING_QTY: 16,
-  REMAINING_BUNDLE_QTY: 17,
-  VARIANCE: 18,
-  STATUS: 19,
-  REMARKS: 20
-};
-
-const DELIVERY_LOG_COLUMN_COUNT = 20;
+const DELIVERY_LOG_COLUMN_COUNT = 19;
 
 
 /* ==========================================================

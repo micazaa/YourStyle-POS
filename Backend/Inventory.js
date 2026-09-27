@@ -39,19 +39,156 @@ function setInventoryCalculatedFields_(sheet, startRow, rowCount) {
     return;
   }
 
+  const deliveredFormulas = [];
+  const soldFormulas = [];
+  const returnedFormulas = [];
   const stockFormulas = [];
   const statusFormulas = [];
   for (let rowNumber = startRow; rowNumber < startRow + rowCount; rowNumber++) {
+    deliveredFormulas.push([
+      '=IF(A' + rowNumber + '="","",SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"DELIVERY")+SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"DISTRIBUTION",\'Inventory Movement Log\'!$I$2:$I,">0"))'
+    ]);
+    soldFormulas.push([
+      '=IF(A' + rowNumber + '="","",-SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"SALE"))'
+    ]);
+    returnedFormulas.push([
+      '=IF(A' + rowNumber + '="","",-SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"SUPPLIER_RETURN"))'
+    ]);
     stockFormulas.push([
       '=IF(A' + rowNumber + '="","",SUMIF(\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$I$2:$I))'
     ]);
     statusFormulas.push([
-      '=IF(A' + rowNumber + '="","",IF(G' + rowNumber + '<0,"NEGATIVE STOCK",IF(G' + rowNumber + '=0,"SOLD OUT",IF(OR(E' + rowNumber + '="UNIQUE",UPPER(D' + rowNumber + ')="YOURFINDS"),"IN STOCK",IF(G' + rowNumber + '<=IFNA(XLOOKUP(A' + rowNumber + ',\'Product Master\'!$A$2:$A,\'Product Master\'!$G$2:$G),0),"LOW STOCK","IN STOCK")))))'
+      '=IF(A' + rowNumber + '="","",IF(J' + rowNumber + '<0,"NEGATIVE STOCK",IF(J' + rowNumber + '=0,"SOLD OUT",IF(OR(E' + rowNumber + '="UNIQUE",UPPER(D' + rowNumber + ')="YOURFINDS"),"IN STOCK",IF(J' + rowNumber + '<=IFNA(XLOOKUP(A' + rowNumber + ',\'Product Master\'!$A$2:$A,\'Product Master\'!$G$2:$G),0),"LOW STOCK","IN STOCK")))))'
     ]);
   }
 
+  sheet.getRange(startRow, INV_COL.TOTAL_DELIVERED, rowCount, 1).setFormulas(deliveredFormulas);
+  sheet.getRange(startRow, INV_COL.TOTAL_SOLD, rowCount, 1).setFormulas(soldFormulas);
+  sheet.getRange(startRow, INV_COL.TOTAL_RETURNED, rowCount, 1).setFormulas(returnedFormulas);
   sheet.getRange(startRow, INV_COL.STOCK, rowCount, 1).setFormulas(stockFormulas);
   sheet.getRange(startRow, INV_COL.STOCK_STATUS, rowCount, 1).setFormulas(statusFormulas);
+}
+
+/* ==========================================================
+   CUSTOM YOURFINDS SALE -> INVENTORY
+
+   Custom YourFinds items receive a one-off CUSTOM-* code at
+   checkout. Product Master is therefore resolved by size:
+
+   S/M/L/XL -> SNE/MNE/LNE/XLNE
+   Known elastic sizes remain unchanged
+   Every other label uses the CUSTOM size template
+========================================================== */
+
+function normalizeYourFindsSaleSize_(size) {
+  const normalized = String(size || "").trim().toUpperCase();
+  const aliases = {
+    S: "SNE",
+    M: "MNE",
+    L: "LNE",
+    XL: "XLNE"
+  };
+
+  if (aliases[normalized]) return aliases[normalized];
+  if (YOURFINDS_SIZE_ORDER.indexOf(normalized) !== -1) return normalized;
+  return "CUSTOM";
+}
+
+function getYourFindsSaleTemplate_(size) {
+  const lookupSize = normalizeYourFindsSaleSize_(size);
+  const product = getActiveProducts().find(function(candidate) {
+    return String(candidate.category || "").trim().toUpperCase() === "YOURFINDS" &&
+      String(candidate.description || "").trim().toUpperCase() === lookupSize;
+  });
+
+  if (!product) {
+    throw new Error(
+      "Active YourFinds size " + lookupSize + " was not found in Product Master."
+    );
+  }
+
+  return product;
+}
+
+function ensureCustomYourFindsInventoryItem_(item) {
+  item = item || {};
+  const code = String(item.code || "").trim();
+  const name = String(item.name || item.itemName || "").trim();
+  const size = String(item.size || "").trim();
+  const category = String(item.category || "").trim().toUpperCase();
+  const sellingPrice = Number(item.price);
+  const inventorySize = normalizeYourFindsSaleSize_(size);
+
+  if (category !== "YOURFINDS") return { created: false, skipped: true };
+  if (!code) throw new Error("Custom YourFinds item has no Product Code.");
+  if (!name) throw new Error("Custom YourFinds item has no description.");
+  if (!size) throw new Error("Custom YourFinds item has no size.");
+  if (!Number.isFinite(sellingPrice) || sellingPrice < 0) {
+    throw new Error("Custom YourFinds item has an invalid selling price.");
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const inventorySheet = ss.getSheetByName(SHEETS.INVENTORY);
+  if (!inventorySheet) throw new Error("Inventory sheet not found.");
+
+  const lastRow = inventorySheet.getLastRow();
+  let targetRowNumber = lastRow + 1;
+  if (lastRow >= 2) {
+    const codes = inventorySheet
+      .getRange(2, INV_COL.CODE, lastRow - 1, 1)
+      .getDisplayValues();
+    for (let i = 0; i < codes.length; i++) {
+      if (String(codes[i][0] || "").trim() === code) {
+        targetRowNumber = i + 2;
+        const existing = inventorySheet
+          .getRange(targetRowNumber, 1, 1, INVENTORY_COLUMN_COUNT)
+          .getDisplayValues()[0];
+        const existingCategory = String(existing[INV_IDX.CATEGORY] || "").trim().toUpperCase();
+        const existingType = String(existing[INV_IDX.INVENTORY_TYPE] || "").trim().toUpperCase();
+        if (existingCategory === "YOURFINDS" && existingType === INVENTORY_TYPE.UNIQUE) {
+          return { created: false, rowNumber: targetRowNumber };
+        }
+        break;
+      }
+    }
+  }
+
+  const template = getYourFindsSaleTemplate_(size);
+  const now = new Date();
+  const row = [
+    code,
+    name,
+    inventorySize,
+    "YourFinds",
+    INVENTORY_TYPE.UNIQUE,
+    INVENTORY_STATUS.ACTIVE,
+    "",
+    "",
+    "",
+    "",
+    "",
+    sellingPrice,
+    0,
+    template.imageUrl || "",
+    now,
+    now
+  ];
+
+  if (row.length !== INVENTORY_COLUMN_COUNT) {
+    throw new Error("Inventory row structure does not match Inventory mapping.");
+  }
+
+  inventorySheet
+    .getRange(targetRowNumber, 1, 1, INVENTORY_COLUMN_COUNT)
+    .setValues([row]);
+  setInventoryCalculatedFields_(inventorySheet, targetRowNumber, 1);
+  SpreadsheetApp.flush();
+
+  return {
+    created: true,
+    rowNumber: targetRowNumber,
+    templateSize: inventorySize
+  };
 }
 
 function getFullInventory() {
@@ -76,7 +213,7 @@ function getFullInventory() {
   const deliveryMetadataByCode = getInventoryDeliveryMetadataByCode_();
 
   /* ========================================================
-     READ INVENTORY A:M
+     READ INVENTORY A:P
   ======================================================== */
 
   const data = sheet
@@ -787,11 +924,7 @@ function acceptYourFindsDelivery(
       }
 
 
-      const deliveryNo =
-        buildYourFindsDeliveryNo(
-          deliveryDate,
-          deliverySequence
-        );
+      const deliveryNo = deliveryId;
 
       /* ======================================================
          GENERATE ITEM CODES
@@ -912,7 +1045,7 @@ function acceptYourFindsDelivery(
 
 
       /* ======================================================
-         BUILD INVENTORY ROWS A:M
+         BUILD INVENTORY ROWS A:P
       ====================================================== */
 
       const now =
@@ -941,13 +1074,16 @@ function acceptYourFindsDelivery(
                 "YourFinds",                                     // D Category
                 INVENTORY_TYPE.UNIQUE,                            // E Inventory Type
                 INVENTORY_STATUS.INCOMPLETE,                      // F Status
-                "",                                              // G Current Stock formula
-                "",                                              // H Stock Status formula
-                0,                                               // I Selling Price
-                0,                                               // J Original Price
-                "",                                              // K Image
-                now,                                             // L Created At
-                now                                              // M Updated At
+                "",                                              // G Total Delivered formula
+                "",                                              // H Total Sold formula
+                "",                                              // I Total Returned formula
+                "",                                              // J Current Stock formula
+                "",                                              // K Stock Status formula
+                0,                                               // L Selling Price
+                0,                                               // M Original Price
+                "",                                              // N Image
+                now,                                             // O Created At
+                now                                              // P Updated At
 
               ];
 
@@ -958,7 +1094,7 @@ function acceptYourFindsDelivery(
               ) {
 
                 throw new Error(
-                  "YourFinds Inventory row does not match Inventory A:M mapping."
+                  "YourFinds Inventory row does not match Inventory A:P mapping."
                 );
 
               }
@@ -988,7 +1124,6 @@ function acceptYourFindsDelivery(
         const category = size === "CUSTOM" ? customSizeLabel : size;
         const deliveryRow = [
           deliveryId,
-          deliveryNo,
           deliveryDate,
           now,
           driverName,
@@ -1010,7 +1145,7 @@ function acceptYourFindsDelivery(
         ];
 
         if (deliveryRow.length !== DELIVERY_LOG_COLUMN_COUNT) {
-          throw new Error("YourFinds Delivery row does not match universal A:T mapping.");
+          throw new Error("YourFinds Delivery row does not match universal A:S mapping.");
         }
 
         deliveryRows.push(deliveryRow);
@@ -1110,7 +1245,7 @@ function acceptYourFindsDelivery(
               source: INVENTORY_MOVEMENT_SOURCE.DELIVERY,
               bundleNo: "",
               remainingBundleQty: "",
-              notes: deliveryNo ? "Delivery No: " + deliveryNo : ""
+              notes: deliveryId ? "Delivery ID: " + deliveryId : ""
             });
 
           }
@@ -1393,8 +1528,8 @@ function getInventoryDisplayStatus(item) {
    UNIQUE item:
    1 -> sell 1 -> 0
 
-   Custom items:
-   Ignored because they do not exist in Inventory.
+   Custom YourFinds items:
+   Created in Inventory, then deducted so their stock becomes negative.
 
    Also creates a SALE entry in:
    Inventory Movement Log
@@ -1411,8 +1546,8 @@ function getInventoryDisplayStatus(item) {
    UNIQUE:
    1 -> sell 1 -> 0
 
-   CUSTOM:
-   Ignored because custom items do not exist in Inventory.
+   CUSTOM YOURFINDS:
+   Created from the Product Master size template, then deducted.
 ========================================================== */
 
 function deductInventoryStock(soldItems, receiptId, employeeName) {
@@ -1437,14 +1572,12 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
       return;
     }
 
-    /* ================= CUSTOM ITEM =================
-
-         Custom/unlisted Cashier items don't exist
-         in Inventory and therefore don't change stock.
-      ================================================= */
+    /* ================= CUSTOM ITEM ================= */
 
     if (item.isCustom) {
-      return;
+      const customCategory = String(item.category || "").trim().toUpperCase();
+      if (customCategory !== "YOURFINDS") return;
+      ensureCustomYourFindsInventoryItem_(item);
     }
 
     /* ================= CODE ================= */
@@ -1677,11 +1810,7 @@ function getNextYourFindsDeliveryNumber(
     }
 
 
-    const deliveryNo =
-      buildYourFindsDeliveryNo(
-        deliveryDate,
-        deliverySequence
-      );
+    const deliveryNo = deliveryId;
 
 
     return {

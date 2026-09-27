@@ -21,7 +21,7 @@
         <input type="date" id="yourStyleDeliveryDate" class="form-control" onchange="loadNextYourStyleDeliveryNumber()">
       </div>
       <div class="col-md-6">
-        <label class="form-label">Delivery No.</label>
+        <label class="form-label">Delivery ID</label>
         <input type="text" id="yourStyleDeliveryNo" class="form-control" value="—" readonly>
       </div>
       <div class="col-md-6">
@@ -138,7 +138,7 @@ function loadNextYourStyleDeliveryNumber() {
   if (!date) { field.value = "—"; return; }
   field.value = "Loading...";
   google.script.run.withSuccessHandler(function(result) {
-    field.value = result && result.deliveryNo ? result.deliveryNo : "—";
+    field.value = result && result.deliveryId ? result.deliveryId : "—";
   }).withFailureHandler(function() { field.value = "—"; }).generateDeliveryIdentifiers("YOURSTYLE", date);
 }
 
@@ -283,7 +283,7 @@ function submitYourStyleDelivery() {
     button.textContent = "Accept Delivery";
     if (!result || !result.success) return showNotificationToast(result && result.message ? result.message : "Unable to accept YourStyle delivery.", true);
     closeYourStyleDeliveryModal();
-    showNotificationToast(result.deliveryNo + " accepted — " + result.directUnits + " direct unit(s), " + result.bulkBundles + " bundle(s).");
+    showNotificationToast(result.deliveryId + " accepted — " + result.directUnits + " direct unit(s), " + result.bulkBundles + " bundle(s).");
   }).withFailureHandler(function(err) {
     button.disabled = false;
     button.textContent = "Accept Delivery";

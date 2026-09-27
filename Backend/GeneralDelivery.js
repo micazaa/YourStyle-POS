@@ -33,14 +33,14 @@ function validateUniversalDeliveryDatabase() {
   if (!movementSheet) throw new Error("Inventory Movement Log sheet not found.");
 
   validateSheetHeaders(deliverySheet, [
-    "Delivery ID", "Delivery No.", "Delivery Date", "Timestamp", "Driver Name", "Plate No.", "Accepted By",
-    "Delivery Type", "Type", "Category", "Receive Mode", "Description", "Bundle Qty", "Estimated Quantity",
+    "Delivery ID", "Delivery Date", "Timestamp", "Driver Name", "Plate No.", "Accepted By",
+    "Delivery Type", "Category", "Size / Group", "Receive Mode", "Item Name", "Bundle Qty", "Estimated Quantity",
     "Actual Quantity", "Remaining Quantity", "Remaining Bundle Qty", "Variance", "Status", "Remarks"
   ]);
 
   validateSheetHeaders(movementSheet, [
-    "Movement ID", "Timestamp", "Source", "Reference ID", "Source Line ID", "Product Code",
-    "Item Name", "Inventory Type", "Quantity Change", "Stock Before", "Stock After", "Employee",
+    "Movement ID", "Timestamp", "Movement Source", "Reference ID", "Source Line ID", "Product Code",
+    "Item Name", "Category", "Quantity Change", "Stock Before", "Stock After", "Employee",
     "Reason", "Bundle No.", "Remaining Bundle Qty", "Notes"
   ]);
 
@@ -52,9 +52,8 @@ function generateDeliveryIdentifiers(deliveryType, deliveryDate) {
   deliveryDate = normalizeGeneralDeliveryDate(deliveryDate);
 
   let idPrefix = "";
-  let noPrefix = "";
-  if (deliveryType === DELIVERY_TYPE.YOURFINDS) { idPrefix = "YFD"; noPrefix = "YF"; }
-  else if (deliveryType === DELIVERY_TYPE.YOURSTYLE) { idPrefix = "YSD"; noPrefix = "YS"; }
+  if (deliveryType === DELIVERY_TYPE.YOURFINDS) idPrefix = "YFD";
+  else if (deliveryType === DELIVERY_TYPE.YOURSTYLE) idPrefix = "YSD";
   else throw new Error("Invalid Delivery Type.");
 
   const sheet = getGeneralDeliveryLogSheet();
@@ -73,10 +72,11 @@ function generateDeliveryIdentifiers(deliveryType, deliveryDate) {
   }
 
   const sequence = highestSequence + 1;
+  const deliveryId = fullPrefix + String(sequence).padStart(3, "0");
   return {
     deliveryType: deliveryType,
-    deliveryId: fullPrefix + String(sequence).padStart(3, "0"),
-    deliveryNo: noPrefix + "-" + dateCode.substring(2) + "-" + String(sequence).padStart(2, "0"),
+    deliveryId: deliveryId,
+    deliveryNo: deliveryId,
     sequence: sequence,
     deliveryDate: deliveryDate
   };
@@ -246,16 +246,19 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
     productCode,                                          // A Product Code
     String(product.description || "").trim(),             // B Description
     "",                                                   // C Size
-    category,                                             // D Category
+    normalizeInventoryCategoryValue_(category),           // D Category
     INVENTORY_TYPE.STOCK,                                 // E Inventory Type
     INVENTORY_STATUS.ACTIVE,                              // F Status
-    "",                                                   // G Current Stock formula
-    "",                                                   // H Stock Status formula
-    Number(product.defaultPrice) || 0,                    // I Selling Price
-    0,                                                    // J Original Price
-    String(product.imageUrl || "").trim(),                // K Image
-    now,                                                  // L Created At
-    now                                                   // M Updated At
+    "",                                                   // G Total Delivered formula
+    "",                                                   // H Total Sold formula
+    "",                                                   // I Total Returned formula
+    "",                                                   // J Current Stock formula
+    "",                                                   // K Stock Status formula
+    Number(product.defaultPrice) || 0,                    // L Selling Price
+    0,                                                    // M Original Price
+    String(product.imageUrl || "").trim(),                // N Image
+    now,                                                  // O Created At
+    now                                                   // P Updated At
   ];
 
   if (
@@ -263,7 +266,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
     INVENTORY_COLUMN_COUNT
   ) {
     throw new Error(
-      "Inventory row does not match A:M mapping."
+      "Inventory row does not match A:P mapping."
     );
   }
 
@@ -393,7 +396,7 @@ function acceptYourStyleDelivery(payload) {
       if (line.receiveMode === DELIVERY_RECEIVE_MODE.DIRECT) {
         directUnits += line.quantity;
         deliveryRows.push([
-          identifiers.deliveryId, identifiers.deliveryNo, deliveryDate, now, driverName, plateNo, acceptedBy,
+          identifiers.deliveryId, deliveryDate, now, driverName, plateNo, acceptedBy,
           DELIVERY_TYPE.YOURSTYLE, line.type, line.type, DELIVERY_RECEIVE_MODE.DIRECT, line.description,
           "", "", line.quantity, "", "", "", DELIVERY_STATUS.ACCEPTED, remarks
         ]);
@@ -405,13 +408,13 @@ function acceptYourStyleDelivery(payload) {
       bulkBundles += line.bundleQty;
       line.holderCode = identifiers.deliveryId + "-B" + String(bulkIndex).padStart(2, "0");
       deliveryRows.push([
-        identifiers.deliveryId, identifiers.deliveryNo, deliveryDate, now, driverName, plateNo, acceptedBy,
+        identifiers.deliveryId, deliveryDate, now, driverName, plateNo, acceptedBy,
         DELIVERY_TYPE.YOURSTYLE, line.type, "UNSORTED", DELIVERY_RECEIVE_MODE.BULK, line.description,
         line.bundleQty, line.estimatedQuantity, 0, line.estimatedQuantity, line.bundleQty, "", DELIVERY_STATUS.PENDING, remarks
       ]);
     });
 
-    if (deliveryRows.some(function(row) { return row.length !== DELIVERY_LOG_COLUMN_COUNT; })) throw new Error("YourStyle Delivery row does not match universal A:T mapping.");
+    if (deliveryRows.some(function(row) { return row.length !== DELIVERY_LOG_COLUMN_COUNT; })) throw new Error("YourStyle Delivery row does not match universal A:S mapping.");
 
     deliverySheet.getRange(deliverySheet.getLastRow() + 1, 1, deliveryRows.length, DELIVERY_LOG_COLUMN_COUNT).setValues(deliveryRows);
 
@@ -429,7 +432,7 @@ function acceptYourStyleDelivery(payload) {
           item: line.description,
           reason: "",
           source: INVENTORY_MOVEMENT_SOURCE.DELIVERY,
-          notes: "Delivery No: " + identifiers.deliveryNo
+          notes: "Delivery ID: " + identifiers.deliveryId
         });
         return;
       }
@@ -448,7 +451,7 @@ function acceptYourStyleDelivery(payload) {
         source: INVENTORY_MOVEMENT_SOURCE.DELIVERY,
         bundleNo: "",
         remainingBundleQty: line.bundleQty,
-        notes: "Delivery No: " + identifiers.deliveryNo
+        notes: "Delivery ID: " + identifiers.deliveryId
       });
     });
 
