@@ -263,65 +263,11 @@
 
     btn.disabled = isLoading;
 
-    btn.innerText =
-        isLoading
-            ? "Processing..."
-            : "Complete Order";
+    btn.innerHTML = isLoading ? loadingIndicator("Processing…") : "Complete Order";
 
   }
 
-  function handleCheckoutSuccess(
-  response,
-  payload
-) {
 
-  /* ================= INVENTORY ================= */
-
-  masterInventory =
-    Array.isArray(response.updatedInventory)
-      ? response.updatedInventory
-      : [];
-
-
-  populateManualDropdown(
-    masterInventory
-  );
-
-
-  /* ================= RESET DISCOUNT ================= */
-
-  document.getElementById(
-    "globalDiscountValue"
-  ).value = "";
-
-
-  document.getElementById(
-    "globalDiscountType"
-  ).value = "percentage";
-
-
-  /* ================= CLOSE CHECKOUT ================= */
-
-  toggleCheckoutModal(false);
-
-
-  /* ================= CLEAR CART ================= */
-
-  cart = [];
-
-  renderCart();
-
-  saveSession();
-
-
-  /* ================= SUCCESS ================= */
-
-  showSuccessModal(
-    payload.receiptId,
-    payload.changeGiven
-  );
-
-}
 
 function handleCheckoutFailure(message) {
 

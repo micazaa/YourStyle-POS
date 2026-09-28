@@ -54,7 +54,7 @@ function openYourFindsReprintModal() {
  document.getElementById('yourFindsReprintDeliveryFilter').innerHTML='<option value="">All Deliveries</option>';
  document.getElementById('yourFindsReprintResult').style.display='none';
  setYourFindsReprintBusy(true,'Loading...');
- document.getElementById('yourFindsReprintBody').innerHTML='<tr><td colspan="7" class="text-center text-muted py-5">Loading labels...</td></tr>';
+ document.getElementById('yourFindsReprintBody').innerHTML='<tr><td colspan="7" class="text-center text-muted py-5"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading labels...</span></td></tr>';
  google.script.run.withSuccessHandler(function(result){
    if(request!==yourFindsReprintRequest)return;
    yourFindsReprintItems=result&&result.success&&Array.isArray(result.items)?result.items:[];
@@ -72,7 +72,7 @@ function closeYourFindsReprintModal(){
 function setYourFindsReprintBusy(busy,label){
  yourFindsReprintBusy=busy;document.getElementById('yourFindsReprintControls').disabled=busy;
  updateYourFindsReprintSelection();
- if(busy)document.getElementById('yourFindsBulkPrintBtn').textContent=label||'Generating...';
+ if(busy)document.getElementById('yourFindsBulkPrintBtn').innerHTML=loadingIndicator(label||'Generating…');
 }
 function getVisibleYourFindsReprintItems(){
  const search=document.getElementById('yourFindsReprintSearch').value.trim().toLowerCase();
@@ -118,7 +118,7 @@ function updateYourFindsReprintSelection(){
  document.getElementById('yourFindsReprintVisibleCount').textContent=visible.length+' labels shown';
  document.getElementById('yourFindsReprintSelectedCount').textContent=selected.length+' selected'+(hidden?' · '+hidden+' hidden by filters':'');
  const all=document.getElementById('yourFindsReprintSelectAll');all.checked=visible.length>0&&visibleSelected===visible.length;all.indeterminate=visibleSelected>0&&visibleSelected<visible.length;all.disabled=yourFindsReprintBusy||!visible.length;
- const button=document.getElementById('yourFindsBulkPrintBtn');button.disabled=yourFindsReprintBusy||!selected.length;button.textContent=yourFindsReprintBusy?'Generating...':'Generate '+selected.length+' Label'+(selected.length===1?'':'s');
+ const button=document.getElementById('yourFindsBulkPrintBtn');button.disabled=yourFindsReprintBusy||!selected.length;button.innerHTML=yourFindsReprintBusy?loadingIndicator('Generating…'):'Generate '+selected.length+' Label'+(selected.length===1?'':'s');
 }
 function printSelectedYourFindsReprintLabels(){
  if(yourFindsReprintBusy)return;

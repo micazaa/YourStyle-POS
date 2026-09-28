@@ -34,7 +34,7 @@
           type="button"
           class="btn btn-pink"
           style="display:none;"
-          onclick="openProductEditorPhase8()"
+          onclick="openProductEditor()"
         >
           + Add Product
         </button>
@@ -118,7 +118,7 @@
   <div class="custom-popup-card" style="width:95%;max-width:850px;max-height:90vh;display:flex;flex-direction:column;">
     <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
       <h5 id="inventorySummaryTitle" class="fw-bold mb-0"></h5>
-      <button type="button" class="btn-close" aria-label="Close summary" onclick="closePhase8Modal('inventorySummaryModal')"></button>
+      <button type="button" class="btn-close" aria-label="Close summary" onclick="closeModal('inventorySummaryModal')"></button>
     </div>
     <div id="inventorySummaryCategoryCounts" class="row g-2 mb-3"></div>
     <div id="inventorySummaryCount" class="small text-muted mb-3"></div>
@@ -161,7 +161,7 @@ function loadInventoryPage() {
   document.getElementById('inventoryActiveHeading').style.display = inventoryIsManager() ? '' : 'none';
   const readToken=inventoryManagerReadToken();
   const body = document.getElementById('inventoryTableBody');
-  body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-muted py-5">Loading inventory...</td></tr>`;
+  body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-muted py-5"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading inventory...</span></td></tr>`;
   google.script.run.withSuccessHandler(function(items) {
     if(!currentEmployee || readToken!==inventoryManagerReadToken())return;
     inventoryPageData = Array.isArray(items) ? items : [];
@@ -173,7 +173,7 @@ function loadInventoryPage() {
     inventoryPageData = [];
     body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-danger py-5">Failed to load inventory.</td></tr>`;
     showNotificationToast(error.message || String(error), true);
-  }).getInventoryForManagementPhase8(readToken);
+  }).getInventoryForManagement(readToken);
 }
 function getFilteredInventoryItems() {
   const search = document.getElementById('inventorySearch').value.trim().toLowerCase();
@@ -424,7 +424,7 @@ function renderInventoryTable(items) {
     }
 
     action('view', 'View item', () =>
-      openInventoryDetailsPhase8(item.code)
+      openInventoryDetails(item.code)
     );
 
     if (isManager) {
@@ -447,7 +447,7 @@ function changeInventoryActiveInline(item, select) {
   const status = select.value;
   select.value = item.status;
   if (!inventoryIsManager()) return;
-  const auth = phase8ManagerCredentials('Manager PIN to change status:');
+  const auth = managerCredentials('Manager PIN to change status:');
   if (!auth) return;
   select.disabled = true;
   google.script.run.withSuccessHandler(function(result) {
@@ -457,28 +457,28 @@ function changeInventoryActiveInline(item, select) {
     showNotificationToast('Item set to ' + result.status.toLowerCase() + '.');
   }).withFailureHandler(function(error) {
     select.disabled = false; showNotificationToast(error.message || String(error), true);
-  }).setInventoryAdministrativeStatusPhase8({code:item.code,status:status,...auth});
+  }).setInventoryAdministrativeStatus({code:item.code,status:status,...auth});
 }
 function editInventoryRow(item) {
-  if (inventoryIsYourFinds(item)) { phase8SelectedItem = item; openYourFindsEditorPhase8(); return; }
+  if (inventoryIsYourFinds(item)) { phase8SelectedItem = item; openYourFindsEditor(); return; }
   const readToken=inventoryManagerReadToken();
   google.script.run.withSuccessHandler(function(products) {
     if(!currentEmployee || readToken!==inventoryManagerReadToken())return;
     window.phase8Products = products || [];
     if (!window.phase8Products.some(p => String(p.productCode) === String(item.code))) return showNotificationToast('This item has no Product Master entry.', true);
-    clearProductMasterFormPhase8(); editProductMasterPhase8(item.code);
-  }).withFailureHandler(error => showNotificationToast(error.message || String(error), true)).getProductMasterForManagementPhase8(readToken);
+    clearProductMasterForm(); editProductMaster(item.code);
+  }).withFailureHandler(error => showNotificationToast(error.message || String(error), true)).getProductMasterForManagement(readToken);
 }
 function deleteInventoryRow(item) {
   if (!inventoryIsManager()) return;
   if (Number(item.stock) !== 0) return showNotificationToast('Only zero-stock items can be deleted. Use a stock adjustment first.', true);
   if (!window.confirm('Delete ' + (item.name || item.code) + '? Items with transaction or delivery history cannot be deleted.')) return;
-  const auth = phase8ManagerCredentials('Manager PIN to delete this item:');
+  const auth = managerCredentials('Manager PIN to delete this item:');
   if (!auth) return;
   google.script.run.withSuccessHandler(function(result) {
     if (!result || !result.success) return showNotificationToast(result && result.message || 'Delete failed.', true);
     showNotificationToast('Inventory item deleted.'); loadInventoryPage();
-  }).withFailureHandler(error => showNotificationToast(error.message || String(error), true)).deleteUnusedInventoryItemPhase8({code:item.code,...auth});
+  }).withFailureHandler(error => showNotificationToast(error.message || String(error), true)).deleteUnusedInventoryItem({code:item.code,...auth});
 }
 function getInventoryDisplayStatus(
   item

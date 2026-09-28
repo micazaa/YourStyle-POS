@@ -798,8 +798,7 @@ function searchExchangeReceipt() {
   button.disabled =
     true;
 
-  button.textContent =
-    "Searching...";
+  button.innerHTML = loadingIndicator("Searching...");
 
 
   google.script.run
@@ -1850,8 +1849,7 @@ function confirmCustomerExchange() {
   button.disabled =
     true;
 
-  button.textContent =
-    "Processing...";
+  button.innerHTML = loadingIndicator("Processing...");
 
 
   google.script.run

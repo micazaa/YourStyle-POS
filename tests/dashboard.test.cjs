@@ -474,6 +474,7 @@ function frontend() {
       .match(/<script>([\s\S]*?)<\/script>/)[1],
     c
   );
+  vm.runInContext(fs.readFileSync(path.join(root, 'Frontend/Scripts/AppJS.html'), 'utf8').split('let masterInventory')[0].replace('<script>', ''), c);
   return { c, el, calls };
 }
 test('late dashboard response from logout/account switch is ignored and private editor state cleared', () => {
@@ -494,7 +495,8 @@ test('latest dashboard request wins, missing token prompts login, task text is e
   c.loadDashboardPage();
   c.loadDashboardPage();
   calls[0].failure({ message: 'old error' });
-  assert.equal(el('dashboardStatus').textContent, 'Loading your store…');
+  assert.match(el('dashboardStatus').innerHTML, /spinner-border/);
+  assert.match(el('dashboardStatus').innerHTML, /Loading your store…/);
   calls[1].failure({ message: 'Session expired' });
   assert.equal(el('dashboardStatus').textContent, 'Session expired');
   c.currentEmployee = {};

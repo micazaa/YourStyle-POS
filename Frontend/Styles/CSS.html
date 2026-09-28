@@ -16,29 +16,8 @@
     color: var(--text-dark);
   }
 
-  .navbar-custom {
-    background-color: var(--card-bg);
-    border-bottom: 1px solid var(--border-color);
-    padding: 10px 20px;
-  }
 
-  .navbar-brand-custom {
-    font-weight: 700;
-    color: var(--text-dark);
-    font-size: 1.3rem;
-    letter-spacing: -0.5px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
 
-  .navbar-logo {
-    height: 38px;
-    width: 38px;
-    object-fit: cover;
-    border-radius: 50%;
-    border: 1px solid var(--border-color);
-  }
 
   .card-pane {
     background: var(--card-bg);
@@ -816,9 +795,9 @@ thead th {
 .sidebar-name {font-size:14px;overflow-wrap:anywhere;}
 @media(min-width:992px){
  .pos-session-active .app-sidebar {left:0;}
- .pos-session-active #appMain,.pos-session-active .navbar-custom {margin-left:240px;}
+ .pos-session-active #appMain {margin-left:240px;}
  .pos-session-active.sidebar-collapsed .app-sidebar {width:88px;}
- .pos-session-active.sidebar-collapsed #appMain,.pos-session-active.sidebar-collapsed .navbar-custom {margin-left:88px;}
+ .pos-session-active.sidebar-collapsed #appMain {margin-left:88px;}
  .sidebar-collapsed .sidebar-label {display:none;}
  .sidebar-collapsed .sidebar-item {justify-content:center;padding:12px;}
  .sidebar-collapsed .sidebar-profile {justify-content:center;width:100%;}
@@ -833,20 +812,21 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 .table th.text-end button {text-align:right;}
 .table th.text-center button {text-align:center;}
 
-.sidebar-petty-cash {display:flex;flex-direction:column;gap:4px;margin:0 16px 16px;padding:12px;border-radius:10px;background:#f9edf0;}
-.sidebar-petty-cash strong {font-size:1.05rem;color:#784451;overflow-wrap:anywhere;}
 .inventory-workspace-nav .active {background:var(--pink-main);color:white;}
-@media(min-width:992px){body.sidebar-collapsed .sidebar-petty-cash {margin:0 4px 12px;padding:6px 2px;text-align:center;}body.sidebar-collapsed .sidebar-petty-cash strong{font-size:.65rem;}}
 
-.navbar-custom{position:sticky;top:0;z-index:920;min-height:65px}
 .inventory-workspace-nav{position:sticky;top:0;z-index:910;text-align:center;padding:12px;background:var(--bg-main);border-bottom:1px solid var(--border-color)}
 .inventory-workspace-nav[hidden]{display:none}
 .cashier-actions-footer{display:flex;justify-content:center;gap:12px;padding:14px;border-top:1px solid var(--border-color);flex-shrink:0}
 #appSidebar:focus-visible{outline:3px solid var(--pink-hover);outline-offset:-3px}
-.sidebar-petty-cash .sidebar-label{display:block!important}
-@media(min-width:992px){#menuToggleBtn{display:none}body.sidebar-collapsed .sidebar-petty-cash strong{font-size:.72rem;white-space:nowrap;overflow-x:auto}body.sidebar-collapsed .sidebar-petty-cash .sidebar-label{font-size:.65rem}}
 .cashier-petty-cash{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:var(--pink-light);color:#784451;white-space:nowrap;font-size:.9rem}
 .mobile-menu-toggle{display:none}
 @media(max-width:991px){.pos-session-active .mobile-menu-toggle{display:block;position:fixed;top:8px;left:12px;z-index:920}.pos-session-active #appMain{padding-top:56px}.inventory-workspace-nav{top:0;padding-left:60px;padding-right:60px}#terminalWorkspace{height:calc(100vh - 56px)!important}}
 @media(max-width:767px){#terminalWorkspace{height:auto!important}}
+/* Leave breathing room below every page, including the cashier workspace. */
+#appMain {padding-bottom:24px;}
+.app-loading {display:inline-flex;align-items:center;justify-content:center;gap:8px;}
+.app-loading .spinner-border {flex-shrink:0;}
+.control-loading {display:block;margin-top:6px;font-size:.875rem;color:var(--text-gray);}
+.control-loading[hidden] {display:none;}
+@media(min-width:992px){#menuToggleBtn{display:none}}
 </style>

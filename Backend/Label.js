@@ -1184,7 +1184,7 @@ function createCompletedYourFindsLabelPDFByCodes(codes) {
     if (Number(item.stock) <= 0) {
       throw new Error("Sold YourFinds item " + code + " cannot generate a completed label.");
     }
-    phase8AssertCompletedYourFinds_(item);
+    assertCompletedYourFinds_(item);
     return item;
   });
 

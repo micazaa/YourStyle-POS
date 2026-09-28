@@ -314,7 +314,7 @@
     document.getElementById('dashboardContent').hidden = true;
     document.getElementById('dashboardDates').hidden = true;
     const status = document.getElementById('dashboardStatus');
-    status.textContent = 'Loading your store…';
+    status.innerHTML = loadingIndicator('Loading your store…');
     if (!token) {
       status.textContent = 'Please sign out and sign in again to access the dashboard.';
       return;

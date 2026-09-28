@@ -1,5 +1,30 @@
 <script>
 
+  function loadingIndicator(label = 'Loading…') {
+    const escaped = String(label).replace(/[&<>"']/g, character => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[character]);
+    return `<span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>${escaped}</span></span>`;
+  }
+
+  // Inputs and selects cannot contain spinner markup, so place it beside them.
+  function setControlLoading(control, busy, label = 'Loading…') {
+    if (!control) return;
+    const id = control.id + 'LoadingIndicator';
+    let indicator = document.getElementById(id);
+    control.setAttribute('aria-busy', String(busy));
+    if (busy && !indicator) {
+      indicator = document.createElement('span');
+      indicator.id = id;
+      indicator.className = 'control-loading';
+      control.insertAdjacentElement('afterend', indicator);
+    }
+    if (indicator) {
+      indicator.innerHTML = busy ? loadingIndicator(label) : '';
+      indicator.hidden = !busy;
+    }
+  }
+
   let masterInventory = [];
   let cart = [];
 
@@ -56,7 +81,7 @@
 
     currentCashier = session.currentCashier;
     currentShiftPettyCash = session.currentShiftPettyCash;
-    updateSidebarPettyCash();
+    updatePettyCashDisplay();
     cart = session.cart || [];
 
     document.getElementById("cashierSelect").value = currentCashier;
@@ -176,7 +201,7 @@
 
   window.onload = function () {
 
-    initializeLoginPhase10();
+    initializeLogin();
 
     const hasSession = localStorage.getItem("ys_pos_session");
 

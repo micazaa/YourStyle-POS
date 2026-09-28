@@ -17,7 +17,7 @@ function updateSidebarProfile(employee){
  document.getElementById('sidebarEmployeeName').textContent=employee.fullName;
  document.getElementById('sidebarEmployeeRole').textContent=employee.accessLevel<=1?'Manager':'Cashier';
  document.getElementById('sidebarAvatar').textContent=String(employee.fullName||'').split(' ').map(n=>n[0]||'').join('').slice(0,2).toUpperCase();
- updateSidebarPettyCash();
+ updatePettyCashDisplay();
  restoreSidebarLayout();
 }
 function toggleSidebar(show){
@@ -48,7 +48,7 @@ function showPage(pageId){
  if(pageId==='deliveriesPage')loadDeliveriesPage();
 }
 function restoreActivePage(){restoreSidebarLayout();const saved=localStorage.getItem('ys_pos_active_page');showPage(['dashboardPage','posPage','inventoryPage','deliveriesPage'].includes(saved)?saved:'posPage');}
-function updateSidebarPettyCash(){
+function updatePettyCashDisplay(){
  const amount='₱'+(Number(currentShiftPettyCash)||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
  const display=document.getElementById('cashierPettyCash');
  display.textContent=amount;
@@ -78,7 +78,7 @@ function openInventoryWorkspace(){
       localStorage.removeItem("ys_pos_active_page");
       currentCashier = "";
       currentShiftPettyCash = 0;
-      updateSidebarPettyCash();
+      updatePettyCashDisplay();
       cart = [];
       document.getElementById("cashierSelect").value = "";
       document.getElementById("cashierPin").value = "";
@@ -98,7 +98,7 @@ function openInventoryWorkspace(){
 
       document.getElementById("appSidebar").style.display = "none";
       renderCart();
-      initializeLoginPhase10();
+      initializeLogin();
     }
   }
 

@@ -22,7 +22,7 @@
           id="cashierReportDate"
           class="form-control form-control-sm"
           max=""
-          onchange="loadCashReportByDatePhase10()"
+          onchange="loadCashReportByDate()"
         />
       </div>
     </div>
@@ -316,7 +316,7 @@
         <button
           type="button"
           class="btn btn-outline-dark btn-sm flex-fill"
-          onclick="regenerateClosedReportPhase10()"
+          onclick="regenerateClosedReport()"
         >
           Regenerate Report
         </button>
@@ -324,7 +324,7 @@
           id="phase10CorrectBtn"
           type="button"
           class="btn btn-outline-danger btn-sm flex-fill"
-          onclick="enableClosedReportCorrectionPhase10()"
+          onclick="enableClosedReportCorrection()"
         >
           Correct Report
         </button>
@@ -340,7 +340,7 @@
         <button
           type="button"
           class="btn btn-danger btn-sm w-100"
-          onclick="correctLoadedReportPhase10()"
+          onclick="correctLoadedReport()"
         >
           Save Correction & Regenerate
         </button>
@@ -359,7 +359,7 @@
 <script>
   var phase10ReportLoadId = 0;
 
-  function getCashReportTodayPhase10() {
+  function getCashReportToday() {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Singapore',
       year: 'numeric',
@@ -375,14 +375,14 @@
     return values.year + '-' + values.month + '-' + values.day;
   }
 
-  function getDisplayedPettyReceivedPhase10() {
+  function getDisplayedPettyReceived() {
     const value = document.getElementById('shiftReportModal')
       .dataset.pettyReceived;
 
     return Number(value) || 0;
   }
 
-  function setDisplayedPettyReceivedPhase10(value) {
+  function setDisplayedPettyReceived(value) {
     const amount = Number(value) || 0;
 
     document.getElementById('shiftReportModal')
@@ -397,7 +397,7 @@
     restoreForm('shiftReportModal');
     if (show) {
       const now = new Date();
-      const today = getCashReportTodayPhase10();
+      const today = getCashReportToday();
       document.getElementById('cashierReportDate').max = today;
         now.getFullYear() + '-' +
         String(now.getMonth() + 1).padStart(2, '0') + '-' +
@@ -420,8 +420,8 @@
       document.getElementById('pettyReturnedTotalOut').textContent = '₱0.00';
       document.getElementById('cashDrawerVarianceReason').value = '';
       document.getElementById('cashDrawerCountTotalOut').textContent = '₱0.00';
-      resetPhase10HistoricalState();
-      setTimeout(loadCashReportByDatePhase10, 50);
+      resetHistoricalState();
+      setTimeout(loadCashReportByDate, 50);
     }
   }
 
@@ -439,7 +439,7 @@
       '₱' + total.toFixed(2);
 
     const mismatch =
-      Math.abs(total - getDisplayedPettyReceivedPhase10()) > 0.001;
+      Math.abs(total - getDisplayedPettyReceived()) > 0.001;
 
     document.getElementById('pettyVarianceBox').style.display =
       mismatch ? 'block' : 'none';
@@ -503,7 +503,7 @@
     let voucherNo = document.getElementById('pettyVoucherNo').value.trim();
     let reasonTxt = document.getElementById('pettyVarianceReason').value.trim();
 
-if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceivedPhase10()) > 0.001) {      document.getElementById('pettyVarianceBox').style.display = 'block';
+if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      document.getElementById('pettyVarianceBox').style.display = 'block';
       if (!voucherNo) {
         showNotificationToast(
           'Petty Cash Voucher No. is required when petty received and returned do not match.',
@@ -529,7 +529,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceivedPhase10()) > 0.001) {
     let cashDrawerReason = document.getElementById('cashDrawerVarianceReason').value.trim();
 
     let pettyCashObj = {
-      received: getDisplayedPettyReceivedPhase10(),
+      received: getDisplayedPettyReceived(),
       returnBreakdown: pettyReturnBreakdown,
       voucherNo: voucherNo,
       reason: reasonTxt,
@@ -564,7 +564,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceivedPhase10()) > 0.001) {
   var phase10LoadedClosedReport = null;
   var phase10CorrectionMode = false;
 
-  function setPhase10ReportFieldsReadOnly(readOnly) {
+  function setReportFieldsReadOnly(readOnly) {
     PETTY_DENOMS.forEach(function (d) {
       const p = document.getElementById('pr' + d),
         c = document.getElementById('d' + d);
@@ -579,32 +579,32 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceivedPhase10()) > 0.001) {
     if (mgr) mgr.disabled = readOnly;
   }
 
-  function resetPhase10HistoricalState() {
+  function resetHistoricalState() {
     phase10LoadedClosedReport = null;
     phase10CorrectionMode = false;
     document.getElementById('phase10HistoricalBox').style.display = 'none';
     document.getElementById('phase10CorrectionBox').style.display = 'none';
     document.getElementById('phase10CorrectionExplanation').value = '';
-    setPhase10ReportFieldsReadOnly(false);
+    setReportFieldsReadOnly(false);
     const submit = document.querySelector(
       '#shiftReportModal button[onclick="submitShiftReportTally()"]'
     );
     if (submit) submit.style.display = 'block';
   }
 
-  function loadCashReportByDatePhase10() {
+  function loadCashReportByDate() {
     const requestId = ++phase10ReportLoadId;
     const dateInput = document.getElementById('cashierReportDate');
     const date = String(dateInput.value || '').trim();
     const cashier = currentCashier;
-    const today = getCashReportTodayPhase10();
+    const today = getCashReportToday();
 
     const submit = document.querySelector(
       '#shiftReportModal button[onclick="submitShiftReportTally()"]'
     );
 
-    clearCashReportModalPhase10();
-    setDisplayedPettyReceivedPhase10(0);
+    clearCashReportModal();
+    setDisplayedPettyReceived(0);
 
     if (submit) submit.style.display = 'none';
 
@@ -638,11 +638,11 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceivedPhase10()) > 0.001) {
 
         if (!res.found || !res.report) {
           // Do not copy today's petty cash into a historical report.
-          setDisplayedPettyReceivedPhase10(
+          setDisplayedPettyReceived(
             date === today ? currentShiftPettyCash : 0
           );
 
-          setPhase10ReportFieldsReadOnly(false);
+          setReportFieldsReadOnly(false);
           if (submit) submit.style.display = 'block';
 
           if (date !== today) {
@@ -664,7 +664,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceivedPhase10()) > 0.001) {
           return;
         }
 
-        setDisplayedPettyReceivedPhase10(report.pettyReceived);
+        setDisplayedPettyReceived(report.pettyReceived);
 
         document.getElementById('reportManagerName').value =
           report.manager || '';
@@ -706,13 +706,13 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceivedPhase10()) > 0.001) {
             (report.shiftStart || '—') + ' to ' +
             (report.shiftEnd || '—');
 
-          setPhase10ReportFieldsReadOnly(true);
+          setReportFieldsReadOnly(true);
           if (submit) submit.style.display = 'none';
         } else {
           phase10LoadedClosedReport = null;
           phase10CorrectionMode = false;
 
-          setPhase10ReportFieldsReadOnly(false);
+          setReportFieldsReadOnly(false);
           if (submit) submit.style.display = 'block';
         }
       })
@@ -724,10 +724,10 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceivedPhase10()) > 0.001) {
           true
         );
       })
-      .getCashReportByDatePhase10(cashier, date);
+      .getCashReportByDate(cashier, date);
   }
 
-  function regenerateClosedReportPhase10() {
+  function regenerateClosedReport() {
     if (!phase10LoadedClosedReport) {
       showNotificationToast('Select a date with a CLOSED report first.', true);
       return;
@@ -748,19 +748,19 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceivedPhase10()) > 0.001) {
         .withFailureHandler(function (e) {
           showNotificationToast(e.message || String(e), true);
         })
-        .regenerateCashierReportPhase10(id, pin);
+        .regenerateCashierReport(id, pin);
     });
   }
 
-  function enableClosedReportCorrectionPhase10() {
+  function enableClosedReportCorrection() {
     if (!phase10LoadedClosedReport) return;
     phase10CorrectionMode = true;
-    setPhase10ReportFieldsReadOnly(false);
+    setReportFieldsReadOnly(false);
     document.getElementById('phase10CorrectionBox').style.display = 'block';
     document.getElementById('phase10CorrectionExplanation').focus();
   }
 
-  function correctLoadedReportPhase10() {
+  function correctLoadedReport() {
     if (!phase10LoadedClosedReport || !phase10CorrectionMode) {
       showNotificationToast('Load a CLOSED report and choose Correct Report first.', true);
       return;
@@ -801,16 +801,16 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceivedPhase10()) > 0.001) {
             'Report ' + phase10LoadedClosedReport.reportId + ' corrected and regenerated.'
           );
           phase10CorrectionMode = false;
-          loadCashReportByDatePhase10();
+          loadCashReportByDate();
         })
         .withFailureHandler(function (e) {
           showNotificationToast(e.message || String(e), true);
         })
-        .correctClosedCashReportPhase10(payload);
+        .correctClosedCashReport(payload);
     });
   }
 
-  function clearCashReportModalPhase10() {
+  function clearCashReportModal() {
     phase10LoadedClosedReport = null;
     phase10CorrectionMode = false;
 
@@ -868,7 +868,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceivedPhase10()) > 0.001) {
 
     /* ================= EDITABILITY ================= */
 
-    setPhase10ReportFieldsReadOnly(false);
+    setReportFieldsReadOnly(false);
 
     /*
     IMPORTANT:

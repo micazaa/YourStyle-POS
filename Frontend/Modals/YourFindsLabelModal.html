@@ -1009,12 +1009,7 @@ function printSelectedYourFindsLabels() {
     true;
 
 
-  button.textContent =
-    selectedCodes.length === 1
-      ? "Generating Label..."
-      : "Generating " +
-        selectedCodes.length +
-        " Labels...";
+  button.innerHTML = loadingIndicator("Generating " + selectedCodes.length + " label(s)…");
 
 
   /* ========================================================

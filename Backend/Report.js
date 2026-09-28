@@ -2,7 +2,7 @@
    PHASE 10 — CASH SHIFT / PETTY CASH CONTROL
 ========================================================== */
 
-function phase10CashReportSheet_() {
+function cashReportSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SHEETS.CASH_REPORT_LOG);
   if (!sheet) sheet = ss.insertSheet(SHEETS.CASH_REPORT_LOG);
@@ -49,8 +49,8 @@ function phase10CashReportSheet_() {
   return sheet;
 }
 
-function phase10NextReportId_() {
-  const sheet = phase10CashReportSheet_();
+function nextReportId_() {
+  const sheet = cashReportSheet_();
   const tz = Session.getScriptTimeZone();
   const day = Utilities.formatDate(new Date(), tz, 'yyyyMMdd');
   const prefix = 'CR-' + day + '-';
@@ -69,8 +69,8 @@ function phase10NextReportId_() {
   return prefix + String(max + 1).padStart(3, '0');
 }
 
-function phase10FindOpenShift_(employee) {
-  const sheet = phase10CashReportSheet_();
+function findOpenShift_(employee) {
+  const sheet = cashReportSheet_();
   if (sheet.getLastRow() < 2) return null;
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, CASH_REPORT_COLUMN_COUNT).getValues();
   for (let i = values.length - 1; i >= 0; i--) {
@@ -83,7 +83,7 @@ function phase10FindOpenShift_(employee) {
   return null;
 }
 
-function getLatestPettyHandoverPhase10() {
+function getLatestPettyHandover() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const sheet = ss.getSheetByName('Cash Report Log');
@@ -171,7 +171,7 @@ function getLatestPettyHandoverPhase10() {
   };
 }
 
-function startCashierShiftPhase10(employee, firstShiftPetty) {
+function startCashierShift(employee, firstShiftPetty) {
   try {
     employee = String(employee || '').trim();
 
@@ -182,7 +182,7 @@ function startCashierShiftPhase10(employee, firstShiftPetty) {
       };
     }
 
-    const sheet = phase10CashReportSheet_();
+    const sheet = cashReportSheet_();
 
     const tz = Session.getScriptTimeZone();
 
@@ -336,7 +336,7 @@ function startCashierShiftPhase10(employee, firstShiftPetty) {
       resumed: false,
     };
   } catch (err) {
-    console.error('startCashierShiftPhase10 failed:', err);
+    console.error('startCashierShift failed:', err);
 
     return {
       success: false,
@@ -346,7 +346,7 @@ function startCashierShiftPhase10(employee, firstShiftPetty) {
   }
 }
 
-function phase10ExpectedCash_(cashierName, start, end) {
+function expectedCash_(cashierName, start, end) {
   const ss = SpreadsheetApp.getActiveSpreadsheet(),
     sheet = ss.getSheetByName(SHEETS.SALES_LOG);
   if (!sheet) return 0;
@@ -380,11 +380,11 @@ function phase10ExpectedCash_(cashierName, start, end) {
 /* Daily cashier report expected cash.
    Uses the same completed Sales Log rows shown on the daily report.
    Exchange RETURN/REPLACEMENT rows naturally net against each other. */
-function phase10ExpectedCashForDate_(cashierName, reportDate) {
+function expectedCashForDate_(cashierName, reportDate) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
   if (!sheet) return 0;
-  const dateStr = phase10DateString_(reportDate);
+  const dateStr = dateString_(reportDate);
   const metrics = collectSalesMetrics(
     sheet.getDataRange().getValues(),
     dateStr,
@@ -395,7 +395,7 @@ function phase10ExpectedCashForDate_(cashierName, reportDate) {
   return roundToTwo(buildPaymentSummary(metrics).cashSales);
 }
 
-function closeCashierShiftPhase10(
+function closeCashierShift(
   managerName,
   cashierName,
   reportDate,
@@ -407,11 +407,11 @@ function closeCashierShiftPhase10(
   lock.waitLock(30000);
 
   try {
-    const sheet = phase10CashReportSheet_();
+    const sheet = cashReportSheet_();
     const now = new Date();
     const tz = Session.getScriptTimeZone();
     const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
-    const dateStr = phase10DateString_(reportDate);
+    const dateStr = dateString_(reportDate);
     const employee = String(cashierName || '').trim();
     const manager = String(managerName || '').trim();
 
@@ -449,7 +449,7 @@ function closeCashierShiftPhase10(
         String(row[CASH_REPORT_IDX.REPORT_TYPE] || '')
           .trim().toUpperCase() !== 'CASHIER SHIFT' ||
         String(row[CASH_REPORT_IDX.EMPLOYEE] || '').trim() !== employee ||
-        phase10DateString_(row[CASH_REPORT_IDX.REPORT_DATE]) !== dateStr
+        dateString_(row[CASH_REPORT_IDX.REPORT_DATE]) !== dateStr
       ) {
         continue;
       }
@@ -521,7 +521,7 @@ function closeCashierShiftPhase10(
 
       const values = new Array(CASH_REPORT_COLUMN_COUNT).fill('');
 
-      values[CASH_REPORT_IDX.REPORT_ID] = phase10NextReportId_();
+      values[CASH_REPORT_IDX.REPORT_ID] = nextReportId_();
       values[CASH_REPORT_IDX.TIMESTAMP] = now;
       values[CASH_REPORT_IDX.REPORT_TYPE] = 'CASHIER SHIFT';
       values[CASH_REPORT_IDX.REPORT_DATE] = dateStr;
@@ -566,7 +566,7 @@ function closeCashierShiftPhase10(
       }
     }
 
-    const expected = phase10ExpectedCashForDate_(employee, dateStr);
+    const expected = expectedCashForDate_(employee, dateStr);
     const cashVariance = roundToTwo(cashCounted - expected);
     const pettyVariance = roundToTwo(pettyReturned - pettyReceived);
 
@@ -621,8 +621,8 @@ function closeCashierShiftPhase10(
   }
 }
 
-function getCashReportHistoryPhase10(limit) {
-  const sheet = phase10CashReportSheet_();
+function getCashReportHistory(limit) {
+  const sheet = cashReportSheet_();
   if (sheet.getLastRow() < 2) return [];
   const v = sheet
     .getRange(2, 1, sheet.getLastRow() - 1, CASH_REPORT_COLUMN_COUNT)
@@ -667,7 +667,7 @@ function generateCashierShiftReportPDF(
 
     const todayDisplay = Utilities.formatDate(new Date(reportDate), tz, 'MM/dd/yyyy');
 
-    const openShift = phase10FindOpenShift_(cashierName);
+    const openShift = findOpenShift_(cashierName);
     const shiftStart = openShift ? openShift.values[CASH_REPORT_IDX.SHIFT_START] : null;
     const reportEnd = new Date();
     const metrics = collectSalesMetrics(salesData, reportDate, cashierName, null, null);
@@ -711,7 +711,7 @@ function generateCashierShiftReportPDF(
 
     // Persist the blind cashier count and server-side reconciliation.
     // Expected Cash / Cash Variance are stored for manager reporting but not shown to cashier.
-    const closeResult = closeCashierShiftPhase10(
+    const closeResult = closeCashierShift(
       managerName,
       cashierName,
       reportDate,
@@ -781,10 +781,10 @@ function generateCashierShiftReportPDF(
    PHASE 10 — CLOSED REPORT LOOKUP / REGENERATION / CORRECTION
 ========================================================== */
 
-function phase10FindReportById_(reportId) {
+function findReportById_(reportId) {
   reportId = String(reportId || '').trim();
   if (!reportId) return null;
-  const sheet = phase10CashReportSheet_();
+  const sheet = cashReportSheet_();
   if (sheet.getLastRow() < 2) return null;
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, CASH_REPORT_COLUMN_COUNT).getValues();
   for (let i = values.length - 1; i >= 0; i--) {
@@ -794,9 +794,9 @@ function phase10FindReportById_(reportId) {
   return null;
 }
 
-function getClosedCashReportPhase10(reportId) {
+function getClosedCashReport(reportId) {
   try {
-    const found = phase10FindReportById_(reportId);
+    const found = findReportById_(reportId);
     if (!found) throw new Error('Cash report not found.');
     const r = found.values;
     if (String(r[CASH_REPORT_IDX.STATUS] || '').toUpperCase() !== 'CLOSED')
@@ -834,11 +834,11 @@ function getClosedCashReportPhase10(reportId) {
       success: true,
       report: {
         reportId: String(r[CASH_REPORT_IDX.REPORT_ID] || ''),
-        reportDate: phase10DateString_(r[CASH_REPORT_IDX.REPORT_DATE]),
+        reportDate: dateString_(r[CASH_REPORT_IDX.REPORT_DATE]),
         employee: String(r[CASH_REPORT_IDX.EMPLOYEE] || ''),
         manager: String(r[CASH_REPORT_IDX.MANAGER] || ''),
-        shiftStart: phase10RpcDate_(r[CASH_REPORT_IDX.SHIFT_START]),
-        shiftEnd: phase10RpcDate_(r[CASH_REPORT_IDX.SHIFT_END]),
+        shiftStart: rpcDate_(r[CASH_REPORT_IDX.SHIFT_START]),
+        shiftEnd: rpcDate_(r[CASH_REPORT_IDX.SHIFT_END]),
         expectedCash: Number(r[CASH_REPORT_IDX.EXPECTED_CASH]) || 0,
         cashCounted: Number(r[CASH_REPORT_IDX.CASH_COUNTED]) || 0,
         cashVariance: Number(r[CASH_REPORT_IDX.CASH_VARIANCE]) || 0,
@@ -858,13 +858,13 @@ function getClosedCashReportPhase10(reportId) {
   }
 }
 
-function phase10RpcDate_(v) {
+function rpcDate_(v) {
   if (!v) return '';
   if (v instanceof Date && !isNaN(v.getTime()))
     return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
   return String(v);
 }
-function phase10DateString_(v) {
+function dateString_(v) {
   if (v instanceof Date && !isNaN(v.getTime()))
     return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const s = String(v || '').trim();
@@ -875,20 +875,20 @@ function phase10DateString_(v) {
     : Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
-function regenerateCashierReportPhase10(reportId, managerPin) {
+function regenerateCashierReport(reportId, managerPin) {
   try {
     const auth = verifyManagerPin(managerPin);
     if (!auth || !auth.success)
       throw new Error(auth && auth.message ? auth.message : 'Invalid Manager PIN.');
-    const got = getClosedCashReportPhase10(reportId);
+    const got = getClosedCashReport(reportId);
     if (!got.success) throw new Error(got.message);
-    return phase10BuildClosedCashierPdf_(got.report);
+    return buildClosedCashierPdf_(got.report);
   } catch (err) {
     return { success: false, message: err.message || String(err) };
   }
 }
 
-function correctClosedCashReportPhase10(payload) {
+function correctClosedCashReport(payload) {
   payload = payload || {};
   try {
     const auth = verifyManagerPin(payload.managerPin);
@@ -896,7 +896,7 @@ function correctClosedCashReportPhase10(payload) {
       throw new Error(auth && auth.message ? auth.message : 'Invalid Manager PIN.');
     const explanation = String(payload.correctionExplanation || '').trim();
     if (!explanation) throw new Error('Correction explanation is required.');
-    const found = phase10FindReportById_(payload.reportId);
+    const found = findReportById_(payload.reportId);
     if (!found) throw new Error('Cash report not found.');
     const row = found.values.slice();
     if (String(row[CASH_REPORT_IDX.STATUS] || '').toUpperCase() !== 'CLOSED')
@@ -940,9 +940,9 @@ function correctClosedCashReportPhase10(payload) {
         'Voucher No. and petty explanation are required when petty received and returned do not match.'
       );
     row[CASH_REPORT_IDX.MANAGER] = auth.managerName || row[CASH_REPORT_IDX.MANAGER] || '';
-    const correctedExpected = phase10ExpectedCashForDate_(
+    const correctedExpected = expectedCashForDate_(
       String(row[CASH_REPORT_IDX.EMPLOYEE] || ''),
-      phase10DateString_(row[CASH_REPORT_IDX.REPORT_DATE])
+      dateString_(row[CASH_REPORT_IDX.REPORT_DATE])
     );
     row[CASH_REPORT_IDX.EXPECTED_CASH] = correctedExpected;
     row[CASH_REPORT_IDX.CASH_COUNTED] = cashCounted;
@@ -954,10 +954,10 @@ function correctClosedCashReportPhase10(payload) {
     row[CASH_REPORT_IDX.PETTY_REMARK] =
       (pettyRemark ? pettyRemark + ' | ' : '') + 'CORRECTION: ' + explanation;
     row[CASH_REPORT_IDX.UPDATED_AT] = new Date();
-    phase10CashReportSheet_().getRange(found.row, 1, 1, CASH_REPORT_COLUMN_COUNT).setValues([row]);
+    cashReportSheet_().getRange(found.row, 1, 1, CASH_REPORT_COLUMN_COUNT).setValues([row]);
     SpreadsheetApp.flush();
-    const got = getClosedCashReportPhase10(payload.reportId);
-    const pdf = phase10BuildClosedCashierPdf_(got.report);
+    const got = getClosedCashReport(payload.reportId);
+    const pdf = buildClosedCashierPdf_(got.report);
     if (!pdf.success) return pdf;
     pdf.corrected = true;
     return pdf;
@@ -966,7 +966,7 @@ function correctClosedCashReportPhase10(payload) {
   }
 }
 
-function phase10BuildClosedCashierPdf_(report) {
+function buildClosedCashierPdf_(report) {
   const ss = SpreadsheetApp.getActiveSpreadsheet(),
     sales = ss.getSheetByName('Sales Log');
   if (!sales) return { success: false, message: 'Sales Log sheet not found.' };
@@ -1106,7 +1106,7 @@ function generateManagerDailyReportPDF(managerName, reportDate, cashOnHandObj, c
 
     /* ================= CASH REPORT LOG ================= */
 
-    const managerLog = upsertManagerDailyCashReportPhase10(
+    const managerLog = upsertManagerDailyCashReport(
       managerName,
       reportDate,
       expectedCashDrawer,
@@ -1156,7 +1156,7 @@ function generateManagerDailyReportPDF(managerName, reportDate, cashOnHandObj, c
   }
 }
 
-function buildCashReportObjectPhase10(headers, row, rowNumber) {
+function buildCashReportObject(headers, row, rowNumber) {
   const den = [1000, 500, 200, 100, 50, 20, 10, 5, 1];
   const cashIdx = [
     CASH_REPORT_IDX.CASH_1000,
@@ -1193,11 +1193,11 @@ function buildCashReportObjectPhase10(headers, row, rowNumber) {
     rowNumber: rowNumber || 0,
     reportId: String(row[CASH_REPORT_IDX.REPORT_ID] || ''),
     reportType: String(row[CASH_REPORT_IDX.REPORT_TYPE] || ''),
-    reportDate: phase10DateString_(row[CASH_REPORT_IDX.REPORT_DATE]),
+    reportDate: dateString_(row[CASH_REPORT_IDX.REPORT_DATE]),
     employee: String(row[CASH_REPORT_IDX.EMPLOYEE] || ''),
     manager: String(row[CASH_REPORT_IDX.MANAGER] || ''),
-    shiftStart: phase10RpcDate_(row[CASH_REPORT_IDX.SHIFT_START]),
-    shiftEnd: phase10RpcDate_(row[CASH_REPORT_IDX.SHIFT_END]),
+    shiftStart: rpcDate_(row[CASH_REPORT_IDX.SHIFT_START]),
+    shiftEnd: rpcDate_(row[CASH_REPORT_IDX.SHIFT_END]),
     expectedCash: Number(row[CASH_REPORT_IDX.EXPECTED_CASH]) || 0,
     cashCounted: Number(row[CASH_REPORT_IDX.CASH_COUNTED]) || 0,
     cashVariance: Number(row[CASH_REPORT_IDX.CASH_VARIANCE]) || 0,
@@ -1213,7 +1213,7 @@ function buildCashReportObjectPhase10(headers, row, rowNumber) {
   };
 }
 
-function upsertManagerDailyCashReportPhase10(
+function upsertManagerDailyCashReport(
   managerName,
   reportDate,
   expectedCash,
@@ -1224,9 +1224,9 @@ function upsertManagerDailyCashReportPhase10(
   lock.waitLock(30000);
 
   try {
-    const sheet = phase10CashReportSheet_();
+    const sheet = cashReportSheet_();
     const now = new Date();
-    const dateStr = phase10DateString_(reportDate);
+    const dateStr = dateString_(reportDate);
     const manager = String(managerName || '').trim();
 
     if (!manager) throw new Error('Manager name is required.');
@@ -1249,7 +1249,7 @@ function upsertManagerDailyCashReportPhase10(
           String(r[CASH_REPORT_IDX.REPORT_TYPE] || '')
             .trim()
             .toUpperCase() === 'MANAGER DAILY' &&
-          phase10DateString_(r[CASH_REPORT_IDX.REPORT_DATE]) === dateStr &&
+          dateString_(r[CASH_REPORT_IDX.REPORT_DATE]) === dateStr &&
           String(r[CASH_REPORT_IDX.MANAGER] || '').trim() === manager
         ) {
           targetRow = i + 2;
@@ -1262,7 +1262,7 @@ function upsertManagerDailyCashReportPhase10(
     const row = existing || new Array(CASH_REPORT_COLUMN_COUNT).fill('');
 
     if (!existing) {
-      row[CASH_REPORT_IDX.REPORT_ID] = phase10NextReportId_();
+      row[CASH_REPORT_IDX.REPORT_ID] = nextReportId_();
       row[CASH_REPORT_IDX.TIMESTAMP] = now;
       row[CASH_REPORT_IDX.REPORT_TYPE] = 'MANAGER DAILY';
       row[CASH_REPORT_IDX.REPORT_DATE] = dateStr;
@@ -1324,7 +1324,7 @@ function upsertManagerDailyCashReportPhase10(
 /* ==========================================================
    PHASE 10 — DATE-DRIVEN CASHIER REPORT LOOKUP
 ========================================================== */
-function getCashReportByDatePhase10(employee, reportDate) {
+function getCashReportByDate(employee, reportDate) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const sheet = ss.getSheetByName('Cash Report Log');
@@ -1359,7 +1359,7 @@ function getCashReportByDatePhase10(employee, reportDate) {
 
     const rowEmployee = String(row[employeeCol] || '').trim();
 
-    const rowDate = phase10DateString_(row[reportDateCol]);
+    const rowDate = dateString_(row[reportDateCol]);
 
     if (rowEmployee !== employee || rowDate !== reportDate) {
       continue;
@@ -1416,7 +1416,7 @@ function getCashReportByDatePhase10(employee, reportDate) {
     success: true,
     found: true,
 
-    report: buildCashReportObjectPhase10(headers, selected.row, selected.rowNumber),
+    report: buildCashReportObject(headers, selected.row, selected.rowNumber),
   };
 }
 

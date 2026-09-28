@@ -90,7 +90,7 @@ function buildProductCatalogSvg_(description, category) {
   return '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800"><rect width="800" height="800" rx="36" fill="' + color.bg + '"/>' + border + body + '</svg>';
 }
 
-function generateProductMasterCatalogImagesPhase8() {
+function generateProductMasterCatalogImages() {
   // Execution API calls do not have an active container spreadsheet.
   const ss = SpreadsheetApp.openById("1xnHBsGsoMmcBIoRwEjX0paf5R39A-s2Tnc6m1lkoOQU");
   const master = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
