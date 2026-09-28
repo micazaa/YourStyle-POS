@@ -48,20 +48,22 @@ function openYourFindsReprintModal() {
  document.getElementById('yourFindsReprintModal').style.display='flex';
  if(yourFindsReprintBusy)return;
  const request=++yourFindsReprintRequest;
- yourFindsReprintItems=[];yourFindsReprintSelection={};
+ const refresh=beginPageRead('labelReprint');
+ yourFindsReprintItems=refresh.cached||[];yourFindsReprintSelection={};
  document.getElementById('yourFindsReprintSearch').value='';
  document.getElementById('yourFindsReprintType').value='ALL';
  document.getElementById('yourFindsReprintDeliveryFilter').innerHTML='<option value="">All Deliveries</option>';
  document.getElementById('yourFindsReprintResult').style.display='none';
  setYourFindsReprintBusy(true,'Loading...');
- document.getElementById('yourFindsReprintBody').innerHTML='<tr><td colspan="7" class="text-center text-muted py-5"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading labels...</span></td></tr>';
+ if(refresh.cached!==undefined){populateYourFindsReprintFilters();renderYourFindsReprintItems();}
+ else document.getElementById('yourFindsReprintBody').innerHTML='<tr><td colspan="7" class="text-center text-muted py-5"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading labels...</span></td></tr>';
  google.script.run.withSuccessHandler(function(result){
-   if(request!==yourFindsReprintRequest)return;
-   yourFindsReprintItems=result&&result.success&&Array.isArray(result.items)?result.items:[];
+   if(request!==yourFindsReprintRequest||!refresh.current())return;
+   if(result&&result.success){yourFindsReprintItems=Array.isArray(result.items)?result.items:[];refresh.save(yourFindsReprintItems);}
    setYourFindsReprintBusy(false);populateYourFindsReprintFilters();renderYourFindsReprintItems();
    if(!result||!result.success)showNotificationToast(result&&result.message||'Unable to load labels.',true);
  }).withFailureHandler(function(error){
-   if(request!==yourFindsReprintRequest)return;
+   if(request!==yourFindsReprintRequest||!refresh.current())return;
    setYourFindsReprintBusy(false);renderYourFindsReprintItems();showNotificationToast(error.message||String(error),true);
  }).getYourFindsItemsForLabelReprint();
 }

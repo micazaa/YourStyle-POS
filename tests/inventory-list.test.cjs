@@ -303,6 +303,7 @@ test('logout dismisses sidebar and item overlays before displaying login',()=>{
   c.localStorage={removeItem(){}};c.renderCart=()=>{};c.initializeLogin=()=>{refreshed=true;};
   const source=fs.readFileSync(path.join(root,'Frontend/Layout/Sidebar.html'),'utf8');
   vm.runInContext(source.slice(source.indexOf('function triggerCleanLogout()'),source.indexOf('  window.addEventListener("click"')),c);
+  c.yourFindsReprintRequest=0;
   c.triggerCleanLogout();
   assert.equal(sidebarClosed,true);assert.equal(overlays[0].style.display,'none');assert.equal(c.document.getElementById('loginOverlay').style.display,'flex');assert.equal(c.currentEmployee,null);assert.equal(refreshed,true);
 });

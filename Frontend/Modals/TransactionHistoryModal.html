@@ -487,20 +487,6 @@ function loadTransactionHistory() {
   }
 
 
-  tbody.innerHTML = `
-    <tr>
-      <td
-        colspan="7"
-        class="text-center text-muted py-5"
-        role="status"
-        aria-label="Loading transactions"
-      >
-        <div class="spinner-border spinner-border-sm text-secondary" aria-hidden="true"></div>
-      </td>
-    </tr>
-  `;
-
-
   const fromDate =
     document.getElementById(
       "transactionHistoryFromDate"
@@ -518,9 +504,31 @@ function loadTransactionHistory() {
     ) <= 1;
 
 
+  const refresh = beginPageRead('transactions', JSON.stringify([fromDate, toDate, isManager]));
+  if (refresh.cached !== undefined) {
+    transactionHistoryData = refresh.cached;
+    populateTransactionPaymentFilter(transactionHistoryData);
+    filterTransactionHistoryTable();
+  } else {
+  tbody.innerHTML = `
+    <tr>
+      <td
+        colspan="7"
+        class="text-center text-muted py-5"
+        role="status"
+        aria-label="Loading transactions"
+      >
+        <div class="spinner-border spinner-border-sm text-secondary" aria-hidden="true"></div>
+      </td>
+    </tr>
+  `;
+
+
+  }
   google.script.run
 
     .withSuccessHandler(function(result) {
+      if (!refresh.current()) return;
 
       if (
         !result ||
@@ -537,6 +545,9 @@ function loadTransactionHistory() {
           "Transaction history failed:",
           message
         );
+
+
+        if (refresh.cached !== undefined) { showNotificationToast('Transaction refresh failed. Showing previously loaded data.', true); return; }
 
 
         tbody.innerHTML = `
@@ -561,6 +572,7 @@ function loadTransactionHistory() {
           ? result.transactions
           : [];
 
+      refresh.save(transactionHistoryData);
       populateTransactionPaymentFilter(
         transactionHistoryData
       );
@@ -572,11 +584,15 @@ function loadTransactionHistory() {
 
 
     .withFailureHandler(function(err) {
+      if (!refresh.current()) return;
 
       console.error(
         "TRANSACTION HISTORY SERVER ERROR:",
         err
       );
+
+
+      if (refresh.cached !== undefined) { showNotificationToast('Transaction refresh failed. Showing previously loaded data.', true); return; }
 
 
       tbody.innerHTML = `

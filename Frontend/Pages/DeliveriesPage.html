@@ -418,45 +418,14 @@ function loadDeliveriesPage(forceRefresh) {
   }
 
 
-  /* ========================================================
-     USE CACHE
-  ======================================================== */
-
-  if (
-    !forceRefresh &&
-    deliveriesPageLoaded
-  ) {
-
-    renderDeliveriesTable(
-      deliveriesPageData
-    );
-
-
-    updateDeliveriesSummary(
-      deliveriesPageData
-    );
-
-
-    return;
-
+  const refresh = beginPageRead('deliveries');
+  if (refresh.cached !== undefined) {
+    deliveriesPageData = refresh.cached;
+    renderDeliveriesTable(deliveriesPageData);
+    updateDeliveriesSummary(deliveriesPageData);
   }
-
-
-  /* ========================================================
-     PREVENT DUPLICATE REQUEST
-  ======================================================== */
-
-  if (deliveriesPageLoading) {
-
-    return;
-
-  }
-
-
-  deliveriesPageLoading =
-    true;
-
-
+  deliveriesPageLoading = true;
+  if (refresh.cached === undefined)
   tbody.innerHTML = `
 
     <tr>
@@ -466,12 +435,7 @@ function loadDeliveriesPage(forceRefresh) {
         class="text-center text-muted py-5"
       >
 
-        <div
-          class="spinner-border spinner-border-sm me-2"
-          role="status"
-        ></div>
-
-        <span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading deliveries...</span>
+<span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading deliveries...</span>
 
       </td>
 
@@ -484,6 +448,7 @@ function loadDeliveriesPage(forceRefresh) {
 
     .withSuccessHandler(
       function(result) {
+        if (!refresh.current()) return;
 
         deliveriesPageLoading =
           false;
@@ -499,6 +464,9 @@ function loadDeliveriesPage(forceRefresh) {
             result.message
               ? result.message
               : "Unable to load deliveries.";
+
+
+          if (refresh.cached !== undefined) { showNotificationToast('Delivery refresh failed. Showing previously loaded data.', true); return; }
 
 
           tbody.innerHTML = `
@@ -532,8 +500,8 @@ function loadDeliveriesPage(forceRefresh) {
             : [];
 
 
-        deliveriesPageLoaded =
-          true;
+        refresh.save(deliveriesPageData);
+        deliveriesPageLoaded = true;
 
 
         renderDeliveriesTable(
@@ -551,6 +519,7 @@ function loadDeliveriesPage(forceRefresh) {
 
     .withFailureHandler(
       function(err) {
+        if (!refresh.current()) return;
 
         deliveriesPageLoading =
           false;
@@ -567,6 +536,9 @@ function loadDeliveriesPage(forceRefresh) {
           "DELIVERIES PAGE ERROR:",
           err
         );
+
+
+        if (refresh.cached !== undefined) { showNotificationToast('Delivery refresh failed. Showing previously loaded data.', true); return; }
 
 
         tbody.innerHTML = `

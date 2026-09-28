@@ -66,6 +66,12 @@ function openInventoryWorkspace(){
       });
       document.querySelectorAll('dialog[open]').forEach(function(dialog) { dialog.close(); });
       clearSession();
+      pageReadCache.clear();
+      yourFindsReprintBusy = false;
+      ++yourFindsReprintRequest;
+      deliveriesPageLoaded = false;
+      deliveriesPageLoading = false;
+      deliveriesPageData = [];
       currentEmployee = null;
       inventoryPageData = []; phase8SelectedItem = null;
       if(typeof window !== 'undefined')window.phase8Products = [];

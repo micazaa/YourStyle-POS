@@ -160,16 +160,26 @@ function loadInventoryPage() {
   document.getElementById('inventoryAddProductButton').style.display = inventoryIsManager() ? 'inline-block' : 'none';
   document.getElementById('inventoryActiveHeading').style.display = inventoryIsManager() ? '' : 'none';
   const readToken=inventoryManagerReadToken();
+  const refresh = beginPageRead('inventory');
   const body = document.getElementById('inventoryTableBody');
-  body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-muted py-5"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading inventory...</span></td></tr>`;
+  if (refresh.cached !== undefined) {
+    inventoryPageData = refresh.cached;
+    filterInventoryTable();
+  } else body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-muted py-5">${loadingIndicator('Loading inventory…')}</td></tr>`;
   google.script.run.withSuccessHandler(function(items) {
-    if(!currentEmployee || readToken!==inventoryManagerReadToken())return;
+    if(!refresh.current() || readToken!==inventoryManagerReadToken())return;
     inventoryPageData = Array.isArray(items) ? items : [];
+    refresh.save(inventoryPageData);
     filterInventoryTable();
     if(dashboardInventoryReminder==='low'||dashboardInventoryReminder==='sold')openInventorySummary(dashboardInventoryReminder);
     dashboardInventoryReminder='';
 
   }).withFailureHandler(function(error) {
+    if (!refresh.current()) return;
+    if (refresh.cached !== undefined) {
+      showNotificationToast('Inventory refresh failed. Showing previously loaded data.', true);
+      return;
+    }
     inventoryPageData = [];
     body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-danger py-5">Failed to load inventory.</td></tr>`;
     showNotificationToast(error.message || String(error), true);

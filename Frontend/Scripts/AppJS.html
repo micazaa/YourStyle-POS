@@ -1,5 +1,19 @@
 <script>
 
+  var pageReadCache = new Map();
+  function beginPageRead(view, key = '') {
+    const employee = currentEmployee;
+    const owner = JSON.stringify([employee, typeof currentCashier === 'undefined' ? '' : currentCashier]);
+    const previous = pageReadCache.get(view);
+    const entry = { owner, key, data: previous && previous.owner === owner && previous.key === key ? previous.data : undefined };
+    pageReadCache.set(view, entry);
+    return {
+      cached: entry.data,
+      current: () => pageReadCache.get(view) === entry && !!currentEmployee && JSON.stringify([currentEmployee, typeof currentCashier === 'undefined' ? '' : currentCashier]) === owner,
+      save: data => { entry.data = data; }
+    };
+  }
+
   function loadingIndicator(label = 'Loading…') {
     const escaped = String(label).replace(/[&<>"']/g, character => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'

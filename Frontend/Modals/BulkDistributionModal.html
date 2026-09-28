@@ -145,14 +145,18 @@ function selectBulkDistributionBundle(bundleNo) {
 function getSelectedBulkBundle(){return (bulkDistributionHolder&&bulkDistributionHolder.bundles||[]).find(function(b){return Number(b.bundleNo)===Number(bulkDistributionSelectedBundleNo);})||null;}
 
 function loadBulkDistributionProducts() {
+  const refresh=beginPageRead('bulkProducts',String(bulkDistributionHolder.type||'').trim().toUpperCase());
+  if(refresh.cached!==undefined){bulkDistributionProducts=refresh.cached;document.getElementById('bulkDistributionProductsLoading').style.display='none';if(bulkDistributionProducts.length)addBulkDistributionLine();}
   google.script.run.withSuccessHandler(function(result){
+    if(!refresh.current())return;
     document.getElementById("bulkDistributionProductsLoading").style.display="none";
     if(!result||!result.success){showBulkDistributionError(result&&result.message?result.message:"Unable to load Product Master.");return;}
     const type=String(bulkDistributionHolder.type||"").trim().toUpperCase();
     bulkDistributionProducts=(result.products||[]).filter(function(p){return String(p.category||"").trim().toUpperCase()===type;});
+    refresh.save(bulkDistributionProducts);
     if(!bulkDistributionProducts.length){showBulkDistributionError("No active "+type+" products were found.");return;}
-    addBulkDistributionLine();
-  }).withFailureHandler(function(err){document.getElementById("bulkDistributionProductsLoading").style.display="none";showBulkDistributionError(err&&err.message?err.message:String(err));}).getYourStyleDeliveryProducts();
+    if(refresh.cached===undefined||!refresh.cached.length)addBulkDistributionLine();
+  }).withFailureHandler(function(err){if(!refresh.current())return;document.getElementById("bulkDistributionProductsLoading").style.display="none";showBulkDistributionError(err&&err.message?err.message:String(err));}).getYourStyleDeliveryProducts();
 }
 
 function addBulkDistributionLine() {

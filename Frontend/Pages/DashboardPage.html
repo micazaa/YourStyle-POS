@@ -289,8 +289,8 @@
     dashboardBusy = false;
     document.getElementById('dashboardTaskSave').disabled = false;
     document.getElementById('dashboardContent').innerHTML = '';
-    document.getElementById('dashboardContent').hidden = true;
-    document.getElementById('dashboardDates').hidden = true;
+    document.getElementById('dashboardContent').hidden = !dashboardData;
+    document.getElementById('dashboardDates').hidden = !dashboardData || !dashboardData.employee.manager;
     document.getElementById('dashboardStatus').textContent = '';
     document.getElementById('dashboardGreeting').textContent = 'Welcome to YourStyle';
     document.getElementById('dashboardEncouragement').textContent = 'A little progress, together.';
@@ -314,7 +314,7 @@
     document.getElementById('dashboardContent').hidden = true;
     document.getElementById('dashboardDates').hidden = true;
     const status = document.getElementById('dashboardStatus');
-    status.innerHTML = loadingIndicator('Loading your store…');
+    if (!dashboardData) status.innerHTML = loadingIndicator('Loading your store…');
     if (!token) {
       status.textContent = 'Please sign out and sign in again to access the dashboard.';
       return;
@@ -371,9 +371,7 @@
           token !== currentEmployee.dashboardToken
         )
           return;
-        dashboardData = null;
-        document.getElementById('dashboardContent').innerHTML = '';
-        status.textContent = error.message || String(error);
+        status.textContent = (dashboardData ? 'Refresh failed; showing previous results. ' : '') + (error.message || String(error));
       })
       .getDashboard(request);
   }

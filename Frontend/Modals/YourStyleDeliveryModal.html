@@ -109,9 +109,12 @@ function resetYourStyleDeliveryModal() {
 function loadYourStyleDeliveryProducts() {
   const loading = document.getElementById("yourStyleProductsLoading");
   const error = document.getElementById("yourStyleProductsError");
-  loading.style.display = "block";
+  const refresh=beginPageRead('deliveryProducts');
+  loading.style.display = refresh.cached===undefined?'block':'none';
+  if(refresh.cached!==undefined){yourStyleDeliveryProducts=refresh.cached;if(yourStyleDeliveryProducts.length)addYourStyleDeliveryLine();}
   error.style.display = "none";
   google.script.run.withSuccessHandler(function(result) {
+    if(!refresh.current())return;
     loading.style.display = "none";
     if (!result || !result.success) {
       error.style.display = "block";
@@ -119,13 +122,15 @@ function loadYourStyleDeliveryProducts() {
       return;
     }
     yourStyleDeliveryProducts = Array.isArray(result.products) ? result.products : [];
+    refresh.save(yourStyleDeliveryProducts);
     if (!yourStyleDeliveryProducts.length) {
       error.style.display = "block";
       error.textContent = "No active YourStyle STOCK products found.";
       return;
     }
-    addYourStyleDeliveryLine();
+    if(!document.getElementById('yourStyleDeliveryLines').children.length)addYourStyleDeliveryLine();
   }).withFailureHandler(function(err) {
+    if(!refresh.current())return;
     loading.style.display = "none";
     error.style.display = "block";
     error.textContent = err && err.message ? err.message : "Unable to load Product Master.";

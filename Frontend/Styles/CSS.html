@@ -804,9 +804,10 @@ thead th {
  .sidebar-overlay {display:none!important;}
 }
 @media(max-width:991px){.sidebar-label {display:block;}.app-sidebar.show {left:0;}}
-#terminalWorkspace {display:flex!important;flex-direction:column;gap:12px;}
+#terminalWorkspace {display:flex!important;flex-direction:column;gap:12px;height:calc(100vh - 24px);height:calc(100dvh - 24px);}
 body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 #terminalWorkspace > .row {flex:1;min-height:0;}
+@media(min-width:768px){#terminalWorkspace > .row{--bs-gutter-y:0;}#terminalWorkspace > .row > div{min-height:0;}#terminalWorkspace .pane-body{min-height:0;}}
 @media(max-width:767px){#terminalWorkspace {height:auto!important;}#terminalWorkspace > .row > div {height:auto!important;}}
 /* Alignment follows each numeric column, including its sort button. */
 .table th.text-end button {text-align:right;}
@@ -820,7 +821,7 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 #appSidebar:focus-visible{outline:3px solid var(--pink-hover);outline-offset:-3px}
 .cashier-petty-cash{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:var(--pink-light);color:#784451;white-space:nowrap;font-size:.9rem}
 .mobile-menu-toggle{display:none}
-@media(max-width:991px){.pos-session-active .mobile-menu-toggle{display:block;position:fixed;top:8px;left:12px;z-index:920}.pos-session-active #appMain{padding-top:56px}.inventory-workspace-nav{top:0;padding-left:60px;padding-right:60px}#terminalWorkspace{height:calc(100vh - 56px)!important}}
+@media(max-width:991px){.pos-session-active .mobile-menu-toggle{display:block;position:fixed;top:8px;left:12px;z-index:920}.pos-session-active #appMain{padding-top:56px}.inventory-workspace-nav{top:0;padding-left:60px;padding-right:60px}#terminalWorkspace{height:calc(100vh - 80px);height:calc(100dvh - 80px);}}
 @media(max-width:767px){#terminalWorkspace{height:auto!important}}
 /* Leave breathing room below every page, including the cashier workspace. */
 #appMain {padding-bottom:24px;}
