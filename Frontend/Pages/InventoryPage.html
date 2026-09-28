@@ -55,7 +55,6 @@
 
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-body d-flex flex-wrap gap-2">
-        <button type="button" class="btn btn-outline-pink" onclick="inventoryIncompleteOnly=false;filterInventoryTable()">Show all statuses</button>
         <select id="inventoryCategoryFilter" class="form-select" style="width:180px;" aria-label="Inventory category" onchange="filterInventoryTable()">
           <option value="">All</option><option value="YOURFINDS">YourFinds (YF)</option><option value="PINS">PINS</option><option value="OTHERS">Others</option>
         </select>
@@ -81,7 +80,7 @@
 
             <thead class="table-light">
 
-<tr><th class="ps-3">Image</th><th data-inventory-sort="code" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('code')">Code <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th data-inventory-sort="name" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('name')">Product <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th data-inventory-sort="category" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('category')">Category <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th class="text-center" data-inventory-sort="size" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('size')">Size <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th id="inventoryCostHeading" class="text-end" data-inventory-sort="costPrice" aria-sort="none" style="display:none;"><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('costPrice')">Cost Price <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th class="text-end" data-inventory-sort="price" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('price')">Selling Price <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th class="text-center" data-inventory-sort="stock" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('stock')">Stock <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th class="text-center" data-inventory-sort="availability" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('availability')">Stock Status <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th class="text-center" data-inventory-sort="active" aria-sort="none" id="inventoryActiveHeading" style="display:none;"><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('active')">Active / Inactive <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th class="text-center">Actions</th></tr>
+<tr><th class="ps-3">Image</th><th data-inventory-sort="code" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('code')">Code <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th data-inventory-sort="name" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('name')">Product <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th data-inventory-sort="category" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('category')">Category <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th class="text-center" data-inventory-sort="size" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('size')">Size <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th class="text-end" data-inventory-sort="price" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('price')">Selling Price <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th class="text-center" data-inventory-sort="stock" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('stock')">Stock <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th class="text-center" data-inventory-sort="availability" aria-sort="none" ><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('availability')">Stock Status <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th class="text-center" data-inventory-sort="active" aria-sort="none" id="inventoryActiveHeading" style="display:none;"><button type="button" class="btn btn-link p-0 text-reset text-decoration-none fw-semibold text-nowrap" onclick="sortInventoryTable('active')">Active / Inactive <span class="inventory-sort-marker" aria-hidden="true">↕</span></button></th><th class="text-center">Actions</th></tr>
 
             </thead>
 
@@ -153,13 +152,12 @@ function inventoryIsManager() {
 function inventoryIsYourFinds(item) {
   return String(item.category).toUpperCase() === 'YOURFINDS' && String(item.inventoryType).toUpperCase() === 'UNIQUE';
 }
-function inventoryColumnCount() { return inventoryIsManager() ? 11 : 9; }
+function inventoryColumnCount() { return inventoryIsManager() ? 10 : 9; }
 function inventoryManagerReadToken(){return inventoryIsManager()?(currentEmployee.inventoryManagerToken||'expired'):'';}
 function inventoryCostText(value){return value===null||value===undefined||value===''?'—':'₱'+Number(value).toFixed(2);}
 function loadInventoryPage() {
   inventoryIncompleteOnly = dashboardInventoryReminder === 'incomplete';
   document.getElementById('inventoryAddProductButton').style.display = inventoryIsManager() ? 'inline-block' : 'none';
-  document.getElementById('inventoryCostHeading').style.display = inventoryIsManager() ? '' : 'none';
   document.getElementById('inventoryActiveHeading').style.display = inventoryIsManager() ? '' : 'none';
   const readToken=inventoryManagerReadToken();
   const body = document.getElementById('inventoryTableBody');
@@ -204,12 +202,12 @@ function buildInventorySummaryGroups(items) {
     const group = groups.get(key);
     // Count physical units, including unfinished/inactive stock, but not returns.
     if (String(item.status || '').trim().toUpperCase() !== 'RETURNED') {
-      group.stock += Math.max(0, Number(item.stock) || 0);
+      group.stock += Number(item.stock) || 0;
     }
     group.lowStockAt = Math.max(group.lowStockAt, Number(item.lowStockAt) || 0);
   });
   return Array.from(groups.values()).map(function(group) {
-    group.status = group.stock === 0 ? 'SOLD OUT' :
+    group.status = group.stock <= 0 ? 'SOLD OUT' :
       (group.category !== 'YOURFINDS' && group.lowStockAt > 0 && group.stock <= group.lowStockAt) ? 'LOW STOCK' : 'IN STOCK';
     return group;
   });
@@ -298,47 +296,145 @@ function inventoryIcon(name) {
   };
   return '<svg class="inventory-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">'+paths[name]+'</svg>';
 }
+
 function renderInventoryTable(items) {
   const body = document.getElementById('inventoryTableBody');
   body.innerHTML = '';
+
   if (!items.length) {
-    body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-muted py-5">No inventory found.</td></tr>`;
+    body.innerHTML = `
+      <tr>
+        <td colspan="${inventoryColumnCount()}"
+            class="text-center text-muted py-5">
+          No inventory found.
+        </td>
+      </tr>
+    `;
     return;
   }
+
+  const isManager = inventoryIsManager();
+
   items.forEach(function(item) {
     const row = document.createElement('tr');
-    const state = String(item.status || 'ACTIVE').toUpperCase();
+    const state = String(item.status || 'ACTIVE').trim().toUpperCase();
+    const stock = Number(item.stock) || 0;
+    const isYourFinds = inventoryIsYourFinds(item);
     const canToggle = state === 'ACTIVE' || state === 'INACTIVE';
-    const image = item.imageUrl ? `<button type="button" class="btn p-0 inventory-photo" aria-label="View product image"><img src="${escapeInventoryHtml(item.imageUrl)}" alt="${escapeInventoryHtml(item.name)}" style="width:50px;height:50px;object-fit:cover;border-radius:8px;"></button>` : '<span class="small text-muted">No Image</span>';
-    row.innerHTML = `<td class="ps-3">${image}</td>
-      <td class="font-monospace small">${escapeInventoryHtml(item.code)}</td>
-      <td class="fw-semibold">${escapeInventoryHtml(item.name)}</td>
-      <td>${escapeInventoryHtml(item.category)}</td><td class="text-center">${escapeInventoryHtml(item.size)}</td>
-      ${inventoryIsManager()?`<td class="text-end">${inventoryCostText(item.costPrice)}</td>`:''}
-      <td class="text-end fw-semibold">₱${(Number(item.price)||0).toFixed(2)}</td>
-      <td class="text-center fw-bold">${Number(item.stock)||0}</td>
-      <td class="text-center">${buildInventoryStatusBadge(getInventoryDisplayStatus(item))}</td>
-      ${inventoryIsManager() ? `<td><select class="form-select form-select-sm inventory-active" aria-label="Active status for ${escapeInventoryHtml(item.code)}" ${canToggle?'':'disabled'} title="${canToggle?'Change active status':'Complete the item first; returned items cannot be activated.'}"><option value="ACTIVE" ${state==='ACTIVE'?'selected':''}>Active</option><option value="INACTIVE" ${state!=='ACTIVE'?'selected':''}>Inactive</option></select></td>` : ''}
-      <td><div class="inventory-actions"></div></td>`;
+
+    const image = item.imageUrl
+      ? `
+        <button type="button"
+                class="btn p-0 inventory-photo"
+                aria-label="View product image">
+          <img
+            src="${escapeInventoryHtml(item.imageUrl)}"
+            alt="${escapeInventoryHtml(item.name)}"
+            style="width:50px;height:50px;object-fit:cover;border-radius:8px;">
+        </button>
+      `
+      : '<span class="small text-muted">No Image</span>';
+
+    row.innerHTML = `
+      <td class="ps-3">${image}</td>
+      <td class="font-monospace small">
+        ${escapeInventoryHtml(item.code)}
+      </td>
+      <td class="fw-semibold">
+        ${escapeInventoryHtml(item.name)}
+      </td>
+      <td>${escapeInventoryHtml(item.category)}</td>
+      <td class="text-center">${escapeInventoryHtml(item.size)}</td>
+      <td class="text-end fw-semibold">
+        ₱${(Number(item.price) || 0).toFixed(2)}
+      </td>
+      <td class="text-center fw-bold">${stock}</td>
+      <td class="text-center">
+        ${buildInventoryStatusBadge(getInventoryDisplayStatus(item))}
+      </td>
+      ${
+        isManager
+          ? `
+            <td>
+              <select
+                class="form-select form-select-sm inventory-active"
+                aria-label="Active status for ${escapeInventoryHtml(item.code)}"
+                ${canToggle ? '' : 'disabled'}
+                title="${
+                  canToggle
+                    ? 'Change active status'
+                    : 'Complete the item first; returned items cannot be activated.'
+                }">
+                <option value="ACTIVE"
+                  ${state === 'ACTIVE' ? 'selected' : ''}>
+                  Active
+                </option>
+                <option value="INACTIVE"
+                  ${state !== 'ACTIVE' ? 'selected' : ''}>
+                  Inactive
+                </option>
+              </select>
+            </td>
+          `
+          : ''
+      }
+      <td><div class="inventory-actions"></div></td>
+    `;
+
     const photo = row.querySelector('.inventory-photo');
-    if (photo) photo.addEventListener('click', () => openInventoryImageViewer(item));
+    if (photo) {
+      photo.addEventListener('click', () => openInventoryImageViewer(item));
+    }
+
     const select = row.querySelector('.inventory-active');
-    if (select) select.addEventListener('change', () => changeInventoryActiveInline(item, select));
+    if (select) {
+      select.addEventListener('change', () =>
+        changeInventoryActiveInline(item, select)
+      );
+    }
+
     const actions = row.querySelector('.inventory-actions');
+
     function action(name, label, callback) {
       const button = document.createElement('button');
-      button.type = 'button'; button.className = 'btn btn-sm ' + (name === 'delete' ? 'btn-outline-danger' : 'btn-outline-secondary');
-      button.title = label; button.setAttribute('aria-label', label); button.innerHTML = inventoryIcon(name);
-      button.addEventListener('click', callback); actions.appendChild(button);
+      button.type = 'button';
+      button.className =
+        'btn btn-sm ' +
+        (name === 'delete'
+          ? 'btn-outline-danger'
+          : 'btn-outline-secondary');
+
+      button.title = label;
+      button.setAttribute('aria-label', label);
+      button.innerHTML = inventoryIcon(name);
+      button.addEventListener('click', callback);
+      actions.appendChild(button);
     }
-    if (!inventoryIsYourFinds(item) || (['ACTIVE','INACTIVE','INCOMPLETE'].includes(state) && Number(item.stock)>0)) {
-      action('edit', state==='INCOMPLETE'?'Add selling details':'Edit item', () => editInventoryRow(item));
+
+    const canEditDetails =
+      !isYourFinds ||
+      ['ACTIVE', 'INACTIVE', 'INCOMPLETE'].includes(state);
+
+    if (canEditDetails) {
+      action(
+        'edit',
+        state === 'INCOMPLETE' ? 'Add selling details' : 'Edit item',
+        () => editInventoryRow(item)
+      );
     }
-    action('view', 'View item', () => openInventoryDetailsPhase8(item.code));
-    if (inventoryIsManager()) action('delete', 'Delete item', () => deleteInventoryRow(item));
+
+    action('view', 'View item', () =>
+      openInventoryDetailsPhase8(item.code)
+    );
+
+    if (isManager) {
+      action('delete', 'Delete item', () => deleteInventoryRow(item));
+    }
+
     body.appendChild(row);
   });
 }
+
 function openInventoryImageViewer(item) {
   const viewer = document.getElementById('inventoryImageViewer');
   document.getElementById('inventoryImageTitle').textContent = item.name || item.code;

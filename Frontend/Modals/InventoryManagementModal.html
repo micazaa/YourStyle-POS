@@ -68,6 +68,11 @@
             <label class="form-label">Selling Price <span class="text-danger">*</span></label>
             <div class="input-group"><span class="input-group-text">₱</span><input id="yfEditorSellingPrice" type="number" min="0.01" step="0.01" class="form-control"></div>
           </div>
+          <div id="yfEditorCostWrap" class="col-md-6" style="display:none;">
+            <label class="form-label" for="yfEditorCostPrice">Custom Cost Price</label>
+            <div class="input-group"><span class="input-group-text">₱</span><input id="yfEditorCostPrice" type="number" min="0" step="0.01" class="form-control"></div>
+            <small class="text-muted">This item only. Leave blank if unknown; zero is a valid cost.</small>
+          </div>
           <div id="yfEditorManagerPinWrap" class="col-12">
             <label class="form-label">Manager PIN <span class="text-danger">*</span></label>
             <input id="yfEditorManagerPin" type="password" class="form-control" autocomplete="off">
@@ -194,11 +199,19 @@ function openInventoryDetailsPhase8(code){
  const isPins=String(item.category||'').trim().toUpperCase()==='PINS';
  const display=getInventoryDisplayStatus(item); document.getElementById('invDetailBody').innerHTML=`<div class="border rounded p-3 mb-3"><div class="small text-muted">Current Stock</div><div class="fs-3 fw-bold">${Number(item.stock)||0}</div><div>${buildInventoryStatusBadge(display)}</div></div><div class="row g-3"><div class="col-6"><b>Category</b><br>${escapeInventoryHtml(item.category)}</div><div class="col-6"><b>Type</b><br>${escapeInventoryHtml(item.inventoryType)}</div>${isPins?'':`<div class="col-6"><b>Size</b><br>${escapeInventoryHtml(item.size||'—')}</div>`}<div class="col-6"><b>Selling Price</b><br>₱${(Number(item.price)||0).toFixed(2)}</div>${yourFinds?`<div class="col-6"><b>Original Price</b><br>₱${(Number(item.origPrice)||0).toFixed(2)}</div>`:''}${inventoryIsManager()?`<div class="col-6"><b>Cost Price</b><br>${inventoryCostText(item.costPrice)}</div>`:''}${isPins?'':`<div class="col-6"><b>Delivered</b><br>${escapeInventoryHtml(item.dateDelivered||'—')}</div>`}${isPins?'':`<div class="col-12"><b>Delivery ID</b><br>${escapeInventoryHtml(item.deliveryId||'—')}</div>`}</div>`; phase8RenderInventoryPhoto_(item.imageUrl);
  document.getElementById('invAdjustBtn').style.display=unique?'none':'inline-block'; document.getElementById('invChangeBtn').style.display=unique?'none':'inline-block';
- const editIcon=document.getElementById('invDetailEditSellingBtn');editIcon.innerHTML=inventoryIcon('edit');editIcon.style.display=completed?'inline-block':'none';
+ const editIcon=document.getElementById('invDetailEditSellingBtn');editIcon.innerHTML=inventoryIcon('edit');editIcon.style.display=yourFinds&&['ACTIVE','INACTIVE'].includes(status)?'inline-block':'none';
  const editBtn=document.getElementById('invYfEditBtn'); editBtn.style.display=incomplete?'inline-block':'none'; editBtn.textContent=incomplete?'Add Selling Details':'Edit Selling Details';
  document.getElementById('invLabelBtn').style.display=completed?'inline-block':'none';
  const statusBtn=document.getElementById('invStatusBtn'); statusBtn.style.display=!inventoryIsManager()||incomplete||status==='RETURNED'?'none':'inline-block'; statusBtn.textContent=status==='ACTIVE'?'Deactivate':'Reactivate';
  document.getElementById('inventoryDetailsModal').style.display='flex';
+}
+
+function saveYourFindsCustomCostClientPhase8(){
+ if(!phase8SelectedItem||!inventoryIsManager()||phase8SelectedItem.costSource!=='CUSTOM')return;
+ const value=window.prompt('Supplier cost for this item only. Leave blank if unknown.',phase8SelectedItem.costPrice??'');
+ if(value===null)return;
+ const auth=phase8ManagerCredentials('Manager authorization');if(!auth)return;
+ google.script.run.withSuccessHandler(function(){closePhase8Modal('inventoryDetailsModal');loadInventoryPage();showNotificationToast('Custom cost saved.');}).withFailureHandler(function(error){showNotificationToast(error.message||String(error),true);}).saveYourFindsCustomCostPhase8({...auth,code:phase8SelectedItem.code,costPrice:value.trim()});
 }
 
 function openYourFindsEditorPhase8(){
@@ -213,6 +226,8 @@ function openYourFindsEditorPhase8(){
  document.getElementById('yfEditorOriginalPriceWrap').style.display='block';
  document.getElementById('yfEditorOriginalPrice').value=Number(phase8SelectedItem.origPrice)||0;
  document.getElementById('yfEditorSellingPrice').value=Number(phase8SelectedItem.price)||'';
+ document.getElementById('yfEditorCostWrap').style.display=inventoryIsManager()&&phase8SelectedItem.costSource==='CUSTOM'?'block':'none';
+ document.getElementById('yfEditorCostPrice').value=inventoryIsManager()&&phase8SelectedItem.costSource==='CUSTOM'?(phase8SelectedItem.costPrice??''):'';
  document.getElementById('yfEditorManagerPin').value='';
  document.getElementById('yfEditorManagerPinWrap').style.display=incomplete||inventoryIsManager()?'none':'block';
  document.getElementById('yfEditorPhoto').value='';
@@ -259,6 +274,7 @@ function saveYourFindsDetailsClientPhase8(generateLabel){
  const originalPrice=Number(document.getElementById('yfEditorOriginalPrice').value);
  if(!Number.isFinite(originalPrice)||originalPrice<0)return showNotificationToast('Enter a valid Original Price.',true);
  payload.originalPrice=originalPrice;
+ if(inventoryIsManager()&&phase8SelectedItem.costSource==='CUSTOM')payload.costPrice=document.getElementById('yfEditorCostPrice').value;
  setYourFindsSavingPhase8(true,generateLabel);
  google.script.run.withSuccessHandler(function(result){
    setYourFindsSavingPhase8(false);

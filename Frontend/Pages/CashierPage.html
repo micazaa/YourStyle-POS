@@ -1,9 +1,12 @@
 <div id="posPage">
 
-  <div class="container-fluid p-4" id="terminalWorkspace" style="display:none; height: calc(100vh - 85px);">
-    <div class="d-flex justify-content-end flex-wrap gap-2 flex-shrink-0">
+  <div class="container-fluid p-4" id="terminalWorkspace" style="display:none; height: 100vh;">
+    <div class="d-flex align-items-center flex-wrap gap-2 flex-shrink-0">
       <button class="btn btn-outline-secondary btn-sm" onclick="toggleShiftReportModal(true)">Cashier Shift Report</button>
       <button id="cashierManagerReportBtn" class="btn btn-outline-pink btn-sm" style="display:none;" onclick="openManagerReportModal()">Manager Daily Report</button>
+      <div class="cashier-petty-cash ms-auto" title="Petty cash received this shift">
+        <span>Petty Cash</span> <strong id="cashierPettyCash">₱0.00</strong>
+      </div>
     </div>
     <div class="row g-4">
 
@@ -63,7 +66,33 @@
               <div class="mb-2"><input type="text" class="form-control form-control-sm" id="customName" placeholder="Item Name / Description">
               </div>
               <div class="row g-2 mb-2">
-                <div class="col-5"><input type="text" class="form-control form-control-sm" id="customSize" placeholder="Size">
+                <div class="col-5">
+                  <select
+                    id="customSize"
+                    class="form-select form-select-sm"
+                    aria-label="Size"
+                    onchange="toggleCustomItemSize()"
+                  >
+                    <option value="SNE">SNE</option>
+                    <option value="MNE">MNE</option>
+                    <option value="LNE">LNE</option>
+                    <option value="XLNE">XLNE</option>
+                    <option value="SE">SE</option>
+                    <option value="ME">ME</option>
+                    <option value="LE">LE</option>
+                    <option value="XLE">XLE</option>
+                    <option value="CUSTOM">Custom </option>
+                  </select>
+
+                  <input
+                    id="customSizeText"
+                    type="text"
+                    class="form-control form-control-sm mt-2"
+                    placeholder="FREE SIZE"
+                    aria-label="Custom size"
+                    maxlength="50"
+                    hidden
+                  >
                 </div>
                 <div class="col-7"><input type="number" class="form-control form-control-sm text-end" id="customPrice" placeholder="Price (₱)" min="0">
                 </div>
@@ -179,6 +208,20 @@
 </div>
 
 <script>
+
+  function toggleCustomItemSize() {
+  const input = document.getElementById('customSizeText');
+  const isCustom = document.getElementById('customSize').value === 'CUSTOM';
+
+  input.hidden = !isCustom;
+
+  if (isCustom) {
+    input.focus();
+  } else {
+    input.value = '';
+  }
+}
+
 /* ==========================================================
    CART HELPERS
 ========================================================== */
@@ -284,7 +327,7 @@
 
       let tr = document.createElement("tr");
       let imgTag = item.imageUrl
-        ? `<img src="${item.imageUrl}" class="cart-img">`
+        ? `<button type="button" class="btn p-0 cart-photo" aria-label="View product image" title="View product image"><img src="${escapeInventoryHtml(item.imageUrl)}" alt="${escapeInventoryHtml(item.name || item.code)}" class="cart-img"></button>`
         : `<div class="cart-img bg-light border d-flex align-items-center justify-content-center text-muted small" style="font-size:10px;">No Img</div>`;
 
       tr.innerHTML = `
@@ -317,6 +360,10 @@
             <td class="text-end fw-bold pe-3">₱${lineNetValue.toFixed(2)}</td>
             <td><button class="btn btn-sm text-danger p-0 border-0 bg-transparent fw-bold" onclick="removeItem(${index})">✕</button></td>
           `;
+      const photo = tr.querySelector('.cart-photo');
+      if (photo) {
+        photo.addEventListener('click', () => openInventoryImageViewer(item));
+      }
       tbody.appendChild(tr);
     });
 
@@ -719,7 +766,16 @@ function resetManualItemSearch() {
 
   function addCustomItem() {
     let name = document.getElementById("customName").value.trim();
-    let sizeInput = document.getElementById("customSize").value.trim();
+    const selectedSize = document.getElementById('customSize').value;
+    const sizeInput = selectedSize === 'CUSTOM'
+      ? document.getElementById('customSizeText').value.trim().toUpperCase()
+      : selectedSize;
+
+    if (selectedSize === 'CUSTOM' && !sizeInput) {
+      showNotificationToast('Enter the custom size.', true);
+      return;
+    }
+
     let size = sizeInput;
     let price = parseFloat(document.getElementById("customPrice").value);
     if (!name || isNaN(price) || price < 0) {
@@ -743,6 +799,7 @@ function resetManualItemSearch() {
     );
     document.getElementById("customName").value = "";
     document.getElementById("customSize").value = "";
+    toggleCustomItemSize();
     document.getElementById("customPrice").value = "";
   }
 

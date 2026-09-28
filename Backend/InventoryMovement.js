@@ -407,12 +407,62 @@ function phase8ReadYourFindsCostBySize_() {
   const map = {};
   getProductMaster().forEach(function(product) {
     if (String(product.category || '').trim().toUpperCase() !== 'YOURFINDS') return;
-    const size = String(product.description || '').trim().toUpperCase();
+    const size = normalizeYourFindsSaleSize_(product.description);
     const raw = product.costPrice;
     const value = Number(raw);
-    if (size) map[size] = raw === '' || raw === null || !Number.isFinite(value) || value < 0 ? null : value;
+    // Nonstandard sizes have individual costs, never the CUSTOM template cost.
+    if (size !== 'CUSTOM') map[size] = raw === '' || raw === null || !Number.isFinite(value) || value < 0 ? null : value;
   });
   return map;
+}
+// Optional Q column; leave the existing A:P inventory schema unchanged.
+function phase8CustomCostColumn_(sheet, create) {
+  const column = 17;
+  if (sheet.getMaxColumns() < column) {
+    if (!create) return null;
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), column - sheet.getMaxColumns());
+  }
+  const header = String(sheet.getRange(1, column).getValue() || '').trim();
+  if (header && header !== 'Custom Cost Price') throw new Error('Inventory column Q is already used. Custom Cost Price requires a free column Q.');
+  if (!header) {
+    if (!create) return null;
+    if (sheet.getLastRow() > 1 && sheet.getRange(2, column, sheet.getLastRow()-1, 1).getValues().some(row => row[0] !== '' && row[0] !== null)) {
+      throw new Error('Inventory column Q contains data. Move it before adding Custom Cost Price.');
+    }
+    sheet.getRange(1, column).setValue('Custom Cost Price');
+  }
+  return column;
+}
+function phase8ReadCustomCosts_(sheet) {
+  const map = {};
+  if (!sheet || sheet.getLastRow() < 2) return map;
+  const column = phase8CustomCostColumn_(sheet, false);
+  if (!column) return map;
+  const rows = sheet.getRange(2, 1, sheet.getLastRow()-1, column).getValues();
+  rows.forEach(row => {
+    const raw = row[column-1], value = Number(raw);
+    map[String(row[INV_IDX.CODE]).trim()] = raw === '' || raw === null || !Number.isFinite(value) || value < 0 ? null : value;
+  });
+  return map;
+}
+function saveYourFindsCustomCostPhase8(payload) {
+  payload = payload || {};
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const cost = phase8CostPayload_(payload);
+    if (cost === undefined) throw new Error('Custom Cost Price is required; use blank for unknown.');
+    const code = String(payload.code || '').trim();
+    const item = getFullInventory().find(row => String(row.code) === code);
+    if (!item || String(item.category).toUpperCase() !== 'YOURFINDS' || normalizeYourFindsSaleSize_(item.size) !== 'CUSTOM') {
+      throw new Error('Individual costs are only for nonstandard YourFinds sizes.');
+    }
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+    const column = phase8CustomCostColumn_(sheet, true);
+    sheet.getRange(item.rowNumber, column).setValue(cost);
+    sheet.getRange(item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
+    return {success:true};
+  } finally { lock.releaseLock(); }
 }
 function getInventoryForManagementPhase8(managerToken) {
   if (!managerToken) return getFullInventory();
@@ -421,11 +471,14 @@ function getInventoryForManagementPhase8(managerToken) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const stockCosts = phase8ReadCostMap_(ss.getSheetByName(SHEETS.PRODUCT_MASTER), PRODUCT_COL.PRODUCT_CODE);
   const uniqueCosts = phase8ReadYourFindsCostBySize_();
+  const customCosts = phase8ReadCustomCosts_(ss.getSheetByName(SHEETS.INVENTORY));
   return getFullInventory().map(function(item) {
     const yourFinds = String(item.category).toUpperCase() === 'YOURFINDS';
-    const key = yourFinds ? normalizeYourFindsSaleSize_(item.size) : item.code;
-    const map = yourFinds ? uniqueCosts : stockCosts;
+    const size = yourFinds ? normalizeYourFindsSaleSize_(item.size) : '';
+    const key = yourFinds && size !== 'CUSTOM' ? size : item.code;
+    const map = yourFinds ? (size === 'CUSTOM' ? customCosts : uniqueCosts) : stockCosts;
     item.costPrice = Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;
+    if (yourFinds) item.costSource = size === 'CUSTOM' ? 'CUSTOM' : 'SIZE';
     return item;
   });
 }
@@ -647,6 +700,7 @@ function phase8AssertCompletedYourFinds_(item) {
  */
 function saveYourFindsItemDetailsPhase8(payload) {
   payload = payload || {};
+  const costPrice = phase8CostPayload_(payload);
   const code = String(payload.code || "").trim();
   const description = String(payload.description || "").trim();
   const hasOriginalPrice = Object.prototype.hasOwnProperty.call(payload, "originalPrice");
@@ -678,14 +732,14 @@ function saveYourFindsItemDetailsPhase8(payload) {
     }
 
     const item = itemResult.item;
+    if (costPrice !== undefined && normalizeYourFindsSaleSize_(item.size) !== 'CUSTOM') {
+      throw new Error('Standard YourFinds sizes use Product Master cost. Edit the shared size cost there.');
+    }
     // Omitted original prices retain their stored value.
     const originalPrice = hasOriginalPrice ? requestedOriginalPrice : (Number(item.origPrice) || 0);
     const currentStatus = String(item.status || "").trim().toUpperCase();
     if ([INVENTORY_STATUS.INCOMPLETE, INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].indexOf(currentStatus) === -1) {
       throw new Error("This YourFinds item cannot be edited here.");
-    }
-    if (currentStatus !== INVENTORY_STATUS.INCOMPLETE && Number(item.stock) <= 0) {
-      throw new Error("Sold YourFinds items cannot be edited.");
     }
 
     /*
@@ -697,6 +751,9 @@ function saveYourFindsItemDetailsPhase8(payload) {
       : phase8RequireManager_(payload.managerPin, payload.managerToken);
 
     oldImageUrl = String(item.imageUrl || "").trim();
+    const inventorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+    if (!inventorySheet) throw new Error('Inventory sheet not found.');
+    const customCostColumn = costPrice !== undefined ? phase8CustomCostColumn_(inventorySheet, true) : null;
     if (decodedImage) {
       createdImage = phase8CreateInventoryImage_(code, originalName, decodedImage);
     }
@@ -724,6 +781,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
     sheet.getRange(item.rowNumber, INV_COL.YS_PRICE).setValue(sellingPrice);
     sheet.getRange(item.rowNumber, INV_COL.STATUS).setValue(finalStatus);
     sheet.getRange(item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
+    if (customCostColumn) sheet.getRange(item.rowNumber, customCostColumn).setValue(costPrice);
     inventorySaved = true;
     SpreadsheetApp.flush();
 

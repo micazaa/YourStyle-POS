@@ -67,7 +67,6 @@
     document.getElementById("globalDiscountValue").value =
       session.globalDiscountValue || "";
 
-    document.getElementById("navbarEmployeeName").textContent = currentCashier;
     document.getElementById("sidebarEmployeeName").textContent = currentCashier;
 
     document.getElementById("cashierManagerReportBtn").style.display =
@@ -216,6 +215,7 @@
 
 
       const overlaysActive =
+        !!document.querySelector('dialog[open]') ||
         (loginOverlay && loginOverlay.style.display !== "none") ||
         (checkoutModal && checkoutModal.style.display === "flex") ||
         (voidModal && voidModal.style.display === "flex") ||

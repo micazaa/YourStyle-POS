@@ -158,7 +158,7 @@ function ensureCustomYourFindsInventoryItem_(item) {
   const row = [
     code,
     name,
-    inventorySize,
+    inventorySize === "CUSTOM" ? size : inventorySize,
     "YourFinds",
     INVENTORY_TYPE.UNIQUE,
     INVENTORY_STATUS.ACTIVE,
