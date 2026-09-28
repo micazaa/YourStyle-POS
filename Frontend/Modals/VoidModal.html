@@ -542,8 +542,7 @@ if (voidReason === "Other") {
   button.disabled =
     true;
 
-  button.textContent =
-    "Authorizing...";
+  button.innerHTML = loadingIndicator("Authorizing...");
 
 
   /* ================= VERIFY MANAGER ================= */
@@ -576,8 +575,7 @@ if (voidReason === "Other") {
       }
 
 
-      button.textContent =
-        "Voiding...";
+      button.innerHTML = loadingIndicator("Voiding...");
 
 
       /* ================= VOID TRANSACTION ================= */

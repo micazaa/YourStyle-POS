@@ -21,7 +21,9 @@
 
     <!-- Layout -->
     <?!= include("Frontend/Layout/Sidebar"); ?>
-    <?!= include("Frontend/Layout/Navbar"); ?>
+    <button id="menuToggleBtn" type="button" class="btn btn-light mobile-menu-toggle"
+      aria-label="Toggle navigation" aria-controls="appSidebar" aria-expanded="false"
+      onclick="toggleSidebar()">☰</button>
 
     <!-- Modals -->
     <?!= include("Frontend/Modals/LoginModal"); ?>

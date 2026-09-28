@@ -253,6 +253,7 @@ function openYourFindsLabelModal(
   }
 
 
+  const refresh=beginPageRead('deliveryLabels',deliveryId);
   /* ================= RESET STATE ================= */
 
   yourFindsLabelCurrentDeliveryId =
@@ -305,6 +306,7 @@ function openYourFindsLabelModal(
     "block";
 
 
+  if(refresh.cached!==undefined){yourFindsLabelModalItems=refresh.cached;renderYourFindsLabelItems();document.getElementById('yourFindsLabelLoading').style.display='none';}
   updateYourFindsLabelPrintButton();
 
 
@@ -320,6 +322,7 @@ function openYourFindsLabelModal(
 
     .withSuccessHandler(
       function(result) {
+        if(!refresh.current())return;
 
         document.getElementById(
           "yourFindsLabelLoading"
@@ -360,6 +363,7 @@ function openYourFindsLabelModal(
             : [];
 
 
+        refresh.save(yourFindsLabelModalItems);
         renderYourFindsLabelItems();
 
       }
@@ -368,6 +372,7 @@ function openYourFindsLabelModal(
 
     .withFailureHandler(
       function(err) {
+        if(!refresh.current())return;
 
         document.getElementById(
           "yourFindsLabelLoading"
@@ -1009,12 +1014,7 @@ function printSelectedYourFindsLabels() {
     true;
 
 
-  button.textContent =
-    selectedCodes.length === 1
-      ? "Generating Label..."
-      : "Generating " +
-        selectedCodes.length +
-        " Labels...";
+  button.innerHTML = loadingIndicator("Generating " + selectedCodes.length + " label(s)…");
 
 
   /* ========================================================

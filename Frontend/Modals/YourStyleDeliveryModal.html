@@ -42,7 +42,7 @@
       <button type="button" class="btn btn-sm btn-outline-dark" onclick="addYourStyleDeliveryLine()">+ Add Item</button>
     </div>
 
-    <div id="yourStyleProductsLoading" class="border rounded text-center text-muted py-4 mb-3" style="display:none;">Loading Product Master...</div>
+    <div id="yourStyleProductsLoading" class="border rounded text-center text-muted py-4 mb-3" style="display:none;"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading Product Master...</span></div>
     <div id="yourStyleProductsError" class="alert alert-danger" style="display:none;"></div>
     <div id="yourStyleDeliveryLines" class="mb-4"></div>
 
@@ -109,9 +109,12 @@ function resetYourStyleDeliveryModal() {
 function loadYourStyleDeliveryProducts() {
   const loading = document.getElementById("yourStyleProductsLoading");
   const error = document.getElementById("yourStyleProductsError");
-  loading.style.display = "block";
+  const refresh=beginPageRead('deliveryProducts');
+  loading.style.display = refresh.cached===undefined?'block':'none';
+  if(refresh.cached!==undefined){yourStyleDeliveryProducts=refresh.cached;if(yourStyleDeliveryProducts.length)addYourStyleDeliveryLine();}
   error.style.display = "none";
   google.script.run.withSuccessHandler(function(result) {
+    if(!refresh.current())return;
     loading.style.display = "none";
     if (!result || !result.success) {
       error.style.display = "block";
@@ -119,13 +122,15 @@ function loadYourStyleDeliveryProducts() {
       return;
     }
     yourStyleDeliveryProducts = Array.isArray(result.products) ? result.products : [];
+    refresh.save(yourStyleDeliveryProducts);
     if (!yourStyleDeliveryProducts.length) {
       error.style.display = "block";
       error.textContent = "No active YourStyle STOCK products found.";
       return;
     }
-    addYourStyleDeliveryLine();
+    if(!document.getElementById('yourStyleDeliveryLines').children.length)addYourStyleDeliveryLine();
   }).withFailureHandler(function(err) {
+    if(!refresh.current())return;
     loading.style.display = "none";
     error.style.display = "block";
     error.textContent = err && err.message ? err.message : "Unable to load Product Master.";
@@ -136,10 +141,12 @@ function loadNextYourStyleDeliveryNumber() {
   const date = document.getElementById("yourStyleDeliveryDate").value;
   const field = document.getElementById("yourStyleDeliveryNo");
   if (!date) { field.value = "—"; return; }
-  field.value = "Loading...";
+  field.value = "";
+  setControlLoading(field, true, "Loading delivery number…");
   google.script.run.withSuccessHandler(function(result) {
+    setControlLoading(field, false);
     field.value = result && result.deliveryId ? result.deliveryId : "—";
-  }).withFailureHandler(function() { field.value = "—"; }).generateDeliveryIdentifiers("YOURSTYLE", date);
+  }).withFailureHandler(function() { setControlLoading(field, false); field.value = "—"; }).generateDeliveryIdentifiers("YOURSTYLE", date);
 }
 
 function addYourStyleDeliveryLine() {
@@ -277,7 +284,7 @@ function submitYourStyleDelivery() {
 
   const button = document.getElementById("acceptYourStyleDeliveryBtn");
   button.disabled = true;
-  button.textContent = "Accepting Delivery...";
+  button.innerHTML = loadingIndicator("Accepting Delivery...");
   google.script.run.withSuccessHandler(function(result) {
     button.disabled = false;
     button.textContent = "Accept Delivery";

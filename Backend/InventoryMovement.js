@@ -132,14 +132,14 @@ function getInventoryMovementType(category, inventoryType) {
    PHASE 8 - INVENTORY MANAGEMENT & STOCK OPERATIONS
 ========================================================== */
 
-function phase8RequireManager_(pin, token) {
+function requireManager_(pin, token) {
   if (token) return verifyInventoryManagerSession_(token);
   const auth = verifyManagerPin(pin);
   if (!auth || !auth.success) throw new Error(auth && auth.message ? auth.message : "Manager authorization failed.");
   return auth;
 }
 
-function phase8AdjustmentId_() {
+function adjustmentId_() {
   return "ADJ-" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd-HHmmss") + "-" + Math.floor(100 + Math.random() * 900);
 }
 
@@ -169,9 +169,9 @@ function getInventoryMovementHistoryByCode(code) {
   return { success: true, movements: movements };
 }
 
-function adjustInventoryStockPhase8(payload) {
+function adjustInventoryStock(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
+  const auth = requireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   const direction = String(payload.direction || "").trim().toUpperCase();
   const qty = Number(payload.quantity);
@@ -188,7 +188,7 @@ function adjustInventoryStockPhase8(payload) {
   if (!itemResult || !itemResult.success || !itemResult.item) throw new Error("Inventory item not found.");
   const item = itemResult.item;
   if (String(item.inventoryType || "").toUpperCase() === INVENTORY_TYPE.UNIQUE) throw new Error("UNIQUE YourFinds items cannot use quantity stock adjustment.");
-  const referenceId = phase8AdjustmentId_();
+  const referenceId = adjustmentId_();
   const result = changeInventoryStock({
     code: code, qtyChange: direction === "ADD" ? qty : -qty,
     referenceId: referenceId, employee: employee || auth.managerName,
@@ -198,10 +198,10 @@ function adjustInventoryStockPhase8(payload) {
   return { success: true, referenceId: referenceId, manager: auth.managerName, stockAfter: result.stockAfter };
 }
 
-function changeInventoryItemPhase8(payload) {
+function changeInventoryItem(payload) {
   payload = payload || {};
 
-  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
+  const auth = requireManager_(payload.managerPin, payload.managerToken);
   const fromCode = String(payload.fromCode || "").trim();
   const toCode = String(payload.toCode || "").trim();
   const qty = Number(payload.quantity);
@@ -275,7 +275,7 @@ function changeInventoryItemPhase8(payload) {
 
     const fromAfter = fromBefore - qty;
     const toAfter = toBefore + qty;
-    const referenceId = phase8AdjustmentId_();
+    const referenceId = adjustmentId_();
 
     logInventoryMovement({
       code: fromCode,
@@ -348,7 +348,7 @@ function changeInventoryItemPhase8(payload) {
   }
 }
 
-function generateProductMasterCodePhase8_() {
+function generateProductMasterCode_() {
   const usedCodes = {};
   getProductMaster().forEach(function(product) {
     const code = String(product.productCode || "").trim();
@@ -363,25 +363,25 @@ function generateProductMasterCodePhase8_() {
   throw new Error("Unable to generate a unique Product Code.");
 }
 
-function generateProductMasterCodePhase8() {
-  return generateProductMasterCodePhase8_();
+function generateProductMasterCode() {
+  return generateProductMasterCode_();
 }
 
-function phase8CostColumn_(sheet) {
+function costColumn_(sheet) {
   if (!sheet || sheet.getName() !== SHEETS.PRODUCT_MASTER) {
     throw new Error('Cost Price is stored only in Product Master.');
   }
   return PRODUCT_COL.COST_PRICE;
 }
-function phase8PrepareCostColumn_(sheet) {
-  const column = phase8CostColumn_(sheet);
+function prepareCostColumn_(sheet) {
+  const column = costColumn_(sheet);
   if (sheet.getMaxColumns() < column) sheet.insertColumnsAfter(sheet.getMaxColumns(), column - sheet.getMaxColumns());
   const header = String(sheet.getRange(1, column).getValue() || '').trim();
   if (header && header.toLowerCase() !== 'cost price') throw new Error('The Cost Price column is already used by another field.');
   if (!header) sheet.getRange(1, column).setValue('Cost Price');
   return column;
 }
-function phase8CostPayload_(payload) {
+function costPayload_(payload) {
   if (!Object.prototype.hasOwnProperty.call(payload, 'costPrice')) return undefined;
   const auth = verifyInventoryManagerSession_(payload.managerToken);
   if (!auth || !auth.success) throw new Error('Sign in as a manager to change Cost Price.');
@@ -390,10 +390,10 @@ function phase8CostPayload_(payload) {
   if (!Number.isFinite(value) || value < 0) throw new Error('Cost Price must be a valid non-negative amount.');
   return value;
 }
-function phase8ReadCostMap_(sheet, codeColumn) {
+function readCostMap_(sheet, codeColumn) {
   const map = {};
   if (!sheet || sheet.getLastRow() < 2) return map;
-  const column = phase8CostColumn_(sheet);
+  const column = costColumn_(sheet);
   if (sheet.getMaxColumns() < column || String(sheet.getRange(1, column).getValue() || '').trim().toLowerCase() !== 'cost price') return map;
   const codes = sheet.getRange(2, codeColumn, sheet.getLastRow()-1, 1).getDisplayValues();
   const values = sheet.getRange(2, column, sheet.getLastRow()-1, 1).getValues();
@@ -403,55 +403,108 @@ function phase8ReadCostMap_(sheet, codeColumn) {
   });
   return map;
 }
-function phase8ReadYourFindsCostBySize_() {
+function readYourFindsCostBySize_() {
   const map = {};
   getProductMaster().forEach(function(product) {
     if (String(product.category || '').trim().toUpperCase() !== 'YOURFINDS') return;
-    const size = String(product.description || '').trim().toUpperCase();
+    const size = normalizeYourFindsSaleSize_(product.description);
     const raw = product.costPrice;
     const value = Number(raw);
-    if (size) map[size] = raw === '' || raw === null || !Number.isFinite(value) || value < 0 ? null : value;
+    // Nonstandard sizes have individual costs, never the CUSTOM template cost.
+    if (size !== 'CUSTOM') map[size] = raw === '' || raw === null || !Number.isFinite(value) || value < 0 ? null : value;
   });
   return map;
 }
-function getInventoryForManagementPhase8(managerToken) {
+// Optional Q column; leave the existing A:P inventory schema unchanged.
+function customCostColumn_(sheet, create) {
+  const column = 17;
+  if (sheet.getMaxColumns() < column) {
+    if (!create) return null;
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), column - sheet.getMaxColumns());
+  }
+  const header = String(sheet.getRange(1, column).getValue() || '').trim();
+  if (header && header !== 'Custom Cost Price') throw new Error('Inventory column Q is already used. Custom Cost Price requires a free column Q.');
+  if (!header) {
+    if (!create) return null;
+    if (sheet.getLastRow() > 1 && sheet.getRange(2, column, sheet.getLastRow()-1, 1).getValues().some(row => row[0] !== '' && row[0] !== null)) {
+      throw new Error('Inventory column Q contains data. Move it before adding Custom Cost Price.');
+    }
+    sheet.getRange(1, column).setValue('Custom Cost Price');
+  }
+  return column;
+}
+function readCustomCosts_(sheet) {
+  const map = {};
+  if (!sheet || sheet.getLastRow() < 2) return map;
+  const column = customCostColumn_(sheet, false);
+  if (!column) return map;
+  const rows = sheet.getRange(2, 1, sheet.getLastRow()-1, column).getValues();
+  rows.forEach(row => {
+    const raw = row[column-1], value = Number(raw);
+    map[String(row[INV_IDX.CODE]).trim()] = raw === '' || raw === null || !Number.isFinite(value) || value < 0 ? null : value;
+  });
+  return map;
+}
+function saveYourFindsCustomCost(payload) {
+  payload = payload || {};
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const cost = costPayload_(payload);
+    if (cost === undefined) throw new Error('Custom Cost Price is required; use blank for unknown.');
+    const code = String(payload.code || '').trim();
+    const item = getFullInventory().find(row => String(row.code) === code);
+    if (!item || String(item.category).toUpperCase() !== 'YOURFINDS' || normalizeYourFindsSaleSize_(item.size) !== 'CUSTOM') {
+      throw new Error('Individual costs are only for nonstandard YourFinds sizes.');
+    }
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+    const column = customCostColumn_(sheet, true);
+    sheet.getRange(item.rowNumber, column).setValue(cost);
+    sheet.getRange(item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
+    return {success:true};
+  } finally { lock.releaseLock(); }
+}
+function getInventoryForManagement(managerToken) {
   if (!managerToken) return getFullInventory();
   const auth = verifyInventoryManagerSession_(managerToken);
   if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const stockCosts = phase8ReadCostMap_(ss.getSheetByName(SHEETS.PRODUCT_MASTER), PRODUCT_COL.PRODUCT_CODE);
-  const uniqueCosts = phase8ReadYourFindsCostBySize_();
+  const stockCosts = readCostMap_(ss.getSheetByName(SHEETS.PRODUCT_MASTER), PRODUCT_COL.PRODUCT_CODE);
+  const uniqueCosts = readYourFindsCostBySize_();
+  const customCosts = readCustomCosts_(ss.getSheetByName(SHEETS.INVENTORY));
   return getFullInventory().map(function(item) {
     const yourFinds = String(item.category).toUpperCase() === 'YOURFINDS';
-    const key = yourFinds ? normalizeYourFindsSaleSize_(item.size) : item.code;
-    const map = yourFinds ? uniqueCosts : stockCosts;
+    const size = yourFinds ? normalizeYourFindsSaleSize_(item.size) : '';
+    const key = yourFinds && size !== 'CUSTOM' ? size : item.code;
+    const map = yourFinds ? (size === 'CUSTOM' ? customCosts : uniqueCosts) : stockCosts;
     item.costPrice = Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;
+    if (yourFinds) item.costSource = size === 'CUSTOM' ? 'CUSTOM' : 'SIZE';
     return item;
   });
 }
-function getProductMasterForManagementPhase8(managerToken) {
+function getProductMasterForManagement(managerToken) {
   if (!managerToken) return getProductMaster();
   const auth = verifyInventoryManagerSession_(managerToken);
   if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
   return getProductMaster();
 }
 
-function saveProductMasterPhase8(payload) {
+function saveProductMaster(payload) {
   payload = payload || {};
-  phase8RequireManager_(payload.managerPin, payload.managerToken);
+  requireManager_(payload.managerPin, payload.managerToken);
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
-  try { return saveProductMasterLockedPhase8_(payload); }
+  try { return saveProductMasterLocked_(payload); }
   finally { lock.releaseLock(); }
 }
 
-function saveProductMasterLockedPhase8_(payload) {
+function saveProductMasterLocked_(payload) {
   payload = payload || {};
   let code = String(payload.productCode || "").trim();
   const description = String(payload.description || "").trim();
   const category = String(payload.category || "").trim().toUpperCase();
   const defaultPrice = Number(payload.defaultPrice), lowStockAt = Number(payload.lowStockAt);
-  const costPrice = phase8CostPayload_(payload);
+  const costPrice = costPayload_(payload);
   if (!description) throw new Error("Description is required.");
   if (category !== "PINS" && category !== "OTHERS") throw new Error("Category must be PINS or OTHERS.");
   if (!Number.isFinite(defaultPrice) || defaultPrice < 0) throw new Error("Prices must be valid non-negative numbers.");
@@ -463,10 +516,10 @@ function saveProductMasterLockedPhase8_(payload) {
     ? products.find(function(p){ return String(p.productCode) === code; })
     : null;
   const storedCostPrice = existing && existing.costPrice !== null ? Number(existing.costPrice) || 0 : "";
-  if (costPrice !== undefined) phase8PrepareCostColumn_(sheet);
+  if (costPrice !== undefined) prepareCostColumn_(sheet);
 
   if (!existing && !code) {
-    code = generateProductMasterCodePhase8_();
+    code = generateProductMasterCode_();
   }
   if (payload.isNew === true && existing) throw new Error("This barcode is already in use. Reopen Add Product to generate another.");
   if (payload.isNew === false && !existing) throw new Error("Product Master entry no longer exists. Reload inventory.");
@@ -479,7 +532,7 @@ function saveProductMasterLockedPhase8_(payload) {
   const imageDataUrl = String(payload.imageDataUrl || "").trim();
   const imageFileName = String(payload.imageFileName || "product-photo").trim();
   const createdImage = imageDataUrl
-    ? phase8CreateInventoryImage_(code, imageFileName, phase8DecodeInventoryImage_(imageDataUrl))
+    ? createInventoryImage_(code, imageFileName, decodeInventoryImage_(imageDataUrl))
     : null;
   const imageUrl = createdImage ? createdImage.imageUrl : (existing ? String(existing.imageUrl || "") : "");
   const now = new Date();
@@ -512,9 +565,9 @@ function saveProductMasterLockedPhase8_(payload) {
   return { success: true, productCode: code };
 }
 
-function setInventoryAdministrativeStatusPhase8(payload) {
+function setInventoryAdministrativeStatus(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
+  const auth = requireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   const status = String(payload.status || "").trim().toUpperCase();
   if (![INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].includes(status)) throw new Error("Status must be ACTIVE or INACTIVE.");
@@ -528,7 +581,7 @@ function setInventoryAdministrativeStatusPhase8(payload) {
       throw new Error("Only active or inactive items can be changed here. Complete unfinished items first.");
     }
     if (String(item.category).toUpperCase() === "YOURFINDS" && String(item.inventoryType).toUpperCase() === INVENTORY_TYPE.UNIQUE && status === INVENTORY_STATUS.ACTIVE) {
-      phase8AssertCompletedYourFinds_(item);
+      assertCompletedYourFinds_(item);
     }
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
     const master = getProductMaster().find(function(product) { return String(product.productCode) === code; });
@@ -548,9 +601,9 @@ function setInventoryAdministrativeStatusPhase8(payload) {
 
 // Delete only unused records. Historical rows remain available to receipts,
 // exchanges, delivery reports and stock movement reconciliation.
-function deleteUnusedInventoryItemPhase8(payload) {
+function deleteUnusedInventoryItem(payload) {
   payload = payload || {};
-  phase8RequireManager_(payload.managerPin, payload.managerToken);
+  requireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   if (!code) throw new Error("Inventory Code is required.");
   const lock = LockService.getScriptLock();
@@ -589,7 +642,7 @@ function deleteUnusedInventoryItemPhase8(payload) {
 
 const PHASE8_PRODUCT_IMAGES_FOLDER_ID = "1Jm-OdXcmg17KgHW5Ed_NRwwTKvrbpWC3";
 
-function phase8DecodeInventoryImage_(dataUrl) {
+function decodeInventoryImage_(dataUrl) {
   dataUrl = String(dataUrl || "").trim();
   if (!dataUrl) return null;
 
@@ -605,7 +658,7 @@ function phase8DecodeInventoryImage_(dataUrl) {
   return { bytes: bytes, mimeType: mimeType };
 }
 
-function phase8CreateInventoryImage_(code, originalName, decodedImage) {
+function createInventoryImage_(code, originalName, decodedImage) {
   const folder = DriveApp.getFolderById(PHASE8_PRODUCT_IMAGES_FOLDER_ID);
   const safeName = String(originalName || "photo").replace(/[^A-Za-z0-9._-]+/g, "_");
   const blob = Utilities.newBlob(
@@ -621,12 +674,12 @@ function phase8CreateInventoryImage_(code, originalName, decodedImage) {
   };
 }
 
-function phase8IsYourFindsUnique_(item) {
+function isYourFindsUnique_(item) {
   return String(item && item.category || "").trim().toUpperCase() === "YOURFINDS" &&
     String(item && item.inventoryType || "").trim().toUpperCase() === INVENTORY_TYPE.UNIQUE;
 }
 
-function phase8AssertCompletedYourFinds_(item) {
+function assertCompletedYourFinds_(item) {
   if (!String(item && item.imageUrl || "").trim()) {
     throw new Error("A product picture is required before this YourFinds item can be active.");
   }
@@ -645,14 +698,15 @@ function phase8AssertCompletedYourFinds_(item) {
  * Completes a newly received YourFinds item, or edits a completed one.
  * Code, size, stock, category, type, and delivery metadata stay immutable.
  */
-function saveYourFindsItemDetailsPhase8(payload) {
+function saveYourFindsItemDetails(payload) {
   payload = payload || {};
+  const costPrice = costPayload_(payload);
   const code = String(payload.code || "").trim();
   const description = String(payload.description || "").trim();
   const hasOriginalPrice = Object.prototype.hasOwnProperty.call(payload, "originalPrice");
   const requestedOriginalPrice = Number(payload.originalPrice);
   const sellingPrice = Number(payload.sellingPrice);
-  const decodedImage = phase8DecodeInventoryImage_(payload.dataUrl);
+  const decodedImage = decodeInventoryImage_(payload.dataUrl);
   const originalName = String(payload.fileName || "photo").trim();
 
   if (!code) throw new Error("Inventory Code is required.");
@@ -678,14 +732,14 @@ function saveYourFindsItemDetailsPhase8(payload) {
     }
 
     const item = itemResult.item;
+    if (costPrice !== undefined && normalizeYourFindsSaleSize_(item.size) !== 'CUSTOM') {
+      throw new Error('Standard YourFinds sizes use Product Master cost. Edit the shared size cost there.');
+    }
     // Omitted original prices retain their stored value.
     const originalPrice = hasOriginalPrice ? requestedOriginalPrice : (Number(item.origPrice) || 0);
     const currentStatus = String(item.status || "").trim().toUpperCase();
     if ([INVENTORY_STATUS.INCOMPLETE, INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].indexOf(currentStatus) === -1) {
       throw new Error("This YourFinds item cannot be edited here.");
-    }
-    if (currentStatus !== INVENTORY_STATUS.INCOMPLETE && Number(item.stock) <= 0) {
-      throw new Error("Sold YourFinds items cannot be edited.");
     }
 
     /*
@@ -694,11 +748,14 @@ function saveYourFindsItemDetailsPhase8(payload) {
      */
     const auth = currentStatus === INVENTORY_STATUS.INCOMPLETE
       ? null
-      : phase8RequireManager_(payload.managerPin, payload.managerToken);
+      : requireManager_(payload.managerPin, payload.managerToken);
 
     oldImageUrl = String(item.imageUrl || "").trim();
+    const inventorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+    if (!inventorySheet) throw new Error('Inventory sheet not found.');
+    const customCostColumn = costPrice !== undefined ? customCostColumn_(inventorySheet, true) : null;
     if (decodedImage) {
-      createdImage = phase8CreateInventoryImage_(code, originalName, decodedImage);
+      createdImage = createInventoryImage_(code, originalName, decodedImage);
     }
     const finalImageUrl = createdImage ? createdImage.imageUrl : oldImageUrl;
     if (!finalImageUrl) throw new Error("A product picture is required to complete this YourFinds item.");
@@ -709,7 +766,7 @@ function saveYourFindsItemDetailsPhase8(payload) {
       price: sellingPrice,
       size: item.size
     };
-    phase8AssertCompletedYourFinds_(completedItem);
+    assertCompletedYourFinds_(completedItem);
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEETS.INVENTORY);
@@ -724,11 +781,12 @@ function saveYourFindsItemDetailsPhase8(payload) {
     sheet.getRange(item.rowNumber, INV_COL.YS_PRICE).setValue(sellingPrice);
     sheet.getRange(item.rowNumber, INV_COL.STATUS).setValue(finalStatus);
     sheet.getRange(item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
+    if (customCostColumn) sheet.getRange(item.rowNumber, customCostColumn).setValue(costPrice);
     inventorySaved = true;
     SpreadsheetApp.flush();
 
     if (createdImage && oldImageUrl) {
-      const oldId = phase8DriveImageId_(oldImageUrl);
+      const oldId = driveImageId_(oldImageUrl);
       if (oldId) {
         try { DriveApp.getFileById(oldId).setTrashed(true); } catch (cleanupError) {}
       }
@@ -755,21 +813,21 @@ function saveYourFindsItemDetailsPhase8(payload) {
   }
 }
 
-function saveInventoryPhotoPhase8(payload) {
+function saveInventoryPhoto(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
+  const auth = requireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   const dataUrl = String(payload.dataUrl || "").trim();
   const originalName = String(payload.fileName || "photo").trim();
   if (!code) throw new Error("Inventory Code is required.");
   if (!dataUrl) throw new Error("Choose an image first.");
 
-  const decodedImage = phase8DecodeInventoryImage_(dataUrl);
+  const decodedImage = decodeInventoryImage_(dataUrl);
 
   const itemResult = getInventoryItemByCode(code);
   if (!itemResult || !itemResult.success || !itemResult.item) throw new Error("Inventory item not found.");
 
-  const createdImage = phase8CreateInventoryImage_(code, originalName, decodedImage);
+  const createdImage = createInventoryImage_(code, originalName, decodedImage);
   const file = createdImage.file;
   const imageUrl = createdImage.imageUrl;
 
@@ -781,7 +839,7 @@ function saveInventoryPhotoPhase8(payload) {
   sheet.getRange(rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
 
   // Best-effort cleanup of an older Drive image created by this feature.
-  const oldId = phase8DriveImageId_(oldValue);
+  const oldId = driveImageId_(oldValue);
   if (oldId) {
     try { DriveApp.getFileById(oldId).setTrashed(true); } catch (e) {}
   }
@@ -789,14 +847,14 @@ function saveInventoryPhotoPhase8(payload) {
   return { success: true, imageUrl: imageUrl, fileId: file.getId(), manager: auth.managerName };
 }
 
-function removeInventoryPhotoPhase8(payload) {
+function removeInventoryPhoto(payload) {
   payload = payload || {};
-  const auth = phase8RequireManager_(payload.managerPin, payload.managerToken);
+  const auth = requireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
   const itemResult = getInventoryItemByCode(code);
   if (!itemResult || !itemResult.success || !itemResult.item) throw new Error("Inventory item not found.");
   if (
-    phase8IsYourFindsUnique_(itemResult.item) &&
+    isYourFindsUnique_(itemResult.item) &&
     String(itemResult.item.status || "").trim().toUpperCase() !== INVENTORY_STATUS.INCOMPLETE
   ) {
     throw new Error("A completed YourFinds item must keep a picture. Use Change Photo instead.");
@@ -809,14 +867,14 @@ function removeInventoryPhotoPhase8(payload) {
   sheet.getRange(rowNumber, INV_COL.IMAGE).clearContent();
   sheet.getRange(rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
 
-  const oldId = phase8DriveImageId_(oldValue);
+  const oldId = driveImageId_(oldValue);
   if (oldId) {
     try { DriveApp.getFileById(oldId).setTrashed(true); } catch (e) {}
   }
   return { success: true, manager: auth.managerName };
 }
 
-function phase8DriveImageId_(value) {
+function driveImageId_(value) {
   value = String(value || "");
   let m = value.match(/[?&]id=([A-Za-z0-9_-]+)/);
   if (m) return m[1];

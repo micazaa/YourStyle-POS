@@ -53,7 +53,7 @@
       <button type="button" class="btn btn-sm btn-outline-dark" onclick="addBulkDistributionLine()">+ Add Product</button>
     </div>
 
-    <div id="bulkDistributionProductsLoading" class="border rounded text-center text-muted py-3 mb-3" style="display:none;">Loading Product Master...</div>
+    <div id="bulkDistributionProductsLoading" class="border rounded text-center text-muted py-3 mb-3" style="display:none;"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading Product Master...</span></div>
     <div id="bulkDistributionProductsError" class="alert alert-danger" style="display:none;"></div>
     <div id="bulkDistributionLines" class="mb-3"></div>
 
@@ -145,14 +145,18 @@ function selectBulkDistributionBundle(bundleNo) {
 function getSelectedBulkBundle(){return (bulkDistributionHolder&&bulkDistributionHolder.bundles||[]).find(function(b){return Number(b.bundleNo)===Number(bulkDistributionSelectedBundleNo);})||null;}
 
 function loadBulkDistributionProducts() {
+  const refresh=beginPageRead('bulkProducts',String(bulkDistributionHolder.type||'').trim().toUpperCase());
+  if(refresh.cached!==undefined){bulkDistributionProducts=refresh.cached;document.getElementById('bulkDistributionProductsLoading').style.display='none';if(bulkDistributionProducts.length)addBulkDistributionLine();}
   google.script.run.withSuccessHandler(function(result){
+    if(!refresh.current())return;
     document.getElementById("bulkDistributionProductsLoading").style.display="none";
     if(!result||!result.success){showBulkDistributionError(result&&result.message?result.message:"Unable to load Product Master.");return;}
     const type=String(bulkDistributionHolder.type||"").trim().toUpperCase();
     bulkDistributionProducts=(result.products||[]).filter(function(p){return String(p.category||"").trim().toUpperCase()===type;});
+    refresh.save(bulkDistributionProducts);
     if(!bulkDistributionProducts.length){showBulkDistributionError("No active "+type+" products were found.");return;}
-    addBulkDistributionLine();
-  }).withFailureHandler(function(err){document.getElementById("bulkDistributionProductsLoading").style.display="none";showBulkDistributionError(err&&err.message?err.message:String(err));}).getYourStyleDeliveryProducts();
+    if(refresh.cached===undefined||!refresh.cached.length)addBulkDistributionLine();
+  }).withFailureHandler(function(err){if(!refresh.current())return;document.getElementById("bulkDistributionProductsLoading").style.display="none";showBulkDistributionError(err&&err.message?err.message:String(err));}).getYourStyleDeliveryProducts();
 }
 
 function addBulkDistributionLine() {
@@ -183,7 +187,7 @@ function submitBulkDistribution(){
   if(!employee){showNotificationToast("Unable to identify the logged-in employee.",true);return;}
   const lines=getBulkDistributionLines(); if(!lines.length){showNotificationToast("Add at least one product.",true);return;}
   for(let i=0;i<lines.length;i++){if(!lines[i].productCode){showNotificationToast("Select a valid product for Item "+(i+1)+".",true);return;}if(!Number.isInteger(lines[i].quantity)||lines[i].quantity<1){showNotificationToast("Enter a valid quantity for Item "+(i+1)+".",true);return;}}
-  const button=document.getElementById("confirmBulkDistributionBtn");button.disabled=true;button.textContent="Distributing...";
+  const button=document.getElementById("confirmBulkDistributionBtn");button.disabled=true;button.innerHTML = loadingIndicator("Distributing...");
   const payload={deliveryId:bulkDistributionHolder.deliveryId,sheetRow:bulkDistributionHolder.sheetRow,bundleNo:bulkDistributionSelectedBundleNo,employee:employee,remarks:document.getElementById("bulkDistributionRemarks").value.trim(),lines:lines};
   google.script.run.withSuccessHandler(function(result){button.disabled=false;button.textContent="Distribute";if(!result||!result.success){showNotificationToast(result&&result.message?result.message:"Distribution failed.",true);return;}closeBulkDistributionModal();showNotificationToast("Added "+result.distributionActual+" piece(s) to Bundle #"+result.bundleNo+".");if(typeof loadDeliveries==="function")loadDeliveries();}).withFailureHandler(function(err){button.disabled=false;button.textContent="Distribute";showNotificationToast(err&&err.message?err.message:String(err),true);}).distributeBulkBundle(payload);
 }

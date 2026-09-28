@@ -211,6 +211,8 @@ function ensureManualSaleInventoryItem_(item) {
   const category = String(item.category || "").trim().toUpperCase();
 
   if (category === "YOURFINDS") {
+    // Shared resolver normalizes S/M/L/XL and preserves nonstandard size labels.
+    // Sync never sets a supplier cost from a selling price or CUSTOM template.
     return ensureCustomYourFindsInventoryItem_(item);
   }
 

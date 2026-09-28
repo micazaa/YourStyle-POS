@@ -315,137 +315,7 @@
    CURRENT EMPLOYEE
 ========================================================== */
 
-function getCurrentDeliveryEmployeeName() {
 
-  if (
-    typeof currentEmployee !== "undefined" &&
-    currentEmployee
-  ) {
-
-    if (
-      typeof currentEmployee === "string"
-    ) {
-
-      return currentEmployee.trim();
-
-    }
-
-
-    if (
-      currentEmployee.name
-    ) {
-
-      return String(
-        currentEmployee.name
-      ).trim();
-
-    }
-
-
-    if (
-      currentEmployee.employeeName
-    ) {
-
-      return String(
-        currentEmployee.employeeName
-      ).trim();
-
-    }
-
-  }
-
-
-  if (
-    typeof loggedInEmployee !== "undefined" &&
-    loggedInEmployee
-  ) {
-
-    if (
-      typeof loggedInEmployee === "string"
-    ) {
-
-      return loggedInEmployee.trim();
-
-    }
-
-
-    if (
-      loggedInEmployee.name
-    ) {
-
-      return String(
-        loggedInEmployee.name
-      ).trim();
-
-    }
-
-
-    if (
-      loggedInEmployee.employeeName
-    ) {
-
-      return String(
-        loggedInEmployee.employeeName
-      ).trim();
-
-    }
-
-  }
-
-
-  if (
-    typeof currentUser !== "undefined" &&
-    currentUser
-  ) {
-
-    if (
-      typeof currentUser === "string"
-    ) {
-
-      return currentUser.trim();
-
-    }
-
-
-    if (
-      currentUser.name
-    ) {
-
-      return String(
-        currentUser.name
-      ).trim();
-
-    }
-
-
-    if (
-      currentUser.employeeName
-    ) {
-
-      return String(
-        currentUser.employeeName
-      ).trim();
-
-    }
-
-  }
-
-
-  if (
-    typeof currentCashier !== "undefined" &&
-    currentCashier
-  ) {
-
-    return String(
-      currentCashier
-    ).trim();
-
-  }
-
-
-  return "";
-
-}
 
 
 /* ==========================================================
@@ -901,8 +771,7 @@ function submitYourFindsDelivery() {
     true;
 
 
-  button.textContent =
-    "Accepting Delivery...";
+  button.innerHTML = loadingIndicator("Accepting Delivery...");
 
 
   google.script.run
@@ -1065,8 +934,7 @@ function loadNextYourFindsDeliveryNumber() {
   }
 
 
-  display.textContent =
-    "Loading...";
+  display.innerHTML = loadingIndicator();
 
 
   google.script.run

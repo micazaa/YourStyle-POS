@@ -282,7 +282,7 @@
         class="border rounded text-center text-muted py-3"
         style="display:none;"
       >
-        Loading items...
+        <span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading items...</span>
       </div>
 
 
@@ -417,10 +417,13 @@ function viewYourFindsDeliveryDetails(
     "flex";
 
 
+  const refresh=beginPageRead('deliveryDetails',deliveryId);
+  if(refresh.cached!==undefined){renderYourFindsDeliveryDetails(refresh.cached);document.getElementById('deliveryDetailsLoading').style.display='none';}
   google.script.run
 
     .withSuccessHandler(
       function(result) {
+        if(!refresh.current())return;
 
         document.getElementById(
           "deliveryDetailsLoading"
@@ -456,6 +459,7 @@ function viewYourFindsDeliveryDetails(
         }
 
 
+        refresh.save(result.delivery);
         renderYourFindsDeliveryDetails(
           result.delivery
         );
@@ -466,6 +470,7 @@ function viewYourFindsDeliveryDetails(
 
     .withFailureHandler(
       function(err) {
+        if(!refresh.current())return;
 
         document.getElementById(
           "deliveryDetailsLoading"
@@ -720,6 +725,7 @@ function loadYourFindsDeliveryDetailItems(
     );
 
 
+  const refresh=beginPageRead('deliveryItems',deliveryId);
   loading.style.display =
     "block";
 
@@ -736,10 +742,12 @@ function loadYourFindsDeliveryDetailItems(
     "0";
 
 
+  if(refresh.cached!==undefined){renderYourFindsDeliveryDetailItems(refresh.cached);loading.style.display='none';}
   google.script.run
 
     .withSuccessHandler(
       function(result) {
+        if(!refresh.current())return;
 
         loading.style.display =
           "none";
@@ -774,6 +782,7 @@ function loadYourFindsDeliveryDetailItems(
             : [];
 
 
+        refresh.save(items);
         renderYourFindsDeliveryDetailItems(
           items
         );
@@ -784,6 +793,7 @@ function loadYourFindsDeliveryDetailItems(
 
     .withFailureHandler(
       function(err) {
+        if(!refresh.current())return;
 
         loading.style.display =
           "none";

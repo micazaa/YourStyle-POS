@@ -172,7 +172,7 @@
       onclick="unlockTerminalSession()"
       disabled
     >
-      Loading shift...
+      <span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading shift…</span>
     </button>
 
   </div>
@@ -200,7 +200,7 @@ var phase10PettyLoaded =
    Call this whenever the login screen is opened.
 ========================================================== */
 
-function initializeLoginPhase10() {
+function initializeLogin() {
 
   phase10EmployeesLoaded =
     false;
@@ -220,15 +220,14 @@ function initializeLoginPhase10() {
     loginButton.disabled =
       true;
 
-    loginButton.textContent =
-      "Loading shift...";
+    loginButton.innerHTML = loadingIndicator("Loading shift…");
 
   }
 
 
   loadEmployees();
 
-  loadPettyHandoverPhase10();
+  loadPettyHandover();
 
 }
 
@@ -237,7 +236,7 @@ function initializeLoginPhase10() {
    UPDATE LOGIN READY STATE
 ========================================================== */
 
-function updateLoginReadyPhase10() {
+function updateLoginReady() {
 
   const button =
     document.getElementById(
@@ -261,10 +260,7 @@ function updateLoginReadyPhase10() {
     !ready;
 
 
-  button.textContent =
-    ready
-      ? "Log In"
-      : "Loading shift...";
+  button.innerHTML = ready ? "Log In" : loadingIndicator("Loading shift…");
 
 }
 
@@ -288,14 +284,15 @@ function loadEmployees() {
   }
 
 
-  select.innerHTML =
-    '<option value="">Loading employees...</option>';
+  select.innerHTML = '<option value="">Loading employees...</option>';
+  setControlLoading(select, true, 'Loading employees…');
 
 
   google.script.run
 
     .withSuccessHandler(
       function(employees) {
+        setControlLoading(select, false);
 
         select.innerHTML =
           "";
@@ -353,7 +350,7 @@ function loadEmployees() {
           true;
 
 
-        updateLoginReadyPhase10();
+        updateLoginReady();
 
       }
     )
@@ -361,6 +358,7 @@ function loadEmployees() {
 
     .withFailureHandler(
       function(err) {
+        setControlLoading(select, false);
 
         console.error(
           "Employee loading error:",
@@ -393,7 +391,7 @@ function loadEmployees() {
    LOAD PETTY HANDOVER
 ========================================================== */
 
-function loadPettyHandoverPhase10() {
+function loadPettyHandover() {
 
   const input =
     document.getElementById(
@@ -534,7 +532,7 @@ function loadPettyHandoverPhase10() {
               </span>
 
               <span class="text-muted">
-                · ${escapeLoginHtmlPhase10(
+                · ${escapeLoginHtml(
                   previousReportId
                 )}
               </span>
@@ -580,7 +578,7 @@ function loadPettyHandoverPhase10() {
           true;
 
 
-        updateLoginReadyPhase10();
+        updateLoginReady();
 
       }
     )
@@ -620,7 +618,7 @@ function loadPettyHandoverPhase10() {
 
             <span class="text-danger">
               ${
-                escapeLoginHtmlPhase10(
+                escapeLoginHtml(
                   err &&
                   err.message
                     ? err.message
@@ -653,13 +651,13 @@ function loadPettyHandoverPhase10() {
           true;
 
 
-        updateLoginReadyPhase10();
+        updateLoginReady();
 
       }
     )
 
 
-    .getLatestPettyHandoverPhase10();
+    .getLatestPettyHandover();
 
 }
 
@@ -732,8 +730,7 @@ function unlockTerminalSession() {
   button.disabled =
     true;
 
-  button.textContent =
-    "Verifying...";
+  button.innerHTML = loadingIndicator("Verifying...");
 
 
   /* ========================================================
@@ -772,8 +769,7 @@ function unlockTerminalSession() {
         }
 
 
-        button.textContent =
-          "Starting shift...";
+        button.innerHTML = loadingIndicator("Starting shift…");
 
 
         /* ==================================================
@@ -929,7 +925,7 @@ function unlockTerminalSession() {
           )
 
 
-          .startCashierShiftPhase10(
+          .startCashierShift(
             result.fullName,
             petty
           );
@@ -972,7 +968,7 @@ function unlockTerminalSession() {
    SAFE HTML
 ========================================================== */
 
-function escapeLoginHtmlPhase10(
+function escapeLoginHtml(
   value
 ) {
 
