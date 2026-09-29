@@ -294,7 +294,7 @@ function processSalesRows_(sheet, rowNumbers) {
         const price = Number(row[SALES_IDX.PRICE]);
         const saleStatus = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
 
-        if (!row[SALES_IDX.TIMESTAMP]) throw new Error("Timestamp is required.");
+        // A missing sale date must not block stock sync or invent a historical date.
         if (!receiptId) throw new Error("Receipt ID is required.");
         if (!cashier) throw new Error("Cashier is required.");
         if (!Number.isInteger(quantity) || quantity < 1) throw new Error("Quantity must be a positive whole number.");

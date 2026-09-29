@@ -301,6 +301,7 @@ function filterInventoryTable() {
 function inventoryIcon(name) {
   const paths = {
     view: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+    label: '<path d="M3 3h7l11 11-7 7L3 10Z"/><circle cx="7" cy="7" r="1"/>',
     edit: '<path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5"/>',
     delete: '<path d="M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7"/>'
   };
@@ -464,6 +465,7 @@ function changeInventoryActiveInline(item, select) {
     select.disabled = false;
     if (!result || !result.success) return showNotificationToast(result && result.message || 'Status change failed.', true);
     item.status = result.status; filterInventoryTable();
+    loadInventoryPage();
     showNotificationToast('Item set to ' + result.status.toLowerCase() + '.');
   }).withFailureHandler(function(error) {
     select.disabled = false; showNotificationToast(error.message || String(error), true);

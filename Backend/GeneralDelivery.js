@@ -342,8 +342,8 @@ function acceptYourStyleDelivery(payload) {
     /* ========================================================
        NORMALIZE BULK HOLDERS
 
-       Multiple BULK rows of the same Type in one acceptance
-       represent physical bundles of the SAME bulk holder.
+       Multiple BULK rows with the same Type and Bundle Code
+       represent physical bundles of the same bulk holder.
 
        Example:
        PINS BULK 1 bundle / est 80
@@ -357,7 +357,7 @@ function acceptYourStyleDelivery(payload) {
     ======================================================== */
 
     const normalizedLines = [];
-    const bulkByType = {};
+    const bulkByReference = {};
 
     lines.forEach(function(line) {
       if (line.receiveMode !== DELIVERY_RECEIVE_MODE.BULK) {
@@ -365,21 +365,23 @@ function acceptYourStyleDelivery(payload) {
         return;
       }
 
-      const key = String(line.type || "").trim().toUpperCase();
+      const type = String(line.type || "").trim().toUpperCase();
+      const description = String(line.description || "").trim();
+      const key = type + "\u0000" + description.toUpperCase();
 
-      if (!bulkByType[key]) {
-        bulkByType[key] = {
-          type: key,
+      if (!bulkByReference[key]) {
+        bulkByReference[key] = {
+          type: type,
           receiveMode: DELIVERY_RECEIVE_MODE.BULK,
-          description: line.description,
+          description: description,
           bundleQty: 0,
           estimatedQuantity: 0
         };
-        normalizedLines.push(bulkByType[key]);
+        normalizedLines.push(bulkByReference[key]);
       }
 
-      bulkByType[key].bundleQty += Number(line.bundleQty) || 0;
-      bulkByType[key].estimatedQuantity += Number(line.estimatedQuantity) || 0;
+      bulkByReference[key].bundleQty += Number(line.bundleQty) || 0;
+      bulkByReference[key].estimatedQuantity += Number(line.estimatedQuantity) || 0;
     });
 
     lines = normalizedLines;

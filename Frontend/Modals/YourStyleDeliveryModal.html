@@ -4,7 +4,7 @@
 ========================================================== -->
 
 <div id="yourStyleDeliveryModal" class="generic-overlay-blur" style="display:none;">
-  <div class="custom-popup-card" style="max-width:980px;width:96%;max-height:92vh;overflow-y:auto;">
+  <div class="custom-popup-card delivery-modal-card">
 
     <div class="d-flex justify-content-between align-items-start mb-4 pb-3 border-bottom">
       <div>
@@ -34,26 +34,19 @@
       </div>
     </div>
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <div>
-        <div class="fw-semibold">Items Received</div>
-        <div class="small text-muted">Each row may be DIRECT or BULK.</div>
+    <div class="delivery-items-toolbar mb-3">
+      <div class="fw-semibold">Items Received</div>
+      <div class="delivery-mode-toggle btn-group" role="group" aria-label="Delivery mode">
+        <button type="button" id="yourStyleDirectModeBtn" class="btn btn-sm btn-outline-pink active" aria-pressed="true" onclick="setYourStyleDeliveryMode('DIRECT')">Direct</button>
+        <button type="button" id="yourStyleBundleModeBtn" class="btn btn-sm btn-outline-pink" aria-pressed="false" onclick="setYourStyleDeliveryMode('BULK')">Bundle</button>
       </div>
-      <button type="button" class="btn btn-sm btn-outline-dark" onclick="addYourStyleDeliveryLine()">+ Add Item</button>
+      <button type="button" class="btn btn-sm btn-outline-dark delivery-add-item" onclick="addYourStyleDeliveryLine()">+ Add Item</button>
     </div>
 
     <div id="yourStyleProductsLoading" class="border rounded text-center text-muted py-4 mb-3" style="display:none;"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading Product Master...</span></div>
     <div id="yourStyleProductsError" class="alert alert-danger" style="display:none;"></div>
-    <div id="yourStyleDeliveryLines" class="mb-4"></div>
-
-    <div class="border rounded bg-light p-3 mb-4">
-      <div class="row g-3 text-center">
-        <div class="col-md-3"><div class="small text-muted">Direct Units</div><div id="yourStyleSummaryDirect" class="fw-bold fs-5">0</div></div>
-        <div class="col-md-3"><div class="small text-muted">Bulk Estimate</div><div id="yourStyleSummaryBulk" class="fw-bold fs-5">0</div></div>
-        <div class="col-md-3"><div class="small text-muted">Bundles</div><div id="yourStyleSummaryBundles" class="fw-bold fs-5">0</div></div>
-        <div class="col-md-3"><div class="small text-muted">Rows</div><div id="yourStyleSummaryRows" class="fw-bold fs-5">0</div></div>
-      </div>
-    </div>
+    <div class="delivery-line-scroll mb-3"><div id="yourStyleDeliveryHead"></div><div id="yourStyleDeliveryLines"></div></div>
+    <div id="yourStyleDeliverySummary" class="delivery-summary mb-4" aria-live="polite"></div>
 
     <div class="mb-3">
       <label class="form-label">Accepted By</label>
@@ -75,6 +68,7 @@
 <script>
 var yourStyleDeliveryProducts = [];
 var yourStyleDeliveryLineCounter = 0;
+var yourStyleDeliveryMode = "DIRECT";
 
 function openYourStyleDeliveryModal() {
   const modal = document.getElementById("yourStyleDeliveryModal");
@@ -93,6 +87,7 @@ function closeYourStyleDeliveryModal() {
 function resetYourStyleDeliveryModal() {
   yourStyleDeliveryProducts = [];
   yourStyleDeliveryLineCounter = 0;
+  yourStyleDeliveryMode = "DIRECT";
   const now = new Date();
   const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
   document.getElementById("yourStyleDeliveryDate").value = localDate.toISOString().split("T")[0];
@@ -103,6 +98,7 @@ function resetYourStyleDeliveryModal() {
   document.getElementById("yourStyleAcceptedBy").value = currentEmployee && currentEmployee.name ? currentEmployee.name : currentCashier || "";
   document.getElementById("yourStyleDeliveryLines").innerHTML = "";
   document.getElementById("yourStyleProductsError").style.display = "none";
+  renderYourStyleDeliveryMode();
   updateYourStyleDeliverySummary();
 }
 
@@ -150,32 +146,48 @@ function loadNextYourStyleDeliveryNumber() {
 }
 
 function addYourStyleDeliveryLine() {
-  if (!yourStyleDeliveryProducts.length) return showNotificationToast("Product Master is still loading.", true);
+  if (yourStyleDeliveryMode === "DIRECT" && !yourStyleDeliveryProducts.length) return showNotificationToast("Product Master is still loading.", true);
   yourStyleDeliveryLineCounter++;
   const lineId = yourStyleDeliveryLineCounter;
   const line = document.createElement("div");
-  line.className = "yourstyle-delivery-line border rounded px-2 py-2 mb-2";
-  line.innerHTML = `
-    <div class="row g-2 align-items-end">
-      <div class="col-auto"><div class="small text-muted mb-1">#</div><div class="yourstyle-line-title fw-bold text-center" style="min-width:28px;padding:7px 0;">${lineId}</div></div>
-      <div class="col-md-2"><label class="form-label small mb-1">Type</label><select class="form-select form-select-sm yourstyle-line-type" onchange="handleYourStyleLineConfigChange(this)"><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option></select></div>
-      <div class="col-md-2"><label class="form-label small mb-1">Mode</label><select class="form-select form-select-sm yourstyle-line-mode" onchange="handleYourStyleLineConfigChange(this)"><option value="DIRECT">DIRECT</option><option value="BULK">BULK</option></select></div>
-      <div class="col yourstyle-direct-fields">
-        <label class="form-label small mb-1">Product</label>
-        <input type="text" class="form-control form-control-sm yourstyle-line-product-search" placeholder="Search code, product or price..." autocomplete="off" list="yourStyleProductList-${lineId}" oninput="handleYourStyleProductSearch(this)">
-        <datalist class="yourstyle-line-product-list" id="yourStyleProductList-${lineId}"></datalist>
-        <input type="hidden" class="yourstyle-line-product">
-      </div>
-      <div class="col-md-2 yourstyle-direct-fields" style="max-width:120px;"><label class="form-label small mb-1">Actual Qty</label><input type="number" class="form-control form-control-sm yourstyle-line-qty" min="1" max="99999" step="1" value="1" oninput="updateYourStyleDeliverySummary()"></div>
-      <div class="col yourstyle-bulk-fields" style="display:none;"><label class="form-label small mb-1">Description</label><input type="text" class="form-control form-control-sm yourstyle-line-bulk-description" value="PINS BUNDLE"></div>
-      <div class="col-md-2 yourstyle-bulk-fields" style="display:none;max-width:120px;"><label class="form-label small mb-1">Bundle Qty</label><input type="number" class="form-control form-control-sm yourstyle-line-bundle-qty" min="1" step="1" value="1" oninput="updateYourStyleDeliverySummary()"></div>
-      <div class="col-md-2 yourstyle-bulk-fields" style="display:none;max-width:150px;"><label class="form-label small mb-1">Est. Total Pcs</label><input type="number" class="form-control form-control-sm yourstyle-line-estimated-qty" min="1" step="1" value="80" oninput="updateYourStyleDeliverySummary()"></div>
-      <div class="col-auto"><button type="button" class="btn btn-sm btn-outline-danger" style="min-width:38px;" title="Remove item" onclick="removeYourStyleDeliveryLine(this)">×</button></div>
-    </div>`;
+  line.className = "yourstyle-delivery-line delivery-line " + (yourStyleDeliveryMode === "DIRECT" ? "direct" : "bundle");
+  const referenceField = yourStyleDeliveryMode === "DIRECT"
+    ? '<select class="form-select form-select-sm yourstyle-line-product" aria-label="Product"></select>'
+    : '<input type="text" class="form-control form-control-sm yourstyle-line-bulk-description" maxlength="100" placeholder="Enter bundle code" aria-label="Bundle code">';
+  const quantityFields = yourStyleDeliveryMode === "DIRECT"
+    ? '<input type="number" class="form-control form-control-sm yourstyle-line-qty" min="1" max="99999" step="1" value="1" aria-label="Actual quantity" oninput="updateYourStyleDeliverySummary()">'
+    : '<input type="number" class="form-control form-control-sm yourstyle-line-estimated-per-bundle" min="1" step="1" value="80" aria-label="Estimated units per bundle" oninput="updateYourStyleDeliverySummary()"><input type="number" class="form-control form-control-sm yourstyle-line-bundle-qty" min="1" step="1" value="1" aria-label="Bundle quantity" oninput="updateYourStyleDeliverySummary()"><div class="delivery-line-total yourstyle-line-total"></div>';
+  line.innerHTML = '<div class="delivery-line-number yourstyle-line-title">' + lineId + '</div>' +
+    '<select class="form-select form-select-sm yourstyle-line-type" aria-label="Type" onchange="handleYourStyleLineTypeChange(this)"><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option></select>' +
+    referenceField + quantityFields +
+    '<button type="button" class="btn btn-sm btn-outline-danger" title="Remove item" aria-label="Remove item" onclick="removeYourStyleDeliveryLine(this)">×</button>';
   document.getElementById("yourStyleDeliveryLines").appendChild(line);
-  populateYourStyleLineProducts(line, "PINS");
+  if (yourStyleDeliveryMode === "DIRECT") populateYourStyleLineProducts(line, "PINS");
   renumberYourStyleDeliveryLines();
   updateYourStyleDeliverySummary();
+}
+
+function setYourStyleDeliveryMode(mode) {
+  mode = String(mode || "").toUpperCase() === "BULK" ? "BULK" : "DIRECT";
+  if (yourStyleDeliveryMode === mode) return;
+  yourStyleDeliveryMode = mode;
+  yourStyleDeliveryLineCounter = 0;
+  document.getElementById("yourStyleDeliveryLines").innerHTML = "";
+  renderYourStyleDeliveryMode();
+  addYourStyleDeliveryLine();
+}
+
+function renderYourStyleDeliveryMode() {
+  const direct = yourStyleDeliveryMode === "DIRECT";
+  const directButton = document.getElementById("yourStyleDirectModeBtn");
+  const bundleButton = document.getElementById("yourStyleBundleModeBtn");
+  directButton.classList.toggle("active", direct);
+  bundleButton.classList.toggle("active", !direct);
+  directButton.setAttribute("aria-pressed", String(direct));
+  bundleButton.setAttribute("aria-pressed", String(!direct));
+  document.getElementById("yourStyleDeliveryHead").innerHTML = direct
+    ? '<div class="delivery-line-head direct"><span>#</span><span>Type</span><span>Product</span><span>Actual Qty</span><span></span></div>'
+    : '<div class="delivery-line-head bundle"><span>#</span><span>Type</span><span>Bundle Code</span><span>Est. / Bundle</span><span>Bundles</span><span>Est. Actual Units</span><span></span></div>';
 }
 
 function removeYourStyleDeliveryLine(button) {
@@ -192,47 +204,25 @@ function renumberYourStyleDeliveryLines() {
   });
 }
 
-function handleYourStyleLineConfigChange(field) {
+function handleYourStyleLineTypeChange(field) {
   const line = field.closest(".yourstyle-delivery-line");
   if (!line) return;
   const type = line.querySelector(".yourstyle-line-type").value;
-  const mode = line.querySelector(".yourstyle-line-mode").value;
-  line.querySelectorAll(".yourstyle-direct-fields").forEach(function(el) { el.style.display = mode === "DIRECT" ? "" : "none"; });
-  line.querySelectorAll(".yourstyle-bulk-fields").forEach(function(el) { el.style.display = mode === "BULK" ? "" : "none"; });
-  if (mode === "DIRECT") populateYourStyleLineProducts(line, type);
-  const desc = line.querySelector(".yourstyle-line-bulk-description");
-  if (desc && mode === "BULK") desc.value = type === "PINS" ? "PINS BUNDLE" : "OTHERS BUNDLE";
+  if (yourStyleDeliveryMode === "DIRECT") populateYourStyleLineProducts(line, type);
   updateYourStyleDeliverySummary();
 }
 
 function populateYourStyleLineProducts(line, type) {
   type = String(type || "").trim().toUpperCase();
-  const searchInput = line.querySelector(".yourstyle-line-product-search");
-  const hiddenInput = line.querySelector(".yourstyle-line-product");
-  const datalist = line.querySelector(".yourstyle-line-product-list");
-  if (!searchInput || !hiddenInput || !datalist) return;
-  searchInput.value = "";
-  hiddenInput.value = "";
-  datalist.innerHTML = "";
+  const select = line.querySelector(".yourstyle-line-product");
+  if (!select) return;
+  select.innerHTML = '<option value="">Select product</option>';
   yourStyleDeliveryProducts.filter(function(product) { return String(product.category || "").trim().toUpperCase() === type; }).forEach(function(product) {
     const option = document.createElement("option");
-    option.value = product.productCode + " — " + product.description + " — ₱" + formatYourStylePrice(product.defaultPrice);
-    datalist.appendChild(option);
+    option.value = product.productCode;
+    option.textContent = product.productCode + " — " + product.description + " — ₱" + formatYourStylePrice(product.defaultPrice);
+    select.appendChild(option);
   });
-}
-
-function handleYourStyleProductSearch(input) {
-  const line = input.closest(".yourstyle-delivery-line");
-  if (!line) return;
-  const type = String(line.querySelector(".yourstyle-line-type").value || "").trim().toUpperCase();
-  const hiddenInput = line.querySelector(".yourstyle-line-product");
-  const enteredValue = String(input.value || "").trim();
-  const product = yourStyleDeliveryProducts.find(function(item) {
-    const displayValue = item.productCode + " — " + item.description + " — ₱" + formatYourStylePrice(item.defaultPrice);
-    return String(item.category || "").trim().toUpperCase() === type && displayValue === enteredValue;
-  });
-  hiddenInput.value = product ? product.productCode : "";
-  updateYourStyleDeliverySummary();
 }
 
 function formatYourStylePrice(value) {
@@ -242,25 +232,32 @@ function formatYourStylePrice(value) {
 function getYourStyleDeliveryLinesFromForm() {
   return Array.from(document.querySelectorAll("#yourStyleDeliveryLines .yourstyle-delivery-line")).map(function(row) {
     const type = String(row.querySelector(".yourstyle-line-type").value || "").trim().toUpperCase();
-    const receiveMode = String(row.querySelector(".yourstyle-line-mode").value || "").trim().toUpperCase();
+    const receiveMode = yourStyleDeliveryMode;
     if (receiveMode === "DIRECT") {
       return { type: type, receiveMode: receiveMode, productCode: String(row.querySelector(".yourstyle-line-product").value || "").trim(), quantity: Number(row.querySelector(".yourstyle-line-qty").value) || 0 };
     }
-    return { type: type, receiveMode: receiveMode, description: String(row.querySelector(".yourstyle-line-bulk-description").value || "").trim(), bundleQty: Number(row.querySelector(".yourstyle-line-bundle-qty").value) || 0, estimatedQuantity: Number(row.querySelector(".yourstyle-line-estimated-qty").value) || 0 };
+    const bundleQty = Number(row.querySelector(".yourstyle-line-bundle-qty").value) || 0;
+    const estimatedPerBundle = Number(row.querySelector(".yourstyle-line-estimated-per-bundle").value) || 0;
+    return { type: type, receiveMode: receiveMode, description: String(row.querySelector(".yourstyle-line-bulk-description").value || "").trim(), bundleQty: bundleQty, estimatedPerBundle: estimatedPerBundle, estimatedQuantity: bundleQty * estimatedPerBundle };
   });
 }
 
 function updateYourStyleDeliverySummary() {
   const lines = getYourStyleDeliveryLinesFromForm();
-  let direct = 0, bulk = 0, bundles = 0;
-  lines.forEach(function(line) {
-    if (line.receiveMode === "DIRECT") direct += Number(line.quantity) || 0;
-    else { bulk += Number(line.estimatedQuantity) || 0; bundles += Number(line.bundleQty) || 0; }
+  const summary = document.getElementById("yourStyleDeliverySummary");
+  if (yourStyleDeliveryMode === "DIRECT") {
+    const actual = lines.reduce(function(total, line) { return total + (Number(line.quantity) || 0); }, 0);
+    summary.innerHTML = '<span>Actual Units <strong>' + actual + '</strong></span>';
+    return;
+  }
+  const bundles = lines.reduce(function(total, line) { return total + (Number(line.bundleQty) || 0); }, 0);
+  const estimated = lines.reduce(function(total, line) { return total + (Number(line.estimatedQuantity) || 0); }, 0);
+  summary.innerHTML = '<span>Bundles <strong>' + bundles + '</strong></span><span>Est. Actual Units <strong>' + estimated + '</strong></span>';
+  document.querySelectorAll("#yourStyleDeliveryLines .yourstyle-delivery-line").forEach(function(row) {
+    const bundleQty = Number(row.querySelector(".yourstyle-line-bundle-qty").value) || 0;
+    const estimatedPerBundle = Number(row.querySelector(".yourstyle-line-estimated-per-bundle").value) || 0;
+    row.querySelector(".yourstyle-line-total").innerHTML = '<strong>' + (bundleQty * estimatedPerBundle) + ' units</strong>' + bundleQty + ' × ' + estimatedPerBundle;
   });
-  document.getElementById("yourStyleSummaryDirect").textContent = direct;
-  document.getElementById("yourStyleSummaryBulk").textContent = bulk;
-  document.getElementById("yourStyleSummaryBundles").textContent = bundles;
-  document.getElementById("yourStyleSummaryRows").textContent = lines.length;
 }
 
 function submitYourStyleDelivery() {
@@ -279,7 +276,7 @@ function submitYourStyleDelivery() {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line.receiveMode === "DIRECT" && (!line.productCode || !Number.isInteger(line.quantity) || line.quantity < 1)) return showNotificationToast("Complete the DIRECT fields for Item " + (i + 1) + ".", true);
-    if (line.receiveMode === "BULK" && (!line.description || !Number.isInteger(line.bundleQty) || line.bundleQty < 1 || !Number.isInteger(line.estimatedQuantity) || line.estimatedQuantity < 1)) return showNotificationToast("Complete the BULK fields for Item " + (i + 1) + ".", true);
+    if (line.receiveMode === "BULK" && (!line.description || !Number.isInteger(line.estimatedPerBundle) || line.estimatedPerBundle < 1 || !Number.isInteger(line.bundleQty) || line.bundleQty < 1 || !Number.isInteger(line.estimatedQuantity) || line.estimatedQuantity < 1)) return showNotificationToast("Complete the BUNDLE fields for Item " + (i + 1) + ".", true);
   }
 
   const button = document.getElementById("acceptYourStyleDeliveryBtn");
@@ -290,6 +287,7 @@ function submitYourStyleDelivery() {
     button.textContent = "Accept Delivery";
     if (!result || !result.success) return showNotificationToast(result && result.message ? result.message : "Unable to accept YourStyle delivery.", true);
     closeYourStyleDeliveryModal();
+    refreshDeliveriesPage();
     showNotificationToast(result.deliveryId + " accepted — " + result.directUnits + " direct unit(s), " + result.bulkBundles + " bundle(s).");
   }).withFailureHandler(function(err) {
     button.disabled = false;

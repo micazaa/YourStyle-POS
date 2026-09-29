@@ -418,6 +418,7 @@ function loadDeliveriesPage(forceRefresh) {
   }
 
 
+  if (forceRefresh) pageReadCache.delete('deliveries');
   const refresh = beginPageRead('deliveries');
   if (refresh.cached !== undefined) {
     deliveriesPageData = refresh.cached;
@@ -579,6 +580,8 @@ function loadDeliveriesPage(forceRefresh) {
 
 function invalidateDeliveriesCache() {
 
+  pageReadCache.delete('deliveries');
+
   deliveriesPageLoaded =
     false;
 
@@ -590,6 +593,9 @@ function invalidateDeliveriesCache() {
 
 
 function refreshDeliveriesPage() {
+
+  pageReadCache.delete('inventory');
+  loadInventoryPage();
 
   invalidateDeliveriesCache();
 
@@ -840,7 +846,7 @@ function renderDeliveriesTable(
                       '${escapeDeliveriesHtml(deliveryId)}'
                     )"
                   >
-                    Distribute Bulk
+                    Open Bulk
                   </button>
                 `
                 : ""
@@ -875,21 +881,25 @@ function renderDeliveriesTable(
                   <button
                     type="button"
                     class="btn btn-sm btn-outline-secondary"
+                    title="View delivery"
+                    aria-label="View delivery"
                     onclick="viewYourFindsDeliveryDetails(
                       '${escapeDeliveriesHtml(deliveryId)}'
                     )"
                   >
-                    View
+                    ${inventoryIcon('view')}
                   </button>
 
                   <button
                     type="button"
                     class="btn btn-sm btn-outline-dark"
+                    title="Print labels"
+                    aria-label="Print labels"
                     onclick="openYourFindsLabelModal(
                       '${escapeDeliveriesHtml(deliveryId)}'
                     )"
                   >
-                    Labels
+                    ${inventoryIcon('label')}
                   </button>
                 `
                 : ""
