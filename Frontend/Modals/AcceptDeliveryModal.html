@@ -15,7 +15,7 @@
         </h5>
 
         <p class="text-muted small mb-0">
-          Register newly delivered unique items
+          Register newly delivered items
         </p>
 
       </div>
@@ -340,6 +340,7 @@ function openAcceptDeliveryModal() {
     localToday;
 
   loadNextYourFindsDeliveryNumber();
+  loadYourFindsCustomSizes();
 
 
   /* ================= DETAILS ================= */
@@ -469,13 +470,32 @@ function renderYourFindsDeliverySize(line) {
   const type = line.querySelector(".yourfinds-line-type").value;
   const container = line.querySelector(".yourfinds-line-size");
   if (type === "CUSTOM") {
-    container.innerHTML = '<input type="text" class="form-control form-control-sm yourfinds-line-custom-size" maxlength="40" placeholder="FREE SIZE / NO SIZE" aria-label="Custom size">';
+    container.innerHTML = '<input type="text" list="yourFindsCustomSizeOptions" class="form-control form-control-sm yourfinds-line-custom-size" maxlength="40" placeholder="Select or enter size" aria-label="Custom size">';
     return;
   }
   const sizes = type === "ELECTRONIC"
-    ? [{ value:"SE", label:"S" }, { value:"ME", label:"M" }, { value:"LE", label:"L" }, { value:"XLE", label:"XL" }]
-    : [{ value:"SNE", label:"S" }, { value:"MNE", label:"M" }, { value:"LNE", label:"L" }, { value:"XLNE", label:"XL" }];
+    ? [{ value:"SE", label:"SE" }, { value:"ME", label:"ME" }, { value:"LE", label:"LE" }, { value:"XLE", label:"XLE" }]
+    : [{ value:"SNE", label:"SNE" }, { value:"MNE", label:"MNE" }, { value:"LNE", label:"LNE" }, { value:"XLNE", label:"XLNE" }];
   container.innerHTML = '<select class="form-select form-select-sm yourfinds-line-size-select" aria-label="Size">' + sizes.map(function(size) { return '<option value="' + size.value + '">' + size.label + '</option>'; }).join("") + '</select>';
+}
+
+function loadYourFindsCustomSizes() {
+  let list = document.getElementById("yourFindsCustomSizeOptions");
+  if (!list) {
+    list = document.createElement("datalist");
+    list.id = "yourFindsCustomSizeOptions";
+    document.getElementById("acceptDeliveryModal").appendChild(list);
+  }
+  google.script.run.withSuccessHandler(function(sizes) {
+    list.innerHTML = "";
+    (Array.isArray(sizes) ? sizes : []).forEach(function(size) {
+      const option = document.createElement("option");
+      option.value = size;
+      list.appendChild(option);
+    });
+  }).withFailureHandler(function() {
+    list.innerHTML = "";
+  }).getYourFindsCustomSizes();
 }
 
 function getYourFindsDeliveryLinesFromForm() {

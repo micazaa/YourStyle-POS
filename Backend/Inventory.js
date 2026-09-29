@@ -829,6 +829,8 @@ function acceptYourFindsDelivery(
         SHEETS.DELIVERY_LOG
       );
 
+    const productMasterSheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
+
 
     if (!inventorySheet) {
 
@@ -857,6 +859,10 @@ function acceptYourFindsDelivery(
 
     }
 
+    if ((normalizedQuantities.CUSTOM || 0) > 0 && !productMasterSheet) {
+      return { success: false, message: "Product Master sheet not found." };
+    }
+
 
     /* ========================================================
        LOCK
@@ -873,6 +879,8 @@ function acceptYourFindsDelivery(
       30000
     );
 
+
+    let createdCustomProductRow = 0;
 
     try {
 
@@ -1050,6 +1058,11 @@ function acceptYourFindsDelivery(
 
       const now =
         new Date();
+
+      if ((normalizedQuantities.CUSTOM || 0) > 0) {
+        const customDefinition = ensureYourFindsCustomSizeDefinition_(productMasterSheet, customSizeLabel, now);
+        createdCustomProductRow = customDefinition.created ? customDefinition.rowNumber : 0;
+      }
 
 
       const inventoryRows =
@@ -1343,6 +1356,16 @@ function acceptYourFindsDelivery(
           1
 
       };
+
+    } catch (error) {
+
+      if (createdCustomProductRow > 0) {
+        try {
+          productMasterSheet.deleteRow(createdCustomProductRow);
+        } catch (rollbackError) {}
+      }
+
+      throw error;
 
     } finally {
 

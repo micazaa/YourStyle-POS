@@ -142,6 +142,43 @@ function getActiveProducts() {
   });
 }
 
+function normalizeYourFindsCustomSizeLabel_(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+function isStandardYourFindsSizeLabel_(value) {
+  const label = normalizeYourFindsCustomSizeLabel_(value);
+  return ["S", "M", "L", "XL", "SNE", "MNE", "LNE", "XLNE", "SE", "ME", "LE", "XLE", "CUSTOM"].indexOf(label) !== -1;
+}
+
+function getYourFindsCustomSizes() {
+  const found = {};
+  getProductMaster().forEach(function(product) {
+    if (String(product.category || "").trim().toUpperCase() !== "YOURFINDS") return;
+    const label = normalizeYourFindsCustomSizeLabel_(product.description);
+    if (!label || isStandardYourFindsSizeLabel_(label)) return;
+    found[label] = true;
+  });
+  return Object.keys(found).sort();
+}
+
+function ensureYourFindsCustomSizeDefinition_(sheet, sizeLabel, now) {
+  const label = normalizeYourFindsCustomSizeLabel_(sizeLabel);
+  if (!label || isStandardYourFindsSizeLabel_(label)) {
+    throw new Error("Enter a valid custom YourFinds size.");
+  }
+
+  const existing = getProductMaster().find(function(product) {
+    return String(product.category || "").trim().toUpperCase() === "YOURFINDS" &&
+      normalizeYourFindsCustomSizeLabel_(product.description) === label;
+  });
+  if (existing) return { created: false, rowNumber: existing.rowNumber, size: label };
+
+  const rowNumber = sheet.getLastRow() + 1;
+  sheet.appendRow(["", label, "YourFinds", INVENTORY_TYPE.UNIQUE, 0, "", 0, true, "", now, now]);
+  return { created: true, rowNumber: rowNumber, size: label };
+}
+
 /* ==========================================================
    PRODUCT MASTER DATE → CLIENT SAFE STRING
 ========================================================== */
