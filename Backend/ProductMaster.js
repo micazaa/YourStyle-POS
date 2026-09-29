@@ -162,6 +162,52 @@ function getYourFindsCustomSizes() {
   return Object.keys(found).sort();
 }
 
+function generateYourFindsSizeProductCode_() {
+  const used = {};
+  getProductMaster().forEach(function(product) {
+    const code = String(product.productCode || "").trim();
+    if (code) used[code] = true;
+  });
+  if (typeof getFullInventory === "function") {
+    getFullInventory().forEach(function(item) {
+      const code = String(item.code || "").trim();
+      if (code) used[code] = true;
+    });
+  }
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    if (!used[code]) return code;
+  }
+  throw new Error("Unable to generate a unique Product Code.");
+}
+
+function prepareYourFindsCustomSizes() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.PRODUCT_MASTER);
+  if (!sheet) throw new Error("Product Master sheet not found.");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    getProductMaster().forEach(function(product) {
+      const label = normalizeYourFindsCustomSizeLabel_(product.description);
+      if (String(product.category || "").trim().toUpperCase() !== "YOURFINDS" ||
+          !label || isStandardYourFindsSizeLabel_(label)) return;
+      let changed = false;
+      if (String(product.category || "").trim() !== "YOURFINDS") {
+        sheet.getRange(product.rowNumber, PRODUCT_COL.CATEGORY).setValue("YOURFINDS");
+        changed = true;
+      }
+      if (!product.productCode) {
+        sheet.getRange(product.rowNumber, PRODUCT_COL.PRODUCT_CODE).setValue(generateYourFindsSizeProductCode_());
+        changed = true;
+      }
+      if (changed) sheet.getRange(product.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(new Date());
+    });
+    return getYourFindsCustomSizes();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function ensureYourFindsCustomSizeDefinition_(sheet, sizeLabel, now) {
   const label = normalizeYourFindsCustomSizeLabel_(sizeLabel);
   if (!label || isStandardYourFindsSizeLabel_(label)) {
@@ -172,11 +218,23 @@ function ensureYourFindsCustomSizeDefinition_(sheet, sizeLabel, now) {
     return String(product.category || "").trim().toUpperCase() === "YOURFINDS" &&
       normalizeYourFindsCustomSizeLabel_(product.description) === label;
   });
-  if (existing) return { created: false, rowNumber: existing.rowNumber, size: label };
+  if (existing) {
+    let productCode = String(existing.productCode || "").trim();
+    if (String(existing.category || "").trim() !== "YOURFINDS") {
+      sheet.getRange(existing.rowNumber, PRODUCT_COL.CATEGORY).setValue("YOURFINDS");
+    }
+    if (!productCode) {
+      productCode = generateYourFindsSizeProductCode_();
+      sheet.getRange(existing.rowNumber, PRODUCT_COL.PRODUCT_CODE).setValue(productCode);
+      sheet.getRange(existing.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(now);
+    }
+    return { created: false, rowNumber: existing.rowNumber, size: label, productCode: productCode };
+  }
 
   const rowNumber = sheet.getLastRow() + 1;
-  sheet.appendRow(["", label, "YourFinds", INVENTORY_TYPE.UNIQUE, 0, "", 0, true, "", now, now]);
-  return { created: true, rowNumber: rowNumber, size: label };
+  const productCode = generateYourFindsSizeProductCode_();
+  sheet.appendRow([productCode, label, "YOURFINDS", INVENTORY_TYPE.UNIQUE, 0, "", 0, true, "", now, now]);
+  return { created: true, rowNumber: rowNumber, size: label, productCode: productCode };
 }
 
 /* ==========================================================

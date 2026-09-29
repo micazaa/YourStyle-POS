@@ -495,7 +495,7 @@ function loadYourFindsCustomSizes() {
     });
   }).withFailureHandler(function() {
     list.innerHTML = "";
-  }).getYourFindsCustomSizes();
+  }).prepareYourFindsCustomSizes();
 }
 
 function getYourFindsDeliveryLinesFromForm() {
@@ -700,15 +700,10 @@ function submitYourFindsDelivery() {
         closeAcceptDeliveryModal();
 
 
-        /* ================= REFRESH INVENTORY ================= */
+        refreshDeliveriesPage();
 
-        if (
-          typeof loadInventoryPage ===
-          "function"
-        ) {
-
-          loadInventoryPage();
-
+        if (typeof pageReadCache !== "undefined") {
+          pageReadCache.delete("productMaster");
         }
 
 
@@ -717,6 +712,7 @@ function submitYourFindsDelivery() {
         showNotificationToast(
           result.totalQty +
           " YourFinds item(s) accepted. " +
+          (result.customSizeAdded ? result.customSizeAdded + " added to Product Master. " : "") +
           "Delivery ID: " +
           result.deliveryId
         );

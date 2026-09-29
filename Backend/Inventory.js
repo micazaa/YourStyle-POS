@@ -1353,7 +1353,12 @@ function acceptYourFindsDelivery(
         inventoryEndRow:
           inventoryStartRow +
           inventoryRows.length -
-          1
+          1,
+
+        customSizeAdded:
+          createdCustomProductRow > 0
+            ? customSizeLabel
+            : ""
 
       };
 
