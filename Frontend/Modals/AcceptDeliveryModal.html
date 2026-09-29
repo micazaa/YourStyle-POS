@@ -1,10 +1,6 @@
 <div id="acceptDeliveryModal" class="generic-overlay-blur" style="display:none;">
 
-  <div class="custom-popup-card" style="
-      max-width:650px;
-      max-height:90vh;
-      overflow-y:auto;
-    ">
+  <div class="custom-popup-card delivery-modal-card">
 
     <!-- =====================================================
          HEADER
@@ -144,42 +140,17 @@
     </div>
 
 
-    <!-- =====================================================
-         QUANTITY BY FINAL YOURFINDS CATEGORY
-    ====================================================== -->
-
     <div class="mb-4">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-          <div class="fw-semibold">Quantity Received</div>
-          <div class="small text-muted">Enter the final YourFinds category directly.</div>
-        </div>
-        <div class="small text-muted">Total Pieces: <strong id="deliveryTotalQty" class="text-dark">0</strong></div>
+      <div class="delivery-items-toolbar mb-3">
+        <div class="fw-semibold">Items Received</div>
+        <span></span>
+        <button type="button" class="btn btn-sm btn-outline-dark delivery-add-item" onclick="addYourFindsDeliveryLine()">+ Add Item</button>
       </div>
-
-      <div class="small fw-semibold text-muted mb-2">NON-ELECTRONIC</div>
-      <div class="row g-2 mb-3">
-        <div class="col"><label class="form-label text-center d-block" for="deliveryQtySNE">SNE</label><input type="number" id="deliveryQtySNE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
-        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyMNE">MNE</label><input type="number" id="deliveryQtyMNE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
-        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyLNE">LNE</label><input type="number" id="deliveryQtyLNE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
-        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyXLNE">XLNE</label><input type="number" id="deliveryQtyXLNE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
+      <div class="delivery-line-scroll mb-3">
+        <div class="delivery-line-head yourfinds"><span>#</span><span>Type</span><span>Size</span><span>Actual Qty</span><span></span></div>
+        <div id="yourFindsDeliveryLines"></div>
       </div>
-
-      <div class="small fw-semibold text-muted mb-2">ELECTRONIC</div>
-      <div class="row g-2 mb-3">
-        <div class="col"><label class="form-label text-center d-block" for="deliveryQtySE">SE</label><input type="number" id="deliveryQtySE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
-        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyME">ME</label><input type="number" id="deliveryQtyME" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
-        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyLE">LE</label><input type="number" id="deliveryQtyLE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
-        <div class="col"><label class="form-label text-center d-block" for="deliveryQtyXLE">XLE</label><input type="number" id="deliveryQtyXLE" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()"></div>
-      </div>
-
-      <div class="small fw-semibold text-muted mb-2">CUSTOM / UNKNOWN</div>
-      <div class="row g-2">
-        <div class="col-md-8"><input type="text" id="deliveryCustomSize" class="form-control" maxlength="40" placeholder="Enter custom size/category"></div>
-        <div class="col-md-4"><input type="number" id="deliveryQtyCustom" class="form-control text-center delivery-size-qty" value="0" min="0" max="999" step="1" oninput="updateDeliveryTotalQty()" placeholder="Qty"></div>
-      </div>
-
-      <div class="form-text mt-2">Each piece receives its own unique YourFinds Code.</div>
+      <div id="yourFindsDeliverySummary" class="delivery-summary" aria-live="polite"><span>Actual Units <strong>0</strong></span></div>
     </div>
 
     <!-- =====================================================
@@ -311,6 +282,7 @@
 
 
 <script>
+var yourFindsDeliveryLineCounter = 0;
   /* ==========================================================
    CURRENT EMPLOYEE
 ========================================================== */
@@ -390,16 +362,9 @@ function openAcceptDeliveryModal() {
     "";
 
 
-  /* ================= QUANTITIES ================= */
-
-  ["SNE","MNE","LNE","XLNE","SE","ME","LE","XLE"].forEach(function(size) {
-    const el = document.getElementById("deliveryQty" + size);
-    if (el) el.value = "0";
-  });
-  document.getElementById("deliveryQtyCustom").value = "0";
-  document.getElementById("deliveryCustomSize").value = "";
-
-  updateDeliveryTotalQty();
+  yourFindsDeliveryLineCounter = 0;
+  document.getElementById("yourFindsDeliveryLines").innerHTML = "";
+  addYourFindsDeliveryLine();
 
 
   /* ================= ACCEPTED BY ================= */
@@ -466,131 +431,86 @@ function closeAcceptDeliveryModal() {
 }
 
 
-/* ==========================================================
-   GET QUANTITY
-========================================================== */
-
-function getDeliveryQuantity(
-  elementId
-) {
-
-  const input =
-    document.getElementById(
-      elementId
-    );
-
-
-  if (!input) {
-
-    return null;
-
-  }
-
-
-  const rawValue =
-    String(
-      input.value || ""
-    ).trim();
-
-
-  if (
-    rawValue === ""
-  ) {
-
-    return 0;
-
-  }
-
-
-  const quantity =
-    Number(
-      rawValue
-    );
-
-
-  if (
-    !Number.isInteger(quantity) ||
-    quantity < 0 ||
-    quantity > 999
-  ) {
-
-    return null;
-
-  }
-
-
-  return quantity;
-
+function addYourFindsDeliveryLine() {
+  yourFindsDeliveryLineCounter++;
+  const line = document.createElement("div");
+  line.className = "yourfinds-delivery-line delivery-line yourfinds";
+  line.innerHTML = '<div class="delivery-line-number yourfinds-line-number">' + yourFindsDeliveryLineCounter + '</div>' +
+    '<select class="form-select form-select-sm yourfinds-line-type" aria-label="Type" onchange="updateYourFindsDeliveryLineType(this)"><option value="NON_ELECTRONIC">Non-electronic</option><option value="ELECTRONIC">Electronic</option><option value="CUSTOM">Custom</option></select>' +
+    '<div class="yourfinds-line-size"></div>' +
+    '<input type="number" class="form-control form-control-sm yourfinds-line-qty" min="1" max="999" step="1" value="1" aria-label="Actual quantity" oninput="updateDeliveryTotalQty()">' +
+    '<button type="button" class="btn btn-sm btn-outline-danger" aria-label="Remove item" title="Remove item" onclick="removeYourFindsDeliveryLine(this)">×</button>';
+  document.getElementById("yourFindsDeliveryLines").appendChild(line);
+  renderYourFindsDeliverySize(line);
+  renumberYourFindsDeliveryLines();
+  updateDeliveryTotalQty();
 }
 
+function removeYourFindsDeliveryLine(button) {
+  const line = button.closest(".yourfinds-delivery-line");
+  if (line) line.remove();
+  renumberYourFindsDeliveryLines();
+  updateDeliveryTotalQty();
+}
 
-/* ==========================================================
-   UPDATE TOTAL
-========================================================== */
+function renumberYourFindsDeliveryLines() {
+  document.querySelectorAll("#yourFindsDeliveryLines .yourfinds-delivery-line").forEach(function(line, index) {
+    line.querySelector(".yourfinds-line-number").textContent = String(index + 1);
+  });
+}
+
+function updateYourFindsDeliveryLineType(select) {
+  const line = select.closest(".yourfinds-delivery-line");
+  if (line) renderYourFindsDeliverySize(line);
+  updateDeliveryTotalQty();
+}
+
+function renderYourFindsDeliverySize(line) {
+  const type = line.querySelector(".yourfinds-line-type").value;
+  const container = line.querySelector(".yourfinds-line-size");
+  if (type === "CUSTOM") {
+    container.innerHTML = '<input type="text" class="form-control form-control-sm yourfinds-line-custom-size" maxlength="40" placeholder="FREE SIZE / NO SIZE" aria-label="Custom size">';
+    return;
+  }
+  const sizes = type === "ELECTRONIC"
+    ? [{ value:"SE", label:"S" }, { value:"ME", label:"M" }, { value:"LE", label:"L" }, { value:"XLE", label:"XL" }]
+    : [{ value:"SNE", label:"S" }, { value:"MNE", label:"M" }, { value:"LNE", label:"L" }, { value:"XLNE", label:"XL" }];
+  container.innerHTML = '<select class="form-select form-select-sm yourfinds-line-size-select" aria-label="Size">' + sizes.map(function(size) { return '<option value="' + size.value + '">' + size.label + '</option>'; }).join("") + '</select>';
+}
+
+function getYourFindsDeliveryLinesFromForm() {
+  return Array.from(document.querySelectorAll("#yourFindsDeliveryLines .yourfinds-delivery-line")).map(function(line) {
+    const type = line.querySelector(".yourfinds-line-type").value;
+    const customInput = line.querySelector(".yourfinds-line-custom-size");
+    const sizeSelect = line.querySelector(".yourfinds-line-size-select");
+    return {
+      type: type,
+      size: customInput ? String(customInput.value || "").trim().toUpperCase() : String(sizeSelect.value || "").trim().toUpperCase(),
+      quantity: Number(line.querySelector(".yourfinds-line-qty").value)
+    };
+  });
+}
+
+function buildYourFindsDeliveryQuantities(lines) {
+  const quantities = { SNE:0, MNE:0, LNE:0, XLNE:0, SE:0, ME:0, LE:0, XLE:0, CUSTOM:0, CUSTOM_LABEL:"" };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > 999) throw new Error("Item " + (i + 1) + ": quantity must be a whole number from 1 to 999.");
+    if (!line.size) throw new Error("Item " + (i + 1) + ": enter a custom size.");
+    if (line.type === "CUSTOM") {
+      if (quantities.CUSTOM_LABEL && quantities.CUSTOM_LABEL !== line.size) throw new Error("Use one custom size per delivery. Add different custom sizes in separate deliveries.");
+      quantities.CUSTOM_LABEL = line.size;
+      quantities.CUSTOM += line.quantity;
+    } else {
+      quantities[line.size] += line.quantity;
+    }
+  }
+  return quantities;
+}
 
 function updateDeliveryTotalQty() {
-
-  const ids = [
-    "deliveryQtySNE", "deliveryQtyMNE", "deliveryQtyLNE", "deliveryQtyXLNE",
-    "deliveryQtySE", "deliveryQtyME", "deliveryQtyLE", "deliveryQtyXLE",
-    "deliveryQtyCustom"
-  ];
-
-
-  let total =
-    0;
-
-
-  let valid =
-    true;
-
-
-  ids.forEach(
-    function(id) {
-
-      const quantity =
-        getDeliveryQuantity(
-          id
-        );
-
-
-      if (
-        quantity === null
-      ) {
-
-        valid =
-          false;
-
-        return;
-
-      }
-
-
-      total +=
-        quantity;
-
-    }
-  );
-
-
-  const totalElement =
-    document.getElementById(
-      "deliveryTotalQty"
-    );
-
-
-  if (!totalElement) {
-
-    return;
-
-  }
-
-
-  totalElement.textContent =
-    valid
-      ? String(total)
-      : "—";
-
+  const total = getYourFindsDeliveryLinesFromForm().reduce(function(sum, line) { return sum + (Number.isFinite(line.quantity) ? line.quantity : 0); }, 0);
+  document.getElementById("yourFindsDeliverySummary").innerHTML = '<span>Actual Units <strong>' + total + '</strong></span>';
 }
 
 function submitYourFindsDelivery() {
@@ -629,20 +549,7 @@ function submitYourFindsDelivery() {
     ).value.trim();
 
 
-  /* ================= QUANTITIES ================= */
-
-  const quantities = {
-    SNE: getDeliveryQuantity("deliveryQtySNE"),
-    MNE: getDeliveryQuantity("deliveryQtyMNE"),
-    LNE: getDeliveryQuantity("deliveryQtyLNE"),
-    XLNE: getDeliveryQuantity("deliveryQtyXLNE"),
-    SE: getDeliveryQuantity("deliveryQtySE"),
-    ME: getDeliveryQuantity("deliveryQtyME"),
-    LE: getDeliveryQuantity("deliveryQtyLE"),
-    XLE: getDeliveryQuantity("deliveryQtyXLE"),
-    CUSTOM: getDeliveryQuantity("deliveryQtyCustom"),
-    CUSTOM_LABEL: String(document.getElementById("deliveryCustomSize").value || "").trim().toUpperCase()
-  };
+  const deliveryLines = getYourFindsDeliveryLinesFromForm();
 
   /* ========================================================
      VALIDATION
@@ -684,56 +591,7 @@ function submitYourFindsDelivery() {
   }
 
 
-  const sizeOrder = ["SNE","MNE","LNE","XLNE","SE","ME","LE","XLE","CUSTOM"];
-
-
-  let totalQty =
-    0;
-
-
-  for (
-    let i = 0;
-    i < sizeOrder.length;
-    i++
-  ) {
-
-    const size =
-      sizeOrder[i];
-
-
-    const quantity =
-      quantities[size];
-
-
-    if (
-      quantity === null
-    ) {
-
-      showNotificationToast(
-        size +
-        " quantity must be a whole number between 0 and 999.",
-        true
-      );
-
-      return;
-
-    }
-
-
-    totalQty +=
-      quantity;
-
-  }
-
-
-  if ((quantities.CUSTOM || 0) > 0 && !quantities.CUSTOM_LABEL) {
-    showNotificationToast("Enter the custom YourFinds size/category.", true);
-    return;
-  }
-
-  if (
-    totalQty < 1
-  ) {
+  if (!deliveryLines.length) {
 
     showNotificationToast(
       "Enter at least one YourFinds item.",
@@ -742,6 +600,14 @@ function submitYourFindsDelivery() {
 
     return;
 
+  }
+
+  let quantities;
+  try {
+    quantities = buildYourFindsDeliveryQuantities(deliveryLines);
+  } catch (error) {
+    showNotificationToast(error.message || String(error), true);
+    return;
   }
 
 
