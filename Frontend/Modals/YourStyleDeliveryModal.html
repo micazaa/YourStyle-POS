@@ -105,32 +105,16 @@ function resetYourStyleDeliveryModal() {
 function loadYourStyleDeliveryProducts() {
   const loading = document.getElementById("yourStyleProductsLoading");
   const error = document.getElementById("yourStyleProductsError");
-  const refresh=beginPageRead('deliveryProducts');
-  loading.style.display = refresh.cached===undefined?'block':'none';
-  if(refresh.cached!==undefined){yourStyleDeliveryProducts=refresh.cached;if(yourStyleDeliveryProducts.length)addYourStyleDeliveryLine();}
-  error.style.display = "none";
-  google.script.run.withSuccessHandler(function(result) {
-    if(!refresh.current())return;
-    loading.style.display = "none";
-    if (!result || !result.success) {
-      error.style.display = "block";
-      error.textContent = result && result.message ? result.message : "Unable to load Product Master.";
-      return;
-    }
-    yourStyleDeliveryProducts = Array.isArray(result.products) ? result.products : [];
-    refresh.save(yourStyleDeliveryProducts);
-    if (!yourStyleDeliveryProducts.length) {
-      error.style.display = "block";
-      error.textContent = "No active YourStyle STOCK products found.";
-      return;
-    }
-    if(!document.getElementById('yourStyleDeliveryLines').children.length)addYourStyleDeliveryLine();
-  }).withFailureHandler(function(err) {
-    if(!refresh.current())return;
-    loading.style.display = "none";
-    error.style.display = "block";
-    error.textContent = err && err.message ? err.message : "Unable to load Product Master.";
-  }).getYourStyleDeliveryProducts();
+  const read = beginPageRead('deliveryProducts');
+  loading.style.display = cachedDeliveryCatalog() ? 'none' : 'block';
+  error.style.display = 'none';
+  getDeliveryCatalog().then(function(result) {
+    if (!read.current()) return;
+    loading.style.display = 'none';
+    yourStyleDeliveryProducts = result.products || [];
+    if (!yourStyleDeliveryProducts.length) {error.textContent='No active YourStyle products found.';error.style.display='block';return;}
+    if (!document.getElementById('yourStyleDeliveryLines').children.length) addYourStyleDeliveryLine();
+  }).catch(function(err) {if(!read.current())return;loading.style.display='none';error.textContent=err.message||String(err);error.style.display='block';});
 }
 
 function loadNextYourStyleDeliveryNumber() {
@@ -152,7 +136,7 @@ function addYourStyleDeliveryLine() {
   const line = document.createElement("div");
   line.className = "yourstyle-delivery-line delivery-line " + (yourStyleDeliveryMode === "DIRECT" ? "direct" : "bundle");
   const referenceField = yourStyleDeliveryMode === "DIRECT"
-    ? '<select class="form-select form-select-sm yourstyle-line-product" aria-label="Product"></select>'
+    ? '<div><input type="text" class="form-control form-control-sm yourstyle-line-product" list="yourStyleProductOptions' + lineId + '" placeholder="Search product name or code" aria-label="Product" autocomplete="off"><datalist id="yourStyleProductOptions' + lineId + '"></datalist></div>'
     : '<input type="text" class="form-control form-control-sm yourstyle-line-bulk-description" maxlength="100" placeholder="Enter bundle code" aria-label="Bundle code">';
   const quantityFields = yourStyleDeliveryMode === "DIRECT"
     ? '<input type="number" class="form-control form-control-sm yourstyle-line-qty" min="1" max="99999" step="1" value="1" aria-label="Actual quantity" oninput="updateYourStyleDeliverySummary()">'
@@ -214,15 +198,20 @@ function handleYourStyleLineTypeChange(field) {
 
 function populateYourStyleLineProducts(line, type) {
   type = String(type || "").trim().toUpperCase();
-  const select = line.querySelector(".yourstyle-line-product");
-  if (!select) return;
-  select.innerHTML = '<option value="">Select product</option>';
+  const input = line.querySelector(".yourstyle-line-product");
+  if (!input) return;
+  input.value = "";
+  const options = line.querySelector("datalist");
+  options.replaceChildren();
   yourStyleDeliveryProducts.filter(function(product) { return String(product.category || "").trim().toUpperCase() === type; }).forEach(function(product) {
     const option = document.createElement("option");
-    option.value = product.productCode;
-    option.textContent = product.productCode + " — " + product.description + " — ₱" + formatYourStylePrice(product.defaultPrice);
-    select.appendChild(option);
+    option.value = yourStyleProductSearchLabel(product);
+    options.appendChild(option);
   });
+}
+
+function yourStyleProductSearchLabel(product) {
+  return product.productCode + " — " + product.description + " — ₱" + formatYourStylePrice(product.defaultPrice);
 }
 
 function formatYourStylePrice(value) {
@@ -234,7 +223,12 @@ function getYourStyleDeliveryLinesFromForm() {
     const type = String(row.querySelector(".yourstyle-line-type").value || "").trim().toUpperCase();
     const receiveMode = yourStyleDeliveryMode;
     if (receiveMode === "DIRECT") {
-      return { type: type, receiveMode: receiveMode, productCode: String(row.querySelector(".yourstyle-line-product").value || "").trim(), quantity: Number(row.querySelector(".yourstyle-line-qty").value) || 0 };
+      const search = row.querySelector(".yourstyle-line-product").value.trim();
+      const product = yourStyleDeliveryProducts.find(function(item) {
+        return String(item.category || "").trim().toUpperCase() === type &&
+          (yourStyleProductSearchLabel(item) === search || String(item.productCode) === search);
+      });
+      return { type: type, receiveMode: receiveMode, productCode: product ? String(product.productCode) : "", quantity: Number(row.querySelector(".yourstyle-line-qty").value) || 0 };
     }
     const bundleQty = Number(row.querySelector(".yourstyle-line-bundle-qty").value) || 0;
     const estimatedPerBundle = Number(row.querySelector(".yourstyle-line-estimated-per-bundle").value) || 0;

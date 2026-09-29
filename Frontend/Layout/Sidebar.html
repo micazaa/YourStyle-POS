@@ -35,10 +35,11 @@ function toggleSidebar(show){
 function activateMenu(button){document.querySelectorAll('.sidebar-item[data-page]').forEach(item=>item.classList.toggle('active',item===button));}
 function navigateSidebar(page){showPage(page);toggleSidebar(false);}
 function showPage(pageId){
- const pages=['dashboardPage','posPage','inventoryPage','deliveriesPage'];if(!pages.includes(pageId))return;
+ const pages=['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'];if(!pages.includes(pageId))return;
  pages.forEach(id=>{const page=document.getElementById(id);if(page)page.style.display=id===pageId?'block':'none';});
  localStorage.setItem('ys_pos_active_page',pageId);
- const inventoryWorkspace=pageId==='inventoryPage'||pageId==='deliveriesPage';
+ const inventoryWorkspace=pageId==='inventoryPage'||pageId==='deliveriesPage'||pageId==='supplierReturnsPage';
+ if(inventoryWorkspace)getDeliveryCatalog().catch(()=>{});
  if(inventoryWorkspace)localStorage.setItem('ys_pos_inventory_tab',pageId);
  document.querySelectorAll('[data-inventory-tab]').forEach(function(button){const active=button.dataset.inventoryTab===pageId;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
  activateMenu(document.querySelector('.sidebar-item[data-page="'+(inventoryWorkspace?'inventoryPage':pageId)+'"]'));
@@ -46,8 +47,9 @@ function showPage(pageId){
  if(pageId==='dashboardPage')loadDashboardPage();
  if(pageId==='inventoryPage')loadInventoryPage();
  if(pageId==='deliveriesPage')loadDeliveriesPage();
+ if(pageId==='supplierReturnsPage')loadSupplierReturnsPage();
 }
-function restoreActivePage(){restoreSidebarLayout();const saved=localStorage.getItem('ys_pos_active_page');showPage(['dashboardPage','posPage','inventoryPage','deliveriesPage'].includes(saved)?saved:'posPage');}
+function restoreActivePage(){restoreSidebarLayout();const saved=localStorage.getItem('ys_pos_active_page');showPage(['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'].includes(saved)?saved:'posPage');}
 function updatePettyCashDisplay(){
  const amount='₱'+(Number(currentShiftPettyCash)||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
  const display=document.getElementById('cashierPettyCash');
@@ -55,7 +57,8 @@ function updatePettyCashDisplay(){
  display.parentElement.title='Petty cash received this shift: '+amount;
 }
 function openInventoryWorkspace(){
- navigateSidebar(localStorage.getItem('ys_pos_inventory_tab')==='deliveriesPage'?'deliveriesPage':'inventoryPage');
+ const saved=localStorage.getItem('ys_pos_inventory_tab');
+ navigateSidebar(['inventoryPage','deliveriesPage','supplierReturnsPage'].includes(saved)?saved:'inventoryPage');
 }
   function triggerCleanLogout() {
     if (confirm("Are you sure you want to log out?")) {

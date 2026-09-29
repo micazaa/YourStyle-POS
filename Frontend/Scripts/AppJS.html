@@ -1,6 +1,32 @@
 <script>
 
   var pageReadCache = new Map();
+  let deliveryCatalogCache = null;
+  let deliveryCatalogPending = null;
+  function cachedDeliveryCatalog() {
+    return deliveryCatalogCache && deliveryCatalogCache.owner === JSON.stringify(currentEmployee) && Date.now() - deliveryCatalogCache.time < 60000 ? deliveryCatalogCache.products : null;
+  }
+  function rememberDeliveryCatalog(products) {
+    deliveryCatalogCache = {owner:JSON.stringify(currentEmployee), time:Date.now(), products:products};
+  }
+  function getDeliveryCatalog() {
+    const cached = cachedDeliveryCatalog();
+    if (cached) return Promise.resolve({success:true, products:cached});
+    const owner = JSON.stringify(currentEmployee);
+    if (deliveryCatalogPending && deliveryCatalogPending.owner === owner) return deliveryCatalogPending.promise;
+    const request = {owner:owner};
+    request.promise = new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(result => {
+        if (deliveryCatalogPending === request) deliveryCatalogPending = null;
+        if (!result || !result.success) return reject(new Error(result && result.message || 'Unable to load products.'));
+        if (owner === JSON.stringify(currentEmployee)) rememberDeliveryCatalog(result.products || []);
+        resolve(result);
+      }).withFailureHandler(error => {if(deliveryCatalogPending===request)deliveryCatalogPending=null;reject(error);}).getYourStyleDeliveryProducts();
+    });
+    deliveryCatalogPending = request;
+    return request.promise;
+  }
+
   function beginPageRead(view, key = '') {
     const employee = currentEmployee;
     const owner = JSON.stringify([employee, typeof currentCashier === 'undefined' ? '' : currentCashier]);

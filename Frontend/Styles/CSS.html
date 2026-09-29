@@ -838,7 +838,8 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 .delivery-items-toolbar .delivery-mode-toggle{justify-self:center}
 .delivery-items-toolbar .delivery-add-item{justify-self:end}
 .delivery-mode-toggle{display:inline-flex;border-radius:8px;overflow:hidden}
-.delivery-mode-toggle .btn{min-width:76px;border-radius:0}
+.delivery-mode-toggle .btn{min-width:76px;border-radius:0;color:var(--pink-main);background:#fff;border-color:var(--pink-main)}
+.delivery-mode-toggle .btn.active,.delivery-mode-toggle .btn[aria-pressed="true"]{color:#fff;background:var(--pink-main);border-color:var(--pink-main)}
 .delivery-mode-toggle .btn:first-child{border-radius:8px 0 0 8px}
 .delivery-mode-toggle .btn:last-child{border-radius:0 8px 8px 0;margin-left:-1px}
 .delivery-line-scroll{overflow-x:auto}

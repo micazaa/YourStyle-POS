@@ -643,6 +643,24 @@ function getPendingBulkHolders() {
    Used immediately before opening / distributing a bundle.
 ========================================================== */
 
+function getBulkDistributionData(deliveryId, omitProducts) {
+  deliveryId = String(deliveryId || "").trim();
+  if (!deliveryId) throw new Error("Delivery ID is required.");
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DELIVERY_LOG);
+  if (!sheet || sheet.getLastRow() < 2) throw new Error("No pending bundles found.");
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELIVERY_LOG_COLUMN_COUNT).getValues();
+  const index = rows.findIndex(function(row) {
+    return String(row[DELIVERY_IDX.DELIVERY_ID]).trim() === deliveryId &&
+      String(row[DELIVERY_IDX.RECEIVE_MODE]).trim().toUpperCase() === DELIVERY_RECEIVE_MODE.BULK &&
+      [DELIVERY_STATUS.PENDING, DELIVERY_STATUS.PARTIAL].includes(String(row[DELIVERY_IDX.STATUS]).trim().toUpperCase());
+  });
+  if (index < 0) throw new Error("No pending bundles found for this delivery.");
+  const holder = getBulkHolderDetails(deliveryId, index + 2).holder;
+  const result = omitProducts ? {success:true,products:[]} : getYourStyleDeliveryProducts();
+  if (!result.success) throw new Error(result.message || "Unable to load products.");
+  return {success:true, holder:holder, products:result.products || []};
+}
+
 function getBulkHolderDetails(deliveryId, sheetRow) {
   deliveryId = String(deliveryId || "").trim();
   sheetRow = Number(sheetRow);
@@ -685,6 +703,7 @@ function getBulkHolderDetails(deliveryId, sheetRow) {
     remainingQuantity:Math.max(0, estimated-actual),
     currentVariance:actual-estimated,
     bundles:progress.bundles,
+    remarks:progress.remarks,
     bundlesWithActivity:progress.bundlesWithActivity,
     status:status
   }};
@@ -698,6 +717,8 @@ function getBulkBundleProgress_(deliveryId, sheetRow, holderType, bundleQty) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
   const totals = {};
+  const savedLines = {};
+  let remarks = "";
   for (let n = 1; n <= bundleQty; n++) totals[n] = 0;
 
   if (sheet && sheet.getLastRow() >= 2) {
@@ -712,6 +733,11 @@ function getBulkBundleProgress_(deliveryId, sheetRow, holderType, bundleQty) {
       if (type !== holderType || qty <= 0) return;
       if (!Number.isInteger(bundleNo) || bundleNo < 1 || bundleNo > bundleQty) return;
       totals[bundleNo] = (totals[bundleNo] || 0) + qty;
+      remarks = String(row[MOVE_IDX.NOTES] || "");
+      const code = String(row[MOVE_IDX.CODE] || "").trim();
+      const key = JSON.stringify([bundleNo, code]);
+      if (!savedLines[key]) savedLines[key] = {bundleNo:bundleNo, productCode:code, description:String(row[MOVE_IDX.ITEM] || ""), quantity:0};
+      savedLines[key].quantity += qty;
     });
   }
 
@@ -720,9 +746,9 @@ function getBulkBundleProgress_(deliveryId, sheetRow, holderType, bundleQty) {
   for (let n = 1; n <= bundleQty; n++) {
     const actual = Number(totals[n]) || 0;
     if (actual > 0) bundlesWithActivity++;
-    bundles.push({bundleNo:n, actualQuantity:actual, hasActivity:actual>0});
+    bundles.push({bundleNo:n, actualQuantity:actual, hasActivity:actual>0, lines:Object.values(savedLines).filter(line => line.bundleNo === n)});
   }
-  return {bundles:bundles, bundlesWithActivity:bundlesWithActivity};
+  return {bundles:bundles, bundlesWithActivity:bundlesWithActivity, remarks:remarks};
 }
 
 /* ==========================================================

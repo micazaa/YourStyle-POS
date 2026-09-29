@@ -1,0 +1,61 @@
+<div id="supplierReturnsPage" style="display:none;"><div class="container-fluid px-5 py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4"><div><h4 class="fw-bold mb-1">Return to Supplier</h4><div class="small text-muted">Products returned to suppliers</div></div><button class="btn btn-pink" type="button" onclick="openSupplierReturn()">Return a Product</button></div>
+  <div class="row g-3 mb-4">
+    <div class="col-sm-4"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Total Returns</div><div id="supplierReturnCount" class="fs-4 fw-bold">0</div></div></div></div>
+    <div class="col-sm-4"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Pieces Returned</div><div id="supplierReturnPieces" class="fs-4 fw-bold">0</div></div></div></div>
+    <div class="col-sm-4"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Products Returned</div><div id="supplierReturnProducts" class="fs-4 fw-bold">0</div></div></div></div>
+  </div>
+  <div class="card border-0 shadow-sm mb-3"><div class="card-body d-flex flex-wrap gap-2"><select id="supplierReturnCategory" class="form-select" style="width:180px" aria-label="Return category" onchange="renderSupplierReturns()"><option value="">All</option><option>YOURFINDS</option><option>PINS</option><option>OTHERS</option></select><input id="supplierReturnSearch" type="search" class="form-control" style="flex:1;min-width:220px" placeholder="Search code, product, category, supplier..." aria-label="Search returns" oninput="renderSupplierReturns()"></div></div>
+  <div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Return</th><th>Date</th><th>Supplier / Driver / Plate</th><th>Returned By</th><th>Product</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="supplierReturnRows"></tbody></table></div></div>
+</div></div>
+<div id="supplierReturnModal" class="generic-overlay-blur" style="display:none"><div class="custom-popup-card delivery-modal-card">
+  <h5 class="fw-bold mb-4">Return a Product</h5>
+  <div class="row g-3">
+    <div class="col-md-9"><label class="form-label" for="supplierReturnProduct">Product</label><input id="supplierReturnProduct" class="form-control" list="supplierReturnOptions" placeholder="Search inventory code or product"><datalist id="supplierReturnOptions"></datalist></div>
+    <div class="col-md-3"><label class="form-label" for="supplierReturnQty">Quantity</label><input id="supplierReturnQty" class="form-control" type="number" min="1" step="1" value="1"></div>
+    <div class="col-md-6"><label class="form-label" for="supplierReturnSupplier">Supplier</label><input id="supplierReturnSupplier" class="form-control"></div>
+    <div class="col-md-6"><label class="form-label" for="supplierReturnReason">Reason</label><input id="supplierReturnReason" class="form-control" placeholder="Reason for return"></div>
+    <div class="col-md-6"><label class="form-label" for="supplierReturnDriver">Driver</label><input id="supplierReturnDriver" class="form-control"></div>
+    <div class="col-md-6"><label class="form-label" for="supplierReturnPlate">Plate No.</label><input id="supplierReturnPlate" class="form-control"></div>
+    <div class="col-12"><label class="form-label" for="supplierReturnRemarks">Remarks</label><textarea id="supplierReturnRemarks" class="form-control" rows="2"></textarea></div>
+  </div>
+  <div class="d-flex gap-2 mt-4"><button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeSupplierReturn()">Cancel</button><button id="supplierReturnSave" type="button" class="btn btn-pink flex-fill" onclick="submitSupplierReturn()">Return Product</button></div>
+</div></div>
+<dialog id="supplierReturnDetails" style="max-width:600px;border:1px solid #ddd;border-radius:12px"><h5>Supplier Return</h5><pre id="supplierReturnDetailsText" style="white-space:pre-wrap"></pre><button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('supplierReturnDetails').close()">Close</button></dialog>
+<script>
+let supplierReturns = [], supplierReturnInventory = [], supplierReturnRequest = '', supplierReturnBusy = false, supplierReturnLoad = 0;
+function loadSupplierReturnsPage() {
+  const read = beginPageRead('supplierReturns');
+  if (read.cached !== undefined) { supplierReturns = read.cached; renderSupplierReturns(); }
+  else document.getElementById('supplierReturnRows').innerHTML = '<tr><td colspan="8">'+loadingIndicator('Loading returns…')+'</td></tr>';
+  google.script.run.withSuccessHandler(rows => {if(!read.current())return;supplierReturns=rows||[];read.save(supplierReturns);renderSupplierReturns();}).withFailureHandler(e=>{if(read.current())showNotificationToast(e.message||String(e),true);}).getSupplierReturns();
+}
+function renderSupplierReturns() {
+  const search=document.getElementById('supplierReturnSearch').value.toLowerCase(), category=document.getElementById('supplierReturnCategory').value;
+  const rows=supplierReturns.filter(r=>(!category||r.category===category)&&[r.id,r.code,r.name,r.category,r.supplier,r.driver,r.plate,r.employee].join(' ').toLowerCase().includes(search));
+  document.getElementById('supplierReturnCount').textContent=new Set(rows.map(r=>r.id)).size;
+  document.getElementById('supplierReturnPieces').textContent=rows.reduce((sum,r)=>sum+r.quantity,0);
+  document.getElementById('supplierReturnProducts').textContent=new Set(rows.map(r=>r.code)).size;
+  const body=document.getElementById('supplierReturnRows');body.replaceChildren();
+  rows.forEach(r=>{const tr=document.createElement('tr');[r.id,r.date,[r.supplier,r.driver,r.plate].filter(Boolean).join(' / '),r.employee,r.name+' · '+r.category,r.quantity,'RETURNED'].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td);});const td=document.createElement('td'),button=document.createElement('button');button.type='button';button.className='btn btn-sm btn-outline-secondary';button.title='View return';button.setAttribute('aria-label','View return');button.innerHTML=inventoryIcon('view');button.onclick=()=>{document.getElementById('supplierReturnDetailsText').textContent=[r.id,r.name+' ('+r.code+')',r.quantity+' pcs',r.supplier,'Returned by: '+r.employee,'Reason: '+r.reason,r.remarks].join('\n');document.getElementById('supplierReturnDetails').showModal();};td.appendChild(button);tr.appendChild(td);body.appendChild(tr);});
+  if(!rows.length)body.innerHTML='<tr><td colspan="8" class="text-center py-5 text-muted">No supplier returns found.</td></tr>';
+}
+function openSupplierReturn() {
+  const request=++supplierReturnLoad;supplierReturnRequest=crypto.randomUUID();supplierReturnInventory=[];
+  ['Product','Supplier','Reason','Driver','Plate','Remarks'].forEach(id=>document.getElementById('supplierReturn'+id).value='');document.getElementById('supplierReturnQty').value=1;
+  document.getElementById('supplierReturnModal').style.display='flex';document.getElementById('supplierReturnOptions').replaceChildren();
+  setControlLoading(document.getElementById('supplierReturnProduct'),true,'Loading inventory…');
+  google.script.run.withSuccessHandler(items=>{if(request!==supplierReturnLoad)return;supplierReturnInventory=(items||[]).filter(i=>Number(i.stock)>0&&String(i.status).toUpperCase()!=='RETURNED');const list=document.getElementById('supplierReturnOptions');supplierReturnInventory.forEach(i=>{const o=document.createElement('option');o.value=i.code+' — '+i.name;list.appendChild(o);});setControlLoading(document.getElementById('supplierReturnProduct'),false);}).withFailureHandler(e=>{if(request!==supplierReturnLoad)return;setControlLoading(document.getElementById('supplierReturnProduct'),false);showNotificationToast(e.message||String(e),true);}).getInventoryForManagement(inventoryManagerReadToken());
+}
+function closeSupplierReturn(){if(supplierReturnBusy)return;supplierReturnLoad++;document.getElementById('supplierReturnModal').style.display='none';}
+function submitSupplierReturn(){
+  if(supplierReturnBusy)return;
+  const value=id=>document.getElementById('supplierReturn'+id).value.trim();
+  const product=supplierReturnInventory.find(i=>i.code+' — '+i.name===value('Product')||String(i.code)===value('Product'));
+  const quantity=Number(value('Qty'));if(!product||!Number.isInteger(quantity)||quantity<1||quantity>Number(product.stock)||!value('Supplier')||!value('Reason'))return showNotificationToast('Select a product, available quantity, supplier and reason.',true);
+  const auth=managerCredentials('Manager authorization for supplier return:');if(!auth)return;
+  supplierReturnBusy=true;const button=document.getElementById('supplierReturnSave');button.disabled=true;button.innerHTML=loadingIndicator('Returning…');
+  const finish=()=>{supplierReturnBusy=false;button.disabled=false;button.textContent='Return Product';};
+  google.script.run.withSuccessHandler(result=>{finish();if(!result||!result.success)return showNotificationToast(result&&result.message||'Return failed.',true);closeSupplierReturn();pageReadCache.delete('inventory');pageReadCache.delete('supplierReturns');loadSupplierReturnsPage();loadInventoryPage();showNotificationToast('Supplier return saved.');}).withFailureHandler(e=>{finish();showNotificationToast(e.message||String(e),true);}).saveSupplierReturn({...auth,requestId:supplierReturnRequest,code:product.code,quantity:quantity,supplier:value('Supplier'),reason:value('Reason'),driver:value('Driver'),plate:value('Plate'),remarks:value('Remarks'),employee:getCurrentDeliveryEmployeeName()});
+}
+</script>

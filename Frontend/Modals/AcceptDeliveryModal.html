@@ -479,6 +479,7 @@ function renderYourFindsDeliverySize(line) {
   container.innerHTML = '<select class="form-select form-select-sm yourfinds-line-size-select" aria-label="Size">' + sizes.map(function(size) { return '<option value="' + size.value + '">' + size.label + '</option>'; }).join("") + '</select>';
 }
 
+let yourFindsCustomSizeCache = null;
 function loadYourFindsCustomSizes() {
   let list = document.getElementById("yourFindsCustomSizeOptions");
   if (!list) {
@@ -486,16 +487,16 @@ function loadYourFindsCustomSizes() {
     list.id = "yourFindsCustomSizeOptions";
     document.getElementById("acceptDeliveryModal").appendChild(list);
   }
-  google.script.run.withSuccessHandler(function(sizes) {
+  const render = function(sizes) {
     list.innerHTML = "";
     (Array.isArray(sizes) ? sizes : []).forEach(function(size) {
       const option = document.createElement("option");
       option.value = size;
       list.appendChild(option);
     });
-  }).withFailureHandler(function() {
-    list.innerHTML = "";
-  }).prepareYourFindsCustomSizes();
+  };
+  if (yourFindsCustomSizeCache && Date.now() - yourFindsCustomSizeCache.time < 60000) {render(yourFindsCustomSizeCache.sizes);return;}
+  google.script.run.withSuccessHandler(function(sizes) {yourFindsCustomSizeCache={time:Date.now(),sizes:sizes};render(sizes);}).withFailureHandler(function() {list.innerHTML="";}).prepareYourFindsCustomSizes();
 }
 
 function getYourFindsDeliveryLinesFromForm() {
@@ -704,6 +705,7 @@ function submitYourFindsDelivery() {
 
         if (typeof pageReadCache !== "undefined") {
           pageReadCache.delete("productMaster");
+          yourFindsCustomSizeCache = null;
         }
 
 

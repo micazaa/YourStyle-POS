@@ -178,116 +178,16 @@
   ====================================================== -->
 
   <div class="card border-0 shadow-sm mb-3">
-
-    <div class="card-body">
-
-      <div class="row g-2">
-
-
-        <!-- SEARCH -->
-
-        <div class="col-md-4">
-
-          <input
-            type="text"
-            id="deliveriesSearch"
-            class="form-control"
-            placeholder="Search delivery, driver, plate..."
-            oninput="filterDeliveriesPage()"
-          >
-
-        </div>
-
-
-        <!-- FROM DATE -->
-
-        <div class="col-md-2">
-
-          <input
-            type="date"
-            id="deliveriesFromDate"
-            class="form-control"
-            onchange="filterDeliveriesPage()"
-          >
-
-        </div>
-
-
-        <!-- TO DATE -->
-
-        <div class="col-md-2">
-
-          <input
-            type="date"
-            id="deliveriesToDate"
-            class="form-control"
-            onchange="filterDeliveriesPage()"
-          >
-
-        </div>
-
-
-        <!-- STATUS -->
-
-        <div class="col-md-2">
-
-          <select
-            id="deliveriesStatusFilter"
-            class="form-select"
-            onchange="filterDeliveriesPage()"
-          >
-
-            <option value="">
-              All Status
-            </option>
-
-            <option value="ACCEPTED">
-              Accepted
-            </option>
-
-            <option value="PENDING">
-              Pending
-            </option>
-
-            <option value="PARTIAL">
-              Partial
-            </option>
-
-            <option value="COMPLETED">
-              Completed
-            </option>
-
-            <option value="PARTIAL RETURN">
-              Partial Return
-            </option>
-
-            <option value="RETURNED">
-              Returned
-            </option>
-
-          </select>
-
-        </div>
-
-
-        <!-- CLEAR -->
-
-        <div class="col-md-2">
-
-          <button
-            type="button"
-            class="btn btn-outline-secondary w-100"
-            onclick="clearDeliveriesFilters()"
-          >
-            Clear
-          </button>
-
-        </div>
-
-      </div>
-
+    <div class="card-body d-flex flex-wrap gap-2">
+      <select id="deliveriesCategoryFilter" class="form-select" style="width:180px;" aria-label="Delivery category" onchange="filterDeliveriesPage()"><option value="">All</option><option value="YOURFINDS">YourFinds (YF)</option><option value="PINS">PINS</option><option value="OTHERS">Others</option></select>
+      <input type="search" id="deliveriesSearch" class="form-control" style="flex:1;min-width:220px;" aria-label="Search deliveries" placeholder="Search code, product, category, size..." oninput="filterDeliveriesPage()">
+      <details class="w-100"><summary class="small text-muted">Date and status filters</summary><div class="d-flex flex-wrap gap-2 mt-2">
+        <input type="date" id="deliveriesFromDate" class="form-control" style="width:180px" aria-label="From date" onchange="filterDeliveriesPage()">
+        <input type="date" id="deliveriesToDate" class="form-control" style="width:180px" aria-label="To date" onchange="filterDeliveriesPage()">
+        <select id="deliveriesStatusFilter" class="form-select" style="width:180px" aria-label="Delivery status" onchange="filterDeliveriesPage()"><option value="">All Status</option><option>ACCEPTED</option><option>PENDING</option><option>PARTIAL</option><option>COMPLETED</option><option>PARTIAL RETURN</option><option>RETURNED</option></select>
+        <button type="button" class="btn btn-outline-secondary" onclick="clearDeliveriesFilters()">Clear</button>
+      </div></details>
     </div>
-
   </div>
 
     <!-- =====================================================
@@ -692,12 +592,6 @@ function renderDeliveriesTable(
         (status === "PENDING" || status === "PARTIAL");
 
 
-      const canCompleteBulk =
-        deliveryType === "YOURSTYLE" &&
-        status === "PARTIAL" &&
-        delivery.hasBulk;
-
-
       row.innerHTML = `
 
         <!-- DELIVERY -->
@@ -852,28 +746,6 @@ function renderDeliveriesTable(
                 : ""
             }
 
-            ${
-            canCompleteBulk
-              ? `
-
-                <button
-                  type="button"
-                  class="btn btn-sm btn-success"
-                  onclick="
-                    completeDeliveryBulk(
-                      '${escapeDeliveriesHtml(
-                        deliveryId
-                      )}'
-                    )
-                  "
-                >
-                  Complete Bulk Delivery
-                </button>
-
-              `
-              : ""
-          }
-
 
             ${
               deliveryType === "YOURFINDS"
@@ -1014,19 +886,6 @@ function buildDeliveryCategoryDisplay(
       ) || 0;
 
 
-    const estimated =
-      Number(
-        delivery.bulkEstimatedQuantity
-      ) || 0;
-
-
-    const remaining =
-      Math.max(
-        0,
-        estimated - actual
-      );
-
-
     const bundleTotal =
       Number(
         delivery.bulkBundleQty
@@ -1056,14 +915,7 @@ function buildDeliveryCategoryDisplay(
 
         <div class="small text-muted">
 
-          ${actual} actual
-
-          · ${estimated} est
-
-          · ${remaining} remaining estimate
-
-          · ${bundleTotal}
-          ${bundleTotal === 1 ? "physical bundle" : "physical bundles"}
+          Bundle ${bundleTotal} pcs · ${actual} pcs
 
         </div>
 
@@ -1385,6 +1237,7 @@ function escapeDeliveriesHtml(
 ========================================================== */
 
 function filterDeliveriesPage() {
+  const category = document.getElementById("deliveriesCategoryFilter").value;
 
   const search =
     document.getElementById(
@@ -1426,7 +1279,10 @@ function filterDeliveriesPage() {
             delivery.deliveryId,
             delivery.driverName,
             delivery.plateNo,
-            delivery.acceptedBy
+            delivery.acceptedBy,
+            JSON.stringify(delivery.quantities || {}),
+            JSON.stringify(delivery.bulkTypes || []),
+            delivery.deliveryType
 
           ]
             .map(
@@ -1492,6 +1348,7 @@ function filterDeliveriesPage() {
 
 
         return (
+          (!category || (category === "YOURFINDS" ? delivery.deliveryType === "YOURFINDS" : (Number((delivery.quantities || {})[category]) > 0 || (delivery.bulkTypes || []).includes(category)))) &&
           matchesSearch &&
           matchesFrom &&
           matchesTo &&
@@ -1610,6 +1467,7 @@ function normalizeDeliveryFilterDate(
 ========================================================== */
 
 function clearDeliveriesFilters() {
+  document.getElementById("deliveriesCategoryFilter").value = "";
 
   document.getElementById(
     "deliveriesSearch"
@@ -1651,58 +1509,7 @@ function clearDeliveriesFilters() {
 ========================================================== */
 
 function distributeDeliveryBundle(deliveryId) {
-  deliveryId = String(deliveryId || "").trim();
-
-  if (!deliveryId) {
-    showNotificationToast(
-      "Delivery ID is missing.",
-      true
-    );
-    return;
-  }
-
-  google.script.run
-    .withSuccessHandler(function(result) {
-      if (
-        !result ||
-        !result.success ||
-        !result.holders ||
-        !result.holders.length
-      ) {
-        showNotificationToast(
-          "No pending bulk bundles found for this delivery.",
-          true
-        );
-        return;
-      }
-
-      /*
-        If one physical delivery contains more than one bulk
-        holder, use the first unresolved holder for now.
-
-        Later the Delivery Details view can expose each holder
-        separately.
-      */
-      const holder = result.holders[0];
-
-      const employee =
-        getCurrentDeliveryEmployeeName();
-
-      openBulkDistributionModal(
-        holder.deliveryId,
-        holder.sheetRow,
-        employee
-      );
-    })
-    .withFailureHandler(function(err) {
-      showNotificationToast(
-        err && err.message
-          ? err.message
-          : String(err),
-        true
-      );
-    })
-    .getBulkHoldersForDelivery(deliveryId);
+  openBulkDistributionModal(deliveryId, null, getCurrentDeliveryEmployeeName());
 }
 
 /* ==========================================================

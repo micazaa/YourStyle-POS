@@ -50,12 +50,14 @@
       <div class="btn-group" role="group" aria-label="Inventory workspace">
         <button type="button" class="btn btn-outline-pink" data-inventory-tab="inventoryPage" aria-pressed="false" onclick="showPage('inventoryPage')">Inventory</button>
         <button type="button" class="btn btn-outline-pink" data-inventory-tab="deliveriesPage" aria-pressed="false" onclick="showPage('deliveriesPage')">Delivery</button>
+        <button type="button" class="btn btn-outline-pink" data-inventory-tab="supplierReturnsPage" aria-pressed="false" onclick="showPage('supplierReturnsPage')">Return</button>
       </div>
     </div>
     <?!= include("Frontend/Pages/DashboardPage"); ?>
     <?!= include("Frontend/Pages/CashierPage"); ?>
     <?!= include("Frontend/Pages/InventoryPage"); ?>
     <?!= include ("Frontend/Pages/DeliveriesPage"); ?>
+    <?!= include("Frontend/Pages/SupplierReturnsPage"); ?>
 
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
