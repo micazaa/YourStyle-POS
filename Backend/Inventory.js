@@ -62,6 +62,16 @@ function setInventoryCalculatedFields_(sheet, startRow, rowCount) {
     ]);
   }
 
+  const querySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(POS_SUMMARY_SHEET);
+  if (querySheet && querySheet.getRange('A1').getDisplayValue() === 'Code') {
+    if(querySheet.getMaxRows()<startRow+rowCount)querySheet.insertRowsAfter(querySheet.getMaxRows(),startRow+rowCount-querySheet.getMaxRows()+1000);
+    for (let i=0;i<rowCount;i++) {
+      deliveredFormulas[i]=[inventorySummaryLookup_(startRow+i,'B')];
+      soldFormulas[i]=[inventorySummaryLookup_(startRow+i,'C')];
+      returnedFormulas[i]=[inventorySummaryLookup_(startRow+i,'D')];
+      stockFormulas[i]=[inventorySummaryLookup_(startRow+i,'E')];
+    }
+  }
   sheet.getRange(startRow, INV_COL.TOTAL_DELIVERED, rowCount, 1).setFormulas(deliveredFormulas);
   sheet.getRange(startRow, INV_COL.TOTAL_SOLD, rowCount, 1).setFormulas(soldFormulas);
   sheet.getRange(startRow, INV_COL.TOTAL_RETURNED, rowCount, 1).setFormulas(returnedFormulas);

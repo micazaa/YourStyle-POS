@@ -1,0 +1,39 @@
+<dialog id="generalDeliveryDetails" style="max-width:700px;width:95%;border:1px solid #ddd;border-radius:12px;padding:24px">
+  <h5 class="fw-bold">Delivery Details</h5>
+  <div id="generalDeliveryDetailsBody" class="mb-4" style="white-space:pre-wrap"></div>
+  <div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary flex-fill" onclick="document.getElementById('generalDeliveryDetails').close()">Close</button><button type="button" class="btn btn-pink flex-fill" onclick="generateBlankA4Report('Delivery',selectedDeliveryReportId)">Print Delivery Report</button></div>
+</dialog>
+<script>
+let selectedDeliveryReportId = '';
+function viewDeliveryDetails(deliveryId) {
+  selectedDeliveryReportId = String(deliveryId || '');
+  const delivery = deliveriesPageData.find(row=>String(row.deliveryId)===selectedDeliveryReportId);
+  if (!delivery) return showNotificationToast('Delivery not found. Refresh the table.',true);
+  if (String(delivery.deliveryType).toUpperCase()==='YOURFINDS') return viewYourFindsDeliveryDetails(deliveryId);
+  document.getElementById('generalDeliveryDetailsBody').textContent = [
+    delivery.deliveryNo || delivery.deliveryId,
+    'Date: '+(delivery.deliveryDate || '—'),
+    'Driver / Plate: '+[delivery.driverName,delivery.plateNo].filter(Boolean).join(' / '),
+    'Accepted by: '+(delivery.acceptedBy || '—'),
+    'Status: '+(delivery.status || '—'),
+    ...Object.entries(delivery.quantities || {}).map(([name,qty])=>name+': '+qty+' pcs'),
+    ...(delivery.hasBulk ? ['Bundles: '+(delivery.bulkBundleQty || 0),'Actual: '+(delivery.bulkActualQuantity || 0)+' pcs','Estimate: '+(delivery.bulkEstimatedQuantity || 0)+' pcs'] : [])
+  ].join('\n');
+  document.getElementById('generalDeliveryDetails').showModal();
+}
+function blankA4PdfBytes() {
+  // PDF dimensions are points: 210 × 297 mm. The content stream is intentionally empty.
+  const objects = ['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.2756 841.8898] /Resources << >> /Contents 4 0 R >>','<< /Length 0 >>\nstream\nendstream'];
+  let pdf='%PDF-1.4\n';const offsets=[0];
+  objects.forEach((object,index)=>{offsets.push(pdf.length);pdf+=(index+1)+' 0 obj\n'+object+'\nendobj\n';});
+  const xref=pdf.length;
+  pdf+='xref\n0 5\n0000000000 65535 f \n'+offsets.slice(1).map(offset=>String(offset).padStart(10,'0')+' 00000 n \n').join('')+'trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF\n';
+  return pdf;
+}
+function generateBlankA4Report(type, reference) {
+  const blob = new Blob([blankA4PdfBytes()],{type:'application/pdf'});
+  const url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download=(type+' Report '+String(reference||'')).replace(/[^a-zA-Z0-9 _-]/g,'')+'.pdf';
+  document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+</script>

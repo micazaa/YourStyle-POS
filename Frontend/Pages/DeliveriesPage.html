@@ -181,12 +181,6 @@
     <div class="card-body d-flex flex-wrap gap-2">
       <select id="deliveriesCategoryFilter" class="form-select" style="width:180px;" aria-label="Delivery category" onchange="filterDeliveriesPage()"><option value="">All</option><option value="YOURFINDS">YourFinds (YF)</option><option value="PINS">PINS</option><option value="OTHERS">Others</option></select>
       <input type="search" id="deliveriesSearch" class="form-control" style="flex:1;min-width:220px;" aria-label="Search deliveries" placeholder="Search code, product, category, size..." oninput="filterDeliveriesPage()">
-      <details class="w-100"><summary class="small text-muted">Date and status filters</summary><div class="d-flex flex-wrap gap-2 mt-2">
-        <input type="date" id="deliveriesFromDate" class="form-control" style="width:180px" aria-label="From date" onchange="filterDeliveriesPage()">
-        <input type="date" id="deliveriesToDate" class="form-control" style="width:180px" aria-label="To date" onchange="filterDeliveriesPage()">
-        <select id="deliveriesStatusFilter" class="form-select" style="width:180px" aria-label="Delivery status" onchange="filterDeliveriesPage()"><option value="">All Status</option><option>ACCEPTED</option><option>PENDING</option><option>PARTIAL</option><option>COMPLETED</option><option>PARTIAL RETURN</option><option>RETURNED</option></select>
-        <button type="button" class="btn btn-outline-secondary" onclick="clearDeliveriesFilters()">Clear</button>
-      </div></details>
     </div>
   </div>
 
@@ -747,21 +741,8 @@ function renderDeliveriesTable(
             }
 
 
-            ${
-              deliveryType === "YOURFINDS"
-                ? `
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-secondary"
-                    title="View delivery"
-                    aria-label="View delivery"
-                    onclick="viewYourFindsDeliveryDetails(
-                      '${escapeDeliveriesHtml(deliveryId)}'
-                    )"
-                  >
-                    ${inventoryIcon('view')}
-                  </button>
-
+                  <button type="button" class="btn btn-sm btn-outline-secondary" title="View delivery" aria-label="View delivery" onclick="viewDeliveryDetails('${escapeDeliveriesHtml(deliveryId)}')">${inventoryIcon('view')}</button>
+            ${deliveryType === "YOURFINDS" ? `
                   <button
                     type="button"
                     class="btn btn-sm btn-outline-dark"

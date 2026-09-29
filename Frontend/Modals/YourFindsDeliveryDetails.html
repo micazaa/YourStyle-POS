@@ -322,6 +322,7 @@
         >
           Close
         </button>
+        <button type="button" class="btn btn-pink" onclick="generateBlankA4Report('Delivery',selectedDeliveryReportId)">Print Delivery Report</button>
 
 
         <button
@@ -364,6 +365,7 @@ var currentDeliveryDetailsId =
 function viewYourFindsDeliveryDetails(
   deliveryId
 ) {
+  selectedDeliveryReportId = String(deliveryId || '');
 
   deliveryId =
     String(

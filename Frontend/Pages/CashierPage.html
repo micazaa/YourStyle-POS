@@ -480,9 +480,11 @@ document
   }
 
 function refreshInventory(callback) {
+  const read = beginPageRead('cashierInventory');
 
   google.script.run
     .withSuccessHandler(function(data) {
+      if (!read.current()) return;
 
       masterInventory = data;
 
@@ -494,6 +496,7 @@ function refreshInventory(callback) {
 
     })
     .withFailureHandler(function(err) {
+      if (!read.current()) return;
 
       showNotificationToast(
         err.message || "Failed to load inventory.",

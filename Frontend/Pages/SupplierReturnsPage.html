@@ -21,8 +21,9 @@
   </div>
   <div class="d-flex gap-2 mt-4"><button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeSupplierReturn()">Cancel</button><button id="supplierReturnSave" type="button" class="btn btn-pink flex-fill" onclick="submitSupplierReturn()">Return Product</button></div>
 </div></div>
-<dialog id="supplierReturnDetails" style="max-width:600px;border:1px solid #ddd;border-radius:12px"><h5>Supplier Return</h5><pre id="supplierReturnDetailsText" style="white-space:pre-wrap"></pre><button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('supplierReturnDetails').close()">Close</button></dialog>
+<dialog id="supplierReturnDetails" style="max-width:600px;border:1px solid #ddd;border-radius:12px"><h5>Supplier Return</h5><pre id="supplierReturnDetailsText" style="white-space:pre-wrap"></pre><button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('supplierReturnDetails').close()">Close</button> <button type="button" class="btn btn-pink" onclick="generateBlankA4Report('Return',selectedReturnReportId)">Print Return Report</button></dialog>
 <script>
+let selectedReturnReportId = '';
 let supplierReturns = [], supplierReturnInventory = [], supplierReturnRequest = '', supplierReturnBusy = false, supplierReturnLoad = 0;
 function loadSupplierReturnsPage() {
   const read = beginPageRead('supplierReturns');
@@ -37,7 +38,7 @@ function renderSupplierReturns() {
   document.getElementById('supplierReturnPieces').textContent=rows.reduce((sum,r)=>sum+r.quantity,0);
   document.getElementById('supplierReturnProducts').textContent=new Set(rows.map(r=>r.code)).size;
   const body=document.getElementById('supplierReturnRows');body.replaceChildren();
-  rows.forEach(r=>{const tr=document.createElement('tr');[r.id,r.date,[r.supplier,r.driver,r.plate].filter(Boolean).join(' / '),r.employee,r.name+' · '+r.category,r.quantity,'RETURNED'].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td);});const td=document.createElement('td'),button=document.createElement('button');button.type='button';button.className='btn btn-sm btn-outline-secondary';button.title='View return';button.setAttribute('aria-label','View return');button.innerHTML=inventoryIcon('view');button.onclick=()=>{document.getElementById('supplierReturnDetailsText').textContent=[r.id,r.name+' ('+r.code+')',r.quantity+' pcs',r.supplier,'Returned by: '+r.employee,'Reason: '+r.reason,r.remarks].join('\n');document.getElementById('supplierReturnDetails').showModal();};td.appendChild(button);tr.appendChild(td);body.appendChild(tr);});
+  rows.forEach(r=>{const tr=document.createElement('tr');[r.id,r.date,[r.supplier,r.driver,r.plate].filter(Boolean).join(' / '),r.employee,r.name+' · '+r.category,r.quantity,'RETURNED'].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td);});const td=document.createElement('td'),button=document.createElement('button');button.type='button';button.className='btn btn-sm btn-outline-secondary';button.title='View return';button.setAttribute('aria-label','View return');button.innerHTML=inventoryIcon('view');button.onclick=()=>{selectedReturnReportId=r.id;document.getElementById('supplierReturnDetailsText').textContent=[r.id,r.name+' ('+r.code+')',r.quantity+' pcs',r.supplier,'Returned by: '+r.employee,'Reason: '+r.reason,r.remarks].join('\n');document.getElementById('supplierReturnDetails').showModal();};td.appendChild(button);tr.appendChild(td);body.appendChild(tr);});
   if(!rows.length)body.innerHTML='<tr><td colspan="8" class="text-center py-5 text-muted">No supplier returns found.</td></tr>';
 }
 function openSupplierReturn() {

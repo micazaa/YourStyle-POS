@@ -167,9 +167,20 @@ function dashboardAnalytics_(rows, period, employee) {
   };
 }
 function dashboardInventory_() {
+  const summary = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(POS_SUMMARY_SHEET);
+  if (summary && summary.getRange('H1').getDisplayValue() === 'Category') {
+    const rows = summary.getLastRow()>1 ? summary.getRange(2,8,summary.getLastRow()-1,5).getValues().filter(row=>row[0]) : [];
+    return {incomplete:rows.reduce((total,row)=>total+(Number(row[4])||0),0),low:rows.filter(row=>row[0]!=='YOURFINDS'&&Number(row[2])>0&&Number(row[3])>0&&Number(row[2])<=Number(row[3])).length,sold:rows.filter(row=>Number(row[2])===0).length};
+  }
   const groups = new Map();
   let incomplete = 0;
-  getFullInventory().forEach((item) => {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEETS.INVENTORY);
+  const thresholds = new Map();
+  const master = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
+  if (master && master.getLastRow() > 1) master.getRange(2,1,master.getLastRow()-1,7).getValues().forEach(row=>thresholds.set(String(row[0]),Number(row[6])||0));
+  const rows = sheet && sheet.getLastRow()>1 ? sheet.getRange(2,1,sheet.getLastRow()-1,10).getValues() : [];
+  rows.filter(row=>row[0] || row[1]).map(row=>({category:row[3],size:row[2],name:row[1],status:row[5],stock:row[9],lowStockAt:thresholds.get(String(row[0]))||0})).forEach((item) => {
     const category = String(item.category || 'OTHERS')
       .trim()
       .toUpperCase();

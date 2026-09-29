@@ -295,3 +295,19 @@ function revokeInventoryManagerSession(token) {
   if (/^[a-f0-9-]{72}$/i.test(token)) CacheService.getScriptCache().remove("inventory-manager:" + token);
   return { success: true };
 }
+
+function loginAndStartShift(name, pin, petty) {
+  const employee = verifyEmployee(name, pin);
+  if (!employee || !employee.success) return employee;
+  const shift = startCashierShift(employee.fullName, petty);
+  if (!shift || !shift.success) {
+    revokeDashboardSession(employee.dashboardToken);
+    if (employee.inventoryManagerToken) revokeInventoryManagerSession(employee.inventoryManagerToken);
+    return {success:false,message:shift && shift.message || 'Unable to start shift.'};
+  }
+  return {success:true,employee:employee,shift:shift};
+}
+
+function getLoginSetup() {
+  return {employees:getEmployees(), petty:getLatestPettyHandover()};
+}
