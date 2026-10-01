@@ -699,7 +699,6 @@ function unlockTerminalSession() {
     button.disabled=false;button.textContent='Log In';document.getElementById('cashierPin').value='';
     showPage('posPage');saveSession();
     if(typeof refreshInventory==='function')refreshInventory();
-    if(result.inventoryManagerToken)google.script.run.withSuccessHandler(result=>{if(result&&result.success){pageReadCache.delete('inventory');pageReadCache.delete('dashboard');}}).withFailureHandler(error=>showNotificationToast('Summary setup: '+(error.message||String(error)),true)).prepareSummaryQueries(result.inventoryManagerToken);
   }).withFailureHandler(failed).loginAndStartShift(name,pin,petty);
 }
 

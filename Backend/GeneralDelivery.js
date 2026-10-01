@@ -83,7 +83,7 @@ function generateDeliveryIdentifiers(deliveryType, deliveryDate) {
 }
 
 function getYourStyleDeliveryProducts() {
-  const products = getProductMaster();
+  const products = getProductMaster_();
   const result = products.filter(function(item) {
     const category = String(item.category || "").trim().toUpperCase();
     const active = item.active === true || String(item.active || "").trim().toUpperCase() === "TRUE";
@@ -155,7 +155,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
         String(codes[i][0] || "").trim() ===
         productCode
       ) {
-        const existingProduct = getProductMaster().find(function(item) {
+        const existingProduct = getProductMaster_().find(function(item) {
           return String(item.productCode || item.code || "").trim() === productCode;
         });
 
@@ -180,7 +180,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
      LOAD PRODUCT MASTER
   ======================================================== */
 
-  const products = getProductMaster();
+  const products = getProductMaster_();
 
   const product = products.find(function(item) {
     return (
@@ -338,23 +338,6 @@ function acceptYourStyleDelivery(payload) {
       if (estimatedQuantity < bundleQty) throw new Error("Item " + (index + 1) + ": Estimated Quantity cannot be less than Bundle Qty.");
       return { type: type, receiveMode: mode, description: description, bundleQty: bundleQty, estimatedQuantity: estimatedQuantity };
     });
-
-    /* ========================================================
-       NORMALIZE BULK HOLDERS
-
-       Multiple BULK rows with the same Type and Bundle Code
-       represent physical bundles of the same bulk holder.
-
-       Example:
-       PINS BULK 1 bundle / est 80
-       PINS BULK 1 bundle / est 80
-
-       becomes ONE holder:
-       PINS BULK 2 bundles / est 160
-
-       This keeps the modal bundle tabs and delivery estimate
-       aligned with what the employee accepted.
-    ======================================================== */
 
     const normalizedLines = [];
     const bulkByReference = {};

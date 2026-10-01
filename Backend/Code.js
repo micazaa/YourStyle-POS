@@ -12,7 +12,7 @@ function doGet() {
       "width=device-width, initial-scale=1"
     )
     .setXFrameOptionsMode(
-      HtmlService.XFrameOptionsMode.ALLOWALL
+      HtmlService.XFrameOptionsMode.DEFAULT
     );
 }
 

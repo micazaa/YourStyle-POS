@@ -350,7 +350,7 @@ function changeInventoryItem(payload) {
 
 function generateProductMasterCode_() {
   const usedCodes = {};
-  getProductMaster().forEach(function(product) {
+  getProductMaster_().forEach(function(product) {
     const code = String(product.productCode || "").trim();
     if (code) usedCodes[code] = true;
   });
@@ -405,7 +405,7 @@ function readCostMap_(sheet, codeColumn) {
 }
 function readYourFindsCostBySize_() {
   const map = {};
-  getProductMaster().forEach(function(product) {
+  getProductMaster_().forEach(function(product) {
     if (String(product.category || '').trim().toUpperCase() !== 'YOURFINDS') return;
     const size = normalizeYourFindsSaleSize_(product.description);
     const raw = product.costPrice;
@@ -483,10 +483,10 @@ function getInventoryForManagement(managerToken) {
   });
 }
 function getProductMasterForManagement(managerToken) {
-  if (!managerToken) return getProductMaster();
+  if (!managerToken) return getProductMaster_().map(publicProduct_);
   const auth = verifyInventoryManagerSession_(managerToken);
   if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
-  return getProductMaster();
+  return getProductMaster_();
 }
 
 function saveProductMaster(payload) {
@@ -511,7 +511,7 @@ function saveProductMasterLocked_(payload) {
   if (!Number.isInteger(lowStockAt) || lowStockAt < 0) throw new Error("Low Stock At must be a non-negative whole number.");
   const ss = SpreadsheetApp.getActiveSpreadsheet(); const sheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
   if (!sheet) throw new Error("Product Master sheet not found.");
-  const products = getProductMaster();
+  const products = getProductMaster_();
   const existing = code
     ? products.find(function(p){ return String(p.productCode) === code; })
     : null;
@@ -584,7 +584,7 @@ function setInventoryAdministrativeStatus(payload) {
       assertCompletedYourFinds_(item);
     }
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
-    const master = getProductMaster().find(function(product) { return String(product.productCode) === code; });
+    const master = getProductMaster_().find(function(product) { return String(product.productCode) === code; });
     const masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.PRODUCT_MASTER);
     if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(status === INVENTORY_STATUS.ACTIVE);
     try {
@@ -623,7 +623,7 @@ function deleteUnusedInventoryItem(payload) {
       }
     });
     // Keep the master definition inactive so it cannot receive a new delivery.
-    const master = getProductMaster().find(function(product) { return String(product.productCode) === code; });
+    const master = getProductMaster_().find(function(product) { return String(product.productCode) === code; });
     const masterSheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
     if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(false);
     try { ss.getSheetByName(SHEETS.INVENTORY).deleteRow(item.rowNumber); }

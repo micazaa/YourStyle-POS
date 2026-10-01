@@ -217,7 +217,7 @@ function getFullInventory() {
   }
 
   const lowStockByCode = {};
-  getProductMaster().forEach(function(product) {
+  getProductMaster_().forEach(function(product) {
     lowStockByCode[String(product.productCode || "").trim()] = Number(product.lowStockAt) || 0;
   });
   const deliveryMetadataByCode = getInventoryDeliveryMetadataByCode_();

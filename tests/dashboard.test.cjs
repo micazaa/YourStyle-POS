@@ -109,7 +109,7 @@ function harness() {
     roundToTwo: (n) => Math.round((n + Number.EPSILON) * 100) / 100,
     toProperCase: (s) => String(s),
   });
-  for (const file of ['Constants.js', 'ReportHelpers.js', 'Employee.js', 'Dashboard.js'])
+  for (const file of ['Constants.js', 'SummaryQueries.js', 'ReportHelpers.js', 'Employee.js', 'Dashboard.js'])
     vm.runInContext(fs.readFileSync(path.join(root, 'Backend', file), 'utf8'), c);
   const manager = c.verifyEmployee('Mia Manager', '1234').dashboardToken,
     ana = c.verifyEmployee('Ana Cashier', '2222').dashboardToken,
@@ -124,7 +124,11 @@ function harness() {
     ana,
     bea,
     state: () => ({ locked, releases }),
-    setInventory: (x) => (inventory = x),
+    setInventory(x) {
+      inventory=x;
+      sheets.set('Inventory',sheet([Array(17).fill(''),...x.map((item,i)=>[String(i),item.name||'',item.size||'',item.category,'',item.status||'ACTIVE',0,0,0,item.stock])]));
+      sheets.set('Product Master',sheet([Array(11).fill(''),...x.map((item,i)=>[String(i),item.name||'',item.category,'',0,0,item.lowStockAt||0])]));
+    },
   };
 }
 function sale({
@@ -303,7 +307,7 @@ test('empty metrics have zero averages and negative totals never become positive
   assert.equal(a.categories[1].share, 100);
   assert.equal(a.netSales, 50);
 });
-test('inventory reminders match frontend grouping and YF threshold, preserve unfinished stock and exclude returns', () => {
+test('inventory reminders match frontend grouping without YF threshold, preserve unfinished stock and exclude returns', () => {
   const h = harness(),
     items = [
       { category: 'YOURFINDS', size: 'M', stock: 3, status: 'INCOMPLETE' },
@@ -316,7 +320,7 @@ test('inventory reminders match frontend grouping and YF threshold, preserve unf
   h.setInventory(items);
   const counts = h.c.dashboardInventory_();
   assert.equal(counts.incomplete, 1);
-  assert.equal(counts.low, 2);
+  assert.equal(counts.low, 1);
   assert.equal(counts.sold, 1);
   const front = vm.createContext({});
   vm.runInContext(

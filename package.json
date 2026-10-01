@@ -10,7 +10,8 @@
     "validate": "node scripts/validate-project.mjs",
     "format": "prettier --write \".github/workflows/*.yml\" \".prettierrc.json\" \"appsscript.json\" \"eslint.config.mjs\" \"package.json\" \"scripts/**/*.mjs\"",
     "format:check": "prettier --check \".github/workflows/*.yml\" \".prettierrc.json\" \"appsscript.json\" \"eslint.config.mjs\" \"package.json\" \"scripts/**/*.mjs\"",
-    "check": "npm run lint && npm run validate && npm run format:check"
+    "check": "npm run lint && npm run validate && npm run format:check && npm test",
+    "test": "node --test tests/*.test.cjs"
   },
   "devDependencies": {
     "@google/clasp": "3.4.0",

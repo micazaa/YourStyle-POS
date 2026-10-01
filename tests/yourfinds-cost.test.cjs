@@ -17,8 +17,8 @@ function setup(){
   const c=vm.createContext({SpreadsheetApp:{getActiveSpreadsheet:()=>({getSheetByName:()=>sheet}),flush(){}},LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){releases++;}})}});
   for(const file of ['Constants.js','Inventory.js','InventoryMovement.js','SalesAutomation.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../Backend',file),'utf8'),c);
   c.verifyInventoryManagerSession_=token=>{if(token!=='manager')throw Error('Manager session invalid');return {success:true};};
-  c.getProductMaster=()=>[{category:'YourFinds',description:'SNE',costPrice:50,active:true,imageUrl:'image'},{category:'YourFinds',description:'CUSTOM',costPrice:999,active:true,imageUrl:'image'}];
-  c.getActiveProducts=c.getProductMaster;
+  c.getProductMaster_=()=>[{category:'YourFinds',description:'SNE',costPrice:50,active:true,imageUrl:'image'},{category:'YourFinds',description:'CUSTOM',costPrice:999,active:true,imageUrl:'image'}];
+  c.getActiveProducts=c.getProductMaster_;
   c.getFullInventory=()=>inventory.slice(1).map((r,i)=>({rowNumber:i+2,code:r[0],name:r[1],size:r[2],category:r[3],stock:-1}));
   c.readCostMap_=()=>({});
   c.setInventoryCalculatedFields_=()=>{};

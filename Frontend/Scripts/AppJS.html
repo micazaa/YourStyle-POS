@@ -17,9 +17,10 @@
     const request = {owner:owner};
     request.promise = new Promise((resolve, reject) => {
       google.script.run.withSuccessHandler(result => {
-        if (deliveryCatalogPending === request) deliveryCatalogPending = null;
+        const current = deliveryCatalogPending === request;
+        if (current) deliveryCatalogPending = null;
         if (!result || !result.success) return reject(new Error(result && result.message || 'Unable to load products.'));
-        if (owner === JSON.stringify(currentEmployee)) rememberDeliveryCatalog(result.products || []);
+        if (current && owner === JSON.stringify(currentEmployee)) rememberDeliveryCatalog(result.products || []);
         resolve(result);
       }).withFailureHandler(error => {if(deliveryCatalogPending===request)deliveryCatalogPending=null;reject(error);}).getYourStyleDeliveryProducts();
     });
