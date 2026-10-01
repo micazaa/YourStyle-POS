@@ -626,14 +626,14 @@ function getPendingBulkHolders() {
    Used immediately before opening / distributing a bundle.
 ========================================================== */
 
-function getBulkDistributionData(deliveryId, omitProducts) {
+function getBulkDistributionData(deliveryId, omitProducts, sheetRow) {
   deliveryId = String(deliveryId || "").trim();
   if (!deliveryId) throw new Error("Delivery ID is required.");
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DELIVERY_LOG);
   if (!sheet || sheet.getLastRow() < 2) throw new Error("No pending bundles found.");
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELIVERY_LOG_COLUMN_COUNT).getValues();
-  const index = rows.findIndex(function(row) {
-    return String(row[DELIVERY_IDX.DELIVERY_ID]).trim() === deliveryId &&
+  const index = rows.findIndex(function(row, rowIndex) {
+    return (!sheetRow || rowIndex + 2 === Number(sheetRow)) && String(row[DELIVERY_IDX.DELIVERY_ID]).trim() === deliveryId &&
       String(row[DELIVERY_IDX.RECEIVE_MODE]).trim().toUpperCase() === DELIVERY_RECEIVE_MODE.BULK &&
       [DELIVERY_STATUS.PENDING, DELIVERY_STATUS.PARTIAL].includes(String(row[DELIVERY_IDX.STATUS]).trim().toUpperCase());
   });

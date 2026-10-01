@@ -41,7 +41,7 @@ let bulkDistributionLineCounter = 0;
 let bulkDistributionEmployee = "";
 let bulkDistributionSelectedBundleNo = 1;
 
-function openBulkDistributionModal(deliveryId, sheetRow, employee) {
+function openBulkDistributionModal(deliveryId, sheetRow, employee, bundleNo) {
   if (bulkDistributionSaving) return;
   const request = ++bulkDistributionRequest;
   const catalog = cachedDeliveryCatalog();
@@ -67,14 +67,14 @@ function openBulkDistributionModal(deliveryId, sheetRow, employee) {
     bulkDistributionHolder = result.holder;
     document.getElementById("bulkDistributionRemarks").value = result.holder.remarks || "";
     const firstUnused = (result.holder.bundles || []).find(function(b){return !b.hasActivity;});
-    bulkDistributionSelectedBundleNo = firstUnused ? firstUnused.bundleNo : 1;
+    bulkDistributionSelectedBundleNo = (result.holder.bundles || []).some(b => b.bundleNo === Number(bundleNo)) ? Number(bundleNo) : firstUnused ? firstUnused.bundleNo : 1;
     if (!catalog) rememberDeliveryCatalog(result.products || []);
     bulkDistributionProducts = (catalog || result.products || []).filter(p => p.category === result.holder.type);
     document.getElementById("bulkDistributionProductsLoading").style.display = "none";
     renderBulkDistributionHolder();
     restoreBulkDistributionLines();
   }).withFailureHandler(function(err){if(request === bulkDistributionRequest)showBulkDistributionError(err && err.message ? err.message : String(err));})
-    .getBulkDistributionData(deliveryId, !!catalog);
+    .getBulkDistributionData(deliveryId, !!catalog, sheetRow);
 }
 
 function closeBulkDistributionModal() {

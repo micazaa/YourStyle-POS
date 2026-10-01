@@ -213,12 +213,14 @@ function buildInventorySummaryGroups(items) {
     if (!groups.has(key)) groups.set(key, {
       key:key, category:category,
       name:String(category === 'YOURFINDS' ? (item.size || 'Unspecified size') : (item.name || 'Unnamed item')).trim().replace(/\s+/g, ' '),
-      stock:0, lowStockAt:0
+      stock:0, positiveStock:0, lowStockAt:0
     });
     const group = groups.get(key);
-    // Count available units; negative balances must not offset positive stock.
+    // Preserve signed table balances; cards count positive units separately.
     if (String(item.status || '').trim().toUpperCase() !== 'RETURNED') {
-      group.stock += Math.max(0, Number(item.stock) || 0);
+      const stock = Number(item.stock) || 0;
+      group.stock += stock;
+      group.positiveStock += Math.max(0, stock);
     }
     group.lowStockAt = Math.max(group.lowStockAt, Number(item.lowStockAt) || 0);
   });
@@ -262,10 +264,10 @@ function renderInventorySummary() {
   const items = sortInventorySummaryGroups(getInventorySummaryItems(inventorySummaryKind));
   const titles = {products:'Total Products',stock:'Total Stock',low:'Low Stock',sold:'Sold Out'};
   document.getElementById('inventorySummaryTitle').textContent = titles[inventorySummaryKind] || 'Inventory';
-  document.getElementById('inventorySummaryCount').textContent = items.length + ' product / size group(s) · ' + items.reduce((sum,item)=>sum+item.stock,0) + ' units';
+  document.getElementById('inventorySummaryCount').textContent = items.length + ' product / size group(s) · ' + items.reduce((sum,item)=>sum+item.positiveStock,0) + ' units';
   document.getElementById('inventorySummaryCategoryCounts').innerHTML = ['PINS','OTHERS','YOURFINDS'].map(function(category) {
     const groups = items.filter(item=>item.category === category);
-    const units = groups.reduce((sum,item)=>sum+item.stock,0);
+    const units = groups.reduce((sum,item)=>sum+item.positiveStock,0);
     const label = category === 'YOURFINDS' ? 'YourFinds' : category === 'OTHERS' ? 'Others' : 'PINS';
     return `<div class="col-sm-4"><div class="border rounded p-3 h-100"><div class="small text-muted">${label}</div><strong class="fs-5">${units} units</strong><div class="small text-muted">${groups.length} ${category==='YOURFINDS'?'sizes':'products'}</div></div></div>`;
   }).join('');

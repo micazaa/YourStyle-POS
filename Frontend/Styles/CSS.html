@@ -816,6 +816,13 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 .table th.text-end button {text-align:right;}
 .table th.text-center button {text-align:center;}
 
+#deliveriesTableBody tr.delivery-row-highlight > td {
+  background-color: var(--pink-light);
+  --bs-table-bg-state: var(--pink-light);
+  --bs-table-bg-type: var(--pink-light);
+  --bs-table-accent-bg: var(--pink-light);
+}
+
 .inventory-workspace-nav .active {background:var(--pink-main);color:white;}
 
 .inventory-workspace-nav{position:sticky;top:0;z-index:910;text-align:center;padding:12px;background:var(--bg-main);border-bottom:1px solid var(--border-color)}

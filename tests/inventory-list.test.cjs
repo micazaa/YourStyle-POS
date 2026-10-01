@@ -429,12 +429,17 @@ test('inventory workspace remembers Delivery when leaving and returning',()=>{
   c.showPage('inventoryPage');c.showPage('dashboardPage');c.openInventoryWorkspace();assert.equal(loaded,'inventory');
 });
 
-test('summary units count positive stock without changing individual balances',()=>{
+test('summary cards count positive units while table preserves negative balances',()=>{
   const {context:c}=frontend();
   const items=[{category:'OTHERS',name:'Bag',stock:5},{category:'OTHERS',name:'Bag',stock:-20},{category:'OTHERS',name:'Hat',stock:-3},{category:'OTHERS',name:'Bag',stock:8,status:'RETURNED'}];
   const groups=c.buildInventorySummaryGroups(items);
-  assert.equal(groups.find(g=>g.name==='Bag').stock,5);
-  assert.equal(groups.find(g=>g.name==='Hat').stock,0);
-  assert.equal(groups.reduce((total,g)=>total+g.stock,0),5);
+  assert.equal(groups.find(g=>g.name==='Bag').stock,-15);
+  assert.equal(groups.find(g=>g.name==='Hat').stock,-3);
+  assert.equal(groups.reduce((total,g)=>total+g.positiveStock,0),5);
+  c.getInventorySummaryItems=()=>groups;
+  c.renderInventorySummary();
+  assert.match(c.document.getElementById('inventorySummaryCount').textContent,/5 units/);
+  assert.match(c.document.getElementById('inventorySummaryCategoryCounts').innerHTML,/5 units/);
+  assert.match(c.document.getElementById('inventorySummaryBody').innerHTML,/>-15<|>-3</);
   assert.equal(items[1].stock,-20);
 });

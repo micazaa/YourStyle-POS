@@ -42,7 +42,7 @@ test('delivery and return navigation reuse loaded results and retry failures',()
   c.chain=new Proxy({}, {get(_target,key){if(key==='withFailureHandler')return fn=>{calls.at(-1).failure=fn;return c.chain;};return ()=>{};}});
   c.console={error(){}};
   vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Pages/'+file+'.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
-  c.renderDeliveriesTable=()=>{};c.updateDeliveriesSummary=()=>{};c.renderSupplierReturns=()=>{};
+  c.renderDeliverySummaryCards=()=>{};c.renderDeliveriesTable=()=>{};c.updateDeliveriesSummary=()=>{};c.renderSupplierReturns=()=>{};
   c[loader]();c[loader]();assert.equal(calls.length,1);
   calls[0].success(view==='deliveries'?{success:true,deliveries:[]}:[]);
   c[loader]();assert.equal(calls.length,1);
