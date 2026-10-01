@@ -33,7 +33,7 @@ test('search and numeric sorting compose without changing source inventory', () 
   assert.deepEqual(Array.from(c.visible, x=>x.code),['2','1']);
   assert.deepEqual(c.inventoryPageData.map(x=>x.code),['2','1','3']);
 });
-test('cashiers can edit and view; only managers get delete and active column', () => {
+test('cashiers can view; only managers get edit, delete and active column', () => {
   const {context:c,elements} = frontend();
   const item={code:'100001',name:'Pin',category:'PINS',stock:2,status:'ACTIVE',price:10};
   c.renderInventoryTable([item]);
@@ -42,7 +42,7 @@ test('cashiers can edit and view; only managers get delete and active column', (
   assert.match(row.innerHTML,/inventory-active/);
   c.currentEmployee={accessLevel:2};
   c.renderInventoryTable([item]);row=elements.inventoryTableBody.children.at(-1);
-  assert.deepEqual(row.actions.children.map(b=>b.title),['Edit item','View item']);
+  assert.deepEqual(row.actions.children.map(b=>b.title),['View item']);
   assert.doesNotMatch(row.innerHTML,/inventory-active/);
   c.currentEmployee={accessLevel:''};assert.equal(c.inventoryIsManager(),false);
 });

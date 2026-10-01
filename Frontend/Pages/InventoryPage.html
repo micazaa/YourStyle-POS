@@ -431,7 +431,7 @@ function renderInventoryTable(items) {
       !isYourFinds ||
       ['ACTIVE', 'INACTIVE', 'INCOMPLETE'].includes(state);
 
-    if (canEditDetails) {
+    if (isManager && canEditDetails) {
       action(
         'edit',
         state === 'INCOMPLETE' ? 'Add selling details' : 'Edit item',
@@ -477,6 +477,7 @@ function changeInventoryActiveInline(item, select) {
   }).setInventoryAdministrativeStatus({code:item.code,status:status,...auth});
 }
 function editInventoryRow(item) {
+  if (!inventoryIsManager()) return;
   if (inventoryIsYourFinds(item)) { phase8SelectedItem = item; openYourFindsEditor(); return; }
   const readToken=inventoryManagerReadToken();
   google.script.run.withSuccessHandler(function(products) {
