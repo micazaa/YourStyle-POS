@@ -155,17 +155,21 @@ function inventoryIsYourFinds(item) {
 function inventoryColumnCount() { return inventoryIsManager() ? 10 : 9; }
 function inventoryManagerReadToken(){return inventoryIsManager()?(currentEmployee.inventoryManagerToken||'expired'):'';}
 function inventoryCostText(value){return value===null||value===undefined||value===''?'—':'₱'+Number(value).toFixed(2);}
-function loadInventoryPage() {
+function loadInventoryPage(forceRefresh = false) {
+  if (forceRefresh) pageReadCache.delete('inventory');
   inventoryIncompleteOnly = dashboardInventoryReminder === 'incomplete';
   document.getElementById('inventoryAddProductButton').style.display = inventoryIsManager() ? 'inline-block' : 'none';
   document.getElementById('inventoryActiveHeading').style.display = inventoryIsManager() ? '' : 'none';
   const readToken=inventoryManagerReadToken();
-  const refresh = beginPageRead('inventory');
+  const refresh = beginPageRead('inventory', '', true);
   const body = document.getElementById('inventoryTableBody');
   if (refresh.cached !== undefined) {
     inventoryPageData = refresh.cached;
     filterInventoryTable();
-  } else body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-muted py-5">${loadingIndicator('Loading inventory…')}</td></tr>`;
+    if(dashboardInventoryReminder==='low'||dashboardInventoryReminder==='sold')openInventorySummary(dashboardInventoryReminder);
+    dashboardInventoryReminder='';
+  } else if (refresh.shouldFetch) body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-muted py-5">${loadingIndicator('Loading inventory…')}</td></tr>`;
+  if (!refresh.shouldFetch) return;
   google.script.run.withSuccessHandler(function(items) {
     if(!refresh.current() || readToken!==inventoryManagerReadToken())return;
     inventoryPageData = Array.isArray(items) ? items : [];
@@ -176,6 +180,7 @@ function loadInventoryPage() {
 
   }).withFailureHandler(function(error) {
     if (!refresh.current()) return;
+    refresh.fail();
     if (refresh.cached !== undefined) {
       showNotificationToast('Inventory refresh failed. Showing previously loaded data.', true);
       return;
@@ -465,7 +470,7 @@ function changeInventoryActiveInline(item, select) {
     select.disabled = false;
     if (!result || !result.success) return showNotificationToast(result && result.message || 'Status change failed.', true);
     item.status = result.status; filterInventoryTable();
-    loadInventoryPage();
+    loadInventoryPage(true);
     showNotificationToast('Item set to ' + result.status.toLowerCase() + '.');
   }).withFailureHandler(function(error) {
     select.disabled = false; showNotificationToast(error.message || String(error), true);
@@ -489,7 +494,7 @@ function deleteInventoryRow(item) {
   if (!auth) return;
   google.script.run.withSuccessHandler(function(result) {
     if (!result || !result.success) return showNotificationToast(result && result.message || 'Delete failed.', true);
-    showNotificationToast('Inventory item deleted.'); loadInventoryPage();
+    showNotificationToast('Inventory item deleted.'); loadInventoryPage(true);
   }).withFailureHandler(error => showNotificationToast(error.message || String(error), true)).deleteUnusedInventoryItem({code:item.code,...auth});
 }
 function getInventoryDisplayStatus(

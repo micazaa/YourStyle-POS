@@ -313,12 +313,13 @@ function loadDeliveriesPage(forceRefresh) {
 
 
   if (forceRefresh) pageReadCache.delete('deliveries');
-  const refresh = beginPageRead('deliveries');
+  const refresh = beginPageRead('deliveries', '', true);
   if (refresh.cached !== undefined) {
     deliveriesPageData = refresh.cached;
     renderDeliveriesTable(deliveriesPageData);
     updateDeliveriesSummary(deliveriesPageData);
   }
+  if (!refresh.shouldFetch) return;
   deliveriesPageLoading = true;
   if (refresh.cached === undefined)
   tbody.innerHTML = `
@@ -344,6 +345,7 @@ function loadDeliveriesPage(forceRefresh) {
     .withSuccessHandler(
       function(result) {
         if (!refresh.current()) return;
+        refresh.fail();
 
         deliveriesPageLoading =
           false;
@@ -415,6 +417,7 @@ function loadDeliveriesPage(forceRefresh) {
     .withFailureHandler(
       function(err) {
         if (!refresh.current()) return;
+        refresh.fail();
 
         deliveriesPageLoading =
           false;

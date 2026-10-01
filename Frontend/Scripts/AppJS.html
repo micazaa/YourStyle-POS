@@ -28,16 +28,22 @@
     return request.promise;
   }
 
-  function beginPageRead(view, key = '') {
+  function beginPageRead(view, key = '', reuse = false) {
     const employee = currentEmployee;
     const owner = JSON.stringify([employee, typeof currentCashier === 'undefined' ? '' : currentCashier]);
     const previous = pageReadCache.get(view);
-    const entry = { owner, key, data: previous && previous.owner === owner && previous.key === key ? previous.data : undefined };
+    const matching = previous && previous.owner === owner && previous.key === key;
+    if (reuse && matching && (previous.pending || previous.data !== undefined)) {
+      return { cached: previous.data, shouldFetch: false };
+    }
+    const entry = { owner, key, pending: true, data: previous && previous.owner === owner && previous.key === key ? previous.data : undefined };
     pageReadCache.set(view, entry);
     return {
       cached: entry.data,
+      shouldFetch: true,
+      fail: () => { entry.pending = false; },
       current: () => pageReadCache.get(view) === entry && !!currentEmployee && JSON.stringify([currentEmployee, typeof currentCashier === 'undefined' ? '' : currentCashier]) === owner,
-      save: data => { entry.data = data; }
+      save: data => { entry.data = data; entry.pending = false; }
     };
   }
 

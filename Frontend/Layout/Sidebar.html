@@ -38,7 +38,6 @@ function showPage(pageId){
  pages.forEach(id=>{const page=document.getElementById(id);if(page)page.style.display=id===pageId?'block':'none';});
  localStorage.setItem('ys_pos_active_page',pageId);
  const inventoryWorkspace=pageId==='inventoryPage'||pageId==='deliveriesPage'||pageId==='supplierReturnsPage';
- if(inventoryWorkspace)getDeliveryCatalog().catch(()=>{});
  if(inventoryWorkspace)localStorage.setItem('ys_pos_inventory_tab',pageId);
  document.querySelectorAll('[data-inventory-tab]').forEach(function(button){const active=button.dataset.inventoryTab===pageId;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
  activateMenu(document.querySelector('.sidebar-item[data-page="'+(inventoryWorkspace?'inventoryPage':pageId)+'"]'));

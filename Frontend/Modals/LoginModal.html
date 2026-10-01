@@ -689,6 +689,7 @@ function unlockTerminalSession() {
     if(!response||!response.success)return failed(new Error(response&&response.message||'Login failed.'));
     const result=response.employee;
     pageReadCache.clear();
+    localStorage.removeItem('ys_pos_inventory_tab');
     currentEmployee=result;currentCashier=result.fullName;
     currentShiftPettyCash=Number(response.shift.pettyReceived)||0;
     updateSidebarProfile(result);

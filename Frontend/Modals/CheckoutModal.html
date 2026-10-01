@@ -351,6 +351,7 @@ function handleCheckoutFailure(message) {
 
   /* ================= INVENTORY ================= */
 
+  pageReadCache.delete('inventory');
   masterInventory =
     Array.isArray(response.updatedInventory)
       ? response.updatedInventory

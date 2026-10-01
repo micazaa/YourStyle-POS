@@ -610,6 +610,7 @@ if (voidReason === "Other") {
 
           /* UPDATE INVENTORY */
 
+          pageReadCache.delete('inventory');
           masterInventory =
             Array.isArray(
               res.updatedInventory

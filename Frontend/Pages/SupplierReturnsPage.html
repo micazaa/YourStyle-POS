@@ -26,10 +26,11 @@
 let selectedReturnReportId = '';
 let supplierReturns = [], supplierReturnInventory = [], supplierReturnRequest = '', supplierReturnBusy = false, supplierReturnLoad = 0;
 function loadSupplierReturnsPage() {
-  const read = beginPageRead('supplierReturns');
+  const read = beginPageRead('supplierReturns', '', true);
   if (read.cached !== undefined) { supplierReturns = read.cached; renderSupplierReturns(); }
-  else document.getElementById('supplierReturnRows').innerHTML = '<tr><td colspan="8">'+loadingIndicator('Loading returns…')+'</td></tr>';
-  google.script.run.withSuccessHandler(rows => {if(!read.current())return;supplierReturns=rows||[];read.save(supplierReturns);renderSupplierReturns();}).withFailureHandler(e=>{if(read.current())showNotificationToast(e.message||String(e),true);}).getSupplierReturns();
+  else if (read.shouldFetch) document.getElementById('supplierReturnRows').innerHTML = '<tr><td colspan="8">'+loadingIndicator('Loading returns…')+'</td></tr>';
+  if (!read.shouldFetch) return;
+  google.script.run.withSuccessHandler(rows => {if(!read.current())return;supplierReturns=rows||[];read.save(supplierReturns);renderSupplierReturns();}).withFailureHandler(e=>{if(read.current()){read.fail();showNotificationToast(e.message||String(e),true);}}).getSupplierReturns();
 }
 function renderSupplierReturns() {
   const search=document.getElementById('supplierReturnSearch').value.toLowerCase(), category=document.getElementById('supplierReturnCategory').value;
