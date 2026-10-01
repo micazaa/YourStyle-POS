@@ -428,3 +428,13 @@ test('inventory workspace remembers Delivery when leaving and returning',()=>{
   assert.equal(loaded,'delivery');assert.equal(store.get('ys_pos_active_page'),'deliveriesPage');
   c.showPage('inventoryPage');c.showPage('dashboardPage');c.openInventoryWorkspace();assert.equal(loaded,'inventory');
 });
+
+test('summary units count positive stock without changing individual balances',()=>{
+  const {context:c}=frontend();
+  const items=[{category:'OTHERS',name:'Bag',stock:5},{category:'OTHERS',name:'Bag',stock:-20},{category:'OTHERS',name:'Hat',stock:-3},{category:'OTHERS',name:'Bag',stock:8,status:'RETURNED'}];
+  const groups=c.buildInventorySummaryGroups(items);
+  assert.equal(groups.find(g=>g.name==='Bag').stock,5);
+  assert.equal(groups.find(g=>g.name==='Hat').stock,0);
+  assert.equal(groups.reduce((total,g)=>total+g.stock,0),5);
+  assert.equal(items[1].stock,-20);
+});

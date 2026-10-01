@@ -16,6 +16,7 @@
         <h4 class="fw-bold mb-1">
           Inventory Master List
         </h4>
+        <p class="small text-muted mb-0">View products, stock levels, and availability.</p>
 
       </div>
 
@@ -215,9 +216,9 @@ function buildInventorySummaryGroups(items) {
       stock:0, lowStockAt:0
     });
     const group = groups.get(key);
-    // Count physical units, including unfinished/inactive stock, but not returns.
+    // Count available units; negative balances must not offset positive stock.
     if (String(item.status || '').trim().toUpperCase() !== 'RETURNED') {
-      group.stock += Number(item.stock) || 0;
+      group.stock += Math.max(0, Number(item.stock) || 0);
     }
     group.lowStockAt = Math.max(group.lowStockAt, Number(item.lowStockAt) || 0);
   });
