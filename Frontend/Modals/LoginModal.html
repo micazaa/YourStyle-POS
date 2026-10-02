@@ -689,6 +689,7 @@ function unlockTerminalSession() {
     if(!response||!response.success)return failed(new Error(response&&response.message||'Login failed.'));
     const result=response.employee;
     pageReadCache.clear();
+    localStorage.removeItem('ys_pos_inventory_tab');
     currentEmployee=result;currentCashier=result.fullName;
     currentShiftPettyCash=Number(response.shift.pettyReceived)||0;
     updateSidebarProfile(result);
@@ -699,7 +700,6 @@ function unlockTerminalSession() {
     button.disabled=false;button.textContent='Log In';document.getElementById('cashierPin').value='';
     showPage('posPage');saveSession();
     if(typeof refreshInventory==='function')refreshInventory();
-    if(result.inventoryManagerToken)google.script.run.withSuccessHandler(result=>{if(result&&result.success){pageReadCache.delete('inventory');pageReadCache.delete('dashboard');}}).withFailureHandler(error=>showNotificationToast('Summary setup: '+(error.message||String(error)),true)).prepareSummaryQueries(result.inventoryManagerToken);
   }).withFailureHandler(failed).loginAndStartShift(name,pin,petty);
 }
 

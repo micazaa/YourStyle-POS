@@ -15,7 +15,8 @@
         </h5>
 
         <p class="text-muted small mb-0">
-          Register newly delivered items
+          Register newly delivered items<br>
+          Delivery ID: <span id="deliveryNoDisplay" class="fw-semibold font-monospace">—</span>
         </p>
 
       </div>
@@ -66,26 +67,9 @@
         </div>
 
 
-        <!-- DELIVERY ID -->
-
         <div class="col-md-6">
-
-          <label class="form-label">
-            Delivery ID
-          </label>
-
-          <div
-            class="form-control bg-light"
-            style="min-height:38px;"
-          >
-            <span
-              id="deliveryNoDisplay"
-              class="fw-semibold"
-            >
-              —
-            </span>
-          </div>
-
+          <label class="form-label" for="deliveryPreparedBy">Prepared By <span class="text-danger">*</span></label>
+          <input type="text" id="deliveryPreparedBy" class="form-control" maxlength="100" placeholder="Enter preparer's name" autocomplete="off" required>
         </div>
 
         <!-- DRIVER -->
@@ -343,6 +327,8 @@ function openAcceptDeliveryModal() {
   loadYourFindsCustomSizes();
 
 
+  document.getElementById("deliveryPreparedBy").value = "";
+
   /* ================= DETAILS ================= */
 
   document.getElementById(
@@ -570,6 +556,8 @@ function submitYourFindsDelivery() {
     ).value.trim();
 
 
+  const preparedBy = document.getElementById("deliveryPreparedBy").value.trim();
+  if (!preparedBy) return showNotificationToast("Please enter the preparer’s name.", true);
   const deliveryLines = getYourFindsDeliveryLinesFromForm();
 
   /* ========================================================
@@ -789,7 +777,8 @@ function submitYourFindsDelivery() {
       plateNo,
       acceptedBy,
       quantities,
-      remarks
+      remarks,
+      preparedBy
     );
 
 }

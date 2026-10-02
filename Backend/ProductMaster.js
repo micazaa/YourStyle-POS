@@ -22,7 +22,7 @@
    K  Updated At
 ========================================================== */
 
-function getProductMaster() {
+function getProductMaster_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const sheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
@@ -135,11 +135,11 @@ function getProductMaster() {
 ========================================================== */
 
 function getActiveProducts() {
-  const products = getProductMaster();
+  const products = getProductMaster_();
 
   return products.filter(function (product) {
     return product.active === true;
-  });
+  }).map(publicProduct_);
 }
 
 function normalizeYourFindsCustomSizeLabel_(value) {
@@ -153,7 +153,7 @@ function isStandardYourFindsSizeLabel_(value) {
 
 function getYourFindsCustomSizes() {
   const found = {};
-  getProductMaster().forEach(function(product) {
+  getProductMaster_().forEach(function(product) {
     if (String(product.category || "").trim().toUpperCase() !== "YOURFINDS") return;
     const label = normalizeYourFindsCustomSizeLabel_(product.description);
     if (!label || isStandardYourFindsSizeLabel_(label)) return;
@@ -164,7 +164,7 @@ function getYourFindsCustomSizes() {
 
 function generateYourFindsSizeProductCode_() {
   const used = {};
-  getProductMaster().forEach(function(product) {
+  getProductMaster_().forEach(function(product) {
     const code = String(product.productCode || "").trim();
     if (code) used[code] = true;
   });
@@ -187,7 +187,7 @@ function prepareYourFindsCustomSizes() {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    getProductMaster().forEach(function(product) {
+    getProductMaster_().forEach(function(product) {
       const label = normalizeYourFindsCustomSizeLabel_(product.description);
       if (String(product.category || "").trim().toUpperCase() !== "YOURFINDS" ||
           !label || isStandardYourFindsSizeLabel_(label)) return;
@@ -214,7 +214,7 @@ function ensureYourFindsCustomSizeDefinition_(sheet, sizeLabel, now) {
     throw new Error("Enter a valid custom YourFinds size.");
   }
 
-  const existing = getProductMaster().find(function(product) {
+  const existing = getProductMaster_().find(function(product) {
     return String(product.category || "").trim().toUpperCase() === "YOURFINDS" &&
       normalizeYourFindsCustomSizeLabel_(product.description) === label;
   });
@@ -584,7 +584,7 @@ function getProductMasterByCode(productCode) {
     };
   }
 
-  const products = getProductMaster();
+  const products = getProductMaster_();
 
   for (let i = 0; i < products.length; i++) {
     const product = products[i];
@@ -593,7 +593,7 @@ function getProductMasterByCode(productCode) {
       return {
         success: true,
 
-        product: product,
+        product: publicProduct_(product),
       };
     }
   }
@@ -979,7 +979,7 @@ function createInventoryFromProductMaster(
 
 
     /* ======================================================
-       BUILD A:P INVENTORY ROW
+       BUILD A:Q INVENTORY ROW
     ====================================================== */
 
     const row = [
@@ -992,13 +992,14 @@ function createInventoryFromProductMaster(
       "",                         // G Total Delivered formula
       "",                         // H Total Sold formula
       "",                         // I Total Returned formula
-      "",                         // J Current Stock formula
-      "",                         // K Stock Status formula
-      product.defaultPrice || 0,  // L Selling Price
-      0,                          // M Original Price
-      product.imageUrl || "",     // N Image
-      now,                        // O Created At
-      now                         // P Updated At
+      "",                         // J Total Adjustment formula
+      "",                         // K Current Stock formula
+      "",                         // L Stock Status formula
+      product.defaultPrice || 0,  // M Selling Price
+      0,                          // N Original Price
+      product.imageUrl || "",     // O Image
+      now,                        // P Created At
+      now                         // Q Updated At
 
     ];
 
@@ -1135,4 +1136,13 @@ function repairIncompleteInventoryFromProductMaster_(product, inventoryRowNumber
   SpreadsheetApp.flush();
 
   return { repaired: true, rowNumber: inventoryRowNumber };
+}
+
+function publicProduct_(product) {
+  const result = Object.assign({}, product);
+  delete result.costPrice;
+  return result;
+}
+function getProductMaster() {
+  return getProductMaster_().map(publicProduct_);
 }

@@ -48,129 +48,9 @@
 ====================================================== -->
 
 <div class="row g-3 mb-4">
-
-  <!-- YOURFINDS RECEIVED -->
-
-  <div class="col-6 col-xl-3">
-
-    <div class="card border-0 shadow-sm h-100">
-
-      <div class="card-body">
-
-        <div class="small text-muted">
-          YourFinds Received
-        </div>
-
-        <div
-          id="deliveriesYourFindsReceived"
-          class="fs-4 fw-bold"
-        >
-          0
-        </div>
-
-        <div class="small text-muted">
-          actual pieces
-        </div>
-
-      </div>
-
-    </div>
-
-  </div>
-
-
-  <!-- YOURSTYLE RECEIVED -->
-
-  <div class="col-6 col-xl-3">
-
-    <div class="card border-0 shadow-sm h-100">
-
-      <div class="card-body">
-
-        <div class="small text-muted">
-          YourStyle Received
-        </div>
-
-        <div
-          id="deliveriesYourStyleReceived"
-          class="fs-4 fw-bold"
-        >
-          0
-        </div>
-
-        <div class="small text-muted">
-          direct + distributed
-        </div>
-
-      </div>
-
-    </div>
-
-  </div>
-
-
-  <!-- BULK REMAINING -->
-
-  <div class="col-6 col-xl-3">
-
-    <div class="card border-0 shadow-sm h-100">
-
-      <div class="card-body">
-
-        <div class="small text-muted">
-          Bulk Remaining
-        </div>
-
-        <div
-          id="deliveriesBulkRemaining"
-          class="fs-4 fw-bold"
-        >
-          0
-        </div>
-
-        <div
-          id="deliveriesBundlesRemaining"
-          class="small text-muted"
-        >
-          0 bundles
-        </div>
-
-      </div>
-
-    </div>
-
-  </div>
-
-
-  <!-- OPEN BULK -->
-
-  <div class="col-6 col-xl-3">
-
-    <div class="card border-0 shadow-sm h-100">
-
-      <div class="card-body">
-
-        <div class="small text-muted">
-          Open Bulk Holders
-        </div>
-
-        <div
-          id="deliveriesOpenBulkHolders"
-          class="fs-4 fw-bold"
-        >
-          0
-        </div>
-
-        <div class="small text-muted">
-          pending / partial
-        </div>
-
-      </div>
-
-    </div>
-
-  </div>
-
+  <div class="col-md-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openDeliverySummary('deliveries')"><span class="card-body"><span class="small text-muted d-block">Delivery Count</span><strong id="deliveryCountValue" class="fs-4 d-block">0</strong><span id="deliveryCountHint" class="small text-muted">Accepted deliveries</span></span></button></div>
+  <div class="col-md-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openDeliverySummary('bundles')"><span class="card-body"><span class="small text-muted d-block">Bundles to Open</span><strong id="deliveryBundlesValue" class="fs-4 d-block">—</strong><span id="deliveryBundlesHint" class="small text-muted">Unopened bundles</span></span></button></div>
+  <div class="col-md-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openDeliverySummary('items')"><span class="card-body"><span class="small text-muted d-block">Items Received</span><strong id="deliveryItemsValue" class="fs-4 d-block">—</strong><span class="small text-muted">Actual pieces</span></span></button></div>
 </div>
 
   <!-- =====================================================
@@ -179,7 +59,7 @@
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body d-flex flex-wrap gap-2">
-      <select id="deliveriesCategoryFilter" class="form-select" style="width:180px;" aria-label="Delivery category" onchange="filterDeliveriesPage()"><option value="">All</option><option value="YOURFINDS">YourFinds (YF)</option><option value="PINS">PINS</option><option value="OTHERS">Others</option></select>
+      <select id="deliveriesCategoryFilter" class="form-select" style="width:180px;" aria-label="Delivery category" onchange="filterDeliveriesPage()"><option value="">All</option><option value="YOURFINDS">YourFinds </option><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option></select>
       <input type="search" id="deliveriesSearch" class="form-control" style="flex:1;min-width:220px;" aria-label="Search deliveries" placeholder="Search code, product, category, size..." oninput="filterDeliveriesPage()">
     </div>
   </div>
@@ -202,35 +82,21 @@
 
               <tr>
 
-                <th class="ps-3">
-                  Delivery
-                </th>
+                <th data-delivery-sort="deliveryId" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setDeliverySort('main','deliveryId')">Delivery <span class="sort-marker">↕</span></button></th>
 
-                <th>
-                  Date
-                </th>
+                <th data-delivery-sort="deliveryDate" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setDeliverySort('main','deliveryDate')">Date <span class="sort-marker">↕</span></button></th>
 
-                <th>
-                  Driver / Plate
-                </th>
+                <th data-delivery-sort="driverName" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setDeliverySort('main','driverName')">Driver / Plate <span class="sort-marker">↕</span></button></th>
 
-                <th>
-                  Accepted By
-                </th>
+                <th data-delivery-sort="acceptedBy" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setDeliverySort('main','acceptedBy')">Accepted By <span class="sort-marker">↕</span></button></th>
 
-                <th>
-                  Categories
-                </th>
+                <th data-delivery-sort="categories" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setDeliverySort('main','categories')">Categories <span class="sort-marker">↕</span></button></th>
 
-                <th class="text-center">
-                  Total
-                </th>
+                <th class="text-center" data-delivery-sort="totalQty" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setDeliverySort('main','totalQty')">Total <span class="sort-marker">↕</span></button></th>
 
-                <th class="text-center">
-                  Status
-                </th>
+                <th class="text-center" data-delivery-sort="status" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setDeliverySort('main','status')">Status <span class="sort-marker">↕</span></button></th>
 
-                <th class="text-center">
+                <th class="text-start">
                   Actions
                 </th>
 
@@ -312,14 +178,19 @@ function loadDeliveriesPage(forceRefresh) {
   }
 
 
-  if (forceRefresh) pageReadCache.delete('deliveries');
-  const refresh = beginPageRead('deliveries');
+  if (forceRefresh) { pageReadCache.delete('standardDeliveryDetails'); pageReadCache.delete('deliveries'); pageReadCache.delete('deliverySummary'); }
+  const refresh = beginPageRead('deliveries', '', true);
   if (refresh.cached !== undefined) {
+    if (deliveriesPageLoaded && deliveriesPageData === refresh.cached) return;
     deliveriesPageData = refresh.cached;
-    renderDeliveriesTable(deliveriesPageData);
-    updateDeliveriesSummary(deliveriesPageData);
+    filterDeliveriesPage();
   }
+  if (!refresh.shouldFetch) return;
   deliveriesPageLoading = true;
+  if (refresh.cached === undefined) {
+    deliverySummaryVisible = [];
+    renderDeliverySummaryCards();
+  }
   if (refresh.cached === undefined)
   tbody.innerHTML = `
 
@@ -344,6 +215,7 @@ function loadDeliveriesPage(forceRefresh) {
     .withSuccessHandler(
       function(result) {
         if (!refresh.current()) return;
+        refresh.fail();
 
         deliveriesPageLoading =
           false;
@@ -395,18 +267,17 @@ function loadDeliveriesPage(forceRefresh) {
             : [];
 
 
+        if (result.summary && result.summary.success) {
+          const summaryRead = beginPageRead('deliverySummary', '', true);
+          if (summaryRead.shouldFetch) summaryRead.save(result.summary);
+        }
+
+
         refresh.save(deliveriesPageData);
         deliveriesPageLoaded = true;
 
 
-        renderDeliveriesTable(
-          deliveriesPageData
-        );
-
-
-        updateDeliveriesSummary(
-          deliveriesPageData
-        );
+        filterDeliveriesPage();
 
       }
     )
@@ -415,6 +286,7 @@ function loadDeliveriesPage(forceRefresh) {
     .withFailureHandler(
       function(err) {
         if (!refresh.current()) return;
+        refresh.fail();
 
         deliveriesPageLoading =
           false;
@@ -473,8 +345,10 @@ function loadDeliveriesPage(forceRefresh) {
 ========================================================== */
 
 function invalidateDeliveriesCache() {
+  pageReadCache.delete('standardDeliveryDetails');
 
   pageReadCache.delete('deliveries');
+  pageReadCache.delete('deliverySummary');
 
   deliveriesPageLoaded =
     false;
@@ -489,7 +363,6 @@ function invalidateDeliveriesCache() {
 function refreshDeliveriesPage() {
 
   pageReadCache.delete('inventory');
-  loadInventoryPage();
 
   invalidateDeliveriesCache();
 
@@ -544,6 +417,8 @@ function renderDeliveriesTable(
   }
 
 
+  deliveries = sortDeliveryRows(deliveries, 'main');
+  updateDeliverySortHeaders();
   deliveries.forEach(
     function(delivery) {
 
@@ -580,6 +455,9 @@ function renderDeliveriesTable(
           .trim()
           .toUpperCase();
 
+
+      row.dataset.deliveryId = deliveryId;
+      row.tabIndex = -1;
 
       const canDistribute =
         deliveryType === "YOURSTYLE" &&
@@ -718,10 +596,10 @@ function renderDeliveriesTable(
 
         <!-- ACTIONS -->
 
-        <td class="text-center">
+        <td class="text-start">
 
           <div
-            class="d-flex justify-content-center gap-1"
+            class="d-flex justify-content-start gap-1"
           >
 
             ${
@@ -918,151 +796,11 @@ function buildDeliveryCategoryDisplay(
    OPERATIONAL SUMMARY
 ========================================================== */
 
-function updateDeliveriesSummary(
-  deliveries
-) {
-
-  let yourFindsReceived =
-    0;
-
-
-  let yourStyleReceived =
-    0;
-
-
-  let bulkRemaining =
-    0;
-
-
-  let bundlesRemaining =
-    0;
-
-
-  let openBulkHolders =
-    0;
-
-
-  (
-    Array.isArray(deliveries)
-      ? deliveries
-      : []
-  )
-    .forEach(
-      function(delivery) {
-
-        const deliveryType =
-          String(
-            delivery.deliveryType ||
-            ""
-          )
-            .trim()
-            .toUpperCase();
-
-
-        /* ================= YOURFINDS ================= */
-
-        if (
-          deliveryType ===
-          "YOURFINDS"
-        ) {
-
-          yourFindsReceived +=
-            Number(
-              delivery.totalQty
-            ) || 0;
-
-        }
-
-
-        /* ================= YOURSTYLE ================= */
-
-        if (
-          deliveryType ===
-          "YOURSTYLE"
-        ) {
-
-          /*
-            totalQty already means:
-
-            DIRECT actual
-            +
-            BULK actual distributed
-          */
-
-          yourStyleReceived +=
-            Number(
-              delivery.totalQty
-            ) || 0;
-
-
-          bulkRemaining +=
-            Number(
-              delivery.bulkRemainingQuantity
-            ) || 0;
-
-
-          bundlesRemaining +=
-            Number(
-              delivery.bulkBundleQty
-            ) || 0;
-
-
-          openBulkHolders +=
-            Number(
-              delivery.openBulkHolderCount
-            ) || 0;
-
-        }
-
-      }
-    );
-
-
-  setDeliveriesSummaryValue(
-    "deliveriesYourFindsReceived",
-    yourFindsReceived
-  );
-
-
-  setDeliveriesSummaryValue(
-    "deliveriesYourStyleReceived",
-    yourStyleReceived
-  );
-
-
-  setDeliveriesSummaryValue(
-    "deliveriesBulkRemaining",
-    bulkRemaining
-  );
-
-
-  setDeliveriesSummaryValue(
-    "deliveriesOpenBulkHolders",
-    openBulkHolders
-  );
-
-
-  const bundleElement =
-    document.getElementById(
-      "deliveriesBundlesRemaining"
-    );
-
-
-  if (bundleElement) {
-
-    bundleElement.textContent =
-      bundlesRemaining +
-      " " +
-      (
-        bundlesRemaining === 1
-          ? "physical bundle"
-          : "physical bundles"
-      );
-
-  }
-
+function updateDeliveriesSummary(deliveries) {
+  deliverySummaryVisible = deliveries || [];
+  renderDeliverySummaryCards();
+  loadDeliverySummaryData();
 }
-
 
 function setDeliveriesSummaryValue(
   elementId,
@@ -1218,7 +956,7 @@ function escapeDeliveriesHtml(
 ========================================================== */
 
 function filterDeliveriesPage() {
-  const category = document.getElementById("deliveriesCategoryFilter").value;
+  const category = document.getElementById("deliveriesCategoryFilter")?.value || "";
 
   const search =
     document.getElementById(
@@ -1232,19 +970,19 @@ function filterDeliveriesPage() {
   const fromDate =
     document.getElementById(
       "deliveriesFromDate"
-    ).value;
+    )?.value || "";
 
 
   const toDate =
     document.getElementById(
       "deliveriesToDate"
-    ).value;
+    )?.value || "";
 
 
   const status =
     document.getElementById(
       "deliveriesStatusFilter"
-    ).value;
+    )?.value || "";
 
 
   const filtered =
@@ -1448,41 +1186,11 @@ function normalizeDeliveryFilterDate(
 ========================================================== */
 
 function clearDeliveriesFilters() {
-  document.getElementById("deliveriesCategoryFilter").value = "";
-
-  document.getElementById(
-    "deliveriesSearch"
-  ).value =
-    "";
-
-
-  document.getElementById(
-    "deliveriesFromDate"
-  ).value =
-    "";
-
-
-  document.getElementById(
-    "deliveriesToDate"
-  ).value =
-    "";
-
-
-  document.getElementById(
-    "deliveriesStatusFilter"
-  ).value =
-    "";
-
-
-  renderDeliveriesTable(
-    deliveriesPageData
-  );
-
-
-  updateDeliveriesSummary(
-    deliveriesPageData
-  );
-
+  ['deliveriesCategoryFilter','deliveriesSearch','deliveriesFromDate','deliveriesToDate','deliveriesStatusFilter'].forEach(id=>{
+    const input=document.getElementById(id);
+    if(input)input.value='';
+  });
+  filterDeliveriesPage();
 }
 
 /* ==========================================================

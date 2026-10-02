@@ -33,7 +33,7 @@ function validateUniversalDeliveryDatabase() {
   if (!movementSheet) throw new Error("Inventory Movement Log sheet not found.");
 
   validateSheetHeaders(deliverySheet, [
-    "Delivery ID", "Delivery Date", "Timestamp", "Driver Name", "Plate No.", "Accepted By",
+    "Delivery ID", "Delivery Date", "Timestamp", "Driver Name", "Plate No.", "Prepared By", "Accepted By",
     "Delivery Type", "Category", "Size / Group", "Receive Mode", "Item Name", "Bundle Qty", "Estimated Quantity",
     "Actual Quantity", "Remaining Quantity", "Remaining Bundle Qty", "Variance", "Status", "Remarks"
   ]);
@@ -59,19 +59,17 @@ function generateDeliveryIdentifiers(deliveryType, deliveryDate) {
   const sheet = getGeneralDeliveryLogSheet();
   const dateCode = deliveryDate.replace(/-/g, "");
   const fullPrefix = idPrefix + "-" + dateCode + "-";
-  let highestSequence = 0;
-
+  const usedIds = new Set();
   if (sheet.getLastRow() >= 2) {
-    const ids = sheet.getRange(2, DELIVERY_COL.DELIVERY_ID, sheet.getLastRow() - 1, 1).getDisplayValues();
-    ids.forEach(function(row) {
-      const id = String(row[0] || "").trim().toUpperCase();
-      if (!id.startsWith(fullPrefix)) return;
-      const sequence = parseInt(id.substring(fullPrefix.length), 10);
-      if (Number.isInteger(sequence) && sequence > highestSequence) highestSequence = sequence;
-    });
+    sheet.getRange(2, DELIVERY_COL.DELIVERY_ID, sheet.getLastRow() - 1, 1).getDisplayValues()
+      .forEach(row => usedIds.add(String(row[0] || "").trim().toUpperCase()));
   }
-
-  const sequence = highestSequence + 1;
+  const available = [];
+  for (let suffix = 1; suffix <= 999; suffix++) {
+    if (!usedIds.has(fullPrefix + String(suffix).padStart(3, "0"))) available.push(suffix);
+  }
+  if (!available.length) throw new Error("Maximum of 999 deliveries reached for this date and type.");
+  const sequence = available[Math.floor(Math.random() * available.length)];
   const deliveryId = fullPrefix + String(sequence).padStart(3, "0");
   return {
     deliveryType: deliveryType,
@@ -83,7 +81,7 @@ function generateDeliveryIdentifiers(deliveryType, deliveryDate) {
 }
 
 function getYourStyleDeliveryProducts() {
-  const products = getProductMaster();
+  const products = getProductMaster_();
   const result = products.filter(function(item) {
     const category = String(item.category || "").trim().toUpperCase();
     const active = item.active === true || String(item.active || "").trim().toUpperCase() === "TRUE";
@@ -155,7 +153,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
         String(codes[i][0] || "").trim() ===
         productCode
       ) {
-        const existingProduct = getProductMaster().find(function(item) {
+        const existingProduct = getProductMaster_().find(function(item) {
           return String(item.productCode || item.code || "").trim() === productCode;
         });
 
@@ -180,7 +178,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
      LOAD PRODUCT MASTER
   ======================================================== */
 
-  const products = getProductMaster();
+  const products = getProductMaster_();
 
   const product = products.find(function(item) {
     return (
@@ -252,13 +250,14 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
     "",                                                   // G Total Delivered formula
     "",                                                   // H Total Sold formula
     "",                                                   // I Total Returned formula
-    "",                                                   // J Current Stock formula
-    "",                                                   // K Stock Status formula
-    Number(product.defaultPrice) || 0,                    // L Selling Price
-    0,                                                    // M Original Price
-    String(product.imageUrl || "").trim(),                // N Image
-    now,                                                  // O Created At
-    now                                                   // P Updated At
+    "",                                                   // J Total Adjustment formula
+    "",                                                   // K Current Stock formula
+    "",                                                   // L Stock Status formula
+    Number(product.defaultPrice) || 0,                    // M Selling Price
+    0,                                                    // N Original Price
+    String(product.imageUrl || "").trim(),                // O Image
+    now,                                                  // P Created At
+    now                                                   // Q Updated At
   ];
 
   if (
@@ -266,7 +265,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
     INVENTORY_COLUMN_COUNT
   ) {
     throw new Error(
-      "Inventory row does not match A:P mapping."
+      "Inventory row does not match A:Q mapping."
     );
   }
 
@@ -302,9 +301,11 @@ function acceptYourStyleDelivery(payload) {
     const driverName = String(payload.driverName || "").trim();
     const plateNo = String(payload.plateNo || "").trim().toUpperCase();
     const acceptedBy = String(payload.acceptedBy || "").trim();
+    const preparedBy = String(payload.preparedBy === undefined ? acceptedBy : payload.preparedBy).trim();
     const remarks = String(payload.remarks || "").trim();
     const submittedLines = Array.isArray(payload.lines) ? payload.lines : [];
 
+    if (!preparedBy) throw new Error("Prepared By is required.");
     if (!driverName) throw new Error("Driver Name is required.");
     if (!plateNo) throw new Error("Plate No. is required.");
     if (!acceptedBy) throw new Error("Accepted By is required.");
@@ -338,23 +339,6 @@ function acceptYourStyleDelivery(payload) {
       if (estimatedQuantity < bundleQty) throw new Error("Item " + (index + 1) + ": Estimated Quantity cannot be less than Bundle Qty.");
       return { type: type, receiveMode: mode, description: description, bundleQty: bundleQty, estimatedQuantity: estimatedQuantity };
     });
-
-    /* ========================================================
-       NORMALIZE BULK HOLDERS
-
-       Multiple BULK rows with the same Type and Bundle Code
-       represent physical bundles of the same bulk holder.
-
-       Example:
-       PINS BULK 1 bundle / est 80
-       PINS BULK 1 bundle / est 80
-
-       becomes ONE holder:
-       PINS BULK 2 bundles / est 160
-
-       This keeps the modal bundle tabs and delivery estimate
-       aligned with what the employee accepted.
-    ======================================================== */
 
     const normalizedLines = [];
     const bulkByReference = {};
@@ -398,7 +382,7 @@ function acceptYourStyleDelivery(payload) {
       if (line.receiveMode === DELIVERY_RECEIVE_MODE.DIRECT) {
         directUnits += line.quantity;
         deliveryRows.push([
-          identifiers.deliveryId, deliveryDate, now, driverName, plateNo, acceptedBy,
+          identifiers.deliveryId, deliveryDate, now, driverName, plateNo, preparedBy, acceptedBy,
           DELIVERY_TYPE.YOURSTYLE, line.type, line.type, DELIVERY_RECEIVE_MODE.DIRECT, line.description,
           "", "", line.quantity, "", "", "", DELIVERY_STATUS.ACCEPTED, remarks
         ]);
@@ -410,13 +394,13 @@ function acceptYourStyleDelivery(payload) {
       bulkBundles += line.bundleQty;
       line.holderCode = identifiers.deliveryId + "-B" + String(bulkIndex).padStart(2, "0");
       deliveryRows.push([
-        identifiers.deliveryId, deliveryDate, now, driverName, plateNo, acceptedBy,
+        identifiers.deliveryId, deliveryDate, now, driverName, plateNo, preparedBy, acceptedBy,
         DELIVERY_TYPE.YOURSTYLE, line.type, "UNSORTED", DELIVERY_RECEIVE_MODE.BULK, line.description,
         line.bundleQty, line.estimatedQuantity, 0, line.estimatedQuantity, line.bundleQty, "", DELIVERY_STATUS.PENDING, remarks
       ]);
     });
 
-    if (deliveryRows.some(function(row) { return row.length !== DELIVERY_LOG_COLUMN_COUNT; })) throw new Error("YourStyle Delivery row does not match universal A:S mapping.");
+    if (deliveryRows.some(function(row) { return row.length !== DELIVERY_LOG_COLUMN_COUNT; })) throw new Error("YourStyle Delivery row does not match universal A:T mapping.");
 
     deliverySheet.getRange(deliverySheet.getLastRow() + 1, 1, deliveryRows.length, DELIVERY_LOG_COLUMN_COUNT).setValues(deliveryRows);
 
@@ -643,14 +627,14 @@ function getPendingBulkHolders() {
    Used immediately before opening / distributing a bundle.
 ========================================================== */
 
-function getBulkDistributionData(deliveryId, omitProducts) {
+function getBulkDistributionData(deliveryId, omitProducts, sheetRow) {
   deliveryId = String(deliveryId || "").trim();
   if (!deliveryId) throw new Error("Delivery ID is required.");
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DELIVERY_LOG);
   if (!sheet || sheet.getLastRow() < 2) throw new Error("No pending bundles found.");
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELIVERY_LOG_COLUMN_COUNT).getValues();
-  const index = rows.findIndex(function(row) {
-    return String(row[DELIVERY_IDX.DELIVERY_ID]).trim() === deliveryId &&
+  const index = rows.findIndex(function(row, rowIndex) {
+    return (!sheetRow || rowIndex + 2 === Number(sheetRow)) && String(row[DELIVERY_IDX.DELIVERY_ID]).trim() === deliveryId &&
       String(row[DELIVERY_IDX.RECEIVE_MODE]).trim().toUpperCase() === DELIVERY_RECEIVE_MODE.BULK &&
       [DELIVERY_STATUS.PENDING, DELIVERY_STATUS.PARTIAL].includes(String(row[DELIVERY_IDX.STATUS]).trim().toUpperCase());
   });

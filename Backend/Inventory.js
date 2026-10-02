@@ -42,6 +42,7 @@ function setInventoryCalculatedFields_(sheet, startRow, rowCount) {
   const deliveredFormulas = [];
   const soldFormulas = [];
   const returnedFormulas = [];
+  const adjustmentFormulas = [];
   const stockFormulas = [];
   const statusFormulas = [];
   for (let rowNumber = startRow; rowNumber < startRow + rowCount; rowNumber++) {
@@ -54,11 +55,14 @@ function setInventoryCalculatedFields_(sheet, startRow, rowCount) {
     returnedFormulas.push([
       '=IF(A' + rowNumber + '="","",-SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"SUPPLIER_RETURN"))'
     ]);
+    adjustmentFormulas.push([
+      '=IF(A' + rowNumber + '="","",SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"ADJUSTMENT"))'
+    ]);
     stockFormulas.push([
       '=IF(A' + rowNumber + '="","",SUMIF(\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$I$2:$I))'
     ]);
     statusFormulas.push([
-      '=IF(A' + rowNumber + '="","",IF(J' + rowNumber + '<0,"NEGATIVE STOCK",IF(J' + rowNumber + '=0,"SOLD OUT",IF(OR(E' + rowNumber + '="UNIQUE",UPPER(D' + rowNumber + ')="YOURFINDS"),"IN STOCK",IF(J' + rowNumber + '<=IFNA(XLOOKUP(A' + rowNumber + ',\'Product Master\'!$A$2:$A,\'Product Master\'!$G$2:$G),0),"LOW STOCK","IN STOCK")))))'
+      '=IF(A' + rowNumber + '="","",IF(K' + rowNumber + '<0,"NEGATIVE STOCK",IF(K' + rowNumber + '=0,"SOLD OUT",IF(OR(E' + rowNumber + '="UNIQUE",UPPER(D' + rowNumber + ')="YOURFINDS"),"IN STOCK",IF(K' + rowNumber + '<=IFNA(XLOOKUP(A' + rowNumber + ',\'Product Master\'!$A$2:$A,\'Product Master\'!$G$2:$G),0),"LOW STOCK","IN STOCK")))))'
     ]);
   }
 
@@ -69,12 +73,14 @@ function setInventoryCalculatedFields_(sheet, startRow, rowCount) {
       deliveredFormulas[i]=[inventorySummaryLookup_(startRow+i,'B')];
       soldFormulas[i]=[inventorySummaryLookup_(startRow+i,'C')];
       returnedFormulas[i]=[inventorySummaryLookup_(startRow+i,'D')];
-      stockFormulas[i]=[inventorySummaryLookup_(startRow+i,'E')];
+      adjustmentFormulas[i]=[inventorySummaryLookup_(startRow+i,'E')];
+      stockFormulas[i]=[inventorySummaryLookup_(startRow+i,'F')];
     }
   }
   sheet.getRange(startRow, INV_COL.TOTAL_DELIVERED, rowCount, 1).setFormulas(deliveredFormulas);
   sheet.getRange(startRow, INV_COL.TOTAL_SOLD, rowCount, 1).setFormulas(soldFormulas);
   sheet.getRange(startRow, INV_COL.TOTAL_RETURNED, rowCount, 1).setFormulas(returnedFormulas);
+  sheet.getRange(startRow, INV_COL.TOTAL_ADJUSTMENT, rowCount, 1).setFormulas(adjustmentFormulas);
   sheet.getRange(startRow, INV_COL.STOCK, rowCount, 1).setFormulas(stockFormulas);
   sheet.getRange(startRow, INV_COL.STOCK_STATUS, rowCount, 1).setFormulas(statusFormulas);
 }
@@ -177,6 +183,7 @@ function ensureCustomYourFindsInventoryItem_(item) {
     "",
     "",
     "",
+    "",
     sellingPrice,
     0,
     template.imageUrl || "",
@@ -217,13 +224,13 @@ function getFullInventory() {
   }
 
   const lowStockByCode = {};
-  getProductMaster().forEach(function(product) {
+  getProductMaster_().forEach(function(product) {
     lowStockByCode[String(product.productCode || "").trim()] = Number(product.lowStockAt) || 0;
   });
   const deliveryMetadataByCode = getInventoryDeliveryMetadataByCode_();
 
   /* ========================================================
-     READ INVENTORY A:P
+     READ INVENTORY A:Q
   ======================================================== */
 
   const data = sheet
@@ -632,7 +639,8 @@ function acceptYourFindsDelivery(
   plateNo,
   acceptedBy,
   quantities,
-  remarks
+  remarks,
+  preparedBy
 ) {
 
   try {
@@ -674,6 +682,9 @@ function acceptYourFindsDelivery(
 
     quantities =
       quantities || {};
+
+    preparedBy = String(preparedBy === undefined ? acceptedBy : preparedBy).trim();
+    if (!preparedBy) return { success: false, message: "Prepared By is required." };
 
     const customSizeLabel = String(quantities.CUSTOM_LABEL || "").trim().toUpperCase();
 
@@ -1063,7 +1074,7 @@ function acceptYourFindsDelivery(
 
 
       /* ======================================================
-         BUILD INVENTORY ROWS A:P
+         BUILD INVENTORY ROWS A:Q
       ====================================================== */
 
       const now =
@@ -1100,13 +1111,14 @@ function acceptYourFindsDelivery(
                 "",                                              // G Total Delivered formula
                 "",                                              // H Total Sold formula
                 "",                                              // I Total Returned formula
-                "",                                              // J Current Stock formula
-                "",                                              // K Stock Status formula
-                0,                                               // L Selling Price
-                0,                                               // M Original Price
-                "",                                              // N Image
-                now,                                             // O Created At
-                now                                              // P Updated At
+                "",                                              // J Total Adjustment formula
+                "",                                              // K Current Stock formula
+                "",                                              // L Stock Status formula
+                0,                                               // M Selling Price
+                0,                                               // N Original Price
+                "",                                              // O Image
+                now,                                             // P Created At
+                now                                              // Q Updated At
 
               ];
 
@@ -1117,7 +1129,7 @@ function acceptYourFindsDelivery(
               ) {
 
                 throw new Error(
-                  "YourFinds Inventory row does not match Inventory A:P mapping."
+                  "YourFinds Inventory row does not match Inventory A:Q mapping."
                 );
 
               }
@@ -1151,6 +1163,7 @@ function acceptYourFindsDelivery(
           now,
           driverName,
           plateNo,
+          preparedBy,
           acceptedBy,
           DELIVERY_TYPE.YOURFINDS,
           "YOURFINDS",
@@ -1168,7 +1181,7 @@ function acceptYourFindsDelivery(
         ];
 
         if (deliveryRow.length !== DELIVERY_LOG_COLUMN_COUNT) {
-          throw new Error("YourFinds Delivery row does not match universal A:S mapping.");
+          throw new Error("YourFinds Delivery row does not match universal A:T mapping.");
         }
 
         deliveryRows.push(deliveryRow);
@@ -1686,64 +1699,7 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
 ========================================================== */
 
 function generateYourFindsDeliveryId(deliveryDate) {
-  deliveryDate = String(deliveryDate || "").trim();
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate)) {
-    throw new Error("Invalid delivery date.");
-  }
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  const deliverySheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
-
-  if (!deliverySheet) {
-    throw new Error("Delivery Log sheet not found.");
-  }
-
-  const datePart = deliveryDate.replace(/-/g, "");
-
-  const prefix = "YFD-" + datePart + "-";
-
-  let highestSequence = 0;
-
-  const lastRow = deliverySheet.getLastRow();
-
-  if (lastRow >= 2) {
-    const existingIds = deliverySheet
-      .getRange(2, DELIVERY_COL.DELIVERY_ID, lastRow - 1, 1)
-      .getDisplayValues()
-      .flat();
-
-    existingIds.forEach(function (value) {
-      const deliveryId = String(value || "").trim();
-
-      if (!deliveryId.startsWith(prefix)) {
-        return;
-      }
-
-      const sequenceText = deliveryId.substring(prefix.length);
-
-      if (!/^\d{3}$/.test(sequenceText)) {
-        return;
-      }
-
-      const sequence = parseInt(sequenceText, 10);
-
-      if (sequence > highestSequence) {
-        highestSequence = sequence;
-      }
-    });
-  }
-
-  const nextSequence = highestSequence + 1;
-
-  if (nextSequence > 999) {
-    throw new Error(
-      "Maximum of 999 YourFinds deliveries reached for this date."
-    );
-  }
-
-  return prefix + String(nextSequence).padStart(3, "0");
+  return generateDeliveryIdentifiers(DELIVERY_TYPE.YOURFINDS, deliveryDate).deliveryId;
 }
 
 /* ==========================================================

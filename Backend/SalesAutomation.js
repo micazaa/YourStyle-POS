@@ -266,6 +266,20 @@ function processPendingSalesLogRows() {
   return processSalesRows_(sheet, pending);
 }
 
+function readSalesRowGroups_(sheet, rowNumbers) {
+  const numbers = Array.from(new Set(rowNumbers)).sort((a, b) => a - b);
+  const rows = new Map();
+  for (let start = 0; start < numbers.length;) {
+    let end = start + 1;
+    // Bound each read and avoid scanning gaps between sparse pending rows.
+    while (end < numbers.length && end - start < 200 && numbers[end] === numbers[end - 1] + 1) end++;
+    const values = sheet.getRange(numbers[start], 1, end - start, SALES_LOG_COLUMN_COUNT).getValues();
+    values.forEach((row, index) => rows.set(numbers[start] + index, row));
+    start = end;
+  }
+  return rows;
+}
+
 function processSalesRows_(sheet, rowNumbers) {
   if (!rowNumbers.length) return { success: true, processed: 0, errors: 0 };
   const lock = LockService.getScriptLock();
@@ -275,8 +289,9 @@ function processSalesRows_(sheet, rowNumbers) {
 
   try {
     const movementIds = salesMovementLineIds_();
-    rowNumbers.forEach(function(rowNumber) {
-      const row = sheet.getRange(rowNumber, 1, 1, SALES_LOG_COLUMN_COUNT).getValues()[0];
+    const rows = readSalesRowGroups_(sheet, rowNumbers);
+    Array.from(new Set(rowNumbers)).forEach(function(rowNumber) {
+      const row = rows.get(rowNumber);
       const source = String(row[SALES_IDX.ENTRY_SOURCE] || "").trim().toUpperCase();
       const syncStatus = String(row[SALES_IDX.SYNC_STATUS] || "").trim().toUpperCase();
       if (source !== "MANUAL" || (syncStatus !== "PENDING" && syncStatus !== "RETRY")) return;

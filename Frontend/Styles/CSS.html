@@ -397,6 +397,9 @@
   }
 
   .sidebar-avatar {
+    border: 0;
+    padding: 0;
+    cursor: pointer;
     width: 56px;
     height: 56px;
     border-radius: 50%;
@@ -812,6 +815,13 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 /* Alignment follows each numeric column, including its sort button. */
 .table th.text-end button {text-align:right;}
 .table th.text-center button {text-align:center;}
+
+#deliveriesTableBody tr.delivery-row-highlight > td {
+  background-color: var(--pink-light);
+  --bs-table-bg-state: var(--pink-light);
+  --bs-table-bg-type: var(--pink-light);
+  --bs-table-accent-bg: var(--pink-light);
+}
 
 .inventory-workspace-nav .active {background:var(--pink-main);color:white;}
 

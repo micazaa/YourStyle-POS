@@ -1,0 +1,164 @@
+<div id="deliverySummaryModal" class="generic-overlay-blur" style="display:none;">
+  <div class="custom-popup-card delivery-modal-card">
+    <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3"><h4 id="deliverySummaryTitle" class="fw-bold mb-0">Delivery Summary</h4><button type="button" class="btn-close" aria-label="Close summary" onclick="closeModal('deliverySummaryModal')"></button></div>
+    <div id="deliverySummaryBreakdown" class="row g-3 mb-3"></div>
+    <div id="deliverySummaryMessage" class="small text-muted mb-3" aria-live="polite"></div>
+    <div id="deliverySummaryTable" class="table-responsive"></div>
+    <section id="deliveryReceiptHistory" hidden><button type="button" class="btn btn-outline-secondary mb-3" onclick="closeDeliveryReceiptHistory()">← Back to Items Received</button><h5 id="deliveryReceiptTitle" class="mb-3"></h5><div id="deliveryReceiptTable" class="table-responsive"></div></section>
+  </div>
+</div>
+<script>
+var deliverySummaryVisible = [];
+var deliverySummaryKind = 'deliveries';
+var deliveryReceiptKey = '';
+var deliverySummarySort = {};
+var deliverySummaryBundles = [];
+
+function deliverySummaryData() {
+  const entry = pageReadCache.get('deliverySummary');
+  const owner = JSON.stringify([currentEmployee, typeof currentCashier === 'undefined' ? '' : currentCashier]);
+  return entry && entry.owner === owner ? entry.data : undefined;
+}
+function loadDeliverySummaryData() {
+  const read = beginPageRead('deliverySummary', '', true);
+  if (!read.shouldFetch) return;
+  google.script.run.withSuccessHandler(result => {
+    if (!read.current()) return;
+    if (!result || !result.success) { read.fail(); deliverySummaryFailure(); return; }
+    read.save(result);
+    renderDeliverySummaryCards();
+    if (document.getElementById('deliverySummaryModal').style.display === 'flex') renderDeliverySummary();
+  }).withFailureHandler(() => { if (read.current()) { read.fail(); deliverySummaryFailure(); } }).getDeliverySummaryData();
+}
+function deliverySummaryFailure() {
+  document.getElementById('deliveryBundlesHint').textContent = 'Unable to load · Click to retry';
+  document.getElementById('deliverySummaryMessage').textContent = 'Unable to load received items. Reopen this summary to retry.';
+}
+function filteredDeliverySummaryData() {
+  const data = deliverySummaryData();
+  if (!data) return null;
+  const ids = new Set(deliverySummaryVisible.map(d => String(d.deliveryId)));
+  return {receipts:data.receipts.filter(r => ids.has(r.deliveryId)), bundles:data.bundles.filter(b => ids.has(b.deliveryId))};
+}
+function groupDeliveryReceipts(receipts) {
+  const groups = new Map();
+  receipts.forEach(receipt => {
+    if (!groups.has(receipt.productKey)) groups.set(receipt.productKey, {...receipt, quantity:0});
+    groups.get(receipt.productKey).quantity += receipt.quantity;
+  });
+  return Array.from(groups.values());
+}
+function renderDeliverySummaryCards() {
+  const style = deliverySummaryVisible.filter(d => d.deliveryType === 'YOURSTYLE').length;
+  const finds = deliverySummaryVisible.filter(d => d.deliveryType === 'YOURFINDS').length;
+  document.getElementById('deliveryCountValue').textContent = deliverySummaryVisible.length + ' deliveries';
+  document.getElementById('deliveryCountHint').textContent = style + ' YourStyle · ' + finds + ' YourFinds';
+  const data = filteredDeliverySummaryData();
+  document.getElementById('deliveryBundlesValue').textContent = data ? data.bundles.filter(b => b.status === 'Unopened').length + ' unopened' : '—';
+  document.getElementById('deliveryBundlesHint').textContent = data ? data.bundles.filter(b => b.status === 'In progress').length + ' distributions in progress' : 'Loading bundles…';
+  document.getElementById('deliveryItemsValue').textContent = data ? data.receipts.reduce((n,r) => n + r.quantity,0) + ' pcs' : '—';
+}
+function openDeliverySummary(kind) {
+  deliverySummaryKind = kind;
+  deliveryReceiptKey = '';
+  document.getElementById('deliverySummaryModal').style.display = 'flex';
+  renderDeliverySummary();
+  loadDeliverySummaryData();
+}
+function deliverySummaryStats(values) {
+  return values.map(([label,value]) => `<div class="col"><div class="border rounded p-3 h-100"><div class="small text-muted">${escapeDeliveriesHtml(label)}</div><strong class="fs-4">${escapeDeliveriesHtml(value)}</strong></div></div>`).join('');
+}
+function deliverySummarySortValue(row,key) {
+  if (key === 'categories') return Object.keys(row.quantities || {}).concat(row.bulkTypes || []).join(' ');
+  if (key === 'driverName') return String(row.driverName || '') + ' ' + String(row.plateNo || '');
+  if (key === 'deliveryDate') return normalizeDeliveryFilterDate(row.deliveryDate) || '';
+  if (['totalQty','quantity','bundleNo'].includes(key)) return Number(row[key]) || 0;
+  return String(row[key] || '');
+}
+function sortDeliveryRows(rows, table) {
+  const sort = deliverySummarySort[table];
+  if (!sort) return rows.slice();
+  return rows.slice().sort((a,b) => {
+    const x = deliverySummarySortValue(a,sort.key), y = deliverySummarySortValue(b,sort.key);
+    return (typeof x === 'number' ? x-y : x.localeCompare(y,undefined,{numeric:true,sensitivity:'base'})) * sort.direction;
+  });
+}
+function setDeliverySort(table,key) {
+  const old = deliverySummarySort[table];
+  deliverySummarySort[table] = {key:key,direction:old && old.key === key ? -old.direction : 1};
+  if (table === 'main') filterDeliveriesPage(); else renderDeliverySummary();
+}
+function updateDeliverySortHeaders() {
+  const sort = deliverySummarySort.main;
+  document.querySelectorAll('[data-delivery-sort]').forEach(header => {
+    const selected = sort && sort.key === header.dataset.deliverySort;
+    header.setAttribute('aria-sort',selected ? sort.direction === 1 ? 'ascending' : 'descending' : 'none');
+    header.querySelector('.sort-marker').textContent = selected ? sort.direction === 1 ? '↑' : '↓' : '↕';
+  });
+}
+function deliverySummaryIcon(kind) {
+  const path = kind === 'history' ? '<path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7M12 7v5l3 2"/>' : '<path d="M7 17 17 7M7 7h10v10"/>';
+  return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">'+path+'</svg>';
+}
+function deliverySummaryAction(attribute,value,label,icon) {
+  return `<button type="button" class="btn btn-sm btn-outline-secondary" ${attribute}="${escapeDeliveriesHtml(value)}" title="${escapeDeliveriesHtml(label)}" aria-label="${escapeDeliveriesHtml(label)}">${deliverySummaryIcon(icon)}</button>`;
+}
+function deliverySummaryTable(table,columns,rows,action) {
+  const sort = deliverySummarySort[table];
+  const heads = columns.map(([key,label]) => {
+    const selected = sort && sort.key === key;
+    return `<th class="${key === 'quantity' ? 'text-center' : ''}" aria-sort="${selected ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'}"><button type="button" class="btn btn-sm p-0 fw-semibold" data-summary-table="${table}" data-summary-key="${key}">${label} ${selected ? sort.direction === 1 ? '↑' : '↓' : '↕'}</button></th>`;
+  }).join('');
+  const body = sortDeliveryRows(rows,table).map(row => '<tr>'+columns.map(([key]) => `<td class="${key === 'quantity' ? 'text-center' : ['totalQty','bundleNo'].includes(key) ? 'text-end' : ''}">${escapeDeliveriesHtml(row[key] ?? '')}</td>`).join('')+(action?'<td class="text-start">'+action(row)+'</td>':'')+'</tr>').join('');
+  return `<table class="table table-hover align-middle"><thead class="table-light"><tr>${heads}${action?'<th class="text-start">Actions</th>':''}</tr></thead><tbody>${body || `<tr><td colspan="${columns.length+(action?1:0)}" class="text-muted text-center py-4">No matching records.</td></tr>`}</tbody></table>`;
+}
+function renderDeliverySummary() {
+  const kind = deliverySummaryKind, data = filteredDeliverySummaryData();
+  document.getElementById('deliverySummaryTitle').textContent = {deliveries:'Delivery Count',bundles:'Bundles to Open',items:'Items Received'}[kind];
+  document.getElementById('deliveryReceiptHistory').hidden = true;
+  const breakdown = document.getElementById('deliverySummaryBreakdown'), table = document.getElementById('deliverySummaryTable'), message = document.getElementById('deliverySummaryMessage');
+  table.hidden = false;
+  message.textContent = 'Matches the delivery page filters.';
+  if (kind === 'deliveries') {
+    breakdown.innerHTML = deliverySummaryStats(['YOURSTYLE','YOURFINDS'].map(type => [type==='YOURSTYLE'?'YourStyle':'YourFinds',deliverySummaryVisible.filter(d=>d.deliveryType===type).length+' deliveries']));
+    table.innerHTML = deliverySummaryTable('count',[['deliveryId','Delivery'],['deliveryDate','Date'],['deliveryType','Type'],['status','Status']],deliverySummaryVisible,row=>deliverySummaryAction('data-delivery-jump',row.deliveryId,'Go to delivery','jump'));
+    return;
+  }
+  if (!data) { breakdown.innerHTML='';table.innerHTML=loadingIndicator('Loading summary…');return; }
+  if (kind === 'bundles') {
+    deliverySummaryBundles = data.bundles;
+    breakdown.innerHTML=deliverySummaryStats(['Unopened','In progress'].map(status=>[status,data.bundles.filter(b=>b.status===status).length+' bundles']));
+    table.innerHTML=deliverySummaryTable('bundles',[['deliveryId','Delivery'],['code','Bundle code'],['category','Type'],['bundleNo','Bundle #'],['status','Status']],data.bundles,row=>deliverySummaryAction('data-summary-bundle',data.bundles.indexOf(row),row.status==='Unopened'?'Open distribution':'Continue distribution','jump'));
+    return;
+  }
+  breakdown.innerHTML=deliverySummaryStats(['PINS','OTHERS','YOURFINDS'].map(category=>[category==='YOURFINDS'?'YourFinds':category==='OTHERS'?'Others':'PINS',data.receipts.filter(r=>r.category===category).reduce((n,r)=>n+r.quantity,0)+' pcs']));
+  message.textContent='Actual received pieces.';
+  table.innerHTML=deliverySummaryTable('items',[['category','Category'],['name','Product / size'],['quantity','Received pcs']],groupDeliveryReceipts(data.receipts),row=>deliverySummaryAction('data-receipt-history',row.productKey,'View receipt history','history'));
+  if (deliveryReceiptKey) {
+    table.hidden = true;
+    const receipts=data.receipts.filter(r=>r.productKey===deliveryReceiptKey);
+    document.getElementById('deliveryReceiptHistory').hidden=false;
+    document.getElementById('deliveryReceiptTitle').textContent=(receipts[0]?.name || 'Item')+' · '+receipts.reduce((n,r)=>n+r.quantity,0)+' pcs received';
+    document.getElementById('deliveryReceiptTable').innerHTML=deliverySummaryTable('receipts',[['date','Delivery date'],['deliveryId','Delivery'],['quantity','Received pcs']],receipts,row=>deliverySummaryAction('data-delivery-jump',row.deliveryId,'Go to delivery','jump'));
+  }
+}
+function closeDeliveryReceiptHistory() { deliveryReceiptKey='';renderDeliverySummary(); }
+function jumpToDeliveryRow(deliveryId) {
+  closeModal('deliverySummaryModal');
+  ['deliveriesCategoryFilter','deliveriesSearch','deliveriesFromDate','deliveriesToDate','deliveriesStatusFilter'].forEach(id=>{const input=document.getElementById(id);if(input)input.value='';});
+  showPage('deliveriesPage');
+  filterDeliveriesPage();
+  document.querySelectorAll('#deliveriesTableBody tr[data-delivery-id]').forEach(row=>{
+    const selected=row.dataset.deliveryId===deliveryId;
+    row.classList.toggle('delivery-row-highlight',selected);
+    if(selected){row.scrollIntoView({block:'center'});row.focus({preventScroll:true});}
+  });
+}
+document.getElementById('deliverySummaryModal').addEventListener('click',event=>{
+  const button=event.target.closest('button');if(!button)return;
+  if(button.dataset.summaryKey)setDeliverySort(button.dataset.summaryTable,button.dataset.summaryKey);
+  else if(button.dataset.deliveryJump)jumpToDeliveryRow(button.dataset.deliveryJump);
+  else if(button.dataset.receiptHistory){deliveryReceiptKey=button.dataset.receiptHistory;renderDeliverySummary();}
+  else if(button.dataset.summaryBundle!==undefined){const bundle=deliverySummaryBundles[Number(button.dataset.summaryBundle)];if(!bundle)return;closeModal('deliverySummaryModal');openBulkDistributionModal(bundle.deliveryId,bundle.sheetRow,getCurrentDeliveryEmployeeName(),bundle.bundleNo);}
+});
+</script>

@@ -1,0 +1,23 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+test('delivery view reuses results, deduplicates requests, and refetches after invalidation', async () => {
+  const callbacks = [];
+  const nodes = new Map();
+  const c = vm.createContext({pageReadCache:new Map(),currentEmployee:{name:'A'},loadingIndicator:()=>'',document:{getElementById(id){if(!nodes.has(id))nodes.set(id,{style:{}});return nodes.get(id);}},google:{script:{run:{withSuccessHandler(fn){callbacks.push(fn);return this;},withFailureHandler(){return this;},getDeliveryDetails(){}}}}});
+  vm.runInContext(fs.readFileSync('Frontend/Modals/DeliveryReportModal.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
+  let renders=0;
+  c.renderStandardDeliveryDetails=()=>{renders++;};
+  c.viewDeliveryDetails('D1');c.viewDeliveryDetails('D1');
+  assert.equal(callbacks.length,1);
+  callbacks[0]({id:'D1'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(renders,1);
+  c.closeStandardDeliveryDetails();c.viewDeliveryDetails('D1');
+  assert.equal(callbacks.length,1);assert.equal(renders,2);
+  c.pageReadCache.delete('standardDeliveryDetails');c.viewDeliveryDetails('D1');
+  assert.equal(callbacks.length,2);
+  c.currentEmployee={name:'B'};c.viewDeliveryDetails('D1');
+  assert.equal(callbacks.length,3);
+});

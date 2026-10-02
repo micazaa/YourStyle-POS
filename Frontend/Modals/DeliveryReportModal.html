@@ -1,25 +1,61 @@
-<dialog id="generalDeliveryDetails" style="max-width:700px;width:95%;border:1px solid #ddd;border-radius:12px;padding:24px">
-  <h5 class="fw-bold">Delivery Details</h5>
-  <div id="generalDeliveryDetailsBody" class="mb-4" style="white-space:pre-wrap"></div>
-  <div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary flex-fill" onclick="document.getElementById('generalDeliveryDetails').close()">Close</button><button type="button" class="btn btn-pink flex-fill" onclick="generateBlankA4Report('Delivery',selectedDeliveryReportId)">Print Delivery Report</button></div>
-</dialog>
+<div id="standardDeliveryDetails" class="generic-overlay-blur" style="display:none">
+ <div class="custom-popup-card delivery-modal-card" style="max-width:760px">
+  <div class="d-flex justify-content-between border-bottom pb-3 mb-4"><div><h5 class="fw-bold">Delivery Details</h5><strong id="standardDeliveryId"></strong></div><button type="button" class="btn-close" aria-label="Close" onclick="closeStandardDeliveryDetails()"></button></div>
+  <div id="standardDeliveryContent"></div>
+  <div class="d-flex gap-2 mt-4"><button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeStandardDeliveryDetails()">Close</button><button type="button" class="btn btn-pink flex-fill" onclick="generateBlankA4Report('Delivery',selectedDeliveryReportId)">Print Report</button></div>
+ </div>
+</div>
 <script>
-let selectedDeliveryReportId = '';
+let selectedDeliveryReportId = '', deliveryViewRequest = 0, deliveryViewData = null;
+function closeStandardDeliveryDetails(){++deliveryViewRequest;document.getElementById('standardDeliveryDetails').style.display='none';}
 function viewDeliveryDetails(deliveryId) {
-  selectedDeliveryReportId = String(deliveryId || '');
-  const delivery = deliveriesPageData.find(row=>String(row.deliveryId)===selectedDeliveryReportId);
-  if (!delivery) return showNotificationToast('Delivery not found. Refresh the table.',true);
-  if (String(delivery.deliveryType).toUpperCase()==='YOURFINDS') return viewYourFindsDeliveryDetails(deliveryId);
-  document.getElementById('generalDeliveryDetailsBody').textContent = [
-    delivery.deliveryNo || delivery.deliveryId,
-    'Date: '+(delivery.deliveryDate || '—'),
-    'Driver / Plate: '+[delivery.driverName,delivery.plateNo].filter(Boolean).join(' / '),
-    'Accepted by: '+(delivery.acceptedBy || '—'),
-    'Status: '+(delivery.status || '—'),
-    ...Object.entries(delivery.quantities || {}).map(([name,qty])=>name+': '+qty+' pcs'),
-    ...(delivery.hasBulk ? ['Bundles: '+(delivery.bulkBundleQty || 0),'Actual: '+(delivery.bulkActualQuantity || 0)+' pcs','Estimate: '+(delivery.bulkEstimatedQuantity || 0)+' pcs'] : [])
-  ].join('\n');
-  document.getElementById('generalDeliveryDetails').showModal();
+ selectedDeliveryReportId=String(deliveryId||'');
+ const request=++deliveryViewRequest,owner=currentEmployee;
+ document.getElementById('standardDeliveryId').textContent=selectedDeliveryReportId;
+ document.getElementById('standardDeliveryContent').innerHTML=loadingIndicator('Loading delivery…');
+ document.getElementById('standardDeliveryDetails').style.display='flex';
+ const ownerKey=JSON.stringify(owner);
+ let cache=pageReadCache.get('standardDeliveryDetails');
+ if(!cache||cache.owner!==ownerKey){cache={owner:ownerKey,entries:new Map()};pageReadCache.set('standardDeliveryDetails',cache);}
+ let entry=cache.entries.get(selectedDeliveryReportId);
+ if(entry&&entry.data){deliveryViewData=entry.data;renderStandardDeliveryDetails();return;}
+ if(!entry){
+  const id=selectedDeliveryReportId;
+  entry={};cache.entries.set(id,entry);
+  entry.promise=new Promise((resolve,reject)=>{
+   google.script.run.withSuccessHandler(data=>{entry.data=data;resolve(data);}).withFailureHandler(error=>{cache.entries.delete(id);reject(error);}).getDeliveryDetails(id);
+  });
+ }
+ entry.promise.then(data=>{if(request!==deliveryViewRequest||currentEmployee!==owner||!currentEmployee||pageReadCache.get('standardDeliveryDetails')!==cache)return;deliveryViewData=data;renderStandardDeliveryDetails();}).catch(error=>{if(request!==deliveryViewRequest||currentEmployee!==owner)return;document.getElementById('standardDeliveryContent').textContent=error.message||String(error);});
+
+}
+function renderStandardDeliveryDetails(){
+ const data=deliveryViewData,body=document.getElementById('standardDeliveryContent');body.replaceChildren();
+ const meta=document.createElement('div');meta.className='row g-3 mb-4';
+ [['Delivery Date',data.date],['Status',data.status],['Driver',data.driver],['Plate No.',data.plate],['Accepted By',data.acceptedBy],['Category',data.category]].forEach(([label,value])=>{const field=document.createElement('div');field.className='col-6';const name=document.createElement('div');name.className='text-muted small';name.textContent=label;const text=document.createElement('div');text.className='fw-semibold';text.textContent=value||'—';if(label==='Status'){text.innerHTML=buildDeliveryStatusBadge(value);}field.append(name,text);meta.append(field);});body.append(meta);
+ const summary=document.createElement('div');summary.className='bg-light rounded p-3 mb-4';
+ const heading=document.createElement('div');heading.className='d-flex justify-content-between mb-3 fw-semibold';heading.innerHTML='<span>Quantity Received</span><span></span>';heading.lastElementChild.textContent=data.bundleCount?data.bundleCount+' bundles':'Total: '+data.actual+' pcs';summary.append(heading);
+ const counts=document.createElement('div');counts.className='d-flex gap-3 flex-wrap';
+ const entries=data.bundleCount?[['Estimated Pieces',data.estimated],['Actual Distributed',data.bulkActual],[data.status==='COMPLETED'?'Final Variance':'Current Variance',data.bulkActual-data.estimated]]:Object.entries(data.counts);
+ entries.forEach(([label,quantity])=>{const box=document.createElement('div');box.className='border rounded bg-white px-3 py-2';const title=document.createElement('div');title.className='small text-muted';title.textContent=label;const count=document.createElement('strong');count.className='fs-4';count.textContent=quantity;box.append(title,count);counts.append(box);});summary.append(counts);body.append(summary);
+ const headingItems=document.createElement('h6');headingItems.className='fw-bold';headingItems.textContent=data.bundleCount?'Distributed Items':'Delivered Items';body.append(headingItems);
+ const tabs=document.createElement('div');tabs.className='delivery-mode-toggle btn-group flex-wrap mb-3';tabs.setAttribute('role','group');tabs.setAttribute('aria-label','Delivery item groups');
+ const items=document.createElement('div');
+ data.groups.forEach((group,index)=>{const button=document.createElement('button');button.type='button';button.className='btn btn-sm btn-outline-pink';button.textContent=group.id==='direct'?'Direct':(new Set(data.groups.filter(g=>g.type).map(g=>g.type)).size>1?group.type+' · ':'')+group.label;button.onclick=()=>{tabs.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));renderStandardDeliveryItems(group,items);};tabs.append(button);if(index===0){button.setAttribute('aria-pressed','true');renderStandardDeliveryItems(group,items);}});
+ if(data.bundleCount)body.append(tabs);body.append(items);
+}
+function renderStandardDeliveryItems(group,container){
+ container.replaceChildren();
+ if(group.id!=='direct'){const summary=document.createElement('div');summary.className='small text-muted mb-2';summary.textContent=(group.code?'Bundle code: '+group.code+' · ':'')+'Actual: '+group.items.reduce((sum,item)=>sum+item.quantity,0)+' pcs';container.append(summary);}
+ if(!group.items.length){const empty=document.createElement('div');empty.className='text-muted text-center py-4';empty.textContent='No products distributed from this bundle yet.';container.append(empty);}
+ group.items.forEach(item=>{
+  const row=document.createElement('div');row.className='d-flex align-items-center gap-3 border rounded p-2 mb-2';
+  if(item.imageUrl&&/^https?:\/\//i.test(item.imageUrl)){const photo=document.createElement('button');photo.type='button';photo.className='btn p-0';photo.setAttribute('aria-label','View '+item.name+' image');const image=document.createElement('img');image.loading='lazy';image.decoding='async';image.src=item.imageUrl;image.alt=item.name;image.style.cssText='width:56px;height:56px;object-fit:cover;border-radius:6px';photo.append(image);photo.onclick=()=>openInventoryImageViewer(item);row.append(photo);}else{const placeholder=document.createElement('span');placeholder.className='small text-muted bg-light rounded p-2';placeholder.style.cssText='width:56px;flex-shrink:0';placeholder.textContent='No Image';row.append(placeholder);}
+  const info=document.createElement('div');info.className='flex-grow-1';info.style.minWidth='0';const name=document.createElement('strong');name.textContent=item.name;const code=document.createElement('div');code.className='small text-muted';code.textContent=item.code;info.append(name,code);
+  if(deliveryViewData.yourFinds){const size=document.createElement('div');size.className='small text-muted';size.textContent=item.status==='INCOMPLETE'?'Details not completed':item.size;info.append(size);}row.append(info);
+  const qty=document.createElement('div');qty.className='text-end';qty.textContent=item.quantity+' pcs';
+  if(deliveryViewData.yourFinds){const badge=document.createElement('div');badge.innerHTML=buildInventoryStatusBadge(item.status);qty.append(badge);}row.append(qty);container.append(row);
+ });
 }
 function blankA4PdfBytes() {
   // PDF dimensions are points: 210 × 297 mm. The content stream is intentionally empty.
