@@ -181,6 +181,7 @@ function loadDeliveriesPage(forceRefresh) {
   if (forceRefresh) { pageReadCache.delete('deliveries'); pageReadCache.delete('deliverySummary'); }
   const refresh = beginPageRead('deliveries', '', true);
   if (refresh.cached !== undefined) {
+    if (deliveriesPageLoaded && deliveriesPageData === refresh.cached) return;
     deliveriesPageData = refresh.cached;
     filterDeliveriesPage();
   }
@@ -264,6 +265,12 @@ function loadDeliveriesPage(forceRefresh) {
           )
             ? result.deliveries
             : [];
+
+
+        if (result.summary && result.summary.success) {
+          const summaryRead = beginPageRead('deliverySummary', '', true);
+          if (summaryRead.shouldFetch) summaryRead.save(result.summary);
+        }
 
 
         refresh.save(deliveriesPageData);
@@ -355,7 +362,6 @@ function invalidateDeliveriesCache() {
 function refreshDeliveriesPage() {
 
   pageReadCache.delete('inventory');
-  loadInventoryPage();
 
   invalidateDeliveriesCache();
 

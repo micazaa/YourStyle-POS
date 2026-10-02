@@ -149,16 +149,14 @@ function getInventoryMovementHistoryByCode(code) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
   if (!sheet || sheet.getLastRow() < 2) return { success: true, movements: [] };
-  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, MOVEMENT_LOG_COLUMN_COUNT).getValues();
   const display = sheet.getRange(2, 1, sheet.getLastRow() - 1, MOVEMENT_LOG_COLUMN_COUNT).getDisplayValues();
   const movements = [];
-  values.forEach(function(row, i) {
-    const d = display[i];
+  display.forEach(function(d) {
     if (String(d[MOVE_IDX.CODE] || "").trim() !== code) return;
     movements.push({
       movementId: String(d[MOVE_IDX.MOVEMENT_ID] || ""), timestamp: String(d[MOVE_IDX.TIMESTAMP] || ""), code: code,
-      type: String(d[MOVE_IDX.TYPE] || ""), qtyChange: Number(row[MOVE_IDX.QTY_CHANGE]) || 0,
-      stockBefore: Number(row[MOVE_IDX.STOCK_BEFORE]) || 0, stockAfter: Number(row[MOVE_IDX.STOCK_AFTER]) || 0,
+      type: String(d[MOVE_IDX.TYPE] || ""), qtyChange: Number(String(d[MOVE_IDX.QTY_CHANGE] || "").replace(/,/g, "")) || 0,
+      stockBefore: Number(String(d[MOVE_IDX.STOCK_BEFORE] || "").replace(/,/g, "")) || 0, stockAfter: Number(String(d[MOVE_IDX.STOCK_AFTER] || "").replace(/,/g, "")) || 0,
       referenceId: String(d[MOVE_IDX.REFERENCE_ID] || ""), sourceLineId: String(d[MOVE_IDX.SOURCE_LINE_ID] || ""), employee: String(d[MOVE_IDX.EMPLOYEE] || ""),
       item: String(d[MOVE_IDX.ITEM] || ""), reason: String(d[MOVE_IDX.REASON] || ""),
       source: String(d[MOVE_IDX.SOURCE] || ""), bundleNo: String(d[MOVE_IDX.BUNDLE_NO] || ""),
@@ -415,19 +413,19 @@ function readYourFindsCostBySize_() {
   });
   return map;
 }
-// Optional Q column; leave the existing A:P inventory schema unchanged.
+// Optional R column; leave the existing A:Q inventory schema unchanged.
 function customCostColumn_(sheet, create) {
-  const column = 17;
+  const column = 18;
   if (sheet.getMaxColumns() < column) {
     if (!create) return null;
     sheet.insertColumnsAfter(sheet.getMaxColumns(), column - sheet.getMaxColumns());
   }
   const header = String(sheet.getRange(1, column).getValue() || '').trim();
-  if (header && header !== 'Custom Cost Price') throw new Error('Inventory column Q is already used. Custom Cost Price requires a free column Q.');
+  if (header && header !== 'Custom Cost Price') throw new Error('Inventory column R is already used. Custom Cost Price requires a free column R.');
   if (!header) {
     if (!create) return null;
     if (sheet.getLastRow() > 1 && sheet.getRange(2, column, sheet.getLastRow()-1, 1).getValues().some(row => row[0] !== '' && row[0] !== null)) {
-      throw new Error('Inventory column Q contains data. Move it before adding Custom Cost Price.');
+      throw new Error('Inventory column R contains data. Move it before adding Custom Cost Price.');
     }
     sheet.getRange(1, column).setValue('Custom Cost Price');
   }

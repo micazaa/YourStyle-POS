@@ -1,12 +1,54 @@
 /* ==========================================================
    UNIVERSAL DELIVERY HISTORY - FAST READER
 
-   Reads:
-   - Delivery Log ONCE
-   - Inventory ONCE
+   Reads each source once and returns history plus summary.
 
    Used by Deliveries Page only.
 ========================================================== */
+
+function readDeliveryPageRows_(ss, sheetName, width, displayValues) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const range = sheet.getRange(2, 1, lastRow - 1, width);
+  return displayValues ? range.getDisplayValues() : range.getValues();
+}
+
+function buildYourFindsDeliveryInventory_(inventoryRows, movementRows) {
+  const deliveryByCode = {};
+  movementRows.forEach(function(row) {
+    const source = String(row[MOVE_IDX.SOURCE] || "").trim().toUpperCase();
+    const deliveryId = String(row[MOVE_IDX.REFERENCE_ID] || "").trim();
+    const code = String(row[MOVE_IDX.CODE] || "").trim();
+    if (source === INVENTORY_MOVEMENT_SOURCE.DELIVERY && deliveryId && code) {
+      deliveryByCode[code] = deliveryId;
+    }
+  });
+
+  const summaries = {};
+  inventoryRows.forEach(function(row) {
+    const code = String(row[INV_IDX.CODE] || "").trim();
+    const deliveryId = deliveryByCode[code] || "";
+    if (!deliveryId) return;
+    const category = String(row[INV_IDX.CATEGORY] || "").trim().toUpperCase();
+    const inventoryType = String(row[INV_IDX.INVENTORY_TYPE] || "").trim().toUpperCase();
+    if (category !== "YOURFINDS" && inventoryType !== INVENTORY_TYPE.UNIQUE) return;
+    if (!summaries[deliveryId]) summaries[deliveryId] = { quantities: {}, totalQty: 0, codes: [] };
+    const size = String(row[INV_IDX.SIZE] || "UNKNOWN").trim().toUpperCase() || "UNKNOWN";
+    summaries[deliveryId].quantities[size] = (summaries[deliveryId].quantities[size] || 0) + 1;
+    summaries[deliveryId].totalQty++;
+    if (code) summaries[deliveryId].codes.push(code);
+  });
+  return summaries;
+}
+
+function formatDeliveryHistoryTimestamp_(value) {
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+  }
+  return String(value || "").trim();
+}
 
 function getDeliveryHistoryFast() {
   try {
@@ -17,116 +59,33 @@ function getDeliveryHistoryFast() {
       throw new Error("Delivery Log sheet not found.");
     }
 
-    if (deliverySheet.getLastRow() < 2) {
+    const deliveryRowCount = deliverySheet.getLastRow() - 1;
+    if (deliveryRowCount < 1) {
       return {
         success: true,
         count: 0,
-        deliveries: []
+        deliveries: [],
+        summary: { success: true, receipts: [], bundles: [] }
       };
     }
-
-    /* ========================================================
-       INVENTORY - ONE READ
-
-       Build all YourFinds summaries in memory.
-    ======================================================== */
-
-    const yourFindsInventory = {};
-
-    getFullInventory().forEach(function(item) {
-        const deliveryId =
-          String(
-            item.deliveryId || ""
-          ).trim();
-
-        if (!deliveryId) return;
-
-        const category =
-          String(
-            item.category || ""
-          )
-            .trim()
-            .toUpperCase();
-
-        const inventoryType =
-          String(
-            item.inventoryType || ""
-          )
-            .trim()
-            .toUpperCase();
-
-        if (
-          category !== "YOURFINDS" &&
-          inventoryType !== INVENTORY_TYPE.UNIQUE
-        ) {
-          return;
-        }
-
-        if (!yourFindsInventory[deliveryId]) {
-          yourFindsInventory[deliveryId] = {
-            quantities: {},
-            totalQty: 0,
-            codes: []
-          };
-        }
-
-        const summary =
-          yourFindsInventory[deliveryId];
-
-        const size =
-          String(
-            item.size || "UNKNOWN"
-          )
-            .trim()
-            .toUpperCase() ||
-          "UNKNOWN";
-
-        const code =
-          String(
-            item.code || ""
-          ).trim();
-
-        summary.quantities[size] =
-          (summary.quantities[size] || 0) + 1;
-
-        summary.totalQty++;
-
-        if (code) {
-          summary.codes.push(code);
-        }
-      });
-
-    /* ========================================================
-       DELIVERY LOG - ONE READ
-    ======================================================== */
-
-    const rowCount =
-      deliverySheet.getLastRow() - 1;
 
     const values =
       deliverySheet
         .getRange(
           2,
           1,
-          rowCount,
+          deliveryRowCount,
           DELIVERY_LOG_COLUMN_COUNT
         )
         .getValues();
-
-    const display =
-      deliverySheet
-        .getRange(
-          2,
-          1,
-          rowCount,
-          DELIVERY_LOG_COLUMN_COUNT
-        )
-        .getDisplayValues();
+    const inventoryRows = readDeliveryPageRows_(ss, SHEETS.INVENTORY, INVENTORY_COLUMN_COUNT, true);
+    const movementRows = readDeliveryPageRows_(ss, SHEETS.INVENTORY_MOVEMENT_LOG, MOVEMENT_LOG_COLUMN_COUNT, false);
+    const yourFindsInventory = buildYourFindsDeliveryInventory_(inventoryRows, movementRows);
 
     const grouped = {};
 
     values.forEach(function(row, index) {
-      const d = display[index];
+      const d = row;
 
       const deliveryId =
         String(
@@ -181,21 +140,21 @@ function getDeliveryHistoryFast() {
             ).trim(),
 
           deliveryDate:
-            String(
-              d[DELIVERY_IDX.DELIVERY_DATE] || ""
-            ).trim(),
+            formatInventoryDateForClient(
+              d[DELIVERY_IDX.DELIVERY_DATE]
+            ),
 
           timestamp:
-            String(
-              d[DELIVERY_IDX.TIMESTAMP] || ""
-            ).trim(),
+            formatDeliveryHistoryTimestamp_(
+              d[DELIVERY_IDX.TIMESTAMP]
+            ),
 
           timestampMs:
             row[DELIVERY_IDX.TIMESTAMP] instanceof Date
               ? row[
                   DELIVERY_IDX.TIMESTAMP
                 ].getTime()
-              : 0,
+              : (Date.parse(row[DELIVERY_IDX.TIMESTAMP]) || 0),
 
           driverName:
             String(
@@ -539,6 +498,13 @@ function getDeliveryHistoryFast() {
       );
     });
 
+    let summary = null;
+    try {
+      summary = buildDeliverySummaryData_(values, inventoryRows, movementRows);
+    } catch (summaryError) {
+      summary = null;
+    }
+
     return {
       success: true,
 
@@ -546,7 +512,10 @@ function getDeliveryHistoryFast() {
         deliveries.length,
 
       deliveries:
-        deliveries
+        deliveries,
+
+      summary:
+        summary
     };
 
   } catch (err) {

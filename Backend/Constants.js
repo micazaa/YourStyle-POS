@@ -42,13 +42,14 @@ const SHEETS = {
    G  Total Delivered
    H  Total Sold
    I  Total Returned
-   J  Current Stock
-   K  Stock Status
-   L  Selling Price
-   M  Original Price
-   N  Image
-   O  Created At
-   P  Updated At
+   J  Total Adjustment
+   K  Current Stock
+   L  Stock Status
+   M  Selling Price
+   N  Original Price
+   O  Image
+   P  Created At
+   Q  Updated At
 ========================================================== */
 
 const INV_IDX = {
@@ -62,13 +63,14 @@ const INV_IDX = {
   TOTAL_DELIVERED: 6,
   TOTAL_SOLD: 7,
   TOTAL_RETURNED: 8,
-  STOCK: 9,
-  STOCK_STATUS: 10,
-  YS_PRICE: 11,
-  ORIG_PRICE: 12,
-  IMAGE: 13,
-  CREATED_AT: 14,
-  UPDATED_AT: 15
+  TOTAL_ADJUSTMENT: 9,
+  STOCK: 10,
+  STOCK_STATUS: 11,
+  YS_PRICE: 12,
+  ORIG_PRICE: 13,
+  IMAGE: 14,
+  CREATED_AT: 15,
+  UPDATED_AT: 16
 
 };
 
@@ -83,17 +85,18 @@ const INV_COL = {
   TOTAL_DELIVERED: 7,
   TOTAL_SOLD: 8,
   TOTAL_RETURNED: 9,
-  STOCK: 10,
-  STOCK_STATUS: 11,
-  YS_PRICE: 12,
-  ORIG_PRICE: 13,
-  IMAGE: 14,
-  CREATED_AT: 15,
-  UPDATED_AT: 16
+  TOTAL_ADJUSTMENT: 10,
+  STOCK: 11,
+  STOCK_STATUS: 12,
+  YS_PRICE: 13,
+  ORIG_PRICE: 14,
+  IMAGE: 15,
+  CREATED_AT: 16,
+  UPDATED_AT: 17
 
 };
 
-const INVENTORY_COLUMN_COUNT = 16;
+const INVENTORY_COLUMN_COUNT = 17;
 
 
 /* ==========================================================

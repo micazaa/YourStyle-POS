@@ -6,7 +6,7 @@ const backend=name=>fs.readFileSync('Backend/'+name+'.js','utf8');
 const script=path=>fs.readFileSync(path,'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
 function fixture(){
  const c=vm.createContext({formatInventoryDateForClient:String});
- vm.runInContext(backend('Constants')+'\n'+backend('DeliverySummary')+'\n'+backend('GeneralDelivery'),c);
+ vm.runInContext(backend('Constants')+'\n'+backend('DeliverySummary')+'\n'+backend('DeliveryHistory')+'\n'+backend('GeneralDelivery'),c);
  const [D,I,M]=vm.runInContext('[DELIVERY_IDX,INV_IDX,MOVE_IDX]',c);
  function row(index,values){const r=Array(20).fill('');for(const [key,value] of Object.entries(values))r[index[key]]=value;return r;}
  const deliveries=[row(D,{DELIVERY_ID:'D1',DELIVERY_DATE:'2026-09-28',DELIVERY_TYPE:'YOURSTYLE',RECEIVE_MODE:'DIRECT'}),row(D,{DELIVERY_ID:'D2',DELIVERY_DATE:'2026-09-29',DELIVERY_TYPE:'YOURSTYLE',TYPE:'PINS',RECEIVE_MODE:'BULK',BUNDLE_QTY:3,STATUS:'PARTIAL'}),row(D,{DELIVERY_ID:'D3',DELIVERY_DATE:'2026-09-29',DELIVERY_TYPE:'YOURFINDS'}),row(D,{DELIVERY_ID:'D4',DELIVERY_TYPE:'YOURSTYLE',TYPE:'PINS',RECEIVE_MODE:'BULK',BUNDLE_QTY:7,STATUS:'COMPLETED'})];
@@ -29,6 +29,17 @@ test('summary reads each sheet once regardless of delivery count',()=>{
  const sheets={'Delivery Log':deliveries,'Inventory':inventory,'Inventory Movement Log':movements};
  c.SpreadsheetApp={getActiveSpreadsheet:()=>({getSheetByName:name=>({getLastRow:()=>sheets[name].length+1,getRange:()=>({getValues(){reads.push(name);return sheets[name];},getDisplayValues(){reads.push(name);return sheets[name];}})})})};
  assert.equal(c.getDeliverySummaryData().receipts.length,3);assert.equal(reads.length,3);assert.equal(new Set(reads).size,3);
+});
+test('delivery page payload uses one read per source and includes cached summary data',()=>{
+ const {c,deliveries,inventory,movements}=fixture();const reads=[];const requested=[];
+ const rows={'Delivery Log':deliveries,'Inventory':inventory,'Inventory Movement Log':movements};
+ c.SpreadsheetApp={getActiveSpreadsheet:()=>({getSheetByName(name){requested.push(name);if(!rows[name])return null;return {getLastRow:()=>rows[name].length+1,getRange:()=>({getValues(){reads.push(name);return rows[name];},getDisplayValues(){reads.push(name);return rows[name];}})};}})};
+ const result=c.getDeliveryHistoryFast();
+ assert.equal(result.success,true);assert.equal(result.deliveries.length,4);
+ assert.equal(result.deliveries.find(row=>row.deliveryId==='D3').totalQty,2);
+ assert.equal(result.summary.receipts.reduce((total,row)=>total+row.quantity,0),62);
+ assert.deepEqual(reads,['Delivery Log','Inventory','Inventory Movement Log']);
+ assert.equal(requested.includes('Product Master'),false);
 });
 test('bundle shortcut selects the requested holder and rejects another delivery row',()=>{
  const {c,deliveries}=fixture();

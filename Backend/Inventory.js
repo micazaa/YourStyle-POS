@@ -42,6 +42,7 @@ function setInventoryCalculatedFields_(sheet, startRow, rowCount) {
   const deliveredFormulas = [];
   const soldFormulas = [];
   const returnedFormulas = [];
+  const adjustmentFormulas = [];
   const stockFormulas = [];
   const statusFormulas = [];
   for (let rowNumber = startRow; rowNumber < startRow + rowCount; rowNumber++) {
@@ -54,11 +55,14 @@ function setInventoryCalculatedFields_(sheet, startRow, rowCount) {
     returnedFormulas.push([
       '=IF(A' + rowNumber + '="","",-SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"SUPPLIER_RETURN"))'
     ]);
+    adjustmentFormulas.push([
+      '=IF(A' + rowNumber + '="","",SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"ADJUSTMENT"))'
+    ]);
     stockFormulas.push([
       '=IF(A' + rowNumber + '="","",SUMIF(\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$I$2:$I))'
     ]);
     statusFormulas.push([
-      '=IF(A' + rowNumber + '="","",IF(J' + rowNumber + '<0,"NEGATIVE STOCK",IF(J' + rowNumber + '=0,"SOLD OUT",IF(OR(E' + rowNumber + '="UNIQUE",UPPER(D' + rowNumber + ')="YOURFINDS"),"IN STOCK",IF(J' + rowNumber + '<=IFNA(XLOOKUP(A' + rowNumber + ',\'Product Master\'!$A$2:$A,\'Product Master\'!$G$2:$G),0),"LOW STOCK","IN STOCK")))))'
+      '=IF(A' + rowNumber + '="","",IF(K' + rowNumber + '<0,"NEGATIVE STOCK",IF(K' + rowNumber + '=0,"SOLD OUT",IF(OR(E' + rowNumber + '="UNIQUE",UPPER(D' + rowNumber + ')="YOURFINDS"),"IN STOCK",IF(K' + rowNumber + '<=IFNA(XLOOKUP(A' + rowNumber + ',\'Product Master\'!$A$2:$A,\'Product Master\'!$G$2:$G),0),"LOW STOCK","IN STOCK")))))'
     ]);
   }
 
@@ -69,12 +73,14 @@ function setInventoryCalculatedFields_(sheet, startRow, rowCount) {
       deliveredFormulas[i]=[inventorySummaryLookup_(startRow+i,'B')];
       soldFormulas[i]=[inventorySummaryLookup_(startRow+i,'C')];
       returnedFormulas[i]=[inventorySummaryLookup_(startRow+i,'D')];
-      stockFormulas[i]=[inventorySummaryLookup_(startRow+i,'E')];
+      adjustmentFormulas[i]=[inventorySummaryLookup_(startRow+i,'E')];
+      stockFormulas[i]=[inventorySummaryLookup_(startRow+i,'F')];
     }
   }
   sheet.getRange(startRow, INV_COL.TOTAL_DELIVERED, rowCount, 1).setFormulas(deliveredFormulas);
   sheet.getRange(startRow, INV_COL.TOTAL_SOLD, rowCount, 1).setFormulas(soldFormulas);
   sheet.getRange(startRow, INV_COL.TOTAL_RETURNED, rowCount, 1).setFormulas(returnedFormulas);
+  sheet.getRange(startRow, INV_COL.TOTAL_ADJUSTMENT, rowCount, 1).setFormulas(adjustmentFormulas);
   sheet.getRange(startRow, INV_COL.STOCK, rowCount, 1).setFormulas(stockFormulas);
   sheet.getRange(startRow, INV_COL.STOCK_STATUS, rowCount, 1).setFormulas(statusFormulas);
 }
@@ -177,6 +183,7 @@ function ensureCustomYourFindsInventoryItem_(item) {
     "",
     "",
     "",
+    "",
     sellingPrice,
     0,
     template.imageUrl || "",
@@ -223,7 +230,7 @@ function getFullInventory() {
   const deliveryMetadataByCode = getInventoryDeliveryMetadataByCode_();
 
   /* ========================================================
-     READ INVENTORY A:P
+     READ INVENTORY A:Q
   ======================================================== */
 
   const data = sheet
@@ -1063,7 +1070,7 @@ function acceptYourFindsDelivery(
 
 
       /* ======================================================
-         BUILD INVENTORY ROWS A:P
+         BUILD INVENTORY ROWS A:Q
       ====================================================== */
 
       const now =
@@ -1100,13 +1107,14 @@ function acceptYourFindsDelivery(
                 "",                                              // G Total Delivered formula
                 "",                                              // H Total Sold formula
                 "",                                              // I Total Returned formula
-                "",                                              // J Current Stock formula
-                "",                                              // K Stock Status formula
-                0,                                               // L Selling Price
-                0,                                               // M Original Price
-                "",                                              // N Image
-                now,                                             // O Created At
-                now                                              // P Updated At
+                "",                                              // J Total Adjustment formula
+                "",                                              // K Current Stock formula
+                "",                                              // L Stock Status formula
+                0,                                               // M Selling Price
+                0,                                               // N Original Price
+                "",                                              // O Image
+                now,                                             // P Created At
+                now                                              // Q Updated At
 
               ];
 
@@ -1117,7 +1125,7 @@ function acceptYourFindsDelivery(
               ) {
 
                 throw new Error(
-                  "YourFinds Inventory row does not match Inventory A:P mapping."
+                  "YourFinds Inventory row does not match Inventory A:Q mapping."
                 );
 
               }

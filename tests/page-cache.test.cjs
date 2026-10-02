@@ -44,7 +44,8 @@ test('delivery and return navigation reuse loaded results and retry failures',()
   vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Pages/'+file+'.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
   c.renderDeliverySummaryCards=()=>{};c.renderDeliveriesTable=()=>{};c.updateDeliveriesSummary=()=>{};c.renderSupplierReturns=()=>{};
   c[loader]();c[loader]();assert.equal(calls.length,1);
-  calls[0].success(view==='deliveries'?{success:true,deliveries:[]}:[]);
+  calls[0].success(view==='deliveries'?{success:true,deliveries:[],summary:{success:true,receipts:[],bundles:[]}}:[]);
+  if(view==='deliveries')assert.deepEqual(c.pageReadCache.get('deliverySummary').data.receipts,[]);
   c[loader]();assert.equal(calls.length,1);
   c.pageReadCache.delete(view);c[loader]();assert.equal(calls.length,2);
   calls[1].failure({message:'offline'});c[loader]();assert.equal(calls.length,3);

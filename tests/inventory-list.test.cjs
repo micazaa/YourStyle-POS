@@ -152,7 +152,8 @@ test('YF view includes original price for both roles and cost only for managers'
     c.renderInventoryPhoto_=()=>{};
     c.openInventoryDetails('YF1');
     assert.equal(c.document.getElementById('invDetailBody').innerHTML.includes('Original Price'),true);assert.equal(c.document.getElementById('invDetailBody').innerHTML.includes('Cost Price'),manager);
-    assert.equal(c.document.getElementById('invYfEditBtn').textContent,'Add Selling Details');
+    assert.equal(c.document.getElementById('invYfEditBtn').title,'Add Selling Details');
+    assert.match(c.document.getElementById('invYfEditBtn').innerHTML,/inventory-icon/);
   }
 });
 test('category, search and summary cards use the same matching items',()=>{
@@ -265,6 +266,20 @@ test('saved YourFinds view shows the corner edit icon and hides initial details 
   assert.equal(c.document.getElementById('invDetailEditSellingBtn').style.display,'inline-block');
   assert.equal(c.document.getElementById('invYfEditBtn').style.display,'none');
 });
+test('change item cards align destination name with source name and keep code as metadata',()=>{
+  const {c}=yourFindsEditor(true);
+  c.phase8SelectedItem={code:'100009',name:'999',category:'PINS',inventoryType:'STOCK',status:'ACTIVE',stock:5};
+  c.inventoryPageData=[c.phase8SelectedItem,{code:'100001',name:'Yellow',category:'PINS',inventoryType:'STOCK',status:'ACTIVE',stock:10,price:500}];
+  c.openChangeItem();
+  c.selectChangeItemDestination('100001');
+  assert.equal(c.document.getElementById('changeFromName').textContent,'999');
+  assert.equal(c.document.getElementById('changeToSearch').value,'Yellow');
+  assert.equal(c.document.getElementById('changeToMeta').textContent,'100001 · PINS');
+  c.renderChangeItemOptions('yellow');
+  assert.match(c.document.getElementById('changeToResults').innerHTML,/Yellow/);
+  assert.match(c.document.getElementById('changeToResults').innerHTML,/₱500\.00/);
+  assert.doesNotMatch(c.document.getElementById('changeToSearch').value,/500/);
+});
 test('backend rejects invalid session authorization for saved selling details',()=>{
   const {c}=backend({authorized:false,status:'ACTIVE',stock:1});
   c.getYourFindsItemForCompletion=()=>({success:true,item:{code:'YF1',rowNumber:2,status:'ACTIVE',stock:1,size:'M',origPrice:45,imageUrl:'photo'}});
@@ -353,7 +368,7 @@ test('report actions are in cashier page; cashier displays petty cash and cashie
 function costHarness() {
   const {c}=backend();
   const records={
-    Inventory:[['Code','Name','Size','Category','Type','Status','','','','','','','','','','','Custom Cost Price'],['YF1','YF','FREE SIZE','YourFinds','UNIQUE','INCOMPLETE',0,0,0,1,'IN STOCK',90,45,'photo','','',30]],
+    Inventory:[['Code','Name','Size','Category','Type','Status','','','','','','','','','','','','Custom Cost Price'],['YF1','YF','FREE SIZE','YourFinds','UNIQUE','INCOMPLETE',0,0,0,0,1,'IN STOCK',90,45,'photo','','',30]],
     'Product Master':[['Code','Description','Category','Type','Selling Price','Cost Price','Low Stock At','Active','Image','Created At','Updated At'],['123456','Pin','PINS','STOCK',100,40,5,true,'','','']]
   };
   function sheet(name){return {getName:()=>name,getMaxColumns:()=>26,getLastRow:()=>records[name].length,
@@ -373,7 +388,7 @@ function costHarness() {
   const inventorySource=fs.readFileSync(path.join(root,'Backend/Inventory.js'),'utf8');
   vm.runInContext(inventorySource.slice(inventorySource.indexOf('function normalizeYourFindsSaleSize_'),inventorySource.indexOf('function getYourFindsSaleTemplate_')),c);
   c.getFullInventory=()=>[{code:'YF1',category:'YOURFINDS',size:'FREE SIZE'},{code:'123456',category:'PINS'}];
-  c.getYourFindsItemForCompletion=()=>({success:true,item:{code:'YF1',rowNumber:2,status:records.Inventory[1][5],stock:1,size:'FREE SIZE',origPrice:records.Inventory[1][12],imageUrl:'photo'}});
+  c.getYourFindsItemForCompletion=()=>({success:true,item:{code:'YF1',rowNumber:2,status:records.Inventory[1][5],stock:1,size:'FREE SIZE',origPrice:records.Inventory[1][13],imageUrl:'photo'}});
   return {c,records};
 }
 test('cost reads require a valid manager session; ordinary reads omit costs',()=>{
@@ -389,17 +404,17 @@ test('cashier completion saves original and selling prices without PIN, preserve
   const {c,records}=costHarness();
   c.requireManager_=()=>{throw Error('Unexpected PIN prompt');};
   c.saveYourFindsItemDetails({code:'YF1',description:'YF',originalPrice:55,sellingPrice:95});
-  assert.equal(records.Inventory[1][12],55);assert.equal(records.Inventory[1][11],95);
-  assert.equal(records.Inventory[1][16],30);assert.equal(records.Inventory[1][5],'ACTIVE');
+  assert.equal(records.Inventory[1][13],55);assert.equal(records.Inventory[1][12],95);
+  assert.equal(records.Inventory[1][17],30);assert.equal(records.Inventory[1][5],'ACTIVE');
 });
 test('manager saves YF cost independently; forged and negative cost writes fail before changes',()=>{
   const {c,records}=costHarness();
   for(const payload of [{costPrice:5,managerPin:'approved'},{costPrice:-1,managerToken:'manager'}]){
     assert.throws(()=>c.saveYourFindsItemDetails({code:'YF1',description:'YF',sellingPrice:100,...payload}),/session invalid|non-negative/);
-    assert.equal(records.Inventory[1][11],90);assert.equal(records.Inventory[1][16],30);
+    assert.equal(records.Inventory[1][12],90);assert.equal(records.Inventory[1][17],30);
   }
   c.saveYourFindsItemDetails({code:'YF1',description:'YF',originalPrice:55,sellingPrice:100,costPrice:35,managerToken:'manager'});
-  assert.equal(records.Inventory[1][16],35);assert.equal(records.Inventory[1][12],55);
+  assert.equal(records.Inventory[1][17],35);assert.equal(records.Inventory[1][13],55);
 });
 test('PINS edit preserves omitted cost; manager cost is separate',()=>{
   const {c,records}=costHarness();
@@ -411,11 +426,11 @@ test('PINS edit preserves omitted cost; manager cost is separate',()=>{
   assert.throws(()=>c.saveProductMaster({...payload,costPrice:1}),/session invalid/);
 });
 test('missing legacy costs stay unknown rather than being inferred from original price',()=>{
-  const {c,records}=costHarness();records.Inventory[0][16]='';records['Product Master'][1][5]='';
+  const {c,records}=costHarness();records.Inventory[0][17]='';records['Product Master'][1][5]='';
   assert.deepEqual(Array.from(c.getInventoryForManagement('manager'),item=>item.costPrice),[null,null]);
   assert.equal(c.costPayload_({costPrice:0,managerToken:'manager'}),0);
   assert.equal(c.costPayload_({costPrice:'',managerToken:'manager'}),'');
-  records.Inventory[0][16]='Other field';
+  records.Inventory[0][17]='Other field';
   assert.throws(()=>c.customCostColumn_(c.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Inventory'),true),/already used/);
 });
 test('inventory workspace remembers Delivery when leaving and returning',()=>{

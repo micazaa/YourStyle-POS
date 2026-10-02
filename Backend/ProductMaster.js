@@ -979,7 +979,7 @@ function createInventoryFromProductMaster(
 
 
     /* ======================================================
-       BUILD A:P INVENTORY ROW
+       BUILD A:Q INVENTORY ROW
     ====================================================== */
 
     const row = [
@@ -992,13 +992,14 @@ function createInventoryFromProductMaster(
       "",                         // G Total Delivered formula
       "",                         // H Total Sold formula
       "",                         // I Total Returned formula
-      "",                         // J Current Stock formula
-      "",                         // K Stock Status formula
-      product.defaultPrice || 0,  // L Selling Price
-      0,                          // M Original Price
-      product.imageUrl || "",     // N Image
-      now,                        // O Created At
-      now                         // P Updated At
+      "",                         // J Total Adjustment formula
+      "",                         // K Current Stock formula
+      "",                         // L Stock Status formula
+      product.defaultPrice || 0,  // M Selling Price
+      0,                          // N Original Price
+      product.imageUrl || "",     // O Image
+      now,                        // P Created At
+      now                         // Q Updated At
 
     ];
 

@@ -252,13 +252,14 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
     "",                                                   // G Total Delivered formula
     "",                                                   // H Total Sold formula
     "",                                                   // I Total Returned formula
-    "",                                                   // J Current Stock formula
-    "",                                                   // K Stock Status formula
-    Number(product.defaultPrice) || 0,                    // L Selling Price
-    0,                                                    // M Original Price
-    String(product.imageUrl || "").trim(),                // N Image
-    now,                                                  // O Created At
-    now                                                   // P Updated At
+    "",                                                   // J Total Adjustment formula
+    "",                                                   // K Current Stock formula
+    "",                                                   // L Stock Status formula
+    Number(product.defaultPrice) || 0,                    // M Selling Price
+    0,                                                    // N Original Price
+    String(product.imageUrl || "").trim(),                // O Image
+    now,                                                  // P Created At
+    now                                                   // Q Updated At
   ];
 
   if (
@@ -266,7 +267,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
     INVENTORY_COLUMN_COUNT
   ) {
     throw new Error(
-      "Inventory row does not match A:P mapping."
+      "Inventory row does not match A:Q mapping."
     );
   }
 
