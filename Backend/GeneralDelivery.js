@@ -33,7 +33,7 @@ function validateUniversalDeliveryDatabase() {
   if (!movementSheet) throw new Error("Inventory Movement Log sheet not found.");
 
   validateSheetHeaders(deliverySheet, [
-    "Delivery ID", "Delivery Date", "Timestamp", "Driver Name", "Plate No.", "Accepted By",
+    "Delivery ID", "Delivery Date", "Timestamp", "Driver Name", "Plate No.", "Prepared By", "Accepted By",
     "Delivery Type", "Category", "Size / Group", "Receive Mode", "Item Name", "Bundle Qty", "Estimated Quantity",
     "Actual Quantity", "Remaining Quantity", "Remaining Bundle Qty", "Variance", "Status", "Remarks"
   ]);
@@ -302,6 +302,7 @@ function acceptYourStyleDelivery(payload) {
     const driverName = String(payload.driverName || "").trim();
     const plateNo = String(payload.plateNo || "").trim().toUpperCase();
     const acceptedBy = String(payload.acceptedBy || "").trim();
+    const preparedBy = String(payload.preparedBy || acceptedBy).trim();
     const remarks = String(payload.remarks || "").trim();
     const submittedLines = Array.isArray(payload.lines) ? payload.lines : [];
 
@@ -381,7 +382,7 @@ function acceptYourStyleDelivery(payload) {
       if (line.receiveMode === DELIVERY_RECEIVE_MODE.DIRECT) {
         directUnits += line.quantity;
         deliveryRows.push([
-          identifiers.deliveryId, deliveryDate, now, driverName, plateNo, acceptedBy,
+          identifiers.deliveryId, deliveryDate, now, driverName, plateNo, preparedBy, acceptedBy,
           DELIVERY_TYPE.YOURSTYLE, line.type, line.type, DELIVERY_RECEIVE_MODE.DIRECT, line.description,
           "", "", line.quantity, "", "", "", DELIVERY_STATUS.ACCEPTED, remarks
         ]);
@@ -393,13 +394,13 @@ function acceptYourStyleDelivery(payload) {
       bulkBundles += line.bundleQty;
       line.holderCode = identifiers.deliveryId + "-B" + String(bulkIndex).padStart(2, "0");
       deliveryRows.push([
-        identifiers.deliveryId, deliveryDate, now, driverName, plateNo, acceptedBy,
+        identifiers.deliveryId, deliveryDate, now, driverName, plateNo, preparedBy, acceptedBy,
         DELIVERY_TYPE.YOURSTYLE, line.type, "UNSORTED", DELIVERY_RECEIVE_MODE.BULK, line.description,
         line.bundleQty, line.estimatedQuantity, 0, line.estimatedQuantity, line.bundleQty, "", DELIVERY_STATUS.PENDING, remarks
       ]);
     });
 
-    if (deliveryRows.some(function(row) { return row.length !== DELIVERY_LOG_COLUMN_COUNT; })) throw new Error("YourStyle Delivery row does not match universal A:S mapping.");
+    if (deliveryRows.some(function(row) { return row.length !== DELIVERY_LOG_COLUMN_COUNT; })) throw new Error("YourStyle Delivery row does not match universal A:T mapping.");
 
     deliverySheet.getRange(deliverySheet.getLastRow() + 1, 1, deliveryRows.length, DELIVERY_LOG_COLUMN_COUNT).setValues(deliveryRows);
 

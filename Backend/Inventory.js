@@ -1152,6 +1152,7 @@ function acceptYourFindsDelivery(
           driverName,
           plateNo,
           acceptedBy,
+          acceptedBy,
           DELIVERY_TYPE.YOURFINDS,
           "YOURFINDS",
           category,
@@ -1168,7 +1169,7 @@ function acceptYourFindsDelivery(
         ];
 
         if (deliveryRow.length !== DELIVERY_LOG_COLUMN_COUNT) {
-          throw new Error("YourFinds Delivery row does not match universal A:S mapping.");
+          throw new Error("YourFinds Delivery row does not match universal A:T mapping.");
         }
 
         deliveryRows.push(deliveryRow);
