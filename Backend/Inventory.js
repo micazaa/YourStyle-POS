@@ -639,7 +639,8 @@ function acceptYourFindsDelivery(
   plateNo,
   acceptedBy,
   quantities,
-  remarks
+  remarks,
+  preparedBy
 ) {
 
   try {
@@ -681,6 +682,9 @@ function acceptYourFindsDelivery(
 
     quantities =
       quantities || {};
+
+    preparedBy = String(preparedBy === undefined ? acceptedBy : preparedBy).trim();
+    if (!preparedBy) return { success: false, message: "Prepared By is required." };
 
     const customSizeLabel = String(quantities.CUSTOM_LABEL || "").trim().toUpperCase();
 
@@ -1159,7 +1163,7 @@ function acceptYourFindsDelivery(
           now,
           driverName,
           plateNo,
-          acceptedBy,
+          preparedBy,
           acceptedBy,
           DELIVERY_TYPE.YOURFINDS,
           "YOURFINDS",
@@ -1695,64 +1699,7 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
 ========================================================== */
 
 function generateYourFindsDeliveryId(deliveryDate) {
-  deliveryDate = String(deliveryDate || "").trim();
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate)) {
-    throw new Error("Invalid delivery date.");
-  }
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  const deliverySheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
-
-  if (!deliverySheet) {
-    throw new Error("Delivery Log sheet not found.");
-  }
-
-  const datePart = deliveryDate.replace(/-/g, "");
-
-  const prefix = "YFD-" + datePart + "-";
-
-  let highestSequence = 0;
-
-  const lastRow = deliverySheet.getLastRow();
-
-  if (lastRow >= 2) {
-    const existingIds = deliverySheet
-      .getRange(2, DELIVERY_COL.DELIVERY_ID, lastRow - 1, 1)
-      .getDisplayValues()
-      .flat();
-
-    existingIds.forEach(function (value) {
-      const deliveryId = String(value || "").trim();
-
-      if (!deliveryId.startsWith(prefix)) {
-        return;
-      }
-
-      const sequenceText = deliveryId.substring(prefix.length);
-
-      if (!/^\d{3}$/.test(sequenceText)) {
-        return;
-      }
-
-      const sequence = parseInt(sequenceText, 10);
-
-      if (sequence > highestSequence) {
-        highestSequence = sequence;
-      }
-    });
-  }
-
-  const nextSequence = highestSequence + 1;
-
-  if (nextSequence > 999) {
-    throw new Error(
-      "Maximum of 999 YourFinds deliveries reached for this date."
-    );
-  }
-
-  return prefix + String(nextSequence).padStart(3, "0");
+  return generateDeliveryIdentifiers(DELIVERY_TYPE.YOURFINDS, deliveryDate).deliveryId;
 }
 
 /* ==========================================================

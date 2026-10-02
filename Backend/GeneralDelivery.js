@@ -59,19 +59,17 @@ function generateDeliveryIdentifiers(deliveryType, deliveryDate) {
   const sheet = getGeneralDeliveryLogSheet();
   const dateCode = deliveryDate.replace(/-/g, "");
   const fullPrefix = idPrefix + "-" + dateCode + "-";
-  let highestSequence = 0;
-
+  const usedIds = new Set();
   if (sheet.getLastRow() >= 2) {
-    const ids = sheet.getRange(2, DELIVERY_COL.DELIVERY_ID, sheet.getLastRow() - 1, 1).getDisplayValues();
-    ids.forEach(function(row) {
-      const id = String(row[0] || "").trim().toUpperCase();
-      if (!id.startsWith(fullPrefix)) return;
-      const sequence = parseInt(id.substring(fullPrefix.length), 10);
-      if (Number.isInteger(sequence) && sequence > highestSequence) highestSequence = sequence;
-    });
+    sheet.getRange(2, DELIVERY_COL.DELIVERY_ID, sheet.getLastRow() - 1, 1).getDisplayValues()
+      .forEach(row => usedIds.add(String(row[0] || "").trim().toUpperCase()));
   }
-
-  const sequence = highestSequence + 1;
+  const available = [];
+  for (let suffix = 1; suffix <= 999; suffix++) {
+    if (!usedIds.has(fullPrefix + String(suffix).padStart(3, "0"))) available.push(suffix);
+  }
+  if (!available.length) throw new Error("Maximum of 999 deliveries reached for this date and type.");
+  const sequence = available[Math.floor(Math.random() * available.length)];
   const deliveryId = fullPrefix + String(sequence).padStart(3, "0");
   return {
     deliveryType: deliveryType,
@@ -303,10 +301,11 @@ function acceptYourStyleDelivery(payload) {
     const driverName = String(payload.driverName || "").trim();
     const plateNo = String(payload.plateNo || "").trim().toUpperCase();
     const acceptedBy = String(payload.acceptedBy || "").trim();
-    const preparedBy = String(payload.preparedBy || acceptedBy).trim();
+    const preparedBy = String(payload.preparedBy === undefined ? acceptedBy : payload.preparedBy).trim();
     const remarks = String(payload.remarks || "").trim();
     const submittedLines = Array.isArray(payload.lines) ? payload.lines : [];
 
+    if (!preparedBy) throw new Error("Prepared By is required.");
     if (!driverName) throw new Error("Driver Name is required.");
     if (!plateNo) throw new Error("Plate No. is required.");
     if (!acceptedBy) throw new Error("Accepted By is required.");

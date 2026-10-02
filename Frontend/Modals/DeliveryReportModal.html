@@ -14,7 +14,20 @@ function viewDeliveryDetails(deliveryId) {
  document.getElementById('standardDeliveryId').textContent=selectedDeliveryReportId;
  document.getElementById('standardDeliveryContent').innerHTML=loadingIndicator('Loading delivery…');
  document.getElementById('standardDeliveryDetails').style.display='flex';
- google.script.run.withSuccessHandler(data=>{if(request!==deliveryViewRequest||currentEmployee!==owner||!currentEmployee)return;deliveryViewData=data;renderStandardDeliveryDetails();}).withFailureHandler(error=>{if(request!==deliveryViewRequest)return;document.getElementById('standardDeliveryContent').textContent=error.message||String(error);}).getDeliveryDetails(selectedDeliveryReportId);
+ const ownerKey=JSON.stringify(owner);
+ let cache=pageReadCache.get('standardDeliveryDetails');
+ if(!cache||cache.owner!==ownerKey){cache={owner:ownerKey,entries:new Map()};pageReadCache.set('standardDeliveryDetails',cache);}
+ let entry=cache.entries.get(selectedDeliveryReportId);
+ if(entry&&entry.data){deliveryViewData=entry.data;renderStandardDeliveryDetails();return;}
+ if(!entry){
+  const id=selectedDeliveryReportId;
+  entry={};cache.entries.set(id,entry);
+  entry.promise=new Promise((resolve,reject)=>{
+   google.script.run.withSuccessHandler(data=>{entry.data=data;resolve(data);}).withFailureHandler(error=>{cache.entries.delete(id);reject(error);}).getDeliveryDetails(id);
+  });
+ }
+ entry.promise.then(data=>{if(request!==deliveryViewRequest||currentEmployee!==owner||!currentEmployee||pageReadCache.get('standardDeliveryDetails')!==cache)return;deliveryViewData=data;renderStandardDeliveryDetails();}).catch(error=>{if(request!==deliveryViewRequest||currentEmployee!==owner)return;document.getElementById('standardDeliveryContent').textContent=error.message||String(error);});
+
 }
 function renderStandardDeliveryDetails(){
  const data=deliveryViewData,body=document.getElementById('standardDeliveryContent');body.replaceChildren();
@@ -37,7 +50,7 @@ function renderStandardDeliveryItems(group,container){
  if(!group.items.length){const empty=document.createElement('div');empty.className='text-muted text-center py-4';empty.textContent='No products distributed from this bundle yet.';container.append(empty);}
  group.items.forEach(item=>{
   const row=document.createElement('div');row.className='d-flex align-items-center gap-3 border rounded p-2 mb-2';
-  if(item.imageUrl&&/^https?:\/\//i.test(item.imageUrl)){const photo=document.createElement('button');photo.type='button';photo.className='btn p-0';photo.setAttribute('aria-label','View '+item.name+' image');const image=document.createElement('img');image.src=item.imageUrl;image.alt=item.name;image.style.cssText='width:56px;height:56px;object-fit:cover;border-radius:6px';photo.append(image);photo.onclick=()=>openInventoryImageViewer(item);row.append(photo);}else{const placeholder=document.createElement('span');placeholder.className='small text-muted bg-light rounded p-2';placeholder.style.cssText='width:56px;flex-shrink:0';placeholder.textContent='No Image';row.append(placeholder);}
+  if(item.imageUrl&&/^https?:\/\//i.test(item.imageUrl)){const photo=document.createElement('button');photo.type='button';photo.className='btn p-0';photo.setAttribute('aria-label','View '+item.name+' image');const image=document.createElement('img');image.loading='lazy';image.decoding='async';image.src=item.imageUrl;image.alt=item.name;image.style.cssText='width:56px;height:56px;object-fit:cover;border-radius:6px';photo.append(image);photo.onclick=()=>openInventoryImageViewer(item);row.append(photo);}else{const placeholder=document.createElement('span');placeholder.className='small text-muted bg-light rounded p-2';placeholder.style.cssText='width:56px;flex-shrink:0';placeholder.textContent='No Image';row.append(placeholder);}
   const info=document.createElement('div');info.className='flex-grow-1';info.style.minWidth='0';const name=document.createElement('strong');name.textContent=item.name;const code=document.createElement('div');code.className='small text-muted';code.textContent=item.code;info.append(name,code);
   if(deliveryViewData.yourFinds){const size=document.createElement('div');size.className='small text-muted';size.textContent=item.status==='INCOMPLETE'?'Details not completed':item.size;info.append(size);}row.append(info);
   const qty=document.createElement('div');qty.className='text-end';qty.textContent=item.quantity+' pcs';

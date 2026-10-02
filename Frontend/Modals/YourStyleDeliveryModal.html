@@ -10,6 +10,7 @@
       <div>
         <h5 class="fw-bold mb-1">Accept YourStyle Delivery</h5>
         <div class="small text-muted">Receive exact products directly or create pending bulk holders.</div>
+        <div class="small text-muted">Delivery ID: <span id="yourStyleDeliveryNo" class="fw-semibold font-monospace">—</span></div>
       </div>
       <button type="button" class="btn-close" onclick="closeYourStyleDeliveryModal()"></button>
     </div>
@@ -21,8 +22,8 @@
         <input type="date" id="yourStyleDeliveryDate" class="form-control" onchange="loadNextYourStyleDeliveryNumber()">
       </div>
       <div class="col-md-6">
-        <label class="form-label">Delivery ID</label>
-        <input type="text" id="yourStyleDeliveryNo" class="form-control" value="—" readonly>
+        <label class="form-label" for="yourStylePreparedBy">Prepared By <span class="text-danger">*</span></label>
+        <input type="text" id="yourStylePreparedBy" class="form-control" maxlength="100" placeholder="Enter preparer's name" autocomplete="off" required>
       </div>
       <div class="col-md-6">
         <label class="form-label">Driver Name <span class="text-danger">*</span></label>
@@ -91,7 +92,8 @@ function resetYourStyleDeliveryModal() {
   const now = new Date();
   const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
   document.getElementById("yourStyleDeliveryDate").value = localDate.toISOString().split("T")[0];
-  document.getElementById("yourStyleDeliveryNo").value = "—";
+  document.getElementById("yourStyleDeliveryNo").textContent = "—";
+  document.getElementById("yourStylePreparedBy").value = "";
   document.getElementById("yourStyleDriverName").value = "";
   document.getElementById("yourStylePlateNo").value = "";
   document.getElementById("yourStyleRemarks").value = "";
@@ -120,13 +122,13 @@ function loadYourStyleDeliveryProducts() {
 function loadNextYourStyleDeliveryNumber() {
   const date = document.getElementById("yourStyleDeliveryDate").value;
   const field = document.getElementById("yourStyleDeliveryNo");
-  if (!date) { field.value = "—"; return; }
-  field.value = "";
-  setControlLoading(field, true, "Loading delivery number…");
+  if (!date) { field.textContent = "—"; return; }
+  field.innerHTML = loadingIndicator();
   google.script.run.withSuccessHandler(function(result) {
-    setControlLoading(field, false);
-    field.value = result && result.deliveryId ? result.deliveryId : "—";
-  }).withFailureHandler(function() { setControlLoading(field, false); field.value = "—"; }).generateDeliveryIdentifiers("YOURSTYLE", date);
+    if (document.getElementById("yourStyleDeliveryDate").value !== date) return;
+    field.textContent = result && result.deliveryId ? result.deliveryId : "—";
+  }).withFailureHandler(function() { field.textContent = "—"; }).generateDeliveryIdentifiers("YOURSTYLE", date);
+
 }
 
 function addYourStyleDeliveryLine() {
@@ -136,7 +138,7 @@ function addYourStyleDeliveryLine() {
   const line = document.createElement("div");
   line.className = "yourstyle-delivery-line delivery-line " + (yourStyleDeliveryMode === "DIRECT" ? "direct" : "bundle");
   const referenceField = yourStyleDeliveryMode === "DIRECT"
-    ? '<div><input type="text" class="form-control form-control-sm yourstyle-line-product" list="yourStyleProductOptions' + lineId + '" placeholder="Search product name or code" aria-label="Product" autocomplete="off"><datalist id="yourStyleProductOptions' + lineId + '"></datalist></div>'
+    ? '<div class="change-item-search"><input type="search" class="form-control form-control-sm yourstyle-line-product" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="yourStyleProductOptions' + lineId + '" placeholder="Search product" aria-label="Product" autocomplete="off"><div id="yourStyleProductOptions' + lineId + '" class="list-group change-item-results" role="listbox" style="display:none;position:fixed;"></div></div>'
     : '<input type="text" class="form-control form-control-sm yourstyle-line-bulk-description" maxlength="100" placeholder="Enter bundle code" aria-label="Bundle code">';
   const quantityFields = yourStyleDeliveryMode === "DIRECT"
     ? '<input type="number" class="form-control form-control-sm yourstyle-line-qty" min="1" max="99999" step="1" value="1" aria-label="Actual quantity" oninput="updateYourStyleDeliverySummary()">'
@@ -201,13 +203,78 @@ function populateYourStyleLineProducts(line, type) {
   const input = line.querySelector(".yourstyle-line-product");
   if (!input) return;
   input.value = "";
-  const options = line.querySelector("datalist");
-  options.replaceChildren();
-  yourStyleDeliveryProducts.filter(function(product) { return String(product.category || "").trim().toUpperCase() === type; }).forEach(function(product) {
-    const option = document.createElement("option");
-    option.value = yourStyleProductSearchLabel(product);
-    options.appendChild(option);
-  });
+  input.dataset.productCode = "";
+  const results = line.querySelector('[role="listbox"]');
+  let highlighted = -1;
+  function hide() {
+    results.style.display = "none";
+    input.setAttribute("aria-expanded", "false");
+  }
+  function render(query) {
+    const search = String(query || "").trim().toLowerCase();
+    const matches = yourStyleDeliveryProducts.filter(product =>
+      String(product.category).toUpperCase() === type &&
+      (!search || yourStyleProductSearchLabel(product).toLowerCase().includes(search))
+    ).slice(0, 12);
+    results.replaceChildren();
+    highlighted = -1;
+    matches.forEach(product => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "list-group-item list-group-item-action change-item-option";
+      button.setAttribute("role", "option");
+      const label = document.createElement("span");
+      const name = document.createElement("strong");
+      name.textContent = product.description;
+      const meta = document.createElement("span");
+      meta.className = "change-item-option-meta";
+      meta.textContent = product.productCode + " · " + product.category;
+      label.append(name, meta);
+      const price = document.createElement("span");
+      price.className = "change-item-option-price";
+      price.textContent = "₱" + formatYourStylePrice(product.defaultPrice);
+      button.append(label, price);
+      button.onmousedown = event => event.preventDefault();
+      button.onclick = function() {
+        input.value = product.description;
+        input.dataset.productCode = String(product.productCode);
+        hide();
+      };
+      results.appendChild(button);
+    });
+    if (!matches.length) {
+      const empty = document.createElement("div");
+      empty.className = "list-group-item text-muted";
+      empty.textContent = "No matching products.";
+      results.appendChild(empty);
+    }
+    const rect = input.getBoundingClientRect();
+    results.style.left = rect.left + "px";
+    results.style.top = rect.bottom + "px";
+    results.style.width = rect.width + "px";
+    results.style.right = "auto";
+    results.style.display = "block";
+    input.setAttribute("aria-expanded", "true");
+  }
+  input.onfocus = function() { input.select(); render(""); };
+  input.oninput = function() { input.dataset.productCode = ""; render(input.value); };
+  input.onblur = hide;
+  input.onkeydown = function(event) {
+    if (event.key === "Escape") { hide(); return; }
+    if (!["ArrowDown", "ArrowUp", "Enter"].includes(event.key)) return;
+    event.preventDefault();
+    if (results.style.display === "none") render(input.value);
+    const options = Array.from(results.querySelectorAll("button"));
+    if (!options.length) return;
+    if (event.key === "Enter") { if (highlighted >= 0) options[highlighted].click(); return; }
+    highlighted = event.key === "ArrowDown" ? Math.min(highlighted + 1, options.length - 1) : Math.max(highlighted - 1, 0);
+    options.forEach((option, index) => option.classList.toggle("active", index === highlighted));
+    options[highlighted].scrollIntoView({ block: "nearest" });
+  };
+  line.closest(".delivery-line-scroll").onscroll = function() {
+    this.querySelectorAll('[role="listbox"]').forEach(list => { list.style.display = "none"; });
+    this.querySelectorAll('[role="combobox"]').forEach(field => field.setAttribute("aria-expanded", "false"));
+  };
 }
 
 function yourStyleProductSearchLabel(product) {
@@ -223,10 +290,10 @@ function getYourStyleDeliveryLinesFromForm() {
     const type = String(row.querySelector(".yourstyle-line-type").value || "").trim().toUpperCase();
     const receiveMode = yourStyleDeliveryMode;
     if (receiveMode === "DIRECT") {
-      const search = row.querySelector(".yourstyle-line-product").value.trim();
+      const code = row.querySelector(".yourstyle-line-product").dataset.productCode;
       const product = yourStyleDeliveryProducts.find(function(item) {
         return String(item.category || "").trim().toUpperCase() === type &&
-          (yourStyleProductSearchLabel(item) === search || String(item.productCode) === search);
+          String(item.productCode) === code;
       });
       return { type: type, receiveMode: receiveMode, productCode: product ? String(product.productCode) : "", quantity: Number(row.querySelector(".yourstyle-line-qty").value) || 0 };
     }
@@ -259,6 +326,8 @@ function submitYourStyleDelivery() {
   const driverName = document.getElementById("yourStyleDriverName").value.trim();
   const plateNo = document.getElementById("yourStylePlateNo").value.trim().toUpperCase();
   const acceptedBy = document.getElementById("yourStyleAcceptedBy").value.trim();
+  const preparedBy = document.getElementById("yourStylePreparedBy").value.trim();
+  if (!preparedBy) return showNotificationToast("Please enter the preparer’s name.", true);
   const remarks = document.getElementById("yourStyleRemarks").value.trim();
   const lines = getYourStyleDeliveryLinesFromForm();
   if (!deliveryDate) return showNotificationToast("Please select the delivery date.", true);
@@ -287,6 +356,6 @@ function submitYourStyleDelivery() {
     button.disabled = false;
     button.textContent = "Accept Delivery";
     showNotificationToast("YourStyle Delivery Error: " + (err && err.message ? err.message : String(err)), true);
-  }).acceptYourStyleDelivery({ deliveryDate: deliveryDate, driverName: driverName, plateNo: plateNo, acceptedBy: acceptedBy, remarks: remarks, lines: lines });
+  }).acceptYourStyleDelivery({ deliveryDate: deliveryDate, driverName: driverName, plateNo: plateNo, acceptedBy: acceptedBy, preparedBy: preparedBy, remarks: remarks, lines: lines });
 }
 </script>
