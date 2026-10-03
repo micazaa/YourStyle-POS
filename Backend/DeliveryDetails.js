@@ -1,14 +1,40 @@
+// Read matching rows in short runs, keeping sheet calls low for large deliveries.
+function readDeliveryDetailRows_(sheet, rowNumbers, width, displayValues) {
+  const rows = [];
+  const sorted = [...new Set(rowNumbers)].sort((a, b) => a - b);
+  for (let index = 0; index < sorted.length;) {
+    const start = sorted[index];
+    let end = start;
+    const firstIndex = index;
+    while (index + 1 < sorted.length && sorted[index + 1] - end <= 20 && sorted[index + 1] - start < 500) {
+      end = sorted[++index];
+    }
+    const range = sheet.getRange(start, 1, end - start + 1, width);
+    const values = displayValues ? range.getDisplayValues() : range.getValues();
+    for (let matched = firstIndex; matched <= index; matched++) {
+      rows.push(values[sorted[matched] - start]);
+    }
+    index++;
+  }
+  return rows;
+}
+
+function findDeliveryDetailRows_(sheet, column, value) {
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, column, sheet.getLastRow() - 1, 1)
+    .createTextFinder(value).matchEntireCell(true).findAll()
+    .map(cell => cell.getRow());
+}
+
 // Read-only view; no active-holder restriction, so completed deliveries remain inspectable.
 function getDeliveryDetails(deliveryId) {
   deliveryId=String(deliveryId||'').trim();
   if(!deliveryId)throw new Error('Delivery ID is required.');
   const ss=SpreadsheetApp.getActiveSpreadsheet();
   const log=ss.getSheetByName(SHEETS.DELIVERY_LOG);
-  const rows=log&&log.getLastRow()>1?log.getRange(2,1,log.getLastRow()-1,DELIVERY_LOG_COLUMN_COUNT).getValues().filter(r=>String(r[DELIVERY_IDX.DELIVERY_ID]).trim()===deliveryId):[];
+  const rows=log?readDeliveryDetailRows_(log,findDeliveryDetailRows_(log,DELIVERY_COL.DELIVERY_ID,deliveryId),DELIVERY_LOG_COLUMN_COUNT,false).filter(r=>String(r[DELIVERY_IDX.DELIVERY_ID]).trim()===deliveryId):[];
   if(!rows.length)throw new Error('Delivery not found.');
   const first=rows[0], inventory=new Map();
-  const sheet=ss.getSheetByName(SHEETS.INVENTORY);
-  if(sheet&&sheet.getLastRow()>1)sheet.getRange(2,1,sheet.getLastRow()-1,INVENTORY_COLUMN_COUNT).getDisplayValues().forEach(r=>inventory.set(String(r[INV_IDX.CODE]).trim(),{name:r[INV_IDX.DESCRIPTION],size:r[INV_IDX.SIZE],category:r[INV_IDX.CATEGORY],status:r[INV_IDX.STATUS],imageUrl:r[INV_IDX.IMAGE]}));
   const groups=[],direct={id:'direct',label:'Direct',items:[]};
   let estimated=0,bundleCount=0;
   const counts={};
@@ -25,7 +51,15 @@ function getDeliveryDetails(deliveryId) {
     }
   });
   const movement=ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
-  const moves=movement&&movement.getLastRow()>1?movement.getRange(2,1,movement.getLastRow()-1,MOVEMENT_LOG_COLUMN_COUNT).getValues():[];
+  const moves=movement?readDeliveryDetailRows_(movement,findDeliveryDetailRows_(movement,MOVE_COL.REFERENCE_ID,deliveryId),MOVEMENT_LOG_COLUMN_COUNT,false):[];
+  const codes=new Set(moves.filter(r=>String(r[MOVE_IDX.REFERENCE_ID]).trim()===deliveryId&&Number(r[MOVE_IDX.QTY_CHANGE])>0).map(r=>String(r[MOVE_IDX.CODE]).trim()));
+  const sheet=ss.getSheetByName(SHEETS.INVENTORY);
+  if(sheet&&sheet.getLastRow()>1&&codes.size){
+    const codeRows=sheet.getRange(2,INV_COL.CODE,sheet.getLastRow()-1,1).getDisplayValues();
+    const rowNumbers=[];
+    codeRows.forEach((row,index)=>{if(codes.has(String(row[0]).trim()))rowNumbers.push(index+2);});
+    readDeliveryDetailRows_(sheet,rowNumbers,INVENTORY_COLUMN_COUNT,true).forEach(r=>inventory.set(String(r[INV_IDX.CODE]).trim(),{name:r[INV_IDX.DESCRIPTION],size:r[INV_IDX.SIZE],category:r[INV_IDX.CATEGORY],status:r[INV_IDX.STATUS],imageUrl:r[INV_IDX.IMAGE]}));
+  }
   const items=new Map();
   moves.forEach(r=>{
     const source=String(r[MOVE_IDX.SOURCE]),qty=Number(r[MOVE_IDX.QTY_CHANGE])||0;
