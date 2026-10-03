@@ -1,14 +1,40 @@
+// Read matching rows in short runs, keeping sheet calls low for large deliveries.
+function readDeliveryDetailRows_(sheet, rowNumbers, width, displayValues) {
+  const rows = [];
+  const sorted = [...new Set(rowNumbers)].sort((a, b) => a - b);
+  for (let index = 0; index < sorted.length;) {
+    const start = sorted[index];
+    let end = start;
+    const firstIndex = index;
+    while (index + 1 < sorted.length && sorted[index + 1] - end <= 20 && sorted[index + 1] - start < 500) {
+      end = sorted[++index];
+    }
+    const range = sheet.getRange(start, 1, end - start + 1, width);
+    const values = displayValues ? range.getDisplayValues() : range.getValues();
+    for (let matched = firstIndex; matched <= index; matched++) {
+      rows.push(values[sorted[matched] - start]);
+    }
+    index++;
+  }
+  return rows;
+}
+
+function findDeliveryDetailRows_(sheet, column, value) {
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, column, sheet.getLastRow() - 1, 1)
+    .createTextFinder(value).matchEntireCell(true).findAll()
+    .map(cell => cell.getRow());
+}
+
 // Read-only view; no active-holder restriction, so completed deliveries remain inspectable.
 function getDeliveryDetails(deliveryId) {
   deliveryId=String(deliveryId||'').trim();
   if(!deliveryId)throw new Error('Delivery ID is required.');
   const ss=SpreadsheetApp.getActiveSpreadsheet();
   const log=ss.getSheetByName(SHEETS.DELIVERY_LOG);
-  const rows=log&&log.getLastRow()>1?log.getRange(2,1,log.getLastRow()-1,DELIVERY_LOG_COLUMN_COUNT).getValues().filter(r=>String(r[DELIVERY_IDX.DELIVERY_ID]).trim()===deliveryId):[];
+  const rows=log?readDeliveryDetailRows_(log,findDeliveryDetailRows_(log,DELIVERY_COL.DELIVERY_ID,deliveryId),DELIVERY_LOG_COLUMN_COUNT,false).filter(r=>String(r[DELIVERY_IDX.DELIVERY_ID]).trim()===deliveryId):[];
   if(!rows.length)throw new Error('Delivery not found.');
   const first=rows[0], inventory=new Map();
-  const sheet=ss.getSheetByName(SHEETS.INVENTORY);
-  if(sheet&&sheet.getLastRow()>1)sheet.getRange(2,1,sheet.getLastRow()-1,INVENTORY_COLUMN_COUNT).getDisplayValues().forEach(r=>inventory.set(String(r[INV_IDX.CODE]).trim(),{name:r[INV_IDX.DESCRIPTION],size:r[INV_IDX.SIZE],category:r[INV_IDX.CATEGORY],status:r[INV_IDX.STATUS],imageUrl:r[INV_IDX.IMAGE]}));
   const groups=[],direct={id:'direct',label:'Direct',items:[]};
   let estimated=0,bundleCount=0;
   const counts={};
@@ -25,7 +51,15 @@ function getDeliveryDetails(deliveryId) {
     }
   });
   const movement=ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
-  const moves=movement&&movement.getLastRow()>1?movement.getRange(2,1,movement.getLastRow()-1,MOVEMENT_LOG_COLUMN_COUNT).getValues():[];
+  const moves=movement?readDeliveryDetailRows_(movement,findDeliveryDetailRows_(movement,MOVE_COL.REFERENCE_ID,deliveryId),MOVEMENT_LOG_COLUMN_COUNT,false):[];
+  const codes=new Set(moves.filter(r=>String(r[MOVE_IDX.REFERENCE_ID]).trim()===deliveryId&&Number(r[MOVE_IDX.QTY_CHANGE])>0).map(r=>String(r[MOVE_IDX.CODE]).trim()));
+  const sheet=ss.getSheetByName(SHEETS.INVENTORY);
+  if(sheet&&sheet.getLastRow()>1&&codes.size){
+    const codeRows=sheet.getRange(2,INV_COL.CODE,sheet.getLastRow()-1,1).getDisplayValues();
+    const rowNumbers=[];
+    codeRows.forEach((row,index)=>{if(codes.has(String(row[0]).trim()))rowNumbers.push(index+2);});
+    readDeliveryDetailRows_(sheet,rowNumbers,INVENTORY_COLUMN_COUNT,true).forEach(r=>inventory.set(String(r[INV_IDX.CODE]).trim(),{name:r[INV_IDX.DESCRIPTION],size:r[INV_IDX.SIZE],category:r[INV_IDX.CATEGORY],status:r[INV_IDX.STATUS],imageUrl:r[INV_IDX.IMAGE]}));
+  }
   const items=new Map();
   moves.forEach(r=>{
     const source=String(r[MOVE_IDX.SOURCE]),qty=Number(r[MOVE_IDX.QTY_CHANGE])||0;
@@ -49,5 +83,19 @@ function getDeliveryDetails(deliveryId) {
   const bulkActual=groups.filter(g=>g.id!=='direct').reduce((sum,g)=>sum+g.items.reduce((total,i)=>total+i.quantity,0),0);
   const statuses=rows.map(r=>String(r[DELIVERY_IDX.STATUS]).toUpperCase());
   const status=statuses.includes('PARTIAL')?'PARTIAL':statuses.includes('PENDING')?'PENDING':statuses.includes('COMPLETED')?'COMPLETED':statuses[0];
-  return {id:deliveryId,date:formatInventoryDateForClient(first[DELIVERY_IDX.DELIVERY_DATE]),driver:String(first[DELIVERY_IDX.DRIVER_NAME]||''),plate:String(first[DELIVERY_IDX.PLATE_NO]||''),acceptedBy:String(first[DELIVERY_IDX.ACCEPTED_BY]||''),category:String(first[DELIVERY_IDX.DELIVERY_TYPE]).toUpperCase()==='YOURFINDS'?'YourFinds':[...new Set(rows.map(r=>String(r[DELIVERY_IDX.TYPE]||r[DELIVERY_IDX.CATEGORY]||first[DELIVERY_IDX.DELIVERY_TYPE])))].join(' / '),yourFinds:String(first[DELIVERY_IDX.DELIVERY_TYPE]).toUpperCase()==='YOURFINDS',status:status,bundleCount:bundleCount,estimated:estimated,actual:actual,bulkActual:bulkActual,counts:counts,groups:groups};
+  const yourFinds=String(first[DELIVERY_IDX.DELIVERY_TYPE]).toUpperCase()==='YOURFINDS';
+  const sizeDescriptions={SNE:'Small non-electronic',MNE:'Medium non-electronic',LNE:'Large non-electronic',XLNE:'Extra large non-electronic',SE:'Small electronic',ME:'Medium electronic',LE:'Large electronic',XLE:'Extra large electronic'};
+  const reportLines=yourFinds
+    ? rows.filter(r=>String(r[DELIVERY_IDX.RECEIVE_MODE]).toUpperCase()==='DIRECT').map(r=>{
+        const size=String(r[DELIVERY_IDX.CATEGORY]||'').trim();
+        return {code:size,description:sizeDescriptions[size.toUpperCase()]||size,quantity:Number(r[DELIVERY_IDX.ACTUAL_QTY])||0,remarks:''};
+      })
+    : direct.items.map(item=>({code:item.code,description:item.name,quantity:item.quantity,remarks:''}));
+  if(!yourFinds){
+    if(!direct.items.length)rows.filter(r=>String(r[DELIVERY_IDX.RECEIVE_MODE]).toUpperCase()==='DIRECT').forEach(r=>reportLines.push({code:'',description:String(r[DELIVERY_IDX.DESCRIPTION]||''),quantity:Number(r[DELIVERY_IDX.ACTUAL_QTY])||0,remarks:''}));
+    rows.filter(r=>String(r[DELIVERY_IDX.RECEIVE_MODE]).toUpperCase()==='BULK').forEach(r=>reportLines.push({code:String(r[DELIVERY_IDX.DESCRIPTION]||''),description:String(r[DELIVERY_IDX.TYPE]||'')+' bundle',quantity:String(Number(r[DELIVERY_IDX.BUNDLE_QTY])||0)+' bundles',remarks:'Est. '+String(Number(r[DELIVERY_IDX.ESTIMATED_QTY])||0)+' pcs'}));
+  }
+  const directTotal=reportLines.reduce((sum,line)=>sum+(typeof line.quantity==='number'?line.quantity:0),0);
+  const reportTotal=bundleCount?(directTotal?directTotal+' pcs + ':'')+bundleCount+' bundles':String(directTotal);
+  return {id:deliveryId,date:formatInventoryDateForClient(first[DELIVERY_IDX.DELIVERY_DATE]),driver:String(first[DELIVERY_IDX.DRIVER_NAME]||''),plate:String(first[DELIVERY_IDX.PLATE_NO]||''),preparedBy:String(first[DELIVERY_IDX.PREPARED_BY]||first[DELIVERY_IDX.ACCEPTED_BY]||''),acceptedBy:String(first[DELIVERY_IDX.ACCEPTED_BY]||''),remarks:String(first[DELIVERY_IDX.REMARKS]||''),category:yourFinds?'YourFinds':[...new Set(rows.map(r=>String(r[DELIVERY_IDX.TYPE]||r[DELIVERY_IDX.CATEGORY]||first[DELIVERY_IDX.DELIVERY_TYPE])))].join(' / '),yourFinds:yourFinds,status:status,bundleCount:bundleCount,estimated:estimated,actual:actual,bulkActual:bulkActual,counts:counts,groups:groups,reportLines:reportLines,reportTotal:reportTotal};
 }
