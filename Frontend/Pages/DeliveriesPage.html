@@ -59,7 +59,7 @@
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body d-flex flex-wrap gap-2">
-      <select id="deliveriesCategoryFilter" class="form-select" style="width:180px;" aria-label="Delivery category" onchange="filterDeliveriesPage()"><option value="">All</option><option value="YOURFINDS">YourFinds </option><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option></select>
+      <select id="deliveriesCategoryFilter" class="form-select" style="width:180px;" aria-label="Delivery type" onchange="filterDeliveriesPage()"><option value="">All</option><option value="YOURFINDS">YOURFINDS</option><option value="YOURSTYLE">YOURSTYLE</option></select>
       <input type="search" id="deliveriesSearch" class="form-control" style="flex:1;min-width:220px;" aria-label="Search deliveries" placeholder="Search code, product, category, size..." oninput="filterDeliveriesPage()">
     </div>
   </div>
@@ -83,6 +83,8 @@
               <tr>
 
                 <th data-delivery-sort="deliveryId" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setDeliverySort('main','deliveryId')">Delivery <span class="sort-marker">↕</span></button></th>
+
+                <th data-delivery-sort="deliveryType" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setDeliverySort('main','deliveryType')">Type <span class="sort-marker">↕</span></button></th>
 
                 <th data-delivery-sort="deliveryDate" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setDeliverySort('main','deliveryDate')">Date <span class="sort-marker">↕</span></button></th>
 
@@ -110,7 +112,7 @@
               <tr>
 
                 <td
-                  colspan="8"
+                  colspan="9"
                   class="text-center text-muted py-5"
                 >
                   Open Deliveries to load history.
@@ -197,7 +199,7 @@ function loadDeliveriesPage(forceRefresh) {
     <tr>
 
       <td
-        colspan="8"
+        colspan="9"
         class="text-center text-muted py-5"
       >
 
@@ -241,7 +243,7 @@ function loadDeliveriesPage(forceRefresh) {
             <tr>
 
               <td
-                colspan="8"
+                colspan="9"
                 class="text-center text-danger py-5"
               >
                 ${escapeDeliveriesHtml(
@@ -313,7 +315,7 @@ function loadDeliveriesPage(forceRefresh) {
           <tr>
 
             <td
-              colspan="8"
+              colspan="9"
               class="text-center text-danger py-5"
             >
               ${escapeDeliveriesHtml(
@@ -401,7 +403,7 @@ function renderDeliveriesTable(
       <tr>
 
         <td
-          colspan="8"
+          colspan="9"
           class="text-center text-muted py-5"
         >
           No deliveries found.
@@ -502,6 +504,8 @@ function renderDeliveriesTable(
 
         </td>
 
+
+        <td>${escapeDeliveriesHtml(deliveryType || "—")}</td>
 
         <!-- DATE -->
 
@@ -1067,7 +1071,7 @@ function filterDeliveriesPage() {
 
 
         return (
-          (!category || (category === "YOURFINDS" ? delivery.deliveryType === "YOURFINDS" : (Number((delivery.quantities || {})[category]) > 0 || (delivery.bulkTypes || []).includes(category)))) &&
+          (!category || String(delivery.deliveryType || "").trim().toUpperCase() === category) &&
           matchesSearch &&
           matchesFrom &&
           matchesTo &&
