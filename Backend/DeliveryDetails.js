@@ -83,5 +83,19 @@ function getDeliveryDetails(deliveryId) {
   const bulkActual=groups.filter(g=>g.id!=='direct').reduce((sum,g)=>sum+g.items.reduce((total,i)=>total+i.quantity,0),0);
   const statuses=rows.map(r=>String(r[DELIVERY_IDX.STATUS]).toUpperCase());
   const status=statuses.includes('PARTIAL')?'PARTIAL':statuses.includes('PENDING')?'PENDING':statuses.includes('COMPLETED')?'COMPLETED':statuses[0];
-  return {id:deliveryId,date:formatInventoryDateForClient(first[DELIVERY_IDX.DELIVERY_DATE]),driver:String(first[DELIVERY_IDX.DRIVER_NAME]||''),plate:String(first[DELIVERY_IDX.PLATE_NO]||''),acceptedBy:String(first[DELIVERY_IDX.ACCEPTED_BY]||''),category:String(first[DELIVERY_IDX.DELIVERY_TYPE]).toUpperCase()==='YOURFINDS'?'YourFinds':[...new Set(rows.map(r=>String(r[DELIVERY_IDX.TYPE]||r[DELIVERY_IDX.CATEGORY]||first[DELIVERY_IDX.DELIVERY_TYPE])))].join(' / '),yourFinds:String(first[DELIVERY_IDX.DELIVERY_TYPE]).toUpperCase()==='YOURFINDS',status:status,bundleCount:bundleCount,estimated:estimated,actual:actual,bulkActual:bulkActual,counts:counts,groups:groups};
+  const yourFinds=String(first[DELIVERY_IDX.DELIVERY_TYPE]).toUpperCase()==='YOURFINDS';
+  const sizeDescriptions={SNE:'Small non-electronic',MNE:'Medium non-electronic',LNE:'Large non-electronic',XLNE:'Extra large non-electronic',SE:'Small electronic',ME:'Medium electronic',LE:'Large electronic',XLE:'Extra large electronic'};
+  const reportLines=yourFinds
+    ? rows.filter(r=>String(r[DELIVERY_IDX.RECEIVE_MODE]).toUpperCase()==='DIRECT').map(r=>{
+        const size=String(r[DELIVERY_IDX.CATEGORY]||'').trim();
+        return {code:size,description:sizeDescriptions[size.toUpperCase()]||size,quantity:Number(r[DELIVERY_IDX.ACTUAL_QTY])||0,remarks:''};
+      })
+    : direct.items.map(item=>({code:item.code,description:item.name,quantity:item.quantity,remarks:''}));
+  if(!yourFinds){
+    if(!direct.items.length)rows.filter(r=>String(r[DELIVERY_IDX.RECEIVE_MODE]).toUpperCase()==='DIRECT').forEach(r=>reportLines.push({code:'',description:String(r[DELIVERY_IDX.DESCRIPTION]||''),quantity:Number(r[DELIVERY_IDX.ACTUAL_QTY])||0,remarks:''}));
+    rows.filter(r=>String(r[DELIVERY_IDX.RECEIVE_MODE]).toUpperCase()==='BULK').forEach(r=>reportLines.push({code:String(r[DELIVERY_IDX.DESCRIPTION]||''),description:String(r[DELIVERY_IDX.TYPE]||'')+' bundle',quantity:String(Number(r[DELIVERY_IDX.BUNDLE_QTY])||0)+' bundles',remarks:'Est. '+String(Number(r[DELIVERY_IDX.ESTIMATED_QTY])||0)+' pcs'}));
+  }
+  const directTotal=reportLines.reduce((sum,line)=>sum+(typeof line.quantity==='number'?line.quantity:0),0);
+  const reportTotal=bundleCount?(directTotal?directTotal+' pcs + ':'')+bundleCount+' bundles':String(directTotal);
+  return {id:deliveryId,date:formatInventoryDateForClient(first[DELIVERY_IDX.DELIVERY_DATE]),driver:String(first[DELIVERY_IDX.DRIVER_NAME]||''),plate:String(first[DELIVERY_IDX.PLATE_NO]||''),preparedBy:String(first[DELIVERY_IDX.PREPARED_BY]||first[DELIVERY_IDX.ACCEPTED_BY]||''),acceptedBy:String(first[DELIVERY_IDX.ACCEPTED_BY]||''),remarks:String(first[DELIVERY_IDX.REMARKS]||''),category:yourFinds?'YourFinds':[...new Set(rows.map(r=>String(r[DELIVERY_IDX.TYPE]||r[DELIVERY_IDX.CATEGORY]||first[DELIVERY_IDX.DELIVERY_TYPE])))].join(' / '),yourFinds:yourFinds,status:status,bundleCount:bundleCount,estimated:estimated,actual:actual,bulkActual:bulkActual,counts:counts,groups:groups,reportLines:reportLines,reportTotal:reportTotal};
 }

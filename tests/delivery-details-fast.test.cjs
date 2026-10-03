@@ -17,7 +17,7 @@ function setup() {
     Inventory: Array.from({ length: 5000 }, (_, index) => makeRow(inventory, { CODE: 'UNRELATED-' + index }, 17)),
     'Inventory Movement Log': Array.from({ length: 20000 }, () => makeRow(movement, { REFERENCE_ID: 'OTHER' }, 16))
   };
-  sheets['Delivery Log'][7] = makeRow(delivery, { DELIVERY_ID: 'D1', DELIVERY_DATE: '2026-10-03', DELIVERY_TYPE: 'YOURSTYLE', TYPE: 'PINS', RECEIVE_MODE: 'DIRECT', STATUS: 'ACCEPTED' }, 20);
+  sheets['Delivery Log'][7] = makeRow(delivery, { DELIVERY_ID: 'D1', DELIVERY_DATE: '2026-10-03', DELIVERY_TYPE: 'YOURSTYLE', TYPE: 'PINS', RECEIVE_MODE: 'DIRECT', STATUS: 'ACCEPTED', PREPARED_BY: 'Emerose', ACCEPTED_BY: 'Mica', ACTUAL_QTY: 5 }, 20);
   sheets.Inventory[100] = makeRow(inventory, { CODE: '001', DESCRIPTION: 'Yellow', SIZE: 'NO SIZE', CATEGORY: 'PINS', STATUS: 'ACTIVE', IMAGE: 'photo' }, 17);
   sheets['Inventory Movement Log'][105] = makeRow(movement, { REFERENCE_ID: 'D1', SOURCE: 'DELIVERY', CODE: '001', QTY_CHANGE: 5, ITEM: 'Yellow' }, 16);
   sheets['Inventory Movement Log'][106] = makeRow(movement, { REFERENCE_ID: 'D1', SOURCE: 'SALE', CODE: '001', QTY_CHANGE: -1 }, 16);
@@ -42,6 +42,9 @@ test('delivery details reads matching history and inventory products without ful
   assert.equal(details.actual, 5);
   assert.equal(details.groups[0].items[0].name, 'Yellow');
   assert.equal(details.groups[0].items[0].imageUrl, 'photo');
+  assert.equal(details.preparedBy, 'Emerose');
+  assert.equal(details.reportTotal, '5');
+  assert.equal(details.reportLines[0].description, 'Yellow');
   assert.ok(reads.reduce((total, [, height, width]) => total + height * width, 0) < 5100);
   assert.deepEqual(Array.from(reads, ([name]) => name), ['Delivery Log', 'Inventory Movement Log', 'Inventory', 'Inventory']);
 });

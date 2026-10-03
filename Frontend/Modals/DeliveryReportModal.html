@@ -2,7 +2,7 @@
  <div class="custom-popup-card delivery-modal-card" style="max-width:760px">
   <div class="d-flex justify-content-between border-bottom pb-3 mb-4"><div><h5 class="fw-bold">Delivery Details</h5><strong id="standardDeliveryId"></strong></div><button type="button" class="btn-close" aria-label="Close" onclick="closeStandardDeliveryDetails()"></button></div>
   <div id="standardDeliveryContent"></div>
-  <div class="d-flex gap-2 mt-4"><button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeStandardDeliveryDetails()">Close</button><button type="button" class="btn btn-pink flex-fill" onclick="generateBlankA4Report('Delivery',selectedDeliveryReportId)">Print Report</button></div>
+  <div class="d-flex gap-2 mt-4"><button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeStandardDeliveryDetails()">Close</button><button type="button" class="btn btn-pink flex-fill" onclick="printDeliveryReport(selectedDeliveryReportId,this)">Print Report</button></div>
  </div>
 </div>
 <script>
@@ -41,21 +41,29 @@ function renderStandardDeliveryDetails(){
  const headingItems=document.createElement('h6');headingItems.className='fw-bold';headingItems.textContent=data.bundleCount?'Distributed Items':'Delivered Items';body.append(headingItems);
  const tabs=document.createElement('div');tabs.className='delivery-mode-toggle btn-group flex-wrap mb-3';tabs.setAttribute('role','group');tabs.setAttribute('aria-label','Delivery item groups');
  const items=document.createElement('div');
- data.groups.forEach((group,index)=>{const button=document.createElement('button');button.type='button';button.className='btn btn-sm btn-outline-pink';button.textContent=group.id==='direct'?'Direct':(new Set(data.groups.filter(g=>g.type).map(g=>g.type)).size>1?group.type+' · ':'')+group.label;button.onclick=()=>{tabs.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));renderStandardDeliveryItems(group,items);};tabs.append(button);if(index===0){button.setAttribute('aria-pressed','true');renderStandardDeliveryItems(group,items);}});
+ data.groups.forEach((group,index)=>{const button=document.createElement('button');button.type='button';button.className='btn btn-sm btn-outline-pink';button.textContent=group.id==='direct'?'Direct':(new Set(data.groups.filter(g=>g.type).map(g=>g.type)).size>1?group.type+' · ':'')+group.label;button.onclick=()=>{tabs.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));renderStandardDeliveryItems(group,items);};tabs.append(button);if(index===0)button.setAttribute('aria-pressed','true');});
  if(data.bundleCount)body.append(tabs);body.append(items);
+ if(data.groups.length)renderStandardDeliveryItems(data.groups[0],items);
 }
 function renderStandardDeliveryItems(group,container){
  container.replaceChildren();
  if(group.id!=='direct'){const summary=document.createElement('div');summary.className='small text-muted mb-2';summary.textContent=(group.code?'Bundle code: '+group.code+' · ':'')+'Actual: '+group.items.reduce((sum,item)=>sum+item.quantity,0)+' pcs';container.append(summary);}
- if(!group.items.length){const empty=document.createElement('div');empty.className='text-muted text-center py-4';empty.textContent='No products distributed from this bundle yet.';container.append(empty);}
+ if(!group.items.length){const empty=document.createElement('div');empty.className='text-muted text-center py-4';empty.textContent='No products distributed from this bundle yet.';container.append(empty);return;}
+ const list=document.createElement('div');list.className='delivery-detail-item-list';container.append(list);
  group.items.forEach(item=>{
   const row=document.createElement('div');row.className='d-flex align-items-center gap-3 border rounded p-2 mb-2';
   if(item.imageUrl&&/^https?:\/\//i.test(item.imageUrl)){const photo=document.createElement('button');photo.type='button';photo.className='btn p-0';photo.setAttribute('aria-label','View '+item.name+' image');const image=document.createElement('img');image.loading='lazy';image.decoding='async';image.src=item.imageUrl;image.alt=item.name;image.style.cssText='width:56px;height:56px;object-fit:cover;border-radius:6px';photo.append(image);photo.onclick=()=>openInventoryImageViewer(item);row.append(photo);}else{const placeholder=document.createElement('span');placeholder.className='small text-muted bg-light rounded p-2';placeholder.style.cssText='width:56px;flex-shrink:0';placeholder.textContent='No Image';row.append(placeholder);}
   const info=document.createElement('div');info.className='flex-grow-1';info.style.minWidth='0';const name=document.createElement('strong');name.textContent=item.name;const code=document.createElement('div');code.className='small text-muted';code.textContent=item.code;info.append(name,code);
   if(deliveryViewData.yourFinds){const size=document.createElement('div');size.className='small text-muted';size.textContent=item.status==='INCOMPLETE'?'Details not completed':item.size;info.append(size);}row.append(info);
   const qty=document.createElement('div');qty.className='text-end';qty.textContent=item.quantity+' pcs';
-  if(deliveryViewData.yourFinds){const badge=document.createElement('div');badge.innerHTML=buildInventoryStatusBadge(item.status);qty.append(badge);}row.append(qty);container.append(row);
+  if(deliveryViewData.yourFinds){const badge=document.createElement('div');badge.innerHTML=buildInventoryStatusBadge(item.status);qty.append(badge);}row.append(qty);list.append(row);
  });
+ if(list.children.length>5){
+  list.style.maxHeight=Math.ceil(list.children[5].getBoundingClientRect().top-list.children[0].getBoundingClientRect().top)+'px';
+  list.tabIndex=0;
+  list.setAttribute('role','region');
+  list.setAttribute('aria-label','Delivered items');
+ }
 }
 function blankA4PdfBytes() {
   // PDF dimensions are points: 210 × 297 mm. The content stream is intentionally empty.
@@ -71,5 +79,26 @@ function generateBlankA4Report(type, reference) {
   const url=URL.createObjectURL(blob),link=document.createElement('a');
   link.href=url;link.download=(type+' Report '+String(reference||'')).replace(/[^a-zA-Z0-9 _-]/g,'')+'.pdf';
   document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+function printDeliveryReport(deliveryId,button) {
+  const id=String(deliveryId||'').trim();
+  if(!id)return showNotificationToast('Delivery ID is required.',true);
+  if(button&&button.disabled)return;
+  const originalButtonHtml=button?button.innerHTML:'';
+  if(button){button.disabled=true;button.setAttribute('aria-busy','true');button.innerHTML=loadingIndicator('Generating report…');}
+  const finish=()=>{if(button){button.disabled=false;button.removeAttribute('aria-busy');button.innerHTML=originalButtonHtml;}};
+  const fail=error=>{finish();showNotificationToast(error&&error.message||String(error),true);};
+  google.script.run.withSuccessHandler(result=>{
+    if(!result||!result.success)return fail(result&&result.message||'Delivery report failed.');
+    try {
+      const binary=atob(result.base64),bytes=new Uint8Array(binary.length);
+      for(let index=0;index<binary.length;index++)bytes[index]=binary.charCodeAt(index);
+      const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+      const link=document.createElement('a');
+      link.href=url;link.download=result.fileName;document.body.appendChild(link);link.click();link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+      finish();
+    } catch(error) {fail(error);}
+  }).withFailureHandler(fail).createDeliveryReceiptPdf(id);
 }
 </script>
