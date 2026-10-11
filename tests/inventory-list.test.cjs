@@ -181,6 +181,24 @@ test('inventory product status filter supports active, inactive, on sale and all
   filter.value='ON SALE';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['3']);
   filter.value='';assert.equal(c.getFilteredInventoryItems().length,4);
 });
+test('inventory stock status filter supports each displayed availability',()=>{
+  const {context:c}=frontend();
+  c.inventoryPageData=[
+    {code:'1',name:'Available',stock:10,lowStockAt:2},
+    {code:'2',name:'Low',stock:2,lowStockAt:2},
+    {code:'3',name:'Sold out',stock:0},
+    {code:'4',name:'Negative',stock:-1},
+    {code:'5',name:'Incomplete',stock:1,status:'INCOMPLETE'},
+    {code:'6',name:'Returned',stock:0,status:'RETURNED'}
+  ];
+  const filter=c.document.getElementById('inventoryStockStatusFilter');
+  filter.value='IN STOCK';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['1']);
+  filter.value='LOW STOCK';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['2']);
+  filter.value='SOLD OUT';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['3','4']);
+  filter.value='INCOMPLETE';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['5']);
+  filter.value='RETURNED';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['6']);
+  filter.value='';assert.equal(c.getFilteredInventoryItems().length,6);
+});
 test('inventory product status filter is manager-only and resets when hidden',()=>{
   const {context:c}=frontend();
   const filter=c.document.getElementById('inventoryStatusFilter');
