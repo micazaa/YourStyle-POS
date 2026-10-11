@@ -1702,7 +1702,7 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
     return [];
   }
 
-  const results = [];
+  const movements = [];
 
   /* ========================================================
      PROCESS SOLD ITEMS
@@ -1760,7 +1760,7 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
          ✓ Roll stock back if movement logging fails
       ====================================================== */
 
-  const result = changeInventoryStock({
+  movements.push({
     code: code,
     qtyChange: -quantitySold,
     referenceId: receiptId,
@@ -1771,12 +1771,8 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
     source: INVENTORY_MOVEMENT_SOURCE.SALE,
     notes: ""
   });
-    results.push(result);
   });
-
-  SpreadsheetApp.flush();
-
-  return results;
+  return changeInventoryStockBatch_(movements);
 }
 
 /* ==========================================================

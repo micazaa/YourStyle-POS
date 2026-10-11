@@ -524,7 +524,7 @@ function changeInventoryActiveInline(item, select) {
     showNotificationToast('Item set to ' + item.productStatus.toLowerCase() + '.');
   }).withFailureHandler(function(error) {
     item.status=previousStatus;item.productStatus=previousProductStatus;filterInventoryTable();showNotificationToast(error.message || String(error), true);
-  }).setInventoryAdministrativeStatus({code:item.code,status:status,...auth});
+  }).setInventoryAdministrativeStatus({code:item.code,rowNumber:item.rowNumber,productRowNumber:item.productRowNumber,status:status,...auth});
 }
 function editInventoryRow(item, requestedStatus) {
   if (!inventoryIsManager()) return;

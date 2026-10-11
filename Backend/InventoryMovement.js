@@ -76,6 +76,65 @@ function changeInventoryStock(options) {
   return { success: true, code: code, rowNumber: inventoryRow, qtyChange: qtyChange, stockBefore: stockBefore, stockAfter: stockAfter };
 }
 
+function changeInventoryStockBatch_(movements) {
+  if (!Array.isArray(movements) || !movements.length) return [];
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const inventorySheet = ss.getSheetByName(SHEETS.INVENTORY);
+  if (!inventorySheet || inventorySheet.getLastRow() < 2) throw new Error("Inventory is empty.");
+  const inventoryRows = inventorySheet.getRange(2, 1, inventorySheet.getLastRow() - 1, INVENTORY_COLUMN_COUNT).getValues();
+  const byCode = {};
+  inventoryRows.forEach(function(row, index) {
+    const code = String(row[INV_IDX.CODE] || "").trim();
+    if (code && !byCode[code]) byCode[code] = {row:row, rowNumber:index + 2, stock:Number(row[INV_IDX.STOCK]) || 0};
+  });
+
+  let movementSheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
+  if (!movementSheet) {
+    movementSheet = ss.insertSheet(SHEETS.INVENTORY_MOVEMENT_LOG);
+    movementSheet.getRange(1, 1, 1, MOVEMENT_LOG_COLUMN_COUNT).setValues([[
+      "Movement ID", "Timestamp", "Movement Source", "Reference ID", "Source Line ID",
+      "Product Code", "Item Name", "Category", "Quantity Change", "Stock Before",
+      "Stock After", "Employee", "Reason", "Bundle No.", "Remaining Bundle Qty", "Notes"
+    ]]);
+  }
+
+  const now = new Date();
+  const rows = [];
+  const results = [];
+  const touchedRows = {};
+  movements.forEach(function(options) {
+    options = options || {};
+    const code = String(options.code || "").trim();
+    const qtyChange = Number(options.qtyChange);
+    const source = String(options.source || "").trim().toUpperCase();
+    if (!code) throw new Error("Inventory Code is required.");
+    if (!Number.isFinite(qtyChange) || qtyChange === 0) throw new Error("Stock quantity change must be a non-zero number.");
+    if (!source) throw new Error("Inventory movement Source is required.");
+    const target = byCode[code];
+    if (!target) throw new Error("Inventory Code " + code + " was not found.");
+    const stockBefore = target.stock;
+    const stockAfter = stockBefore + qtyChange;
+    target.stock = stockAfter;
+    const type = getInventoryMovementType(target.row[INV_IDX.CATEGORY], target.row[INV_IDX.INVENTORY_TYPE]);
+    rows.push([
+      generateInventoryMovementId(), now, source, String(options.referenceId || "").trim(),
+      String(options.sourceLineId || "").trim(), code, String(options.item || "").trim(), type,
+      qtyChange, stockBefore, stockAfter, String(options.employee || "").trim(),
+      String(options.reason || "").trim(), options.bundleNo === "" || options.bundleNo == null ? "" : options.bundleNo,
+      options.remainingBundleQty === "" || options.remainingBundleQty == null ? "" : Number(options.remainingBundleQty),
+      String(options.notes || "").trim()
+    ]);
+    touchedRows[target.rowNumber] = true;
+    results.push({success:true, code:code, rowNumber:target.rowNumber, qtyChange:qtyChange, stockBefore:stockBefore, stockAfter:stockAfter});
+  });
+  movementSheet.getRange(movementSheet.getLastRow() + 1, 1, rows.length, MOVEMENT_LOG_COLUMN_COUNT).setValues(rows);
+  const addresses = Object.keys(touchedRows).map(function(rowNumber) { return "Q" + rowNumber; });
+  if (addresses.length && inventorySheet.getRangeList) inventorySheet.getRangeList(addresses).setValue(now);
+  else Object.keys(touchedRows).forEach(function(rowNumber) { inventorySheet.getRange(Number(rowNumber), INV_COL.UPDATED_AT).setValue(now); });
+  SpreadsheetApp.flush();
+  return results;
+}
+
 function logInventoryMovement(movement) {
   if (!movement) throw new Error("Inventory movement data is required.");
 
@@ -695,18 +754,51 @@ function setInventoryAdministrativeStatus(payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const result = getInventoryItemByCode(code);
-    if (!result.success) throw new Error(result.message || "Inventory item not found.");
-    const item = result.item;
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEETS.INVENTORY);
+    let inventoryRow = Number(payload.rowNumber) || 0;
+    let item;
+    if (!inventoryRow) {
+      const result = getInventoryItemByCode(code);
+      if (!result.success) throw new Error(result.message || "Inventory item not found.");
+      item = result.item;
+      inventoryRow = item.rowNumber;
+    } else {
+      let values = inventoryRow >= 2 && inventoryRow <= sheet.getLastRow()
+        ? sheet.getRange(inventoryRow, 1, 1, INVENTORY_COLUMN_COUNT).getValues()[0]
+        : null;
+      if (!values || String(values[INV_IDX.CODE] || "").trim() !== code) {
+        const codes = sheet.getRange(2, INV_COL.CODE, sheet.getLastRow() - 1, 1).getDisplayValues();
+        inventoryRow = codes.findIndex(function(row) { return String(row[0] || "").trim() === code; }) + 2;
+        if (inventoryRow < 2) throw new Error("Inventory item not found.");
+        values = sheet.getRange(inventoryRow, 1, 1, INVENTORY_COLUMN_COUNT).getValues()[0];
+      }
+      item = {
+        rowNumber: inventoryRow, code: code, name: String(values[INV_IDX.DESCRIPTION] || "").trim(),
+        size: String(values[INV_IDX.SIZE] || "").trim(), category: String(values[INV_IDX.CATEGORY] || "").trim(),
+        inventoryType: String(values[INV_IDX.INVENTORY_TYPE] || "").trim().toUpperCase(),
+        status: String(values[INV_IDX.STATUS] || "").trim().toUpperCase(), stock: Number(values[INV_IDX.STOCK]) || 0
+      };
+    }
     if (![INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].includes(String(item.status).toUpperCase())) {
       throw new Error("Only active or inactive items can be changed here. Complete unfinished items first.");
     }
     if (String(item.category).toUpperCase() === "YOURFINDS" && String(item.inventoryType).toUpperCase() === INVENTORY_TYPE.UNIQUE && inventoryStatus === INVENTORY_STATUS.ACTIVE) {
       assertCompletedYourFinds_(item);
     }
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
-    const master = getProductMaster_().find(function(product) { return String(product.productCode) === code; });
-    const masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.PRODUCT_MASTER);
+    const masterSheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
+    let master = null;
+    const productRowNumber = Number(payload.productRowNumber) || 0;
+    if (masterSheet && productRowNumber >= 2 && productRowNumber <= masterSheet.getLastRow()) {
+      const masterValues = masterSheet.getRange(productRowNumber, 1, 1, PRODUCT_MASTER_COLUMN_COUNT).getValues()[0];
+      if (String(masterValues[PRODUCT_IDX.PRODUCT_CODE] || "").trim() === code) master = {
+        rowNumber:productRowNumber,
+        active:masterValues[PRODUCT_IDX.ACTIVE] === true || String(masterValues[PRODUCT_IDX.ACTIVE]).toUpperCase() === "TRUE",
+        status:String(masterValues[PRODUCT_IDX.STATUS] || "ACTIVE").trim().toUpperCase(),
+        saleReferenceId:String(masterValues[PRODUCT_IDX.SALE_REFERENCE_ID] || "").trim()
+      };
+    }
+    if (!master && masterSheet) master = getProductMaster_().find(function(product) { return String(product.productCode) === code; });
     if (master) {
       masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(status === "ACTIVE");
       masterSheet.getRange(master.rowNumber, PRODUCT_COL.STATUS).setValue(status);
@@ -714,8 +806,8 @@ function setInventoryAdministrativeStatus(payload) {
       masterSheet.getRange(master.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(new Date());
     }
     try {
-      sheet.getRange(item.rowNumber, INV_COL.STATUS).setValue(inventoryStatus);
-      sheet.getRange(item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
+      sheet.getRange(inventoryRow, INV_COL.STATUS).setValue(inventoryStatus);
+      sheet.getRange(inventoryRow, INV_COL.UPDATED_AT).setValue(new Date());
       if (master) logProductStatusChange_({
         code: code, item: item.name, category: item.category, inventoryType: item.inventoryType,
         stock: item.stock, employee: auth.managerName, referenceId: master && master.saleReferenceId,

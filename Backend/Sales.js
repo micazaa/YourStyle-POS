@@ -53,7 +53,8 @@ function executeCheckoutBackend(
         lineAfterItemDiscount: roundToTwo(lineRaw - lineDiscount),
       });
     });
-    lines = validateSalePricing_(lines);
+    const productSnapshot = getProductMaster_();
+    lines = validateSalePricing_(lines, productSnapshot);
 
     const subtotalAfterItemDiscounts = lines.reduce(
       (s, l) => s + l.lineAfterItemDiscount,
@@ -159,7 +160,7 @@ function executeCheckoutBackend(
 
     // 5) Decrement inventory stock for non-custom items
     deductInventoryStock(lines, receiptId, cashierName);
-    consumeSaleAllocations_(lines, cashierName);
+    consumeSaleAllocations_(lines, cashierName, productSnapshot);
 
     return JSON.stringify({
       success: true,
@@ -171,9 +172,9 @@ function executeCheckoutBackend(
   }
 }
 
-function validateSalePricing_(lines) {
+function validateSalePricing_(lines, productSnapshot) {
   const products = {};
-  getProductMaster_().forEach(function(product) {
+  (Array.isArray(productSnapshot) ? productSnapshot : getProductMaster_()).forEach(function(product) {
     products[String(product.productCode || "").trim()] = product;
   });
   return lines.map(function(line) {
@@ -202,7 +203,7 @@ function validateSalePricing_(lines) {
   });
 }
 
-function consumeSaleAllocations_(lines, employee) {
+function consumeSaleAllocations_(lines, employee, productSnapshot) {
   const totals = {};
   lines.forEach(function(line) {
     if (String(line.priceSource || "").toUpperCase() !== "SALE") return;
@@ -213,7 +214,7 @@ function consumeSaleAllocations_(lines, employee) {
   if (!codes.length) return;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
-  const products = getProductMaster_();
+  const products = Array.isArray(productSnapshot) ? productSnapshot : getProductMaster_();
   codes.forEach(function(code) {
     const product = products.find(function(row) { return String(row.productCode) === code; });
     if (!product || product.status !== PRODUCT_STATUS.ON_SALE || product.saleRemaining === null) return;
