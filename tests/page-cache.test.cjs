@@ -27,6 +27,13 @@ test('late inventory responses cannot replace invalidated data or repopulate a s
  const {c,calls}=setup();c.loadInventoryPage();c.loadInventoryPage(true);calls[1].success([{stock:2}]);calls[0].success([{stock:9}]);assert.equal(c.inventoryPageData[0].stock,2);
  c.loadInventoryPage(true);c.pageReadCache.clear();c.currentEmployee=null;calls[2].success([{stock:99}]);assert.equal(c.inventoryPageData[0].stock,2);
 });
+test('silent inventory refresh keeps visible rows and active filters until fresh data arrives',()=>{
+ const {c,elements,calls}=setup();
+ c.document.getElementById('inventoryTableBody').innerHTML='current rows';c.document.getElementById('inventoryCategoryFilter').value='PINS';c.document.getElementById('inventorySearch').value='yellow';
+ c.loadInventoryPage(true,true);
+ assert.equal(elements.inventoryTableBody.innerHTML,'current rows');assert.equal(elements.inventoryCategoryFilter.value,'PINS');assert.equal(elements.inventorySearch.value,'yellow');
+ calls[0].success([{code:'A',stock:0}]);assert.match(elements.inventoryTableBody.innerHTML,/"stock":0/);
+});
 test('cache keys isolate records, empty results and employee sessions',()=>{
  const {c}=setup();const first=c.beginPageRead('history','A');first.save([]);assert.equal(c.beginPageRead('history','A').cached.length,0);
  assert.equal(c.beginPageRead('history','B').cached,undefined);assert.equal(first.current(),false);

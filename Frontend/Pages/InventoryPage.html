@@ -168,7 +168,7 @@ function updateInventoryFilterVisibility() {
   statusFilter.style.display = inventoryIsManager() ? '' : 'none';
   if (!inventoryIsManager()) statusFilter.value = '';
 }
-function loadInventoryPage(forceRefresh = false) {
+function loadInventoryPage(forceRefresh = false, keepVisible = false) {
   if (forceRefresh) { pageReadCache.delete('inventory'); pageReadCache.delete('standardDeliveryDetails'); }
   inventoryIncompleteOnly = dashboardInventoryReminder === 'incomplete';
   document.getElementById('inventoryAddProductButton').style.display = inventoryIsManager() ? 'inline-block' : 'none';
@@ -182,7 +182,7 @@ function loadInventoryPage(forceRefresh = false) {
     filterInventoryTable();
     if(dashboardInventoryReminder==='low'||dashboardInventoryReminder==='sold')openInventorySummary(dashboardInventoryReminder);
     dashboardInventoryReminder='';
-  } else if (refresh.shouldFetch) body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-muted py-5">${loadingIndicator('Loading inventory…')}</td></tr>`;
+  } else if (refresh.shouldFetch && !keepVisible) body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-muted py-5">${loadingIndicator('Loading inventory…')}</td></tr>`;
   if (!refresh.shouldFetch) return;
   google.script.run.withSuccessHandler(function(items) {
     if(!refresh.current() || readToken!==inventoryManagerReadToken())return;

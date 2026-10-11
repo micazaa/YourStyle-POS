@@ -3,7 +3,7 @@
    Label size: 30mm wide x 20mm high
 
    Barcode:
-   Code 128-B encoding of the Inventory Code
+   Code 128 encoding of the Inventory Code
 ========================================================== */
 
 
@@ -36,7 +36,7 @@ const CODE128_PATTERNS = [
 
 
 /* ==========================================================
-   CODE 128-B VALUES
+   CODE 128 VALUES
 ========================================================== */
 
 function getCode128Values(text) {
@@ -53,45 +53,50 @@ function getCode128Values(text) {
 
 
   const values = [];
+  const useCodeC = /^\d+$/.test(text) && text.length % 2 === 0;
 
   /*
-    Start Code B = 104
+    Code C packs numeric pairs. Code B supports text.
   */
 
-  values.push(104);
+  values.push(useCodeC ? 105 : 104);
 
+  if (useCodeC) {
+    for (let i = 0; i < text.length; i += 2) {
+      values.push(Number(text.slice(i, i + 2)));
+    }
+  } else {
+    for (
+      let i = 0;
+      i < text.length;
+      i++
+    ) {
 
-  for (
-    let i = 0;
-    i < text.length;
-    i++
-  ) {
-
-    const charCode =
-      text.charCodeAt(i);
+      const charCode =
+        text.charCodeAt(i);
 
 
     /*
       Code 128-B supports ASCII 32-126.
     */
 
-    if (
-      charCode < 32 ||
-      charCode > 126
-    ) {
+      if (
+        charCode < 32 ||
+        charCode > 126
+      ) {
 
-      throw new Error(
-        "Unsupported barcode character: " +
-        text.charAt(i)
+        throw new Error(
+          "Unsupported barcode character: " +
+          text.charAt(i)
+        );
+
+      }
+
+      values.push(
+        charCode - 32
       );
 
     }
-
-
-    values.push(
-      charCode - 32
-    );
-
   }
 
 
@@ -104,7 +109,7 @@ function getCode128Values(text) {
   */
 
   let checksum =
-    104;
+    values[0];
 
 
   for (
