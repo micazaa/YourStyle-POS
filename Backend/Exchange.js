@@ -135,8 +135,8 @@ function completeCustomerExchange(payload) {
       const now=new Date();
       const commonPayment=paymentMethod||"Cash";
       const rows=[
-        [now,exchangeId,employee,returnCode,returned.name,returned.size,returned.category,-returnQty,returnUnitValue,0,0,0,-returnValue,commonPayment,paymentMethod==="Cash"?"N/A":paymentReference,"COMPLETED",0,0,auth.managerName,EXCHANGE_REASON.RETURN,originalReceiptId,returnSalesLineId,"POS","PROCESSED",now,""],
-        [now,exchangeId,employee,replacementCode,replacement.name,replacement.size,replacement.category,replacementQty,replacementPrice,0,0,0,replacementValue,commonPayment,paymentMethod==="Cash"?"N/A":paymentReference,"COMPLETED",paymentMethod==="Cash"?cashReceived:0,changeGiven,auth.managerName,EXCHANGE_REASON.REPLACEMENT,originalReceiptId,replacementSalesLineId,"POS","PROCESSED",now,""]
+        [now,exchangeId,employee,returnCode,returned.name,returned.size,returned.category,-returnQty,returnUnitValue,0,0,0,-returnValue,commonPayment,paymentMethod==="Cash"?"N/A":paymentReference,"COMPLETED",0,0,auth.managerName,EXCHANGE_REASON.RETURN,originalReceiptId,returnSalesLineId,"POS","PROCESSED",now,"","REGULAR",""],
+        [now,exchangeId,employee,replacementCode,replacement.name,replacement.size,replacement.category,replacementQty,replacementPrice,0,0,0,replacementValue,commonPayment,paymentMethod==="Cash"?"N/A":paymentReference,"COMPLETED",paymentMethod==="Cash"?cashReceived:0,changeGiven,auth.managerName,EXCHANGE_REASON.REPLACEMENT,originalReceiptId,replacementSalesLineId,"POS","PROCESSED",now,"","REGULAR",""]
       ];
       sales.getRange(sales.getLastRow()+1,1,rows.length,SALES_LOG_COLUMN_COUNT).setValues(rows);
       SpreadsheetApp.flush();

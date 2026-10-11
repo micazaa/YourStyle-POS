@@ -436,10 +436,12 @@ function readCustomCosts_(sheet) {
   if (!sheet || sheet.getLastRow() < 2) return map;
   const column = customCostColumn_(sheet, false);
   if (!column) return map;
-  const rows = sheet.getRange(2, 1, sheet.getLastRow()-1, column).getValues();
-  rows.forEach(row => {
-    const raw = row[column-1], value = Number(raw);
-    map[String(row[INV_IDX.CODE]).trim()] = raw === '' || raw === null || !Number.isFinite(value) || value < 0 ? null : value;
+  const rowCount = sheet.getLastRow()-1;
+  const codes = sheet.getRange(2, INV_COL.CODE, rowCount, 1).getDisplayValues();
+  const values = sheet.getRange(2, column, rowCount, 1).getValues();
+  codes.forEach(function(row, index) {
+    const raw = values[index][0], value = Number(raw);
+    map[String(row[0]).trim()] = raw === '' || raw === null || !Number.isFinite(value) || value < 0 ? null : value;
   });
   return map;
 }
@@ -463,14 +465,25 @@ function saveYourFindsCustomCost(payload) {
   } finally { lock.releaseLock(); }
 }
 function getInventoryForManagement(managerToken) {
-  if (!managerToken) return getFullInventory();
+  const products = getProductMaster_();
+  if (!managerToken) return getFullInventory({products:products, includeDeliveryMetadata:false}).filter(function(item) {
+    return String(item.productStatus || PRODUCT_STATUS.ACTIVE).toUpperCase() !== PRODUCT_STATUS.DEACTIVATED;
+  });
   const auth = verifyInventoryManagerSession_(managerToken);
   if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const stockCosts = readCostMap_(ss.getSheetByName(SHEETS.PRODUCT_MASTER), PRODUCT_COL.PRODUCT_CODE);
-  const uniqueCosts = readYourFindsCostBySize_();
+  const stockCosts = {};
+  const uniqueCosts = {};
+  products.forEach(function(product) {
+    const raw = product.costPrice;
+    const value = raw === null || raw === '' || !Number.isFinite(Number(raw)) || Number(raw) < 0 ? null : Number(raw);
+    stockCosts[String(product.productCode || '').trim()] = value;
+    if (String(product.category || '').trim().toUpperCase() !== 'YOURFINDS') return;
+    const size = normalizeYourFindsSaleSize_(product.description);
+    if (size !== 'CUSTOM') uniqueCosts[size] = value;
+  });
   const customCosts = readCustomCosts_(ss.getSheetByName(SHEETS.INVENTORY));
-  return getFullInventory().map(function(item) {
+  return getFullInventory({products:products, includeDeliveryMetadata:false}).map(function(item) {
     const yourFinds = String(item.category).toUpperCase() === 'YOURFINDS';
     const size = yourFinds ? normalizeYourFindsSaleSize_(item.size) : '';
     const key = yourFinds && size !== 'CUSTOM' ? size : item.code;
@@ -503,6 +516,7 @@ function saveProductMasterLocked_(payload) {
   const category = String(payload.category || "").trim().toUpperCase();
   const defaultPrice = Number(payload.defaultPrice), lowStockAt = Number(payload.lowStockAt);
   const costPrice = costPayload_(payload);
+  const requestedStatus = String(payload.status || "").trim().toUpperCase();
   if (!description) throw new Error("Description is required.");
   if (category !== "PINS" && category !== "OTHERS") throw new Error("Category must be PINS or OTHERS.");
   if (!Number.isFinite(defaultPrice) || defaultPrice < 0) throw new Error("Prices must be valid non-negative numbers.");
@@ -527,6 +541,45 @@ function saveProductMasterLocked_(payload) {
   const active = existing
     ? existing.active !== false
     : true;
+  const status = requestedStatus || (existing ? existing.status : PRODUCT_STATUS.ACTIVE);
+  if ([PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.DEACTIVATED, PRODUCT_STATUS.ON_SALE].indexOf(status) === -1) {
+    throw new Error("Status must be ACTIVE, DEACTIVATED, or ON SALE.");
+  }
+  const salePrice = payload.salePrice === "" || payload.salePrice == null ? null : Number(payload.salePrice);
+  const saleQuantity = payload.saleQuantity === "" || payload.saleQuantity == null ? null : Number(payload.saleQuantity);
+  const saleEnd = String(payload.saleEnd || "").trim();
+  if (status === PRODUCT_STATUS.ON_SALE && (!Number.isFinite(salePrice) || salePrice < 0)) {
+    throw new Error("Sale Price is required when Status is ON SALE.");
+  }
+  if (saleQuantity !== null && (!Number.isInteger(saleQuantity) || saleQuantity < 1)) {
+    throw new Error("Sale Quantity must be blank or a positive whole number.");
+  }
+  const existingSaleEnd = String(existing && existing.saleEnd || "").slice(0, 10);
+  const saleAllocationChanged = !existing || existing.status !== PRODUCT_STATUS.ON_SALE ||
+    existing.saleQuantity !== saleQuantity;
+  const saleSettingsChanged = !existing || existing.status !== status || existing.salePrice !== salePrice ||
+    existing.saleQuantity !== saleQuantity || existingSaleEnd !== saleEnd;
+  const saleReferenceId = status === PRODUCT_STATUS.ON_SALE
+    ? (saleSettingsChanged ? generateProductSaleReferenceId_() : String(existing && existing.saleReferenceId || ""))
+    : "";
+  const saleRemaining = status === PRODUCT_STATUS.ON_SALE
+    ? (saleQuantity === null ? null : (saleAllocationChanged ? saleQuantity : Math.min(Number(existing.saleRemaining) || 0, saleQuantity)))
+    : null;
+  const compatibilityActive = status !== PRODUCT_STATUS.DEACTIVATED;
+  const inv = ss.getSheetByName(SHEETS.INVENTORY);
+  let inventoryRow = 0;
+  let inventoryStock = 0;
+  if (inv && inv.getLastRow() >= 2) {
+    const codes = inv.getRange(2, INV_COL.CODE, inv.getLastRow() - 1, 1).getDisplayValues();
+    for (let i = 0; i < codes.length; i++) if (String(codes[i][0]).trim() === code) {
+      inventoryRow = i + 2;
+      inventoryStock = Number(inv.getRange(inventoryRow, INV_COL.STOCK).getValue()) || 0;
+      break;
+    }
+  }
+  if (status === PRODUCT_STATUS.ON_SALE && saleAllocationChanged && saleQuantity !== null && saleQuantity > Math.max(0, inventoryStock)) {
+    throw new Error("Sale Quantity cannot exceed current stock of " + Math.max(0, inventoryStock) + ".");
+  }
   const imageDataUrl = String(payload.imageDataUrl || "").trim();
   const imageFileName = String(payload.imageFileName || "product-photo").trim();
   const createdImage = imageDataUrl
@@ -537,38 +590,108 @@ function saveProductMasterLocked_(payload) {
   if (existing) {
     sheet.getRange(existing.rowNumber, PRODUCT_COL.DESCRIPTION, 1, 7).setValues([[
       description, category, INVENTORY_TYPE.STOCK, defaultPrice,
-      costPrice !== undefined ? costPrice : storedCostPrice, lowStockAt, active
+      costPrice !== undefined ? costPrice : storedCostPrice, lowStockAt, compatibilityActive
     ]]);
     sheet.getRange(existing.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(now);
     sheet.getRange(existing.rowNumber, PRODUCT_COL.IMAGE).setValue(imageUrl);
+    sheet.getRange(existing.rowNumber, PRODUCT_COL.STATUS, 1, 6).setValues([[
+      status,
+      status === PRODUCT_STATUS.ON_SALE ? salePrice : "",
+      status === PRODUCT_STATUS.ON_SALE && saleQuantity !== null ? saleQuantity : "",
+      status === PRODUCT_STATUS.ON_SALE && saleRemaining !== null ? saleRemaining : "",
+      status === PRODUCT_STATUS.ON_SALE ? saleEnd : "",
+      saleReferenceId
+    ]]);
   } else {
     sheet.appendRow([code, description, category, INVENTORY_TYPE.STOCK, defaultPrice,
-      costPrice !== undefined ? costPrice : "", lowStockAt, active, imageUrl, now, now]);
+      costPrice !== undefined ? costPrice : "", lowStockAt, compatibilityActive, imageUrl, now, now,
+      status,
+      status === PRODUCT_STATUS.ON_SALE ? salePrice : "",
+      status === PRODUCT_STATUS.ON_SALE && saleQuantity !== null ? saleQuantity : "",
+      status === PRODUCT_STATUS.ON_SALE && saleRemaining !== null ? saleRemaining : "",
+      status === PRODUCT_STATUS.ON_SALE ? saleEnd : "",
+      saleReferenceId
+    ]);
   }
   // Sync safe metadata into existing STOCK Inventory row if present.
-  const inv = ss.getSheetByName(SHEETS.INVENTORY);
-  if (inv && inv.getLastRow() >= 2) {
-    const codes = inv.getRange(2, INV_COL.CODE, inv.getLastRow() - 1, 1).getDisplayValues();
-    for (let i = 0; i < codes.length; i++) if (String(codes[i][0]).trim() === code) {
-      const r = i + 2;
+  if (inv && inventoryRow) {
+      const r = inventoryRow;
       if (imageUrl) inv.getRange(r, INV_COL.IMAGE).setValue(imageUrl);
       inv.getRange(r, INV_COL.DESCRIPTION).setValue(description);
       inv.getRange(r, INV_COL.YS_PRICE).setValue(defaultPrice);
       inv.getRange(r, INV_COL.CATEGORY).setValue(category);
-      inv.getRange(r, INV_COL.STATUS).setValue(active ? INVENTORY_STATUS.ACTIVE : INVENTORY_STATUS.INACTIVE);
+      inv.getRange(r, INV_COL.STATUS).setValue(compatibilityActive ? INVENTORY_STATUS.ACTIVE : INVENTORY_STATUS.INACTIVE);
       inv.getRange(r, INV_COL.UPDATED_AT).setValue(now);
-      break;
-    }
+      if (saleSettingsChanged) {
+        logProductStatusChange_({
+          code: code,
+          item: description,
+          category: category,
+          inventoryType: INVENTORY_TYPE.STOCK,
+          stock: inventoryStock,
+          employee: authNameFromPayload_(payload),
+          referenceId: saleReferenceId || String(existing && existing.saleReferenceId || ""),
+          previousStatus: existing ? existing.status : "",
+          status: status,
+          salePrice: salePrice,
+          saleQuantity: saleQuantity,
+          saleRemaining: saleRemaining,
+          saleEnd: saleEnd
+        });
+      }
   }
-  return { success: true, productCode: code };
+  return {
+    success: true, productCode: code, description: description, category: category,
+    defaultPrice: defaultPrice, lowStockAt: lowStockAt, status: status,
+    inventoryStatus: compatibilityActive ? INVENTORY_STATUS.ACTIVE : INVENTORY_STATUS.INACTIVE,
+    salePrice: status === PRODUCT_STATUS.ON_SALE ? salePrice : null,
+    saleQuantity: status === PRODUCT_STATUS.ON_SALE ? saleQuantity : null,
+    saleRemaining: status === PRODUCT_STATUS.ON_SALE ? saleRemaining : null,
+    saleEnd: status === PRODUCT_STATUS.ON_SALE ? saleEnd : "",
+    saleReferenceId: saleReferenceId, imageUrl: imageUrl
+  };
+}
+
+function generateProductSaleReferenceId_() {
+  return "SALECFG-" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd-HHmmss") + "-" + Math.floor(100 + Math.random() * 900);
+}
+
+function authNameFromPayload_(payload) {
+  payload = payload || {};
+  const token = String(payload.managerToken || "").trim();
+  if (token) {
+    const auth = verifyInventoryManagerSession_(token);
+    return auth && auth.success ? String(auth.managerName || "Manager") : "Manager";
+  }
+  return String(payload.employee || "Manager").trim() || "Manager";
+}
+
+function logProductStatusChange_(event) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const movementSheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
+  if (!movementSheet) return;
+  const notes = [
+    "Status: " + (event.previousStatus || "NEW") + " → " + event.status,
+    event.status === PRODUCT_STATUS.ON_SALE ? "Sale price: " + event.salePrice : "",
+    event.status === PRODUCT_STATUS.ON_SALE ? "Sale quantity: " + (event.saleQuantity === null ? "ALL" : event.saleQuantity) : "",
+    event.status === PRODUCT_STATUS.ON_SALE && event.saleEnd ? "Sale end: " + event.saleEnd : ""
+  ].filter(Boolean).join(" | ");
+  movementSheet.appendRow([
+    generateInventoryMovementId(), new Date(), INVENTORY_MOVEMENT_SOURCE.PRODUCT_STATUS,
+    String(event.referenceId || ""), "", String(event.code || ""), String(event.item || ""),
+    getInventoryMovementType(event.category, event.inventoryType), 0, Number(event.stock) || 0,
+    Number(event.stock) || 0, String(event.employee || "Manager"), "PRODUCT STATUS CHANGE", "", "", notes
+  ]);
 }
 
 function setInventoryAdministrativeStatus(payload) {
   payload = payload || {};
   const auth = requireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
-  const status = String(payload.status || "").trim().toUpperCase();
-  if (![INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].includes(status)) throw new Error("Status must be ACTIVE or INACTIVE.");
+  const requested = String(payload.status || "").trim().toUpperCase();
+  const status = requested === "INACTIVE" ? "DEACTIVATED" : requested;
+  if (["ACTIVE", "DEACTIVATED"].indexOf(status) === -1) throw new Error("Status must be ACTIVE or DEACTIVATED.");
+  const inventoryStatus = status === "ACTIVE" ? INVENTORY_STATUS.ACTIVE : INVENTORY_STATUS.INACTIVE;
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -578,22 +701,33 @@ function setInventoryAdministrativeStatus(payload) {
     if (![INVENTORY_STATUS.ACTIVE, INVENTORY_STATUS.INACTIVE].includes(String(item.status).toUpperCase())) {
       throw new Error("Only active or inactive items can be changed here. Complete unfinished items first.");
     }
-    if (String(item.category).toUpperCase() === "YOURFINDS" && String(item.inventoryType).toUpperCase() === INVENTORY_TYPE.UNIQUE && status === INVENTORY_STATUS.ACTIVE) {
+    if (String(item.category).toUpperCase() === "YOURFINDS" && String(item.inventoryType).toUpperCase() === INVENTORY_TYPE.UNIQUE && inventoryStatus === INVENTORY_STATUS.ACTIVE) {
       assertCompletedYourFinds_(item);
     }
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
     const master = getProductMaster_().find(function(product) { return String(product.productCode) === code; });
     const masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.PRODUCT_MASTER);
-    if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(status === INVENTORY_STATUS.ACTIVE);
+    if (master) {
+      masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(status === "ACTIVE");
+      masterSheet.getRange(master.rowNumber, PRODUCT_COL.STATUS).setValue(status);
+      masterSheet.getRange(master.rowNumber, PRODUCT_COL.SALE_PRICE, 1, 5).clearContent();
+      masterSheet.getRange(master.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(new Date());
+    }
     try {
-      sheet.getRange(item.rowNumber, INV_COL.STATUS).setValue(status);
+      sheet.getRange(item.rowNumber, INV_COL.STATUS).setValue(inventoryStatus);
       sheet.getRange(item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
+      if (master) logProductStatusChange_({
+        code: code, item: item.name, category: item.category, inventoryType: item.inventoryType,
+        stock: item.stock, employee: auth.managerName, referenceId: master && master.saleReferenceId,
+        previousStatus: master ? master.status : String(item.status || ""), status: status,
+        salePrice: null, saleQuantity: null, saleRemaining: null, saleEnd: ""
+      });
     }
     catch (error) {
       if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(master.active);
       throw error;
     }
-    return { success: true, status: status, manager: auth.managerName };
+    return { success: true, status: requested === "INACTIVE" ? "INACTIVE" : status, productStatus: status, inventoryStatus: inventoryStatus, manager: auth.managerName };
   } finally { lock.releaseLock(); }
 }
 

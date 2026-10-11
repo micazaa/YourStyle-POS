@@ -167,6 +167,52 @@ test('category, search and summary cards use the same matching items',()=>{
   c.document.getElementById('inventorySearch').value='white';
   assert.equal(c.getInventorySummaryItems('stock').length,0);
 });
+test('inventory product status filter supports active, inactive, on sale and all',()=>{
+  const {context:c}=frontend();
+  c.inventoryPageData=[
+    {code:'1',name:'Active pin',productStatus:'ACTIVE',status:'ACTIVE'},
+    {code:'2',name:'Inactive pin',productStatus:'DEACTIVATED',status:'INACTIVE'},
+    {code:'3',name:'Sale pin',productStatus:'ON SALE',status:'ACTIVE'},
+    {code:'4',name:'Legacy inactive pin',status:'INACTIVE'}
+  ];
+  const filter=c.document.getElementById('inventoryStatusFilter');
+  filter.value='ACTIVE';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['1']);
+  filter.value='DEACTIVATED';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['2','4']);
+  filter.value='ON SALE';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['3']);
+  filter.value='';assert.equal(c.getFilteredInventoryItems().length,4);
+});
+test('inventory product status filter is manager-only and resets when hidden',()=>{
+  const {context:c}=frontend();
+  const filter=c.document.getElementById('inventoryStatusFilter');
+  c.currentEmployee={accessLevel:1};c.updateInventoryFilterVisibility();
+  assert.equal(filter.style.display,'');
+  filter.value='ON SALE';c.currentEmployee={accessLevel:2};c.updateInventoryFilterVisibility();
+  assert.equal(filter.style.display,'none');assert.equal(filter.value,'');
+});
+test('specific sale allocation renders separate regular and sale inventory rows',()=>{
+  const {context:c}=frontend();
+  const rows=c.expandInventorySaleRows([{code:'1',name:'Yellow',stock:10,price:120,regularPrice:120,productStatus:'ON SALE',salePrice:99,saleRemaining:3}]);
+  assert.deepEqual(Array.from(rows,x=>[x.name,x.stock,x.price,x.saleVariant]),[
+    ['Yellow',7,120,'REGULAR'],['Yellow',3,99,'SALE']
+  ]);
+  assert.equal(rows.reduce((total,row)=>total+row.stock,0),10);
+});
+test('choosing on sale opens editor immediately with status and sale controls ready',()=>{
+  const {context:c}=frontend();
+  vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Modals/InventoryManagementModal.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
+  c.window={phase8Products:[]};c.currentEmployee={accessLevel:1};
+  c.editInventoryRow({code:'1',name:'Yellow',category:'PINS',price:120,regularPrice:120,stock:10,productStatus:'ACTIVE'},'ON SALE');
+  assert.equal(c.document.getElementById('pmStatus').value,'ON SALE');
+  assert.equal(c.document.getElementById('pmSaleFields').style.display,'block');
+  assert.equal(c.document.getElementById('productEditorModal').style.display,'flex');
+});
+test('sale quantity selector switches between all stock and number input',()=>{
+  const {context:c}=frontend();
+  vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Modals/InventoryManagementModal.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
+  const scope=c.document.getElementById('pmSaleScope'),quantity=c.document.getElementById('pmSaleQuantity');
+  scope.value='SPECIFIC';c.toggleProductSaleQuantity(true);assert.equal(c.document.getElementById('pmSaleQuantityWrap').style.display,'block');
+  quantity.value='4';scope.value='ALL';c.toggleProductSaleQuantity(true);assert.equal(quantity.value,'');assert.equal(c.document.getElementById('pmSaleQuantityWrap').style.display,'none');
+});
 test('PINS detail view omits size and delivery metadata',()=>{
   const {c}=yourFindsEditor(true);
   c.phase8SelectedItem.category='PINS';c.phase8SelectedItem.inventoryType='STOCK';
@@ -424,6 +470,12 @@ test('PINS edit preserves omitted cost; manager cost is separate',()=>{
   c.saveProductMaster({...payload,costPrice:50,managerToken:'manager'});
   assert.equal(records['Product Master'][1][5],50);
   assert.throws(()=>c.saveProductMaster({...payload,costPrice:1}),/session invalid/);
+});
+test('specific sale quantity cannot exceed current inventory stock',()=>{
+  const {c,records}=costHarness();
+  const before=records['Product Master'][1].slice();
+  assert.throws(()=>c.saveProductMaster({productCode:'123456',description:'Pin',category:'PINS',defaultPrice:100,lowStockAt:5,isNew:false,managerToken:'manager',status:'ON SALE',salePrice:80,saleQuantity:1}),/cannot exceed current stock of 0/);
+  assert.deepEqual(records['Product Master'][1],before);
 });
 test('missing legacy costs stay unknown rather than being inferred from original price',()=>{
   const {c,records}=costHarness();records.Inventory[0][17]='';records['Product Master'][1][5]='';

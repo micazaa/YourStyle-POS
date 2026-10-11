@@ -80,9 +80,21 @@ function getProductMaster_() {
     /* ================= ACTIVE ================= */
 
     const rawActive = row[PRODUCT_IDX.ACTIVE];
-
-    const active =
+    const legacyActive =
       rawActive === true || String(rawActive).trim().toUpperCase() === "TRUE";
+    const storedStatus = String(displayRow[PRODUCT_IDX.STATUS] || "").trim().toUpperCase();
+    const status = storedStatus === PRODUCT_STATUS.ON_SALE || storedStatus === PRODUCT_STATUS.DEACTIVATED
+      ? storedStatus
+      : (legacyActive ? PRODUCT_STATUS.ACTIVE : PRODUCT_STATUS.DEACTIVATED);
+    const active = status !== PRODUCT_STATUS.DEACTIVATED;
+    const saleQuantityRaw = row[PRODUCT_IDX.SALE_QUANTITY];
+    const saleRemainingRaw = row[PRODUCT_IDX.SALE_REMAINING];
+    const saleQuantity = saleQuantityRaw === "" || saleQuantityRaw === null
+      ? null
+      : Number(saleQuantityRaw) || 0;
+    const saleRemaining = saleRemainingRaw === "" || saleRemainingRaw === null
+      ? saleQuantity
+      : Number(saleRemainingRaw) || 0;
 
     /* ================= PRODUCT OBJECT ================= */
 
@@ -110,6 +122,21 @@ function getProductMaster_() {
       lowStockAt: Number(row[PRODUCT_IDX.LOW_STOCK_AT]) || 0,
 
       active: active,
+
+      status: status,
+
+      salePrice: row[PRODUCT_IDX.SALE_PRICE] === "" || row[PRODUCT_IDX.SALE_PRICE] === null
+        ? null
+        : Number(row[PRODUCT_IDX.SALE_PRICE]) || 0,
+
+      saleQuantity: saleQuantity,
+
+      saleRemaining: saleRemaining,
+
+      saleEnd: formatProductMasterDateForClient(row[PRODUCT_IDX.SALE_END]),
+
+      saleReferenceId: String(displayRow[PRODUCT_IDX.SALE_REFERENCE_ID] || "").trim() ||
+        (status === PRODUCT_STATUS.ON_SALE ? "SALE-MANUAL-" + productCode : ""),
 
       imageUrl: String(displayRow[PRODUCT_IDX.IMAGE] || "").trim(),
 
@@ -233,7 +260,8 @@ function ensureYourFindsCustomSizeDefinition_(sheet, sizeLabel, now) {
 
   const rowNumber = sheet.getLastRow() + 1;
   const productCode = generateYourFindsSizeProductCode_();
-  sheet.appendRow([productCode, label, "YOURFINDS", INVENTORY_TYPE.UNIQUE, 0, "", 0, true, "", now, now]);
+  sheet.appendRow([productCode, label, "YOURFINDS", INVENTORY_TYPE.UNIQUE, 0, "", 0, true, "", now, now,
+    PRODUCT_STATUS.ACTIVE, "", "", "", "", ""]);
   return { created: true, rowNumber: rowNumber, size: label, productCode: productCode };
 }
 
@@ -1117,6 +1145,7 @@ function repairIncompleteInventoryFromProductMaster_(product, inventoryRowNumber
     normalizeInventoryCategoryValue_(product.category),
     String(product.inventoryType || INVENTORY_TYPE.STOCK).trim().toUpperCase(),
     INVENTORY_STATUS.ACTIVE,
+    "",
     "",
     "",
     "",

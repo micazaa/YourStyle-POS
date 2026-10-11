@@ -1,3 +1,10 @@
+function saleDisplayName_(name, priceSource) {
+  const value = String(name || "").trim();
+  return String(priceSource || "").trim().toUpperCase() === "SALE" && !/\s(?:·\s*)?SALE$/i.test(value)
+    ? value + " · SALE"
+    : value;
+}
+
 function executeCheckoutBackend(
   cart,
   paymentMethod,
@@ -46,6 +53,7 @@ function executeCheckoutBackend(
         lineAfterItemDiscount: roundToTwo(lineRaw - lineDiscount),
       });
     });
+    lines = validateSalePricing_(lines);
 
     const subtotalAfterItemDiscounts = lines.reduce(
       (s, l) => s + l.lineAfterItemDiscount,
@@ -104,7 +112,7 @@ function executeCheckoutBackend(
       l.salesLineId = generateSalesLineId();
     });
 
-    // 4) Write Sales Log rows (A–Z), repeating Cash Received/Change on every line.
+    // 4) Write Sales Log rows (A–AB), repeating Cash Received/Change on every line.
     // POS writes are already inventory-synchronized, so mark them PROCESSED.
     const timestamp = new Date();
     const rows = lines.map((l) => [
@@ -112,7 +120,7 @@ function executeCheckoutBackend(
       receiptId, // B Receipt ID
       cashierName, // C Cashier
       l.code, // D Code
-      l.name, // E Item Name
+      saleDisplayName_(l.name, l.priceSource), // E Item Name
       l.size, // F Size
       l.category || "Others", // G Category
       l.quantity, // H Quantity
@@ -137,6 +145,8 @@ function executeCheckoutBackend(
       "PROCESSED", // X Sync Status
       timestamp, // Y Processed At
       "", // Z Sync Error
+      l.priceSource || (l.isCustom ? "MANUAL" : "REGULAR"), // AA Price Source
+      l.saleReferenceId || "", // AB Sale Reference ID
     ]);
     salesLogSheet
       .getRange(
@@ -149,15 +159,91 @@ function executeCheckoutBackend(
 
     // 5) Decrement inventory stock for non-custom items
     deductInventoryStock(lines, receiptId, cashierName);
+    consumeSaleAllocations_(lines, cashierName);
 
     return JSON.stringify({
       success: true,
       message: "Transaction completed.",
-      updatedInventory: getFullInventory(),
+      updatedInventory: getSellableInventory(),
     });
   } catch (err) {
     return JSON.stringify({ success: false, message: err.toString() });
   }
+}
+
+function validateSalePricing_(lines) {
+  const products = {};
+  getProductMaster_().forEach(function(product) {
+    products[String(product.productCode || "").trim()] = product;
+  });
+  return lines.map(function(line) {
+    const source = String(line.priceSource || (line.isCustom ? "MANUAL" : "REGULAR")).trim().toUpperCase();
+    if (source !== "SALE") {
+      line.priceSource = source === "MANUAL" ? "MANUAL" : "REGULAR";
+      line.saleReferenceId = "";
+      return line;
+    }
+    const product = products[String(line.code || "").trim()];
+    if (!product || product.status !== PRODUCT_STATUS.ON_SALE) {
+      throw new Error((line.name || line.code) + " is no longer on sale. Refresh inventory.");
+    }
+    if (String(product.saleReferenceId || "") !== String(line.saleReferenceId || "")) {
+      throw new Error((line.name || line.code) + " sale changed. Refresh inventory.");
+    }
+    if (Math.abs((Number(product.salePrice) || 0) - (Number(line.price) || 0)) > 0.001) {
+      throw new Error((line.name || line.code) + " sale price changed. Refresh inventory.");
+    }
+    if (product.saleRemaining !== null && Number(line.quantity) > Number(product.saleRemaining)) {
+      throw new Error((line.name || line.code) + " has only " + product.saleRemaining + " sale item(s) left.");
+    }
+    line.priceSource = "SALE";
+    line.saleReferenceId = product.saleReferenceId;
+    return line;
+  });
+}
+
+function consumeSaleAllocations_(lines, employee) {
+  const totals = {};
+  lines.forEach(function(line) {
+    if (String(line.priceSource || "").toUpperCase() !== "SALE") return;
+    const key = String(line.code || "").trim();
+    totals[key] = (totals[key] || 0) + (Number(line.quantity) || 0);
+  });
+  const codes = Object.keys(totals);
+  if (!codes.length) return;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
+  const products = getProductMaster_();
+  codes.forEach(function(code) {
+    const product = products.find(function(row) { return String(row.productCode) === code; });
+    if (!product || product.status !== PRODUCT_STATUS.ON_SALE || product.saleRemaining === null) return;
+    const remaining = Math.max(0, Number(product.saleRemaining) - totals[code]);
+    if (remaining > 0) {
+      sheet.getRange(product.rowNumber, PRODUCT_COL.SALE_REMAINING).setValue(remaining);
+      sheet.getRange(product.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(new Date());
+      return;
+    }
+    sheet.getRange(product.rowNumber, PRODUCT_COL.ACTIVE).setValue(true);
+    sheet.getRange(product.rowNumber, PRODUCT_COL.STATUS).setValue(PRODUCT_STATUS.ACTIVE);
+    sheet.getRange(product.rowNumber, PRODUCT_COL.SALE_PRICE, 1, 5).clearContent();
+    sheet.getRange(product.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(new Date());
+    const item = getInventoryItemByCode(code);
+    logProductStatusChange_({
+      code: code,
+      item: product.description,
+      category: product.category,
+      inventoryType: product.inventoryType,
+      stock: item && item.success ? item.item.stock : 0,
+      employee: employee,
+      referenceId: product.saleReferenceId,
+      previousStatus: PRODUCT_STATUS.ON_SALE,
+      status: PRODUCT_STATUS.ACTIVE,
+      salePrice: product.salePrice,
+      saleQuantity: product.saleQuantity,
+      saleRemaining: 0,
+      saleEnd: product.saleEnd
+    });
+  });
 }
 
 function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart) {

@@ -128,6 +128,8 @@ const INVENTORY_COLUMN_COUNT = 17;
    X  Sync Status
    Y  Processed At
    Z  Sync Error
+   AA Price Source
+   AB Sale Reference ID
 ========================================================== */
 
 
@@ -160,7 +162,9 @@ const SALES_IDX = {
   ENTRY_SOURCE: 22,
   SYNC_STATUS: 23,
   PROCESSED_AT: 24,
-  SYNC_ERROR: 25
+  SYNC_ERROR: 25,
+  PRICE_SOURCE: 26,
+  SALE_REFERENCE_ID: 27
 
 };
 
@@ -194,12 +198,14 @@ const SALES_COL = {
   ENTRY_SOURCE: 23,
   SYNC_STATUS: 24,
   PROCESSED_AT: 25,
-  SYNC_ERROR: 26
+  SYNC_ERROR: 26,
+  PRICE_SOURCE: 27,
+  SALE_REFERENCE_ID: 28
 
 };
 
 
-const SALES_LOG_COLUMN_COUNT = 26;
+const SALES_LOG_COLUMN_COUNT = 28;
 
 
 /* ==========================================================
@@ -536,6 +542,7 @@ const INVENTORY_MOVEMENT_SOURCE = {
   DISTRIBUTION: "DISTRIBUTION",
   SUPPLIER_RETURN: "SUPPLIER_RETURN",
   ADJUSTMENT: "ADJUSTMENT",
+  PRODUCT_STATUS: "PRODUCT_STATUS",
 
   EXCHANGE: "EXCHANGE"
 };
@@ -554,6 +561,12 @@ const INVENTORY_MOVEMENT_SOURCE = {
    I  Image
    J  Created At
    K  Updated At
+   L  Status
+   M  Sale Price
+   N  Sale Quantity
+   O  Sale Remaining
+   P  Sale End
+   Q  Sale Reference ID
 ========================================================== */
 
 const PRODUCT_IDX = {
@@ -569,7 +582,13 @@ const PRODUCT_IDX = {
   ACTIVE: 7,
   IMAGE: 8,
   CREATED_AT: 9,
-  UPDATED_AT: 10
+  UPDATED_AT: 10,
+  STATUS: 11,
+  SALE_PRICE: 12,
+  SALE_QUANTITY: 13,
+  SALE_REMAINING: 14,
+  SALE_END: 15,
+  SALE_REFERENCE_ID: 16
 
 };
 
@@ -587,12 +606,24 @@ const PRODUCT_COL = {
   ACTIVE: 8,
   IMAGE: 9,
   CREATED_AT: 10,
-  UPDATED_AT: 11
+  UPDATED_AT: 11,
+  STATUS: 12,
+  SALE_PRICE: 13,
+  SALE_QUANTITY: 14,
+  SALE_REMAINING: 15,
+  SALE_END: 16,
+  SALE_REFERENCE_ID: 17
 
 };
 
 
-const PRODUCT_MASTER_COLUMN_COUNT = 11;
+const PRODUCT_MASTER_COLUMN_COUNT = 17;
+
+const PRODUCT_STATUS = {
+  ACTIVE: "ACTIVE",
+  DEACTIVATED: "DEACTIVATED",
+  ON_SALE: "ON SALE"
+};
 
 /* ==========================================================
    DELIVERY VALUES

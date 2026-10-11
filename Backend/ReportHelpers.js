@@ -551,7 +551,12 @@ function collectSalesMetrics(
     if (receiptId) receiptIds.add(receiptId);
 
     const code = row[SALES_IDX.CODE];
-    const name = toProperCase(row[4] || '');
+    const priceSource = String(row[SALES_IDX.PRICE_SOURCE] || '').trim().toUpperCase();
+    const storedName = String(row[SALES_IDX.ITEM_NAME] || '').trim();
+    const reportName = priceSource === 'SALE' && !/\s(?:·\s*)?SALE$/i.test(storedName)
+      ? storedName + ' · SALE'
+      : storedName;
+    const name = toProperCase(reportName);
     const size = String(row[5] || '').toUpperCase();
     const category = String(row[6] || 'YourFinds');
 
@@ -574,7 +579,7 @@ function collectSalesMetrics(
           'EX', receiptId, reason, code, size, price, actualDate
         ])
       : JSON.stringify([
-          'SALE', category, code, size, price
+          'SALE', category, code, size, price, priceSource
         ]);
 
     if (!metrics.items[itemKey]) {

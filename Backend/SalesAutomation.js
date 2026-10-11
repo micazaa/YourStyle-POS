@@ -49,16 +49,16 @@ function processPendingSalesLogRowsFromButton() {
 
 function createSalesSyncButtonFromMenu() {
   createOrRepairSalesSyncButton_();
-  SpreadsheetApp.getUi().alert("The SYNC button is ready on Sales Log at AA2:AC3.");
+  SpreadsheetApp.getUi().alert("The SYNC button is ready on Sales Log at AD2:AF3.");
 }
 
 function createOrRepairSalesSyncButton_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
   if (!sheet) throw new Error("Sales Log sheet not found.");
 
-  const buttonRange = sheet.getRange("AA2:AC3");
+  const buttonRange = sheet.getRange("AD2:AF3");
   const alreadyMerged = buttonRange.getMergedRanges().some(function(range) {
-    return range.getA1Notation() === "AA2:AC3";
+    return range.getA1Notation() === "AD2:AF3";
   });
   if (!alreadyMerged) {
     buttonRange.breakApart();
@@ -74,7 +74,7 @@ function createOrRepairSalesSyncButton_() {
     .setVerticalAlignment("middle")
     .setNote("Click to process all pending manual Sales Log rows.");
 
-  sheet.setColumnWidths(27, 3, 60);
+  sheet.setColumnWidths(30, 3, 60);
   sheet.setRowHeights(2, 2, 28);
 
   let buttonImage = null;
@@ -88,11 +88,11 @@ function createOrRepairSalesSyncButton_() {
       "image/png",
       "sales-sync-button.png"
     );
-    buttonImage = sheet.insertImage(blob, 27, 2, 0, 0);
+    buttonImage = sheet.insertImage(blob, 30, 2, 0, 0);
   }
 
   buttonImage
-    .setAnchorCell(sheet.getRange("AA2"))
+    .setAnchorCell(sheet.getRange("AD2"))
     .setWidth(180)
     .setHeight(56)
     .setAltTextTitle(SALES_SYNC_BUTTON_TITLE)
@@ -100,7 +100,7 @@ function createOrRepairSalesSyncButton_() {
     .assignScript("processPendingSalesLogRowsFromButton");
 
   SpreadsheetApp.flush();
-  return { success: true, range: "AA2:AC3" };
+  return { success: true, range: "AD2:AF3" };
 }
 
 function showSalesAutomationStatus() {
@@ -149,6 +149,10 @@ function getSalesAutomationStatus() {
 function salesAutomationOnEdit(event) {
   if (!event || !event.range) return;
   const sheet = event.range.getSheet();
+  if (sheet.getName() === SHEETS.PRODUCT_MASTER) {
+    productMasterSaleOnEdit_(event);
+    return;
+  }
   if (sheet.getName() !== SHEETS.SALES_LOG || event.range.getRow() < 2) return;
 
   const firstEditedColumn = event.range.getColumn();
@@ -162,6 +166,79 @@ function salesAutomationOnEdit(event) {
 
   markManualSalesRowsPending_(sheet, rows);
   processSalesRows_(sheet, rows);
+}
+
+function productMasterSaleOnEdit_(event) {
+  const range = event.range;
+  if (range.getRow() < 2) return;
+  const firstColumn = range.getColumn();
+  const lastColumn = firstColumn + range.getNumColumns() - 1;
+  if (firstColumn > PRODUCT_COL.SALE_REFERENCE_ID || lastColumn < PRODUCT_COL.STATUS) return;
+
+  const sheet = range.getSheet();
+  const startRow = Math.max(2, range.getRow());
+  const endRow = range.getRow() + range.getNumRows() - 1;
+  const employee = String(Session.getActiveUser().getEmail() || "Sheet editor").trim();
+
+  for (let rowNumber = startRow; rowNumber <= endRow; rowNumber++) {
+    const row = sheet.getRange(rowNumber, 1, 1, PRODUCT_MASTER_COLUMN_COUNT).getValues()[0];
+    const code = String(row[PRODUCT_IDX.PRODUCT_CODE] || "").trim();
+    if (!code) continue;
+    let status = String(row[PRODUCT_IDX.STATUS] || "").trim().toUpperCase();
+    if ([PRODUCT_STATUS.ACTIVE, PRODUCT_STATUS.DEACTIVATED, PRODUCT_STATUS.ON_SALE].indexOf(status) === -1) {
+      sheet.getRange(rowNumber, PRODUCT_COL.STATUS).setNote("Use ACTIVE, DEACTIVATED, or ON SALE.");
+      continue;
+    }
+    sheet.getRange(rowNumber, PRODUCT_COL.STATUS).clearNote();
+    const salePrice = row[PRODUCT_IDX.SALE_PRICE] === "" ? null : Number(row[PRODUCT_IDX.SALE_PRICE]);
+    const saleQuantity = row[PRODUCT_IDX.SALE_QUANTITY] === "" ? null : Number(row[PRODUCT_IDX.SALE_QUANTITY]);
+    if (status === PRODUCT_STATUS.ON_SALE && (!Number.isFinite(salePrice) || salePrice < 0)) {
+      sheet.getRange(rowNumber, PRODUCT_COL.SALE_PRICE).setNote("Sale Price is required for ON SALE.");
+      continue;
+    }
+    sheet.getRange(rowNumber, PRODUCT_COL.SALE_PRICE).clearNote();
+    if (saleQuantity !== null && (!Number.isInteger(saleQuantity) || saleQuantity < 1)) {
+      sheet.getRange(rowNumber, PRODUCT_COL.SALE_QUANTITY).setNote("Use blank or a positive whole number.");
+      continue;
+    }
+    sheet.getRange(rowNumber, PRODUCT_COL.SALE_QUANTITY).clearNote();
+
+    const inventoryStatus = status === PRODUCT_STATUS.DEACTIVATED ? INVENTORY_STATUS.INACTIVE : INVENTORY_STATUS.ACTIVE;
+    sheet.getRange(rowNumber, PRODUCT_COL.ACTIVE).setValue(status !== PRODUCT_STATUS.DEACTIVATED);
+    let referenceId = String(row[PRODUCT_IDX.SALE_REFERENCE_ID] || "").trim();
+    let remaining = row[PRODUCT_IDX.SALE_REMAINING] === "" ? saleQuantity : Number(row[PRODUCT_IDX.SALE_REMAINING]);
+    if (status === PRODUCT_STATUS.ON_SALE) {
+      if (!referenceId) {
+        referenceId = generateProductSaleReferenceId_();
+        sheet.getRange(rowNumber, PRODUCT_COL.SALE_REFERENCE_ID).setValue(referenceId);
+      }
+      if (saleQuantity !== null && (row[PRODUCT_IDX.SALE_REMAINING] === "" || lastColumn >= PRODUCT_COL.SALE_QUANTITY && firstColumn <= PRODUCT_COL.SALE_QUANTITY)) {
+        remaining = saleQuantity;
+        sheet.getRange(rowNumber, PRODUCT_COL.SALE_REMAINING).setValue(remaining);
+      }
+    } else {
+      sheet.getRange(rowNumber, PRODUCT_COL.SALE_PRICE, 1, 5).clearContent();
+      referenceId = "";
+      remaining = null;
+    }
+    sheet.getRange(rowNumber, PRODUCT_COL.UPDATED_AT).setValue(new Date());
+
+    const itemResult = getInventoryItemByCode(code);
+    if (itemResult && itemResult.success && itemResult.item) {
+      const item = itemResult.item;
+      const inventorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+      inventorySheet.getRange(item.rowNumber, INV_COL.STATUS).setValue(inventoryStatus);
+      inventorySheet.getRange(item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
+      logProductStatusChange_({
+        code: code, item: String(row[PRODUCT_IDX.DESCRIPTION] || ""),
+        category: String(row[PRODUCT_IDX.CATEGORY] || ""), inventoryType: String(row[PRODUCT_IDX.INVENTORY_TYPE] || ""),
+        stock: item.stock, employee: employee, referenceId: referenceId,
+        previousStatus: firstColumn === PRODUCT_COL.STATUS && event.oldValue ? String(event.oldValue).toUpperCase() : status,
+        status: status, salePrice: salePrice, saleQuantity: saleQuantity,
+        saleRemaining: remaining, saleEnd: row[PRODUCT_IDX.SALE_END]
+      });
+    }
+  }
 }
 
 function markManualSalesRowsPending_(sheet, rowNumbers) {

@@ -274,6 +274,13 @@
     }
   }
   
+  function cashierItemDisplayName(item) {
+    const name = String(item && item.name || '').trim();
+    return String(item && item.priceSource || '').toUpperCase() === 'SALE' && !/\s(?:·\s*)?SALE$/i.test(name)
+      ? name + ' · SALE'
+      : name;
+  }
+
   function renderCart() {
     let tbody = document.getElementById("cartRows");
     let activeEl = document.activeElement;
@@ -332,9 +339,9 @@
 
       tr.innerHTML = `
             <td class="ps-3">${imgTag}</td>
-            <td><div class="fw-bold">${
-              item.name
-            }</div><div class="text-muted small">${item.code}</div></td>
+            <td><div class="fw-bold">${escapeInventoryHtml(
+              cashierItemDisplayName(item)
+            )}</div><div class="text-muted small">${escapeInventoryHtml(item.code)}</div></td>
             <td class="text-center fw-semibold">${item.size || ""}</td>
             <td class="text-center">
               <input type="number" class="form-control form-control-sm text-center mx-auto" style="width:60px; font-weight:600;" value="${
@@ -558,7 +565,7 @@ function refreshInventory(callback) {
             <span class="fw-semibold">[${item.category}] ${item.name}</span>
             <span class="text-muted"> (${item.size}) - ₱${item.price.toFixed(
           2,
-        )}</span>
+        )}${item.priceSource === 'SALE' ? ' · SALE' : ''}</span>
           </button>
         `,
       )
@@ -823,8 +830,8 @@ function addItemToCart(
     existingItem =
       cart.find(function(item) {
 
-        return String(item.code || "").trim() ===
-          productCode;
+        return String(item.variantKey || item.code || "").trim() ===
+          String(product.variantKey || productCode).trim();
 
       });
 
@@ -873,7 +880,16 @@ function addItemToCart(
         !!isCustom,
 
       category:
-        product.category || "Others"
+        product.category || "Others",
+
+      variantKey:
+        product.variantKey || productCode,
+
+      priceSource:
+        product.priceSource || (isCustom ? "MANUAL" : "REGULAR"),
+
+      saleReferenceId:
+        product.saleReferenceId || ""
 
     });
 
