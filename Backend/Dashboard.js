@@ -179,8 +179,8 @@ function dashboardInventory_() {
   const thresholds = new Map();
   const master = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
   if (master && master.getLastRow() > 1) master.getRange(2,1,master.getLastRow()-1,7).getValues().forEach(row=>thresholds.set(String(row[0]),Number(row[6])||0));
-  const rows = sheet && sheet.getLastRow()>1 ? sheet.getRange(2,1,sheet.getLastRow()-1,10).getValues() : [];
-  rows.filter(row=>row[0] || row[1]).map(row=>({category:row[3],size:row[2],name:row[1],status:row[5],stock:row[9],lowStockAt:thresholds.get(String(row[0]))||0})).forEach((item) => {
+  const rows = sheet && sheet.getLastRow()>1 ? sheet.getRange(2,1,sheet.getLastRow()-1,INVENTORY_COLUMN_COUNT).getValues() : [];
+  rows.filter(row=>row[INV_IDX.CODE] || row[INV_IDX.DESCRIPTION]).map(row=>({category:row[INV_IDX.CATEGORY],size:row[INV_IDX.SIZE],name:row[INV_IDX.DESCRIPTION],status:row[INV_IDX.STATUS],stock:row[INV_IDX.STOCK],lowStockAt:thresholds.get(String(row[INV_IDX.CODE]))||0})).forEach((item) => {
     const category = String(item.category || 'OTHERS')
       .trim()
       .toUpperCase();

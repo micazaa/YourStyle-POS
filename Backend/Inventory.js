@@ -208,7 +208,8 @@ function ensureCustomYourFindsInventoryItem_(item) {
   };
 }
 
-function getFullInventory() {
+function getFullInventory(options) {
+  options = options || {};
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const sheet = ss.getSheetByName(SHEETS.INVENTORY);
@@ -223,11 +224,12 @@ function getFullInventory() {
     return [];
   }
 
-  const lowStockByCode = {};
-  getProductMaster_().forEach(function(product) {
-    lowStockByCode[String(product.productCode || "").trim()] = Number(product.lowStockAt) || 0;
+  const productByCode = {};
+  const products = Array.isArray(options.products) ? options.products : getProductMaster_();
+  products.forEach(function(product) {
+    productByCode[String(product.productCode || "").trim()] = product;
   });
-  const deliveryMetadataByCode = getInventoryDeliveryMetadataByCode_();
+  const deliveryMetadataByCode = options.includeDeliveryMetadata === false ? {} : getInventoryDeliveryMetadataByCode_();
 
   /* ========================================================
      READ INVENTORY A:Q
@@ -345,7 +347,23 @@ function getFullInventory() {
 
       /* Low-stock threshold lives only in Product Master. */
 
-      lowStockAt: inventoryType === INVENTORY_TYPE.UNIQUE ? 0 : (lowStockByCode[code] || 0),
+      lowStockAt: inventoryType === INVENTORY_TYPE.UNIQUE ? 0 : Number(productByCode[code] && productByCode[code].lowStockAt) || 0,
+
+      productStatus: productByCode[code] ? productByCode[code].status : PRODUCT_STATUS.ACTIVE,
+
+      productRowNumber: productByCode[code] ? productByCode[code].rowNumber : 0,
+
+      regularPrice: Number(row[INV_IDX.YS_PRICE]) || 0,
+
+      salePrice: productByCode[code] ? productByCode[code].salePrice : null,
+
+      saleQuantity: productByCode[code] ? productByCode[code].saleQuantity : null,
+
+      saleRemaining: productByCode[code] ? productByCode[code].saleRemaining : null,
+
+      saleEnd: productByCode[code] ? productByCode[code].saleEnd : "",
+
+      saleReferenceId: productByCode[code] ? productByCode[code].saleReferenceId : "",
 
       /* Delivery metadata is derived from the movement ledger. */
 
@@ -1511,14 +1529,88 @@ function generateYourFindsDeliveryCodes(sheet, deliveryDate, size, quantity) {
 }
 
 function getSellableInventory() {
-  const inventory = getFullInventory();
-
-  return inventory.filter((item) => {
+  const products = getProductMaster_();
+  expireEndedProductSales_(products);
+  const inventory = getFullInventory({products: products, includeDeliveryMetadata: false});
+  const sellable = inventory.filter((item) => {
     const status = String(item.status || "")
       .trim()
       .toUpperCase();
+    return status === INVENTORY_STATUS.ACTIVE &&
+      String(item.productStatus || PRODUCT_STATUS.ACTIVE).toUpperCase() !== PRODUCT_STATUS.DEACTIVATED;
+  });
 
-    return status === INVENTORY_STATUS.ACTIVE;
+  const result = [];
+  sellable.forEach(function(item) {
+    const onSale = String(item.productStatus || "").toUpperCase() === PRODUCT_STATUS.ON_SALE &&
+      Number.isFinite(Number(item.salePrice));
+    if (!onSale) {
+      item.priceSource = "REGULAR";
+      result.push(item);
+      return;
+    }
+
+    const remaining = item.saleRemaining === null ? null : Math.min(Math.max(0, Number(item.saleRemaining) || 0), Math.max(0, Number(item.stock) || 0));
+    if (remaining !== null) {
+      const regular = Object.assign({}, item, {
+        variantKey: item.code + "|REGULAR",
+        stock: Math.max(0, (Number(item.stock) || 0) - remaining),
+        price: Number(item.regularPrice) || 0,
+        priceSource: "REGULAR",
+        saleReferenceId: ""
+      });
+      if (regular.stock > 0) result.push(regular);
+    }
+
+    if (remaining === null || remaining > 0) {
+      result.push(Object.assign({}, item, {
+        variantKey: item.code + "|SALE|" + String(item.saleReferenceId || ""),
+        name: item.name,
+        stock: remaining === null ? Number(item.stock) || 0 : remaining,
+        price: Number(item.salePrice) || 0,
+        priceSource: "SALE"
+      }));
+    }
+  });
+  return result;
+}
+
+function expireEndedProductSales_(products) {
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+  products = Array.isArray(products) ? products : getProductMaster_();
+  const expired = products.filter(function(product) {
+    return product.status === PRODUCT_STATUS.ON_SALE && product.saleEnd &&
+      String(product.saleEnd).slice(0, 10) < today;
+  });
+  if (!expired.length) return;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const masterSheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
+  const inventorySheet = ss.getSheetByName(SHEETS.INVENTORY);
+  expired.forEach(function(product) {
+    masterSheet.getRange(product.rowNumber, PRODUCT_COL.ACTIVE).setValue(true);
+    masterSheet.getRange(product.rowNumber, PRODUCT_COL.STATUS).setValue(PRODUCT_STATUS.ACTIVE);
+    masterSheet.getRange(product.rowNumber, PRODUCT_COL.SALE_PRICE, 1, 5).clearContent();
+    masterSheet.getRange(product.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(new Date());
+    const itemResult = getInventoryItemByCode(product.productCode);
+    if (!itemResult || !itemResult.success || !itemResult.item) return;
+    const item = itemResult.item;
+    inventorySheet.getRange(item.rowNumber, INV_COL.STATUS).setValue(INVENTORY_STATUS.ACTIVE);
+    inventorySheet.getRange(item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
+    logProductStatusChange_({
+      code: product.productCode, item: product.description, category: product.category,
+      inventoryType: product.inventoryType, stock: item.stock, employee: "SYSTEM",
+      referenceId: product.saleReferenceId, previousStatus: PRODUCT_STATUS.ON_SALE,
+      status: PRODUCT_STATUS.ACTIVE, salePrice: product.salePrice,
+      saleQuantity: product.saleQuantity, saleRemaining: product.saleRemaining,
+      saleEnd: product.saleEnd
+    });
+    product.status = PRODUCT_STATUS.ACTIVE;
+    product.active = true;
+    product.salePrice = null;
+    product.saleQuantity = null;
+    product.saleRemaining = null;
+    product.saleEnd = "";
+    product.saleReferenceId = "";
   });
 }
 
@@ -1610,7 +1702,7 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
     return [];
   }
 
-  const results = [];
+  const movements = [];
 
   /* ========================================================
      PROCESS SOLD ITEMS
@@ -1668,7 +1760,7 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
          ✓ Roll stock back if movement logging fails
       ====================================================== */
 
-  const result = changeInventoryStock({
+  movements.push({
     code: code,
     qtyChange: -quantitySold,
     referenceId: receiptId,
@@ -1679,12 +1771,8 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
     source: INVENTORY_MOVEMENT_SOURCE.SALE,
     notes: ""
   });
-    results.push(result);
   });
-
-  SpreadsheetApp.flush();
-
-  return results;
+  return changeInventoryStockBatch_(movements);
 }
 
 /* ==========================================================

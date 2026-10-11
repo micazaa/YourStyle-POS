@@ -53,15 +53,16 @@ test('incomplete and returned statuses are retained; administrative state is sep
   c.renderInventoryTable([{code:'1',status:'INCOMPLETE',category:'YOURFINDS',inventoryType:'UNIQUE',stock:1}]);
   assert.match(elements.inventoryTableBody.children.at(-1).innerHTML,/inventory-active[^>]+disabled/);
 });
-function backend({stock=0,status='ACTIVE',references=[],authorized=true}={}) {
-  let deleted=false, released=false, writes=0;
+function backend({stock=0,status='ACTIVE',references=[],authorized=true,masterProduct=false}={}) {
+  let deleted=false, masterDeleted=false, released=false, writes=0;
   const item={code:'123456',stock,status,rowNumber:2,category:'PINS',inventoryType:'STOCK'};
   const inventory={deleteRow(){deleted=true;},getRange(){return {getValues(){return [Array(15).fill('')];},setValues(){writes++;},setValue(){writes++;}};}};
+  const master={deleteRow(){masterDeleted=true;}};
   const history={getName(){return 'Sales';},getLastRow(){return references.length+1;},getLastColumn(){return 1;},getRange(){return {getDisplayValues(){return references;}};}};
-  const sheet={getSheets(){return [history];},getSheetByName(){return inventory;}};
-  const c=vm.createContext({SpreadsheetApp:{getActiveSpreadsheet(){return sheet;}},LockService:{getScriptLock(){return {waitLock(){},releaseLock(){released=true;}};}},verifyManagerPin(){return {success:authorized,message:'Manager authorization failed'};},getFullInventory(){return [item];},getProductMaster_(){return [];},getInventoryItemByCode(){return {success:true,item};},SHEETS:{INVENTORY:'Inventory',PRODUCT_MASTER:'Product Master',EMPLOYEES:'Employees'},INVENTORY_STATUS:{ACTIVE:'ACTIVE',INACTIVE:'INACTIVE'},INVENTORY_TYPE:{UNIQUE:'UNIQUE'},INVENTORY_COLUMN_COUNT:15,INV_COL:{STATUS:6,UPDATED_AT:16,IMAGE:14,DESCRIPTION:2,ORIG_PRICE:13,YS_PRICE:12},INV_IDX:{STATUS:5,UPDATED_AT:15}});
+  const sheet={getSheets(){return [history];},getSheetByName(name){return name==='Product Master'?master:inventory;}};
+  const c=vm.createContext({SpreadsheetApp:{getActiveSpreadsheet(){return sheet;}},LockService:{getScriptLock(){return {waitLock(){},releaseLock(){released=true;}};}},verifyManagerPin(){return {success:authorized,message:'Manager authorization failed'};},getFullInventory(){return [item];},getProductMaster_(){return masterProduct?[{productCode:'123456',rowNumber:2,active:true}]:[];},getInventoryItemByCode(){return {success:true,item};},SHEETS:{INVENTORY:'Inventory',PRODUCT_MASTER:'Product Master',EMPLOYEES:'Employees'},INVENTORY_STATUS:{ACTIVE:'ACTIVE',INACTIVE:'INACTIVE'},INVENTORY_TYPE:{UNIQUE:'UNIQUE'},INVENTORY_COLUMN_COUNT:15,INV_COL:{STATUS:6,UPDATED_AT:16,IMAGE:14,DESCRIPTION:2,ORIG_PRICE:13,YS_PRICE:12},INV_IDX:{STATUS:5,UPDATED_AT:15}});
   vm.runInContext(fs.readFileSync(path.join(root,'Backend/InventoryMovement.js'),'utf8'),c);
-  return {c,state:()=>({deleted,released,writes})};
+  return {c,state:()=>({deleted,released,writes}),masterWasDeleted:()=>masterDeleted};
 }
 test('delete rejects unauthorized requests, stocked items and historical references', () => {
   for (const [options,pattern] of [[{authorized:false},/authorization/],[{stock:1},/zero-stock/],[{references:[['123456']]},/existing records/]]) {
@@ -71,9 +72,10 @@ test('delete rejects unauthorized requests, stocked items and historical referen
   }
 });
 test('delete removes unused zero-stock row and releases lock', () => {
-  const {c,state}=backend();
+  const {c,state,masterWasDeleted}=backend({masterProduct:true});
   assert.equal(c.deleteUnusedInventoryItem({code:'123456',managerPin:'valid'}).success,true);
   assert.deepEqual(state(),{deleted:true,released:true,writes:0});
+  assert.equal(masterWasDeleted(),true);
 });
 test('status updates reject incomplete and returned records, and require authorization', () => {
   for (const status of ['INCOMPLETE','RETURNED']) {
@@ -166,6 +168,70 @@ test('category, search and summary cards use the same matching items',()=>{
   assert.deepEqual(Array.from(c.getInventorySummaryItems('sold'),x=>x.name),['White pin']);
   c.document.getElementById('inventorySearch').value='white';
   assert.equal(c.getInventorySummaryItems('stock').length,0);
+});
+test('inventory product status filter supports active, inactive, on sale and all',()=>{
+  const {context:c}=frontend();
+  c.inventoryPageData=[
+    {code:'1',name:'Active pin',productStatus:'ACTIVE',status:'ACTIVE'},
+    {code:'2',name:'Inactive pin',productStatus:'DEACTIVATED',status:'INACTIVE'},
+    {code:'3',name:'Sale pin',productStatus:'ON SALE',status:'ACTIVE'},
+    {code:'4',name:'Legacy inactive pin',status:'INACTIVE'}
+  ];
+  const filter=c.document.getElementById('inventoryStatusFilter');
+  filter.value='ACTIVE';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['1']);
+  filter.value='DEACTIVATED';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['2','4']);
+  filter.value='ON SALE';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['3']);
+  filter.value='';assert.equal(c.getFilteredInventoryItems().length,4);
+});
+test('inventory stock status filter supports each displayed availability',()=>{
+  const {context:c}=frontend();
+  c.inventoryPageData=[
+    {code:'1',name:'Available',stock:10,lowStockAt:2},
+    {code:'2',name:'Low',stock:2,lowStockAt:2},
+    {code:'3',name:'Sold out',stock:0},
+    {code:'4',name:'Negative',stock:-1},
+    {code:'5',name:'Incomplete',stock:1,status:'INCOMPLETE'},
+    {code:'6',name:'Returned',stock:0,status:'RETURNED'}
+  ];
+  const filter=c.document.getElementById('inventoryStockStatusFilter');
+  filter.value='IN STOCK';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['1']);
+  filter.value='LOW STOCK';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['2']);
+  filter.value='SOLD OUT';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['3','4']);
+  filter.value='INCOMPLETE';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['5']);
+  filter.value='RETURNED';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['6']);
+  filter.value='';assert.equal(c.getFilteredInventoryItems().length,6);
+});
+test('inventory product status filter is manager-only and resets when hidden',()=>{
+  const {context:c}=frontend();
+  const filter=c.document.getElementById('inventoryStatusFilter');
+  c.currentEmployee={accessLevel:1};c.updateInventoryFilterVisibility();
+  assert.equal(filter.style.display,'');
+  filter.value='ON SALE';c.currentEmployee={accessLevel:2};c.updateInventoryFilterVisibility();
+  assert.equal(filter.style.display,'none');assert.equal(filter.value,'');
+});
+test('specific sale allocation renders separate regular and sale inventory rows',()=>{
+  const {context:c}=frontend();
+  const rows=c.expandInventorySaleRows([{code:'1',name:'Yellow',stock:10,price:120,regularPrice:120,productStatus:'ON SALE',salePrice:99,saleRemaining:3}]);
+  assert.deepEqual(Array.from(rows,x=>[x.name,x.stock,x.price,x.saleVariant]),[
+    ['Yellow',7,120,'REGULAR'],['Yellow',3,99,'SALE']
+  ]);
+  assert.equal(rows.reduce((total,row)=>total+row.stock,0),10);
+});
+test('choosing on sale opens editor immediately with status and sale controls ready',()=>{
+  const {context:c}=frontend();
+  vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Modals/InventoryManagementModal.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
+  c.window={phase8Products:[]};c.currentEmployee={accessLevel:1};
+  c.editInventoryRow({code:'1',name:'Yellow',category:'PINS',price:120,regularPrice:120,stock:10,productStatus:'ACTIVE'},'ON SALE');
+  assert.equal(c.document.getElementById('pmStatus').value,'ON SALE');
+  assert.equal(c.document.getElementById('pmSaleFields').style.display,'block');
+  assert.equal(c.document.getElementById('productEditorModal').style.display,'flex');
+});
+test('sale quantity selector switches between all stock and number input',()=>{
+  const {context:c}=frontend();
+  vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Modals/InventoryManagementModal.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
+  const scope=c.document.getElementById('pmSaleScope'),quantity=c.document.getElementById('pmSaleQuantity');
+  scope.value='SPECIFIC';c.toggleProductSaleQuantity(true);assert.equal(c.document.getElementById('pmSaleQuantityWrap').style.display,'block');
+  quantity.value='4';scope.value='ALL';c.toggleProductSaleQuantity(true);assert.equal(quantity.value,'');assert.equal(c.document.getElementById('pmSaleQuantityWrap').style.display,'none');
 });
 test('PINS detail view omits size and delivery metadata',()=>{
   const {c}=yourFindsEditor(true);
@@ -376,18 +442,20 @@ function costHarness() {
       getValue(){return records[name][row-1]?.[col-1]??'';},
       getValues(){return Array.from({length:height},(_,i)=>Array.from({length:width},(_,j)=>records[name][row+i-1]?.[col+j-1]??''));},
       getDisplayValues(){return this.getValues().map(r=>r.map(String));},
-      setValue(value){records[name][row-1][col-1]=value;},
-      setValues(values){values.forEach((r,i)=>r.forEach((v,j)=>records[name][row+i-1][col+j-1]=v));}
+      setValue(value){records[name][row-1]??=[];records[name][row-1][col-1]=value;},
+      setValues(values){values.forEach((r,i)=>{records[name][row+i-1]??=[];r.forEach((v,j)=>records[name][row+i-1][col+j-1]=v);});}
     };},appendRow(row){records[name].push(row);}};}
   c.SpreadsheetApp={flush(){},getActiveSpreadsheet(){return {getSheetByName:sheet};}};
   c.Utilities={formatDate:()=> '2026-10-01'};c.Session={getScriptTimeZone:()=> 'Asia/Manila'};
   c.verifyInventoryManagerSession_=token=>{if(token!=='manager')throw Error('Manager session invalid');return {success:true,managerName:'Manager'};};
   vm.runInContext(fs.readFileSync(path.join(root,'Backend/Constants.js'),'utf8'),c);
+  vm.runInContext(fs.readFileSync(path.join(root,'Backend/Utils.js'),'utf8'),c);
   vm.runInContext(fs.readFileSync(path.join(root,'Backend/ProductMaster.js'),'utf8'),c);
   // Use production size normalization, while retaining isolated sheet mutations.
   const inventorySource=fs.readFileSync(path.join(root,'Backend/Inventory.js'),'utf8');
   vm.runInContext(inventorySource.slice(inventorySource.indexOf('function normalizeYourFindsSaleSize_'),inventorySource.indexOf('function getYourFindsSaleTemplate_')),c);
   c.getFullInventory=()=>[{code:'YF1',category:'YOURFINDS',size:'FREE SIZE'},{code:'123456',category:'PINS'}];
+  c.setInventoryCalculatedFields_=()=>{};
   c.getYourFindsItemForCompletion=()=>({success:true,item:{code:'YF1',rowNumber:2,status:records.Inventory[1][5],stock:1,size:'FREE SIZE',origPrice:records.Inventory[1][13],imageUrl:'photo'}});
   return {c,records};
 }
@@ -424,6 +492,53 @@ test('PINS edit preserves omitted cost; manager cost is separate',()=>{
   c.saveProductMaster({...payload,costPrice:50,managerToken:'manager'});
   assert.equal(records['Product Master'][1][5],50);
   assert.throws(()=>c.saveProductMaster({...payload,costPrice:1}),/session invalid/);
+});
+test('specific sale quantity cannot exceed current inventory stock',()=>{
+  const {c,records}=costHarness();
+  const before=records['Product Master'][1].slice();
+  assert.throws(()=>c.saveProductMaster({productCode:'123456',description:'Pin',category:'PINS',defaultPrice:100,lowStockAt:5,isNew:false,managerToken:'manager',status:'ON SALE',salePrice:80,saleQuantity:1}),/cannot exceed current stock of 0/);
+  assert.deepEqual(records['Product Master'][1],before);
+});
+test('new Product Master item creates a zero-stock Inventory row',()=>{
+  const {c,records}=costHarness();let calculatedRow=0;
+  c.setInventoryCalculatedFields_=(sheet,row)=>{calculatedRow=row;};
+  const result=c.saveProductMaster({productCode:'654321',description:'New Pin',category:'PINS',defaultPrice:150,costPrice:50,lowStockAt:5,isNew:true,managerToken:'manager',status:'ACTIVE'});
+  assert.equal(result.inventoryCreated,true);assert.equal(result.stock,0);assert.equal(result.stockStatus,'SOLD OUT');assert.equal(result.rowNumber,3);
+  assert.deepEqual(records.Inventory[2].slice(0,6),['654321','New Pin','','PINS','STOCK','ACTIVE']);
+  assert.equal(records.Inventory[2][12],150);assert.equal(records.Inventory[2].length,17);assert.equal(calculatedRow,3);
+});
+test('new OTHERS product uses Inventory validation spelling',()=>{
+  const {c,records}=costHarness();
+  c.saveProductMaster({productCode:'654322',description:'New Bag',category:'OTHERS',defaultPrice:150,costPrice:50,lowStockAt:5,isNew:true,managerToken:'manager',status:'ACTIVE'});
+  assert.equal(records.Inventory[2][3],'Others');
+});
+test('inventory load backfills every missing PINS and OTHERS product at zero stock',()=>{
+  const {c,records}=costHarness();
+  records['Product Master'].push(
+    ['222222','Bag','OTHERS','STOCK',50,20,5,true,'','','','ACTIVE','','','','',''],
+    ['333333','Size Template','YOURFINDS','UNIQUE',75,30,0,true,'','','','ACTIVE','','','','','']
+  );
+  let calculated={start:0,count:0};
+  c.setInventoryCalculatedFields_=(sheet,start,count)=>{
+    calculated={start,count};
+    for(let row=start;row<start+count;row++){records.Inventory[row-1][10]=0;records.Inventory[row-1][11]='SOLD OUT';}
+  };
+  c.getInventoryForManagement('manager');
+  assert.deepEqual(records.Inventory.slice(1).map(row=>row[0]),['YF1','123456','222222']);
+  assert.deepEqual(records.Inventory.slice(2).map(row=>[row[3],row[10],row[11]]),[['PINS',0,'SOLD OUT'],['Others',0,'SOLD OUT']]);
+  assert.deepEqual(calculated,{start:3,count:2});
+});
+test('saved product appears immediately while inventory filters stay unchanged',()=>{
+  const {context:c}=frontend();
+  vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Modals/InventoryManagementModal.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
+  c.inventoryPageData=[];let renders=0;c.filterInventoryTable=()=>{renders++;};
+  c.document.getElementById('inventoryCategoryFilter').value='PINS';
+  c.document.getElementById('inventoryStatusFilter').value='ACTIVE';
+  c.document.getElementById('inventoryStockStatusFilter').value='SOLD OUT';
+  c.document.getElementById('inventorySearch').value='new';
+  c.applySavedProductToInventory_({productCode:'654321',description:'New Pin',category:'PINS',inventoryType:'STOCK',inventoryStatus:'ACTIVE',defaultPrice:150,lowStockAt:5,status:'ACTIVE',stock:0,stockStatus:'SOLD OUT',inventoryCreated:true,rowNumber:3});
+  assert.equal(renders,1);assert.equal(c.inventoryPageData.length,1);assert.equal(c.inventoryPageData[0].stock,0);
+  assert.deepEqual(['inventoryCategoryFilter','inventoryStatusFilter','inventoryStockStatusFilter','inventorySearch'].map(id=>c.document.getElementById(id).value),['PINS','ACTIVE','SOLD OUT','new']);
 });
 test('missing legacy costs stay unknown rather than being inferred from original price',()=>{
   const {c,records}=costHarness();records.Inventory[0][17]='';records['Product Master'][1][5]='';

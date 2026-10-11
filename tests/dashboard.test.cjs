@@ -126,7 +126,7 @@ function harness() {
     state: () => ({ locked, releases }),
     setInventory(x) {
       inventory=x;
-      sheets.set('Inventory',sheet([Array(17).fill(''),...x.map((item,i)=>[String(i),item.name||'',item.size||'',item.category,'',item.status||'ACTIVE',0,0,0,item.stock])]));
+      sheets.set('Inventory',sheet([Array(17).fill(''),...x.map((item,i)=>[String(i),item.name||'',item.size||'',item.category,'',item.status||'ACTIVE',0,0,0,item.adjustment||0,item.stock])]));
       sheets.set('Product Master',sheet([Array(11).fill(''),...x.map((item,i)=>[String(i),item.name||'',item.category,'',0,0,item.lowStockAt||0])]));
     },
   };
@@ -143,8 +143,9 @@ function sale({
   net = 100,
   status = 'COMPLETED',
   reason = '',
+  priceSource = '',
 } = {}) {
-  const r = Array(21).fill('');
+  const r = Array(28).fill('');
   Object.assign(r, {
     0: date,
     1: receipt,
@@ -159,6 +160,7 @@ function sale({
     13: 'Cash',
     15: status,
     19: reason,
+    26: priceSource,
   });
   return r;
 }
@@ -258,6 +260,12 @@ test('dashboard equals daily report for distinct receipts, voids and cross-date 
     0
   );
 });
+test('reports mark sale-price items without changing regular item names', () => {
+  const { c, sales } = harness();
+  sales.push(sale({receipt:'REG',name:'TEST'}),sale({receipt:'SALE',name:'TEST',net:25,priceSource:'SALE'}));
+  const report=c.collectSalesMetrics(sales,period.start);
+  assert.deepEqual(Object.values(report.items).map(item=>item.name).sort(),['TEST','TEST · SALE']);
+});
 test('range keeps globally distinct receipts and daily activity, groups YF names within category', () => {
   const { c, sales } = harness();
   sales.push(
@@ -332,6 +340,13 @@ test('inventory reminders match frontend grouping without YF threshold, preserve
   const groups = front.buildInventorySummaryGroups(items);
   assert.equal(counts.low, groups.filter((g) => g.status === 'LOW STOCK').length);
   assert.equal(counts.sold, groups.filter((g) => g.status === 'SOLD OUT').length);
+});
+test('inventory fallback reads Current Stock from K, not Total Adjustment from J', () => {
+  const h = harness();
+  h.setInventory([{ category: 'PINS', name: 'Red', adjustment: 99, stock: 0, lowStockAt: 2 }]);
+  const counts = h.c.dashboardInventory_();
+  assert.equal(counts.sold, 1);
+  assert.equal(counts.low, 0);
 });
 test('task sheet is created only after authorized valid input; validates existing headers', () => {
   const h = harness();

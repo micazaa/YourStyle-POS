@@ -57,7 +57,13 @@
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-body d-flex flex-wrap gap-2">
         <select id="inventoryCategoryFilter" class="form-select" style="width:180px;" aria-label="Inventory category" onchange="filterInventoryTable()">
-          <option value="">All</option><option value="YOURFINDS">YOURFINDS </option><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option>
+          <option value="">All Category</option><option value="YOURFINDS">YOURFINDS </option><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option>
+        </select>
+        <select id="inventoryStatusFilter" class="form-select" style="width:180px;" aria-label="Inventory product status" onchange="filterInventoryTable()">
+          <option value="">All Status</option><option value="ACTIVE">Active</option><option value="DEACTIVATED">Inactive</option><option value="ON SALE">On Sale</option>
+        </select>
+        <select id="inventoryStockStatusFilter" class="form-select" style="width:180px;" aria-label="Inventory stock status" onchange="filterInventoryTable()">
+          <option value="">All Stock </option><option value="IN STOCK">In Stock</option><option value="LOW STOCK">Low Stock</option><option value="SOLD OUT">Sold Out</option><option value="INCOMPLETE">Incomplete</option><option value="RETURNED">Returned</option>
         </select>
         <input style="flex:1;min-width:220px;" type="search" id="inventorySearch" class="form-control"
           aria-label="Search inventory" placeholder="Search code, product, category, size..."
@@ -157,11 +163,17 @@ function inventoryIsYourFinds(item) {
 function inventoryColumnCount() { return inventoryIsManager() ? 10 : 9; }
 function inventoryManagerReadToken(){return inventoryIsManager()?(currentEmployee.inventoryManagerToken||'expired'):'';}
 function inventoryCostText(value){return value===null||value===undefined||value===''?'—':'₱'+Number(value).toFixed(2);}
-function loadInventoryPage(forceRefresh = false) {
+function updateInventoryFilterVisibility() {
+  const statusFilter = document.getElementById('inventoryStatusFilter');
+  statusFilter.style.display = inventoryIsManager() ? '' : 'none';
+  if (!inventoryIsManager()) statusFilter.value = '';
+}
+function loadInventoryPage(forceRefresh = false, keepVisible = false) {
   if (forceRefresh) { pageReadCache.delete('inventory'); pageReadCache.delete('standardDeliveryDetails'); }
   inventoryIncompleteOnly = dashboardInventoryReminder === 'incomplete';
   document.getElementById('inventoryAddProductButton').style.display = inventoryIsManager() ? 'inline-block' : 'none';
   document.getElementById('inventoryActiveHeading').style.display = inventoryIsManager() ? '' : 'none';
+  updateInventoryFilterVisibility();
   const readToken=inventoryManagerReadToken();
   const refresh = beginPageRead('inventory', '', true);
   const body = document.getElementById('inventoryTableBody');
@@ -170,7 +182,7 @@ function loadInventoryPage(forceRefresh = false) {
     filterInventoryTable();
     if(dashboardInventoryReminder==='low'||dashboardInventoryReminder==='sold')openInventorySummary(dashboardInventoryReminder);
     dashboardInventoryReminder='';
-  } else if (refresh.shouldFetch) body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-muted py-5">${loadingIndicator('Loading inventory…')}</td></tr>`;
+  } else if (refresh.shouldFetch && !keepVisible) body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-muted py-5">${loadingIndicator('Loading inventory…')}</td></tr>`;
   if (!refresh.shouldFetch) return;
   google.script.run.withSuccessHandler(function(items) {
     if(!refresh.current() || readToken!==inventoryManagerReadToken())return;
@@ -195,9 +207,15 @@ function loadInventoryPage(forceRefresh = false) {
 function getFilteredInventoryItems() {
   const search = document.getElementById('inventorySearch').value.trim().toLowerCase();
   const category = document.getElementById('inventoryCategoryFilter').value;
+  const statusFilter = document.getElementById('inventoryStatusFilter').value;
+  const stockStatusFilter = document.getElementById('inventoryStockStatusFilter').value;
   return inventoryPageData.filter(function(item) {
     if(inventoryIncompleteOnly && !(String(item.category).toUpperCase()==='YOURFINDS' && String(item.status).toUpperCase()==='INCOMPLETE'))return false;
+    const productStatus = String(item.productStatus || (String(item.status || '').trim().toUpperCase() === 'INACTIVE' ? 'DEACTIVATED' : 'ACTIVE')).trim().toUpperCase();
+    const stockStatus = getInventoryDisplayStatus(item);
     return (!category || String(item.category || '').trim().toUpperCase() === category) &&
+      (!statusFilter || productStatus === statusFilter) &&
+      (!stockStatusFilter || stockStatus === stockStatusFilter || (stockStatusFilter === 'SOLD OUT' && stockStatus === 'NEGATIVE STOCK')) &&
       [item.code, item.name, item.category, item.size].join(' ').toLowerCase().includes(search);
   });
 }
@@ -292,8 +310,24 @@ function sortInventoryTable(key) {
   inventorySort.key = key;
   filterInventoryTable();
 }
+function expandInventorySaleRows(items) {
+  const rows = [];
+  items.forEach(function(item) {
+    const onSale = String(item.productStatus || '').trim().toUpperCase() === 'ON SALE' && Number.isFinite(Number(item.salePrice));
+    if (!onSale) { rows.push(item); return; }
+    const stock = Number(item.stock) || 0;
+    if (item.saleRemaining === null || item.saleRemaining === undefined) {
+      rows.push(Object.assign({}, item, {baseName:item.name,price:Number(item.salePrice)||0,saleVariant:'ALL'}));
+      return;
+    }
+    const allocated = Math.min(Math.max(0, Number(item.saleRemaining) || 0), Math.max(0, stock));
+    rows.push(Object.assign({}, item, {baseName:item.name,stock:stock-allocated,price:Number(item.regularPrice??item.price)||0,saleVariant:'REGULAR'}));
+    rows.push(Object.assign({}, item, {baseName:item.name,stock:allocated,price:Number(item.salePrice)||0,saleVariant:'SALE'}));
+  });
+  return rows;
+}
 function filterInventoryTable() {
-  const items = getFilteredInventoryItems();
+  const items = expandInventorySaleRows(getFilteredInventoryItems());
   updateInventorySummary();
   items.sort(function(a, b) {
     const left = inventorySortValue(a, inventorySort.key), right = inventorySortValue(b, inventorySort.key);
@@ -341,9 +375,14 @@ function renderInventoryTable(items) {
   items.forEach(function(item) {
     const row = document.createElement('tr');
     const state = String(item.status || 'ACTIVE').trim().toUpperCase();
+    const productState = String(item.productStatus || (state === 'INACTIVE' ? 'DEACTIVATED' : 'ACTIVE')).trim().toUpperCase();
     const stock = Number(item.stock) || 0;
     const isYourFinds = inventoryIsYourFinds(item);
     const canToggle = state === 'ACTIVE' || state === 'INACTIVE';
+    const isAllocatedSaleRow = item.saleVariant === 'SALE';
+    const saleLabel = item.saleVariant === 'SALE' || item.saleVariant === 'ALL'
+      ? '<span class="badge bg-warning text-dark ms-2">SALE</span>'
+      : item.saleVariant === 'REGULAR' ? '<span class="badge bg-light text-dark border ms-2">REGULAR</span>' : '';
 
     const image = item.imageUrl
       ? `
@@ -364,7 +403,7 @@ function renderInventoryTable(items) {
         ${escapeInventoryHtml(item.code)}
       </td>
       <td class="fw-semibold">
-        ${escapeInventoryHtml(item.name)}
+        ${escapeInventoryHtml(item.name)} ${saleLabel}
       </td>
       <td>${escapeInventoryHtml(item.category)}</td>
       <td class="text-center">${escapeInventoryHtml(item.size)}</td>
@@ -379,7 +418,7 @@ function renderInventoryTable(items) {
         isManager
           ? `
             <td>
-              <select
+              ${isAllocatedSaleRow ? '<span class="badge bg-warning text-dark">On Sale</span>' : `<select
                 class="form-select form-select-sm inventory-active"
                 aria-label="Active status for ${escapeInventoryHtml(item.code)}"
                 ${canToggle ? '' : 'disabled'}
@@ -389,14 +428,18 @@ function renderInventoryTable(items) {
                     : 'Complete the item first; returned items cannot be activated.'
                 }">
                 <option value="ACTIVE"
-                  ${state === 'ACTIVE' ? 'selected' : ''}>
+                  ${productState === 'ACTIVE' ? 'selected' : ''}>
                   Active
                 </option>
-                <option value="INACTIVE"
-                  ${state !== 'ACTIVE' ? 'selected' : ''}>
-                  Inactive
+                <option value="DEACTIVATED"
+                  ${productState === 'DEACTIVATED' ? 'selected' : ''}>
+                  Deactivated
                 </option>
-              </select>
+                <option value="ON SALE"
+                  ${productState === 'ON SALE' ? 'selected' : ''}>
+                  On Sale
+                </option>
+              </select>`}
             </td>
           `
           : ''
@@ -450,7 +493,7 @@ function renderInventoryTable(items) {
       openInventoryDetails(item.code)
     );
 
-    if (isManager) {
+    if (isManager && !isAllocatedSaleRow) {
       action('delete', 'Delete item', () => deleteInventoryRow(item));
     }
 
@@ -468,31 +511,32 @@ function openInventoryImageViewer(item) {
 function closeInventoryImageViewer() { document.getElementById('inventoryImageViewer').close(); }
 function changeInventoryActiveInline(item, select) {
   const status = select.value;
-  select.value = item.status;
+  select.value = item.productStatus || (String(item.status).toUpperCase()==='INACTIVE'?'DEACTIVATED':'ACTIVE');
   if (!inventoryIsManager()) return;
+  if (status === 'ON SALE') {
+    editInventoryRow(item, 'ON SALE');
+    return;
+  }
   const auth = managerCredentials('Manager PIN to change status:');
   if (!auth) return;
-  select.disabled = true;
+  const previousStatus = item.status;
+  const previousProductStatus = item.productStatus;
+  item.status = status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE';
+  item.productStatus = status;
+  filterInventoryTable();
   google.script.run.withSuccessHandler(function(result) {
-    select.disabled = false;
-    if (!result || !result.success) return showNotificationToast(result && result.message || 'Status change failed.', true);
-    item.status = result.status; filterInventoryTable();
-    loadInventoryPage(true);
-    showNotificationToast('Item set to ' + result.status.toLowerCase() + '.');
+    if (!result || !result.success) { item.status=previousStatus;item.productStatus=previousProductStatus;filterInventoryTable();return showNotificationToast(result && result.message || 'Status change failed.', true); }
+    item.status = result.inventoryStatus; item.productStatus = result.productStatus || result.status; pageReadCache.delete('inventory');pageReadCache.delete('productMaster');
+    showNotificationToast('Item set to ' + item.productStatus.toLowerCase() + '.');
   }).withFailureHandler(function(error) {
-    select.disabled = false; showNotificationToast(error.message || String(error), true);
-  }).setInventoryAdministrativeStatus({code:item.code,status:status,...auth});
+    item.status=previousStatus;item.productStatus=previousProductStatus;filterInventoryTable();showNotificationToast(error.message || String(error), true);
+  }).setInventoryAdministrativeStatus({code:item.code,rowNumber:item.rowNumber,productRowNumber:item.productRowNumber,status:status,...auth});
 }
-function editInventoryRow(item) {
+function editInventoryRow(item, requestedStatus) {
   if (!inventoryIsManager()) return;
   if (inventoryIsYourFinds(item)) { phase8SelectedItem = item; openYourFindsEditor(); return; }
-  const readToken=inventoryManagerReadToken();
-  google.script.run.withSuccessHandler(function(products) {
-    if(!currentEmployee || readToken!==inventoryManagerReadToken())return;
-    window.phase8Products = products || [];
-    if (!window.phase8Products.some(p => String(p.productCode) === String(item.code))) return showNotificationToast('This item has no Product Master entry.', true);
-    clearProductMasterForm(); editProductMaster(item.code);
-  }).withFailureHandler(error => showNotificationToast(error.message || String(error), true)).getProductMasterForManagement(readToken);
+  clearProductMasterForm();
+  editInventoryProduct(item, requestedStatus);
 }
 function deleteInventoryRow(item) {
   if (!inventoryIsManager()) return;
