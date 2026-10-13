@@ -381,7 +381,7 @@ function renderInventoryTable(items) {
     const canToggle = state === 'ACTIVE' || state === 'INACTIVE';
     const isAllocatedSaleRow = item.saleVariant === 'SALE';
     const saleLabel = item.saleVariant === 'SALE' || item.saleVariant === 'ALL'
-      ? '<span class="badge bg-warning text-dark ms-2">SALE</span>'
+      ? '<span class="badge bg-danger text-white ms-2">SALE</span>'
       : item.saleVariant === 'REGULAR' ? '<span class="badge bg-light text-dark border ms-2">REGULAR</span>' : '';
 
     const image = item.imageUrl
@@ -418,7 +418,7 @@ function renderInventoryTable(items) {
         isManager
           ? `
             <td>
-              ${isAllocatedSaleRow ? '<span class="badge bg-warning text-dark">On Sale</span>' : `<select
+              ${isAllocatedSaleRow ? '<span class="badge bg-danger text-white">On Sale</span>' : `<select
                 class="form-select form-select-sm inventory-active"
                 aria-label="Active status for ${escapeInventoryHtml(item.code)}"
                 ${canToggle ? '' : 'disabled'}
@@ -519,17 +519,42 @@ function changeInventoryActiveInline(item, select) {
   }
   const auth = managerCredentials('Manager PIN to change status:');
   if (!auth) return;
-  const previousStatus = item.status;
-  const previousProductStatus = item.productStatus;
-  item.status = status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE';
-  item.productStatus = status;
-  filterInventoryTable();
+  const matchingItems = (inventoryPageData || []).filter(row => String(row.code) === String(item.code));
+  const snapshots = matchingItems.map(row => ({row:row,status:row.status,productStatus:row.productStatus,salePrice:row.salePrice,saleQuantity:row.saleQuantity,saleRemaining:row.saleRemaining,saleEnd:row.saleEnd,saleReferenceId:row.saleReferenceId}));
+  function applyStatus(targetStatus, productStatus) {
+    matchingItems.forEach(function(row) {
+      row.status = targetStatus;
+      row.productStatus = productStatus;
+      row.salePrice = null;
+      row.saleQuantity = null;
+      row.saleRemaining = null;
+      row.saleEnd = '';
+      row.saleReferenceId = '';
+    });
+    filterInventoryTable();
+  }
+  function restoreStatus() {
+    snapshots.forEach(function(snapshot) {
+      snapshot.row.status = snapshot.status;
+      snapshot.row.productStatus = snapshot.productStatus;
+      snapshot.row.salePrice = snapshot.salePrice;
+      snapshot.row.saleQuantity = snapshot.saleQuantity;
+      snapshot.row.saleRemaining = snapshot.saleRemaining;
+      snapshot.row.saleEnd = snapshot.saleEnd;
+      snapshot.row.saleReferenceId = snapshot.saleReferenceId;
+    });
+    filterInventoryTable();
+  }
+  applyStatus(status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE', status);
   google.script.run.withSuccessHandler(function(result) {
-    if (!result || !result.success) { item.status=previousStatus;item.productStatus=previousProductStatus;filterInventoryTable();return showNotificationToast(result && result.message || 'Status change failed.', true); }
-    item.status = result.inventoryStatus; item.productStatus = result.productStatus || result.status; pageReadCache.delete('inventory');pageReadCache.delete('productMaster');
-    showNotificationToast('Item set to ' + item.productStatus.toLowerCase() + '.');
+    if (!result || !result.success) { restoreStatus();return showNotificationToast(result && result.message || 'Status change failed.', true); }
+    applyStatus(result.inventoryStatus, result.productStatus || result.status);
+    pageReadCache.delete('inventory');pageReadCache.delete('productMaster');pageReadCache.delete('cashierInventory');deliveryCatalogCache=null;deliveryCatalogPending=null;
+    showNotificationToast('Item set to ' + String(result.productStatus || result.status).toLowerCase() + '.');
+    loadInventoryPage(true, true);
+    if (typeof refreshInventory === 'function') refreshInventory();
   }).withFailureHandler(function(error) {
-    item.status=previousStatus;item.productStatus=previousProductStatus;filterInventoryTable();showNotificationToast(error.message || String(error), true);
+    restoreStatus();showNotificationToast(error.message || String(error), true);
   }).setInventoryAdministrativeStatus({code:item.code,rowNumber:item.rowNumber,productRowNumber:item.productRowNumber,status:status,...auth});
 }
 function editInventoryRow(item, requestedStatus) {

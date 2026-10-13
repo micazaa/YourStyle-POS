@@ -1693,6 +1693,61 @@ function getInventoryDisplayStatus(item) {
    Created from the Product Master size template, then deducted.
 ========================================================== */
 
+function buildPhysicalBundleSaleQueue_(category) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const deliverySheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
+  const movementSheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
+  if (!deliverySheet || deliverySheet.getLastRow() < 2) return [];
+  const deliveries = deliverySheet.getRange(2, 1, deliverySheet.getLastRow() - 1, DELIVERY_LOG_COLUMN_COUNT).getDisplayValues();
+  const movements = movementSheet && movementSheet.getLastRow() >= 2
+    ? movementSheet.getRange(2, 1, movementSheet.getLastRow() - 1, MOVEMENT_LOG_COLUMN_COUNT).getValues()
+    : [];
+  const wanted = String(category || "").trim().toUpperCase();
+  const states = [];
+  deliveries.forEach(function(row, index) {
+    const type = String(row[DELIVERY_IDX.TYPE] || "").trim().toUpperCase();
+    const status = String(row[DELIVERY_IDX.STATUS] || "").trim().toUpperCase();
+    if (type !== wanted || String(row[DELIVERY_IDX.RECEIVE_MODE] || "").trim().toUpperCase() !== DELIVERY_RECEIVE_MODE.BULK) return;
+    if (status !== DELIVERY_STATUS.PENDING && status !== DELIVERY_STATUS.PARTIAL) return;
+    const qty = Math.max(0, Number(row[DELIVERY_IDX.BUNDLE_QTY]) || 0);
+    for (let bundleNo = 1; bundleNo <= qty; bundleNo++) states.push({
+      deliveryId:String(row[DELIVERY_IDX.DELIVERY_ID] || "").trim(),
+      deliveryDate:String(row[DELIVERY_IDX.DELIVERY_DATE] || "").trim(),
+      sheetRow:index + 2,
+      bundleNo:bundleNo,
+      type:type,
+      distributed:false,
+      fullSold:false,
+      soldHalves:0
+    });
+  });
+  movements.forEach(function(row) {
+    const source = String(row[MOVE_IDX.SOURCE] || "").trim().toUpperCase();
+    const bundleNo = Number(row[MOVE_IDX.BUNDLE_NO]);
+    if (!Number.isInteger(bundleNo)) return;
+    if (source === INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION && Number(row[MOVE_IDX.QTY_CHANGE]) > 0) {
+      const id = String(row[MOVE_IDX.REFERENCE_ID] || "").trim();
+      const type = String(row[MOVE_IDX.TYPE] || "").trim().toUpperCase();
+      const state = states.find(function(item) { return item.deliveryId === id && item.type === type && item.bundleNo === bundleNo; });
+      if (state) state.distributed = true;
+      return;
+    }
+    if (source !== INVENTORY_MOVEMENT_SOURCE.SALE) return;
+    const allocation = parsePhysicalBundleAllocationNote_(row[MOVE_IDX.NOTES]);
+    if (!allocation) return;
+    const state = states.find(function(item) {
+      return item.deliveryId === allocation.deliveryId && (!allocation.sheetRow || item.sheetRow === allocation.sheetRow) && item.bundleNo === bundleNo;
+    });
+    if (!state) return;
+    if (allocation.kind === "FULL") state.fullSold = true;
+    if (allocation.kind === "HALF") state.soldHalves = Math.min(2, state.soldHalves + 1);
+  });
+  states.sort(function(a, b) {
+    return a.deliveryDate.localeCompare(b.deliveryDate) || a.sheetRow - b.sheetRow || a.bundleNo - b.bundleNo;
+  });
+  return states;
+}
+
 function deductInventoryStock(soldItems, receiptId, employeeName) {
   /* ========================================================
      VALIDATE
@@ -1703,6 +1758,8 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
   }
 
   const movements = [];
+  const productSnapshot = getProductMaster_();
+  const queues = {};
 
   /* ========================================================
      PROCESS SOLD ITEMS
@@ -1760,17 +1817,36 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
          ✓ Roll stock back if movement logging fails
       ====================================================== */
 
-  movements.push({
-    code: code,
-    qtyChange: -quantitySold,
-    referenceId: receiptId,
-    sourceLineId: String(item.salesLineId || "").trim(),
-    employee: employeeName,
-    item: String(item.name || "").trim(),
-    reason: "",
-    source: INVENTORY_MOVEMENT_SOURCE.SALE,
-    notes: ""
-  });
+  const category = String(item.category || "").trim().toUpperCase();
+  const bundleName = normalizePhysicalBundleName_(item.name);
+  const bundleKind = bundleName === "BUNDLE" ? "FULL" : (bundleName === "HALF BUNDLE" ? "HALF" : "");
+  if (!bundleKind || (category !== "PINS" && category !== "OTHERS")) {
+    movements.push({code:code,qtyChange:-quantitySold,referenceId:receiptId,sourceLineId:String(item.salesLineId||"").trim(),employee:employeeName,item:String(item.name||"").trim(),reason:"",source:INVENTORY_MOVEMENT_SOURCE.SALE,notes:""});
+    return;
+  }
+
+  if (!queues[category]) queues[category] = buildPhysicalBundleSaleQueue_(category);
+  const queue = queues[category];
+  const fullProduct = findPhysicalBundleProduct_(productSnapshot, category, "FULL");
+  if (bundleKind === "HALF" && !fullProduct) throw new Error("BUNDLE product is missing from Product Master for " + category + ".");
+  for (let unit = 0; unit < quantitySold; unit++) {
+    let holder;
+    if (bundleKind === "FULL") {
+      holder = queue.find(function(state) { return !state.distributed && !state.fullSold && state.soldHalves === 0; });
+    } else {
+      holder = queue.find(function(state) { return !state.distributed && !state.fullSold && state.soldHalves === 1; }) ||
+        queue.find(function(state) { return !state.distributed && !state.fullSold && state.soldHalves === 0; });
+    }
+    if (!holder) throw new Error("No eligible delivered " + bundleName.toLowerCase() + " is available.");
+    const note = physicalBundleAllocationNote_(holder.deliveryId, bundleKind, holder.sheetRow);
+    if (bundleKind === "HALF" && holder.soldHalves === 0) {
+      movements.push({code:fullProduct.productCode,qtyChange:-1,referenceId:receiptId,sourceLineId:String(item.salesLineId||"").trim(),employee:employeeName,item:fullProduct.description,reason:"SPLIT INTO HALVES",source:INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,bundleNo:holder.bundleNo,notes:"Split for " + holder.deliveryId});
+      movements.push({code:code,qtyChange:2,referenceId:receiptId,sourceLineId:String(item.salesLineId||"").trim(),employee:employeeName,item:String(item.name||"").trim(),reason:"SPLIT FROM BUNDLE",source:INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,bundleNo:holder.bundleNo,notes:"Split from " + holder.deliveryId});
+    }
+    movements.push({code:code,qtyChange:-1,referenceId:receiptId,sourceLineId:String(item.salesLineId||"").trim(),employee:employeeName,item:String(item.name||"").trim(),reason:"",source:INVENTORY_MOVEMENT_SOURCE.SALE,bundleNo:holder.bundleNo,notes:note});
+    if (bundleKind === "FULL") holder.fullSold = true;
+    else holder.soldHalves++;
+  }
   });
   return changeInventoryStockBatch_(movements);
 }
