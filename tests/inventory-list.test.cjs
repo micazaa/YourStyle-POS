@@ -226,6 +226,19 @@ test('choosing on sale opens editor immediately with status and sale controls re
   assert.equal(c.document.getElementById('pmSaleFields').style.display,'block');
   assert.equal(c.document.getElementById('productEditorModal').style.display,'flex');
 });
+test('returning sale item to active updates base row immediately',()=>{
+  const {context:c}=frontend();
+  const item={code:'1',rowNumber:2,productRowNumber:2,name:'Yellow',category:'PINS',status:'ACTIVE',productStatus:'ON SALE',salePrice:99,saleQuantity:3,saleRemaining:2,saleReferenceId:'SALE-1'};
+  c.inventoryPageData=[item];c.managerCredentials=()=>({managerPin:'valid'});c.showNotificationToast=()=>{};
+  let success,payload,renders=0,reloads=0;
+  c.filterInventoryTable=()=>{renders++;};
+  c.loadInventoryPage=(force,keepVisible)=>{assert.equal(force,true);assert.equal(keepVisible,true);reloads++;};c.refreshInventory=()=>{};
+  c.google={script:{run:{withSuccessHandler(fn){success=fn;return this;},withFailureHandler(){return this;},setInventoryAdministrativeStatus(value){payload=value;}}}};
+  c.changeInventoryActiveInline(Object.assign({},item,{saleVariant:'ALL'}),{value:'ACTIVE'});
+  assert.equal(item.productStatus,'ACTIVE');assert.equal(item.salePrice,null);assert.equal(renders,1);assert.equal(payload.status,'ACTIVE');
+  success({success:true,inventoryStatus:'ACTIVE',productStatus:'ACTIVE'});
+  assert.equal(item.productStatus,'ACTIVE');assert.equal(renders,2);assert.equal(reloads,1);
+});
 test('sale quantity selector switches between all stock and number input',()=>{
   const {context:c}=frontend();
   vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Modals/InventoryManagementModal.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);

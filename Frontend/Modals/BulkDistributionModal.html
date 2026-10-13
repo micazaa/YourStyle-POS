@@ -7,10 +7,11 @@
     <div class="delivery-items-toolbar mb-3">
       <div class="fw-semibold">Items Received</div>
       <div id="bulkDistributionBundleTabs" class="delivery-mode-toggle btn-group flex-wrap" role="group" aria-label="Select bundle"></div>
-      <button type="button" class="btn btn-sm btn-outline-dark delivery-add-item" onclick="addBulkDistributionLine()">+ Add Item</button>
+      <button type="button" id="bulkDistributionAddItemBtn" class="btn btn-sm btn-outline-dark delivery-add-item" onclick="addBulkDistributionLine()">+ Add Item</button>
     </div>
     <div id="bulkDistributionProductsLoading" class="text-center text-muted py-3" style="display:none;"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading Product Master...</span></div>
     <div id="bulkDistributionProductsError" class="alert alert-danger" style="display:none;" role="alert"></div>
+    <datalist id="bulkDistributionProductList"></datalist>
     <div class="delivery-line-scroll mb-3">
       <div class="delivery-line-head direct"><span>#</span><span>Type</span><span>Product</span><span>Actual Qty</span><span></span></div>
       <div id="bulkDistributionLines"></div>
@@ -66,10 +67,12 @@ function openBulkDistributionModal(deliveryId, sheetRow, employee, bundleNo) {
     }
     bulkDistributionHolder = result.holder;
     document.getElementById("bulkDistributionRemarks").value = result.holder.remarks || "";
-    const firstUnused = (result.holder.bundles || []).find(function(b){return !b.hasActivity;});
-    bulkDistributionSelectedBundleNo = (result.holder.bundles || []).some(b => b.bundleNo === Number(bundleNo)) ? Number(bundleNo) : firstUnused ? firstUnused.bundleNo : 1;
+    const requested = (result.holder.bundles || []).find(b => b.bundleNo === Number(bundleNo) && !b.disabled);
+    const firstAvailable = (result.holder.bundles || []).find(b => !b.disabled);
+    bulkDistributionSelectedBundleNo = requested ? requested.bundleNo : firstAvailable ? firstAvailable.bundleNo : 1;
     if (!catalog) rememberDeliveryCatalog(result.products || []);
     bulkDistributionProducts = (catalog || result.products || []).filter(p => p.category === result.holder.type);
+    populateBulkDistributionProductList();
     document.getElementById("bulkDistributionProductsLoading").style.display = "none";
     renderBulkDistributionHolder();
     restoreBulkDistributionLines();
@@ -80,7 +83,6 @@ function openBulkDistributionModal(deliveryId, sheetRow, employee, bundleNo) {
 function closeBulkDistributionModal() {
   if (bulkDistributionSaving) return;
   bulkDistributionRequest++;
-  pageReadCache.delete("bulkProducts");
   document.getElementById("bulkDistributionModal").style.display = "none";
   bulkDistributionHolder = null; bulkDistributionProducts = []; bulkDistributionEmployee = "";
 }
@@ -96,12 +98,32 @@ function renderBulkDistributionHolder() {
 function renderBulkDistributionTabs() {
   const box = document.getElementById("bulkDistributionBundleTabs");
   box.replaceChildren();
-  (bulkDistributionHolder.bundles || []).forEach(function(bundle) {
+  const bundles = bulkDistributionHolder.bundles || [];
+  if (bundles.length > 3) {
+    const select = document.createElement("select");
+    select.className = "form-select form-select-sm";
+    select.setAttribute("aria-label", "Select bundle");
+    bundles.forEach(function(bundle) {
+      const option = document.createElement("option");
+      option.value = bundle.bundleNo;
+      option.textContent = "Bundle #" + bundle.bundleNo + (bundle.disabled ? " — " + (bundle.shortStatus || "Unavailable") : "");
+      option.disabled = !!bundle.disabled;
+      option.selected = Number(bundle.bundleNo) === bulkDistributionSelectedBundleNo;
+      option.title = bundle.tooltip || "";
+      select.appendChild(option);
+    });
+    select.onchange = function() { selectBulkDistributionBundle(select.value); };
+    box.appendChild(select);
+    return;
+  }
+  bundles.forEach(function(bundle) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "btn btn-sm btn-outline-pink";
     button.setAttribute("aria-pressed", String(Number(bundle.bundleNo) === bulkDistributionSelectedBundleNo));
-    button.textContent = "Bundle #" + bundle.bundleNo;
+    button.textContent = "Bundle #" + bundle.bundleNo + (bundle.disabled ? " · " + (bundle.shortStatus || "Unavailable") : "");
+    button.disabled = !!bundle.disabled;
+    button.title = bundle.tooltip || "";
     button.onclick = function() { selectBulkDistributionBundle(bundle.bundleNo); };
     box.appendChild(button);
   });
@@ -109,6 +131,8 @@ function renderBulkDistributionTabs() {
 
 function selectBulkDistributionBundle(bundleNo) {
   if (bulkDistributionSaving) return;
+  const requested = (bulkDistributionHolder && bulkDistributionHolder.bundles || []).find(b => Number(b.bundleNo) === Number(bundleNo));
+  if (!requested || requested.disabled) return;
   bulkDistributionSelectedBundleNo = Number(bundleNo) || 1;
   renderBulkDistributionTabs();
   let index = 0;
@@ -117,6 +141,8 @@ function selectBulkDistributionBundle(bundleNo) {
     row.style.display = selected ? "" : "none";
     if (selected) row.querySelector(".delivery-line-number").textContent = ++index;
   });
+  const addButton = document.getElementById("bulkDistributionAddItemBtn");
+  if (addButton) addButton.disabled = !!(getSelectedBulkBundle() || {}).disabled;
   updateBulkDistributionSummary();
 }
 function getSelectedBulkBundle(){return (bulkDistributionHolder&&bulkDistributionHolder.bundles||[]).find(function(b){return Number(b.bundleNo)===Number(bulkDistributionSelectedBundleNo);})||null;}
@@ -128,19 +154,21 @@ function restoreBulkDistributionLines() {
       addBulkDistributionLine(saved);
     });
   });
-  selectBulkDistributionBundle(1);
+  const firstAvailable = (bulkDistributionHolder.bundles || []).find(b => !b.disabled);
+  if (firstAvailable) selectBulkDistributionBundle(firstAvailable.bundleNo);
   if (!document.getElementById("bulkDistributionLines").children.length && bulkDistributionProducts.length) addBulkDistributionLine();
 }
 
 function addBulkDistributionLine(saved) {
   if(bulkDistributionSaving)return;
+  if((getSelectedBulkBundle()||{}).disabled){showNotificationToast("This bundle is unavailable.",true);return;}
   if(!saved && !bulkDistributionProducts.length){showNotificationToast("Product Master is still loading.",true);return;}
   bulkDistributionLineCounter++; const id=bulkDistributionLineCounter; const c=document.getElementById("bulkDistributionLines"); const line=document.createElement("div");
   line.className="bulk-distribution-line delivery-line direct";
   line.dataset.bundleNo = bulkDistributionSelectedBundleNo;
-  line.innerHTML=`<span class="delivery-line-number"></span><input class="form-control form-control-sm bulk-distribution-type" aria-label="Type" readonly><div><input type="text" class="form-control form-control-sm bulk-distribution-product-search" aria-label="Product" placeholder="Search product name or code" autocomplete="off" list="bulkProductList-${id}" oninput="handleBulkDistributionProductSearch(this)"><datalist id="bulkProductList-${id}" class="bulk-distribution-product-list"></datalist><input type="hidden" class="bulk-distribution-product-code"></div><input type="number" class="form-control form-control-sm bulk-distribution-qty" aria-label="Actual quantity" min="1" step="1" value="1" oninput="updateBulkDistributionSummary()"><button type="button" class="btn btn-sm btn-outline-danger" aria-label="Remove item" onclick="removeBulkDistributionLine(this)">×</button>`;
+  line.innerHTML=`<span class="delivery-line-number"></span><input class="form-control form-control-sm bulk-distribution-type" aria-label="Type" readonly><div><input type="text" class="form-control form-control-sm bulk-distribution-product-search" aria-label="Product" placeholder="Search product name or code" autocomplete="off" list="bulkDistributionProductList" oninput="handleBulkDistributionProductSearch(this)"><input type="hidden" class="bulk-distribution-product-code"></div><input type="number" class="form-control form-control-sm bulk-distribution-qty" aria-label="Actual quantity" min="1" step="1" value="1" oninput="updateBulkDistributionSummary()"><button type="button" class="btn btn-sm btn-outline-danger" aria-label="Remove item" onclick="removeBulkDistributionLine(this)">×</button>`;
   line.querySelector(".bulk-distribution-type").value = bulkDistributionHolder.type;
-  c.appendChild(line); populateBulkDistributionProducts(line);
+  c.appendChild(line);
   if (saved) {
     line.dataset.saved = "true";
     line.querySelector(".bulk-distribution-product-search").value = saved.productCode + " — " + saved.description;
@@ -153,7 +181,7 @@ function addBulkDistributionLine(saved) {
   }
   selectBulkDistributionBundle(bulkDistributionSelectedBundleNo);
 }
-function populateBulkDistributionProducts(line){const list=line.querySelector(".bulk-distribution-product-list"); list.innerHTML=""; bulkDistributionProducts.forEach(function(p){const o=document.createElement("option");o.value=p.productCode+" — "+p.description;list.appendChild(o);});}
+function populateBulkDistributionProductList(){const list=document.getElementById("bulkDistributionProductList");if(!list)return;const fragment=document.createDocumentFragment();bulkDistributionProducts.forEach(function(p){const o=document.createElement("option");o.value=p.productCode+" — "+p.description;fragment.appendChild(o);});list.replaceChildren(fragment);}
 function handleBulkDistributionProductSearch(input){const line=input.closest(".bulk-distribution-line");const hidden=line.querySelector(".bulk-distribution-product-code");const entered=String(input.value||"").trim();const p=bulkDistributionProducts.find(function(x){return x.productCode+" — "+x.description===entered;});hidden.value=p?p.productCode:"";updateBulkDistributionSummary();}
 function removeBulkDistributionLine(button){const line=button.closest(".bulk-distribution-line");if(line)line.remove();selectBulkDistributionBundle(bulkDistributionSelectedBundleNo);}
 function getBulkDistributionLines(bundleNo, includeSaved){return Array.from(document.querySelectorAll("#bulkDistributionLines .bulk-distribution-line")).filter(row=>(includeSaved || row.dataset.saved !== "true") && (bundleNo===undefined || Number(row.dataset.bundleNo)===Number(bundleNo))).map(function(row){const code=String(row.querySelector(".bulk-distribution-product-code").value||"").trim();const qty=Number(row.querySelector(".bulk-distribution-qty").value)||0;return{productCode:code,quantity:qty,bundleNo:Number(row.dataset.bundleNo)};});}

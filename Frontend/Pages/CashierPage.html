@@ -327,6 +327,7 @@
 
     cart.forEach((item, index) => {
       let lineRawCost = item.price * item.quantity;
+      const isSaleItem = String(item.priceSource || "").toUpperCase() === "SALE";
       const calculatedLineDiscount = calculateLineDiscount(item);
 
       let lineNetValue = Math.max(0, lineRawCost - calculatedLineDiscount);
@@ -339,9 +340,9 @@
 
       tr.innerHTML = `
             <td class="ps-3">${imgTag}</td>
-            <td><div class="fw-bold">${escapeInventoryHtml(
+            <td><div class="fw-bold${isSaleItem ? " text-danger" : ""}">${escapeInventoryHtml(
               cashierItemDisplayName(item)
-            )}</div><div class="text-muted small">${escapeInventoryHtml(item.code)}</div></td>
+            )}</div><div class="small${isSaleItem ? " text-danger" : " text-muted"}">${escapeInventoryHtml(item.code)}</div></td>
             <td class="text-center fw-semibold">${item.size || ""}</td>
             <td class="text-center">
               <input type="number" class="form-control form-control-sm text-center mx-auto" style="width:60px; font-weight:600;" value="${
@@ -561,9 +562,9 @@ function refreshInventory(callback) {
     resultsBox.innerHTML = matches
       .map(
         ({ item, index }, pos) => `
-          <button type="button" class="list-group-item list-group-item-action small py-2" data-pos="${pos}" data-inventory-index="${index}" onclick="selectManualItem(${index})">
+          <button type="button" class="list-group-item list-group-item-action small py-2${item.priceSource === 'SALE' ? ' text-danger' : ''}" data-pos="${pos}" data-inventory-index="${index}" onclick="selectManualItem(${index})">
             <span class="fw-semibold">[${item.category}] ${item.name}</span>
-            <span class="text-muted"> (${item.size}) - ₱${item.price.toFixed(
+            <span class="${item.priceSource === 'SALE' ? 'text-danger' : 'text-muted'}"> (${item.size}) - ₱${item.price.toFixed(
           2,
         )}${item.priceSource === 'SALE' ? ' · SALE' : ''}</span>
           </button>

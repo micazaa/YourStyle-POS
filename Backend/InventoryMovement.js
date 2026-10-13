@@ -863,6 +863,8 @@ function setInventoryAdministrativeStatus(payload) {
     }
     const masterSheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
     let master = null;
+    let masterRange = null;
+    let masterRollback = null;
     const productRowNumber = Number(payload.productRowNumber) || 0;
     if (masterSheet && productRowNumber >= 2 && productRowNumber <= masterSheet.getLastRow()) {
       const masterValues = masterSheet.getRange(productRowNumber, 1, 1, PRODUCT_MASTER_COLUMN_COUNT).getValues()[0];
@@ -875,10 +877,16 @@ function setInventoryAdministrativeStatus(payload) {
     }
     if (!master && masterSheet) master = getProductMaster_().find(function(product) { return String(product.productCode) === code; });
     if (master) {
-      masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(status === "ACTIVE");
-      masterSheet.getRange(master.rowNumber, PRODUCT_COL.STATUS).setValue(status);
-      masterSheet.getRange(master.rowNumber, PRODUCT_COL.SALE_PRICE, 1, 5).clearContent();
-      masterSheet.getRange(master.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(new Date());
+      masterRange = masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE, 1, PRODUCT_COL.SALE_REFERENCE_ID - PRODUCT_COL.ACTIVE + 1);
+      masterRollback = masterRange.getValues()[0];
+      const masterUpdate = masterRollback.slice();
+      masterUpdate[PRODUCT_COL.ACTIVE - PRODUCT_COL.ACTIVE] = status === "ACTIVE";
+      masterUpdate[PRODUCT_COL.UPDATED_AT - PRODUCT_COL.ACTIVE] = new Date();
+      masterUpdate[PRODUCT_COL.STATUS - PRODUCT_COL.ACTIVE] = status;
+      for (let column = PRODUCT_COL.SALE_PRICE; column <= PRODUCT_COL.SALE_REFERENCE_ID; column++) {
+        masterUpdate[column - PRODUCT_COL.ACTIVE] = "";
+      }
+      masterRange.setValues([masterUpdate]);
     }
     try {
       sheet.getRange(inventoryRow, INV_COL.STATUS).setValue(inventoryStatus);
@@ -891,7 +899,7 @@ function setInventoryAdministrativeStatus(payload) {
       });
     }
     catch (error) {
-      if (master) masterSheet.getRange(master.rowNumber, PRODUCT_COL.ACTIVE).setValue(master.active);
+      if (masterRange && masterRollback) masterRange.setValues([masterRollback]);
       throw error;
     }
     return { success: true, status: requested === "INACTIVE" ? "INACTIVE" : status, productStatus: status, inventoryStatus: inventoryStatus, manager: auth.managerName };
