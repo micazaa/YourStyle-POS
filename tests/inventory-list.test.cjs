@@ -408,12 +408,34 @@ test('logout dismisses sidebar and item overlays before displaying login',()=>{
 });
 test('bulk label backend deduplicates codes and validates both groups before generating',()=>{
   const c=vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(root,'Backend/Constants.js'),'utf8'),c);
   vm.runInContext(fs.readFileSync(path.join(root,'Backend/Label.js'),'utf8'),c);
   c.getYourFindsItemsForLabelReprint=()=>({items:[{code:'A',labelType:'COMPLETED'},{code:'B',labelType:'INCOMPLETE'}]});
   const calls=[];c.createYourFindsReprintPDFByCodes=(codes,type)=>{calls.push(type);return {success:true,labelCount:codes.length,fileUrl:'https://example.com/'+type};};
   assert.throws(()=>c.createYourFindsReprintPDFByGroups(['A'],['missing']),/no longer available/);assert.equal(calls.length,0);
   const result=c.createYourFindsReprintPDFByGroups(['A','A'],[' B ']);
   assert.equal(result.labelCount,2);assert.equal(result.files.length,2);assert.equal(result.files[1].labelType,'INCOMPLETE');
+});
+test('reprint includes in-stock YourFinds missing selling details as initial labels',()=>{
+  const c=vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(root,'Backend/Constants.js'),'utf8'),c);
+  vm.runInContext(fs.readFileSync(path.join(root,'Backend/Label.js'),'utf8'),c);
+  c.getFullInventory=()=>[
+    {code:'YF1',name:'Bag',size:'MNE',category:'YOURFINDS',inventoryType:'UNIQUE',status:'ACTIVE',stock:1,price:0,imageUrl:''},
+    {code:'YF2',name:'Shoes',size:'LNE',category:'YOURFINDS',inventoryType:'UNIQUE',status:'ACTIVE',stock:2,price:250,imageUrl:'photo'},
+    {code:'YF3',name:'Draft',size:'NO SIZE',category:'YOURFINDS',inventoryType:'UNIQUE',status:'INCOMPLETE',stock:1},
+    {code:'YF4',name:'Sold',size:'SNE',category:'YOURFINDS',inventoryType:'UNIQUE',status:'ACTIVE',stock:0},
+    {code:'YF5',name:'Returned',size:'SNE',category:'YOURFINDS',inventoryType:'UNIQUE',status:'RETURNED',stock:1},
+    {code:'SKU1',name:'Pin',size:'',category:'PINS',inventoryType:'STOCK',status:'ACTIVE',stock:1,price:10,imageUrl:'photo'}
+  ];
+
+  const result=c.getYourFindsItemsForLabelReprint();
+  assert.deepEqual(Array.from(result.items,item=>[item.code,item.labelType]),[
+    ['YF1','INCOMPLETE'],['YF2','COMPLETED'],['YF3','INCOMPLETE']
+  ]);
+  c.createYourFindsLabelPDFByCodes=codes=>({success:true,labelCount:codes.length});
+  const pdf=c.createYourFindsReprintPDFByCodes(['YF1'],'INCOMPLETE');
+  assert.equal(pdf.labelCount,1);
 });
 test('desktop sidebar collapse persists and navigation does not dismiss it',()=>{
   const {context:c}=frontend();const store=new Map();let desktop=true;

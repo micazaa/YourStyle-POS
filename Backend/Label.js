@@ -1118,6 +1118,16 @@ function getCompletedYourFindsItemsForLabelReprint() {
   };
 }
 
+function getYourFindsReprintLabelType_(item) {
+  const status = String(item && item.status || "").trim().toUpperCase();
+  const hasSellingDetails = String(item && item.imageUrl || "").trim() !== "" &&
+    String(item && item.name || "").trim() !== "" &&
+    Number(item && item.price) > 0;
+  return status === INVENTORY_STATUS.INCOMPLETE || !hasSellingDetails
+    ? "INCOMPLETE"
+    : "COMPLETED";
+}
+
 function getYourFindsItemsForLabelReprint() {
   const items = getFullInventory().filter(function(item) {
     const status = String(item.status || "").trim().toUpperCase();
@@ -1125,17 +1135,12 @@ function getYourFindsItemsForLabelReprint() {
       String(item.category || "").trim().toUpperCase() === "YOURFINDS" &&
       String(item.inventoryType || "").trim().toUpperCase() === INVENTORY_TYPE.UNIQUE;
 
-    if (!isYourFinds || status === INVENTORY_STATUS.RETURNED || Number(item.stock) <= 0) {
+    if (!isYourFinds || status === INVENTORY_STATUS.RETURNED || Number(item.stock) <= 0 ||
+      !String(item.code || "").trim() || !String(item.size || "").trim()) {
       return false;
     }
 
-    if (status === INVENTORY_STATUS.INCOMPLETE) {
-      return String(item.code || "").trim() !== "" && String(item.size || "").trim() !== "";
-    }
-
-    return String(item.imageUrl || "").trim() !== "" &&
-      String(item.name || "").trim() !== "" &&
-      Number(item.price) > 0;
+    return true;
   });
 
   return {
@@ -1148,7 +1153,7 @@ function getYourFindsItemsForLabelReprint() {
         size: item.size,
         sellingPrice: item.price,
         status: status,
-        labelType: status === INVENTORY_STATUS.INCOMPLETE ? "INCOMPLETE" : "COMPLETED",
+        labelType: getYourFindsReprintLabelType_(item),
         imageUrl: item.imageUrl,
         deliveryId: item.deliveryId || ""
       };
@@ -1248,8 +1253,7 @@ function createYourFindsReprintPDFByCodes(codes, labelType) {
     const code = String(value || "").trim();
     const item = inventoryMap[code];
     if (!item) throw new Error("Inventory Code " + code + " was not found.");
-    const status = String(item.status || "").trim().toUpperCase();
-    const actualType = status === INVENTORY_STATUS.INCOMPLETE ? "INCOMPLETE" : "COMPLETED";
+    const actualType = getYourFindsReprintLabelType_(item);
     if (actualType !== labelType) {
       throw new Error("Selected items must all use the same label type.");
     }
