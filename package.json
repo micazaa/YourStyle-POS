@@ -6,6 +6,11 @@
     "node": "24.x"
   },
   "scripts": {
+    "clasp:status:dev": "clasp -P \"$PWD/.clasp.dev.json\" status",
+    "clasp:status:prod": "clasp -P \"$PWD/.clasp.prod.json\" status",
+    "clasp:push:dev": "clasp -P \"$PWD/.clasp.dev.json\" push",
+    "clasp:push:prod": "npm run check && clasp -P \"$PWD/.clasp.prod.json\" push",
+    "clasp:push:both": "npm run check && clasp -P \"$PWD/.clasp.dev.json\" push && clasp -P \"$PWD/.clasp.prod.json\" push",
     "lint": "eslint .",
     "validate": "node scripts/validate-project.mjs",
     "format": "prettier --write \".github/workflows/*.yml\" \".prettierrc.json\" \"appsscript.json\" \"eslint.config.mjs\" \"package.json\" \"scripts/**/*.mjs\"",

@@ -44,6 +44,10 @@ function getProductMaster_() {
   const displayData = sheet
     .getRange(2, 1, lastRow - 1, PRODUCT_MASTER_COLUMN_COUNT)
     .getDisplayValues();
+  const hasSalePrices = hasProductSalePricesColumn_(sheet);
+  const salePriceRows = hasSalePrices
+    ? sheet.getRange(2, PRODUCT_COL.SALE_PRICES, lastRow - 1, 1).getValues()
+    : [];
 
   const products = [];
 
@@ -95,6 +99,42 @@ function getProductMaster_() {
     const saleRemaining = saleRemainingRaw === "" || saleRemainingRaw === null
       ? saleQuantity
       : Number(saleRemainingRaw) || 0;
+    const legacySalePrice = row[PRODUCT_IDX.SALE_PRICE] === "" || row[PRODUCT_IDX.SALE_PRICE] === null
+      ? null : Number(row[PRODUCT_IDX.SALE_PRICE]) || 0;
+    const legacySaleReferenceId = String(displayRow[PRODUCT_IDX.SALE_REFERENCE_ID] || "").trim() ||
+      (status === PRODUCT_STATUS.ON_SALE ? "SALE-MANUAL-" + productCode : "");
+    const legacySale = status === PRODUCT_STATUS.ON_SALE && legacySalePrice !== null
+      ? [{price: legacySalePrice, quantity: saleQuantity, remaining: saleRemaining,
+          end: formatProductMasterDateForClient(row[PRODUCT_IDX.SALE_END]), referenceId: legacySaleReferenceId}]
+      : [];
+    let salePrices = legacySale;
+    if (status === PRODUCT_STATUS.ON_SALE && hasSalePrices && salePriceRows[i][0]) {
+      try {
+        const parsed = JSON.parse(String(salePriceRows[i][0]));
+        if (!Array.isArray(parsed) || !parsed.length) throw new Error("Expected sale price rows.");
+        salePrices = parsed.map(function(tier) {
+          const price = Number(tier.price);
+          const quantity = tier.quantity == null ? null : Number(tier.quantity);
+          const remaining = tier.remaining == null ? quantity : Number(tier.remaining);
+          const referenceId = String(tier.referenceId || "").trim();
+          if (!Number.isFinite(price) || price < 0 || !referenceId ||
+              (quantity !== null && (!Number.isInteger(quantity) || quantity < 1)) ||
+              (remaining !== null && (!Number.isInteger(remaining) || remaining < 0 ||
+                quantity !== null && remaining > quantity))) {
+            throw new Error("Invalid allocation.");
+          }
+          return {price: price, quantity: quantity, remaining: remaining,
+            end: String(tier.end || "").slice(0, 10), referenceId: referenceId};
+        });
+        if (new Set(salePrices.map(function(tier) { return tier.referenceId; })).size !== salePrices.length ||
+            (salePrices.length > 1 && salePrices.some(function(tier) { return tier.quantity === null; }))) {
+          throw new Error("Duplicate references or an unallocated price row.");
+        }
+      } catch (error) {
+        throw new Error("Invalid Sale Prices for Product Master row " + (i + 2) + ": " + error.message);
+      }
+    }
+    const primarySale = salePrices[0] || null;
 
     /* ================= PRODUCT OBJECT ================= */
 
@@ -125,18 +165,19 @@ function getProductMaster_() {
 
       status: status,
 
-      salePrice: row[PRODUCT_IDX.SALE_PRICE] === "" || row[PRODUCT_IDX.SALE_PRICE] === null
-        ? null
-        : Number(row[PRODUCT_IDX.SALE_PRICE]) || 0,
+      salePrice: primarySale ? primarySale.price : null,
 
-      saleQuantity: saleQuantity,
+      saleQuantity: primarySale ? primarySale.quantity : null,
 
-      saleRemaining: saleRemaining,
+      saleRemaining: primarySale ? primarySale.remaining : null,
 
-      saleEnd: formatProductMasterDateForClient(row[PRODUCT_IDX.SALE_END]),
+      saleEnd: primarySale ? primarySale.end : "",
 
-      saleReferenceId: String(displayRow[PRODUCT_IDX.SALE_REFERENCE_ID] || "").trim() ||
-        (status === PRODUCT_STATUS.ON_SALE ? "SALE-MANUAL-" + productCode : ""),
+      saleReferenceId: primarySale ? primarySale.referenceId : "",
+
+      salePrices: salePrices,
+
+      salePricesStored: Boolean(hasSalePrices && salePriceRows[i][0]),
 
       imageUrl: String(displayRow[PRODUCT_IDX.IMAGE] || "").trim(),
 
@@ -147,6 +188,49 @@ function getProductMaster_() {
   }
 
   return products;
+}
+
+function hasProductSalePricesColumn_(sheet) {
+  return typeof sheet.getMaxColumns === "function" && sheet.getMaxColumns() >= PRODUCT_COL.SALE_PRICES &&
+    String(sheet.getRange(1, PRODUCT_COL.SALE_PRICES).getDisplayValues()[0][0] || "").trim() === "Sale Prices";
+}
+
+function ensureProductSalePricesColumn_(sheet) {
+  if (sheet.getMaxColumns() < PRODUCT_COL.SALE_PRICES) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), PRODUCT_COL.SALE_PRICES - sheet.getMaxColumns());
+  }
+  const header = String(sheet.getRange(1, PRODUCT_COL.SALE_PRICES).getDisplayValues()[0][0] || "").trim();
+  if (header && header !== "Sale Prices") throw new Error("Product Master column R is already in use.");
+  if (!header) sheet.getRange(1, PRODUCT_COL.SALE_PRICES).setValue("Sale Prices");
+}
+
+function writeProductSalePrices_(sheet, rowNumber, prices) {
+  const activePrices = (prices || []).filter(function(tier) {
+    return tier.remaining === null || Number(tier.remaining) > 0;
+  });
+  const useSalePricesColumn = activePrices.length > 0 || hasProductSalePricesColumn_(sheet);
+  if (useSalePricesColumn) ensureProductSalePricesColumn_(sheet);
+  const first = activePrices[0] || null;
+  sheet.getRange(rowNumber, PRODUCT_COL.STATUS, 1, 6).setValues([[
+    first ? PRODUCT_STATUS.ON_SALE : PRODUCT_STATUS.ACTIVE,
+    first ? first.price : "", first && first.quantity !== null ? first.quantity : "",
+    first && first.remaining !== null ? first.remaining : "",
+    first ? first.end : "", first ? first.referenceId : ""
+  ]]);
+  if (useSalePricesColumn) sheet.getRange(rowNumber, PRODUCT_COL.SALE_PRICES).setValue(activePrices.length ? JSON.stringify(activePrices) : "");
+  return activePrices;
+}
+
+function applyProductSalePrices_(product, prices) {
+  product.salePrices = prices;
+  product.status = prices.length ? PRODUCT_STATUS.ON_SALE : PRODUCT_STATUS.ACTIVE;
+  product.active = true;
+  const first = prices[0] || null;
+  product.salePrice = first ? first.price : null;
+  product.saleQuantity = first ? first.quantity : null;
+  product.saleRemaining = first ? first.remaining : null;
+  product.saleEnd = first ? first.end : "";
+  product.saleReferenceId = first ? first.referenceId : "";
 }
 
 /* ==========================================================

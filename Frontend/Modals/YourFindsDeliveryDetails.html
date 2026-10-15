@@ -351,11 +351,77 @@
 
 </div>
 
+<div id="yourFindsConversionModal" class="generic-overlay-blur" style="display:none;z-index:10020;">
+  <div class="custom-popup-card change-item-card" style="max-height:92vh;overflow-y:auto;">
+    <div class="d-flex justify-content-between border-bottom pb-3 mb-4">
+      <div>
+        <h5 class="fw-bold mb-1">Convert Delivered Item</h5>
+        <div class="small text-muted">Replace one incomplete YourFinds item with new incomplete items.</div>
+      </div>
+      <button type="button" class="btn-close" aria-label="Close conversion" onclick="closeYourFindsConversionModal()"></button>
+    </div>
+
+    <div class="row g-3 mb-3 align-items-stretch change-item-flow">
+      <div class="col-md-5">
+        <div class="change-item-product h-100">
+          <div class="change-item-label">From</div>
+          <div id="deliveryConversionFromName" class="change-item-name">—</div>
+          <div class="change-item-meta"><span id="deliveryConversionFromCode" class="font-monospace">—</span><span>·</span><span id="deliveryConversionFromSize">—</span></div>
+          <div class="change-item-stock"><span>Current stock</span><b>1</b></div>
+          <div class="change-item-stock change-item-after"><span>After change</span><b>0</b></div>
+        </div>
+      </div>
+      <div class="col-md-2 d-flex align-items-center justify-content-center"><div class="change-item-arrow" aria-hidden="true">→</div></div>
+      <div class="col-md-5">
+        <div class="change-item-product change-item-destination h-100">
+          <label for="deliveryConversionTargetSize" class="change-item-label">To</label>
+          <select id="deliveryConversionTargetSize" class="form-select change-item-name-select" onchange="updateYourFindsConversionPreview()">
+            <option value="SNE">SNE</option>
+            <option value="MNE">MNE</option>
+            <option value="LNE">LNE</option>
+            <option value="XLNE">XLNE</option>
+            <option value="SE">SE</option>
+            <option value="ME">ME</option>
+            <option value="LE">LE</option>
+            <option value="XLE">XLE</option>
+            <option value="CUSTOM">NO SIZE</option>
+          </select>
+          <div id="deliveryConversionCustomWrap" style="display:none;">
+            <input id="deliveryConversionCustomSize" type="text" list="deliveryConversionCustomSizes" class="form-control mt-2" maxlength="40" placeholder="Select or enter custom size" oninput="updateYourFindsConversionPreview()">
+            <datalist id="deliveryConversionCustomSizes"></datalist>
+          </div>
+          <div class="change-item-meta mt-2"><span id="deliveryConversionToSize" class="font-monospace">SNE</span><span>·</span><span>YourFinds</span></div>
+          <div class="change-item-stock"><span>Current stock</span><b>0</b></div>
+          <div class="change-item-stock change-item-after"><span>After change</span><b id="deliveryConversionAfterQty">1</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-12">
+        <label class="form-label fw-semibold" for="deliveryConversionResultQty">Result quantity</label>
+        <input id="deliveryConversionResultQty" type="number" min="1" max="999" step="1" value="1" class="form-control" oninput="updateYourFindsConversionPreview()">
+      </div>
+    </div>
+    <label class="form-label fw-semibold" for="deliveryConversionNotes">Notes <span class="fw-normal text-muted">(optional)</span></label>
+    <textarea id="deliveryConversionNotes" class="form-control mb-3" rows="3" placeholder="Add details about this conversion"></textarea>
+    <div id="deliveryConversionError" class="alert alert-danger py-2 mb-3" role="alert" style="display:none;"></div>
+    <div class="d-flex gap-2">
+      <button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeYourFindsConversionModal()">Cancel</button>
+      <button type="button" id="deliveryConversionSaveBtn" class="btn btn-pink flex-fill" onclick="saveYourFindsConversion()">Save Adjustment</button>
+    </div>
+  </div>
+</div>
+
 
 <script>
 
 var currentDeliveryDetailsId =
   "";
+
+var selectedYourFindsConversionItem = null;
+var yourFindsConversionSaving = false;
+var yourFindsConversionReturnView = "";
 
 
 /* ==========================================================
@@ -973,6 +1039,12 @@ function renderYourFindsDeliveryDetailItems(
                     Incomplete
                   </span>
                 `
+                : status === "CONVERTED"
+                  ? `
+                    <span class="badge bg-secondary" title="This unique item was converted into other YourFinds items.">
+                      Converted
+                    </span>
+                  `
                 : `
                   <span class="badge bg-secondary">
                     ${escapeDeliveryDetailsHtml(
@@ -984,7 +1056,29 @@ function renderYourFindsDeliveryDetailItems(
 
         </div>
 
+        ${
+          status === "INCOMPLETE" && Number(item.stock) === 1
+            ? `
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary delivery-item-convert"
+                title="Convert this item"
+                aria-label="Convert ${escapeDeliveryDetailsHtml(code)}"
+              >
+                ⇄
+              </button>
+            `
+            : ""
+        }
+
       `;
+
+      const convertButton = row.querySelector(".delivery-item-convert");
+      if (convertButton) {
+        convertButton.addEventListener("click", function() {
+          openYourFindsConversionModal(item);
+        });
+      }
 
 
       list.appendChild(
@@ -994,6 +1088,236 @@ function renderYourFindsDeliveryDetailItems(
     }
   );
 
+}
+
+function yourFindsSizeDescription_(size) {
+  const descriptions = {
+    SNE: "Small non-electronic",
+    MNE: "Medium non-electronic",
+    LNE: "Large non-electronic",
+    XLNE: "Extra large non-electronic",
+    SE: "Small electronic",
+    ME: "Medium electronic",
+    LE: "Large electronic",
+    XLE: "Extra large electronic"
+  };
+  const normalized = String(size || "").trim().toUpperCase();
+  return descriptions[normalized] || normalized || "Custom";
+}
+
+function getYourFindsConversionEmployee_() {
+  if (typeof currentCashier !== "undefined" && String(currentCashier || "").trim()) {
+    return String(currentCashier).trim();
+  }
+  if (typeof currentEmployee !== "undefined" && currentEmployee) {
+    return String(
+      currentEmployee.fullName ||
+      currentEmployee.name ||
+      currentEmployee.employeeName ||
+      ""
+    ).trim();
+  }
+  return "";
+}
+
+function loadYourFindsConversionCustomSizes_() {
+  google.script.run
+    .withSuccessHandler(function(sizes) {
+      const dataList = document.getElementById("deliveryConversionCustomSizes");
+      if (!dataList) return;
+      dataList.innerHTML = "";
+      (Array.isArray(sizes) ? sizes : []).forEach(function(size) {
+        const option = document.createElement("option");
+        option.value = String(size || "");
+        dataList.appendChild(option);
+      });
+    })
+    .withFailureHandler(function() {})
+    .getYourFindsCustomSizes();
+}
+
+function openYourFindsConversionModal(item, returnView) {
+  const status = String(item && item.status || "").trim().toUpperCase();
+  if (!item || status !== "INCOMPLETE" || Number(item.stock) !== 1) {
+    showNotificationToast("Only an incomplete YourFinds item with stock 1 can be converted.", true);
+    return;
+  }
+
+  selectedYourFindsConversionItem = item;
+  yourFindsConversionSaving = false;
+  yourFindsConversionReturnView = String(returnView || "LEGACY").toUpperCase();
+  const sourceSize = String(item.size || "").trim().toUpperCase();
+  const targetSize = sourceSize === "SNE" ? "MNE" : "SNE";
+  const suggestedQuantity = sourceSize === "LNE" ? 3 : (sourceSize === "ME" ? 4 : 1);
+
+  document.getElementById("deliveryConversionFromName").textContent =
+    String(item.description || item.name || "").trim() || yourFindsSizeDescription_(sourceSize);
+  document.getElementById("deliveryConversionFromCode").textContent = String(item.code || "").trim();
+  document.getElementById("deliveryConversionFromSize").textContent = sourceSize || "—";
+  document.getElementById("deliveryConversionTargetSize").value = targetSize;
+  document.getElementById("deliveryConversionCustomSize").value = "";
+  document.getElementById("deliveryConversionResultQty").value = suggestedQuantity;
+  document.getElementById("deliveryConversionNotes").value = "";
+  document.getElementById("deliveryConversionError").style.display = "none";
+  document.getElementById("deliveryConversionSaveBtn").disabled = false;
+  document.getElementById("yourFindsConversionModal").style.display = "flex";
+  updateYourFindsConversionPreview();
+  loadYourFindsConversionCustomSizes_();
+}
+
+function closeYourFindsConversionModal() {
+  if (yourFindsConversionSaving) return;
+  const modal = document.getElementById("yourFindsConversionModal");
+  if (modal) modal.style.display = "none";
+  selectedYourFindsConversionItem = null;
+  yourFindsConversionReturnView = "";
+}
+
+function updateYourFindsConversionPreview() {
+  const target = String(document.getElementById("deliveryConversionTargetSize").value || "").trim().toUpperCase();
+  const customWrap = document.getElementById("deliveryConversionCustomWrap");
+  const custom = String(document.getElementById("deliveryConversionCustomSize").value || "").trim().toUpperCase();
+  const quantity = Math.max(0, Number(document.getElementById("deliveryConversionResultQty").value) || 0);
+  customWrap.style.display = target === "CUSTOM" ? "block" : "none";
+  document.getElementById("deliveryConversionToSize").textContent = target === "CUSTOM" ? (custom || "CUSTOM") : target;
+  document.getElementById("deliveryConversionAfterQty").textContent = String(quantity);
+}
+
+function clearYourFindsConversionCaches_() {
+  if (typeof pageReadCache === "undefined" || !pageReadCache) return;
+  ["deliveryItems", "deliveryDetails", "inventory", "cashierInventory", "deliveryLabels"].forEach(function(key) {
+    pageReadCache.delete(key);
+  });
+}
+
+function applyYourFindsConversionClient_(result) {
+  const deliveryId = String(result && result.deliveryId || "").trim().toUpperCase();
+  const adjustmentId = String(result && result.adjustmentId || "").trim();
+  if (!deliveryId || !adjustmentId) return;
+
+  function patchQuantities(record) {
+    if (!record || String(record.deliveryId || record.id || "").trim().toUpperCase() !== deliveryId || record._lastConversionAdjustmentId === adjustmentId) return;
+    const quantities = Object.assign({}, record.quantities || record.counts || {});
+    const fromSize = String(result.fromSize || "").trim().toUpperCase();
+    const toSize = String(result.toSize || "").trim().toUpperCase();
+    if (fromSize) {
+      quantities[fromSize] = Math.max(0, (Number(quantities[fromSize]) || 0) - 1);
+      if (quantities[fromSize] === 0) delete quantities[fromSize];
+    }
+    if (toSize) quantities[toSize] = (Number(quantities[toSize]) || 0) + Number(result.resultQuantity || 0);
+    if (record.quantities) record.quantities = quantities;
+    if (record.counts) record.counts = quantities;
+    if (record.totalQty !== undefined) record.totalQty = Math.max(0, (Number(record.totalQty) || 0) - 1 + Number(result.resultQuantity || 0));
+    if (record.actual !== undefined) record.actual = Math.max(0, (Number(record.actual) || 0) - 1 + Number(result.resultQuantity || 0));
+    record._lastConversionAdjustmentId = adjustmentId;
+  }
+
+  if (typeof deliveriesPageData !== "undefined" && Array.isArray(deliveriesPageData)) {
+    deliveriesPageData.forEach(patchQuantities);
+    if (typeof filterDeliveriesPage === "function") filterDeliveriesPage();
+  }
+
+  function patchDetails(details) {
+    if (!details || String(details.id || "").trim().toUpperCase() !== deliveryId || details._lastConversionAdjustmentId === adjustmentId) return;
+    const groups = Array.isArray(details.groups) ? details.groups : [];
+    let direct = groups.find(function(group) { return group.id === "direct"; });
+    if (!direct) {
+      direct = {id:"direct", label:"Direct", items:[]};
+      groups.unshift(direct);
+      details.groups = groups;
+    }
+    groups.forEach(function(group) {
+      (group.items || []).forEach(function(item) {
+        if (String(item.code || "").trim() === String(result.sourceCode || "").trim()) {
+          item.status = "CONVERTED";
+          item.stock = 0;
+        }
+      });
+    });
+    (Array.isArray(result.codes) ? result.codes : []).forEach(function(code) {
+      const exists = groups.some(function(group) { return (group.items || []).some(function(item) { return String(item.code || "").trim() === String(code || "").trim(); }); });
+      if (!exists) direct.items.push({code:String(code || "").trim(),name:String(result.toSize || "").trim(),size:String(result.toSize || "").trim(),category:"YourFinds",status:"INCOMPLETE",stock:1,imageUrl:"",quantity:1,group:"direct"});
+    });
+    patchQuantities(details);
+  }
+
+  const patchedDetails = [];
+  if (typeof deliveryViewData !== "undefined" && deliveryViewData) {
+    patchDetails(deliveryViewData);
+    patchedDetails.push(deliveryViewData);
+  }
+  if (typeof pageReadCache !== "undefined") {
+    const cache = pageReadCache.get("standardDeliveryDetails");
+    const entry = cache && cache.entries && cache.entries.get(deliveryId);
+    if (entry && entry.data && patchedDetails.indexOf(entry.data) === -1) patchDetails(entry.data);
+  }
+}
+
+function saveYourFindsConversion() {
+  if (yourFindsConversionSaving || !selectedYourFindsConversionItem) return;
+
+  const targetSize = String(document.getElementById("deliveryConversionTargetSize").value || "").trim().toUpperCase();
+  const customSize = String(document.getElementById("deliveryConversionCustomSize").value || "").trim();
+  const resultQuantity = Number(document.getElementById("deliveryConversionResultQty").value);
+  const employee = getYourFindsConversionEmployee_();
+  const errorBox = document.getElementById("deliveryConversionError");
+  const saveButton = document.getElementById("deliveryConversionSaveBtn");
+
+  errorBox.style.display = "none";
+  if (targetSize === "CUSTOM" && !customSize) {
+    errorBox.textContent = "Enter or select a custom size.";
+    errorBox.style.display = "block";
+    return;
+  }
+  if (!Number.isInteger(resultQuantity) || resultQuantity < 1 || resultQuantity > 999) {
+    errorBox.textContent = "Result quantity must be a whole number from 1 to 999.";
+    errorBox.style.display = "block";
+    return;
+  }
+  if (!employee) {
+    errorBox.textContent = "Employee is required.";
+    errorBox.style.display = "block";
+    return;
+  }
+
+  yourFindsConversionSaving = true;
+  saveButton.disabled = true;
+  saveButton.textContent = "Saving...";
+  const payload = {
+    sourceCode: String(selectedYourFindsConversionItem.code || "").trim(),
+    deliveryId: currentDeliveryDetailsId,
+    targetSize: targetSize,
+    customSize: customSize,
+    resultQuantity: resultQuantity,
+    notes: String(document.getElementById("deliveryConversionNotes").value || "").trim(),
+    employee: employee
+  };
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      const returnView = yourFindsConversionReturnView;
+      applyYourFindsConversionClient_(result);
+      yourFindsConversionSaving = false;
+      saveButton.disabled = false;
+      saveButton.textContent = "Save Adjustment";
+      document.getElementById("yourFindsConversionModal").style.display = "none";
+      selectedYourFindsConversionItem = null;
+      yourFindsConversionReturnView = "";
+      clearYourFindsConversionCaches_();
+      if (returnView === "STANDARD" && typeof closeStandardDeliveryDetails === "function") closeStandardDeliveryDetails();
+      else closeYourFindsDeliveryDetailsModal();
+      if (typeof refreshDeliveriesPage === "function") refreshDeliveriesPage(true);
+      openYourFindsLabelModal(result.deliveryId);
+      showNotificationToast("Adjustment saved. Select labels to print.");
+    })
+    .withFailureHandler(function(error) {
+      yourFindsConversionSaving = false;
+      saveButton.disabled = false;
+      saveButton.textContent = "Save Adjustment";
+      errorBox.textContent = error && error.message ? error.message : String(error || "Unable to save adjustment.");
+      errorBox.style.display = "block";
+    })
+    .convertYourFindsDeliveryItem(payload);
 }
 
 

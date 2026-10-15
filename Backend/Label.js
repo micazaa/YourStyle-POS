@@ -1399,6 +1399,15 @@ function getYourFindsLabelItemsByDeliveryId(
               .trim()
               .toUpperCase(),
 
+          stock:
+            Number(
+              item.stock
+            ) || 0,
+
+          printable:
+            String(item.status || "").trim().toUpperCase() !== INVENTORY_STATUS.CONVERTED &&
+            Number(item.stock) > 0,
+
           description:
             String(
               item.name || ""
@@ -1544,6 +1553,7 @@ function buildYourFindsDeliverySummaryFromInventory(deliveryId) {
   const normalizedDeliveryId = String(deliveryId || "").trim().toUpperCase();
   const items = getFullInventory().filter(function(item) {
     return String(item.deliveryId || "").trim().toUpperCase() === normalizedDeliveryId &&
+      String(item.status || "").trim().toUpperCase() !== INVENTORY_STATUS.CONVERTED &&
       (String(item.category || "").trim().toUpperCase() === "YOURFINDS" || String(item.inventoryType || "").trim().toUpperCase() === "UNIQUE");
   });
 

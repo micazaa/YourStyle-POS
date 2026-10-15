@@ -221,6 +221,11 @@ function productMasterSaleOnEdit_(event) {
       referenceId = "";
       remaining = null;
     }
+    // Sheet edits to the legacy sale columns replace the app's tier allocation.
+    if (typeof sheet.getMaxColumns === "function" && sheet.getMaxColumns() >= PRODUCT_COL.SALE_PRICES &&
+        String(sheet.getRange(1, PRODUCT_COL.SALE_PRICES).getDisplayValues()[0][0] || "").trim() === "Sale Prices") {
+      sheet.getRange(rowNumber, PRODUCT_COL.SALE_PRICES).clearContent();
+    }
     sheet.getRange(rowNumber, PRODUCT_COL.UPDATED_AT).setValue(new Date());
 
     const itemResult = getInventoryItemByCode(code);

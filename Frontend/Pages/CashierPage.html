@@ -414,13 +414,19 @@ document
       return;
     }
 
-    const foundItem =
-      masterInventory.find(function(item) {
-
-        return String(item.code || "").trim() ===
-          scannedCode;
-
-      });
+    const matchingItems = masterInventory.filter(function(item) {
+      return String(item.code || "").trim() === scannedCode;
+    });
+    if (matchingItems.length > 1) {
+      const search = document.getElementById('manualItemSearch');
+      search.value = scannedCode;
+      filterManualItemList();
+      search.focus();
+      showNotificationToast('Choose a price for ' + matchingItems[0].name + '.');
+      this.value = '';
+      return;
+    }
+    const foundItem = matchingItems[0];
 
 
     if (foundItem) {

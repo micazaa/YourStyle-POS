@@ -9,7 +9,7 @@ test('delivery view reuses results, deduplicates requests, and refetches after i
   vm.runInContext(fs.readFileSync('Frontend/Modals/DeliveryReportModal.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
   let renders=0;
   c.renderStandardDeliveryDetails=()=>{renders++;};
-  c.viewDeliveryDetails('D1');c.viewDeliveryDetails('D1');
+  c.prefetchDeliveryDetails('D1');c.viewDeliveryDetails('D1');c.viewDeliveryDetails('D1');
   assert.equal(callbacks.length,1);
   callbacks[0]({id:'D1'});
   await new Promise(resolve=>setImmediate(resolve));

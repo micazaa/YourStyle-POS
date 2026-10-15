@@ -1,4 +1,6 @@
 .clasp.json
+.clasp.dev.json
+.clasp.prod.json
 .clasprc.json
 .env
 node_modules/

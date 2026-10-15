@@ -65,3 +65,51 @@ test('sale checkout rejects stale references and accepts current sale price', ()
   assert.equal(c.validateSalePricing_([{code:'A',name:'YELLOW',price:99,quantity:2,priceSource:'SALE',saleReferenceId:'SALE-1'}])[0].priceSource,'SALE');
   assert.throws(()=>c.validateSalePricing_([{code:'A',name:'YELLOW',price:99,quantity:1,priceSource:'SALE',saleReferenceId:'OLD'}]),/sale changed/i);
 });
+
+test('two sale allocations create distinct sellable variants without duplicating stock', () => {
+  const source = fs.readFileSync(path.join(root, 'Backend/Inventory.js'), 'utf8');
+  const code = source.slice(source.indexOf('function getSellableInventory()'), source.indexOf('function getInventoryDisplayStatus'));
+  const item = {code:'A',name:'YELLOW',status:'ACTIVE',productStatus:'ON SALE',stock:10,regularPrice:500,
+    salePrices:[{price:450,remaining:6,referenceId:'SALE-1'},{price:400,remaining:4,referenceId:'SALE-2'}]};
+  const c=vm.createContext({getProductMaster_:()=>[],getFullInventory:()=>[item],
+    INVENTORY_STATUS:{ACTIVE:'ACTIVE'},PRODUCT_STATUS:{ACTIVE:'ACTIVE',DEACTIVATED:'DEACTIVATED',ON_SALE:'ON SALE'}});
+  vm.runInContext(code,c);c.expireEndedProductSales_=()=>{};
+  const result=c.getSellableInventory();
+  assert.deepEqual(Array.from(result,row=>[row.variantKey,row.stock,row.price]),[
+    ['A|SALE|SALE-1',6,450],['A|SALE|SALE-2',4,400]]);
+  assert.equal(result.reduce((sum,row)=>sum+row.stock,0),10);
+});
+
+test('checkout validates each price reference and aggregated quantity', () => {
+  const source=fs.readFileSync(path.join(root,'Backend/Sales.js'),'utf8');
+  const code=source.slice(source.indexOf('function validateSalePricing_'),source.indexOf('function consumeSaleAllocations_'));
+  const product={productCode:'A',status:'ON SALE',salePrices:[
+    {price:450,remaining:2,referenceId:'S1'},{price:400,remaining:4,referenceId:'S2'}]};
+  const c=vm.createContext({getProductMaster_:()=>[product],PRODUCT_STATUS:{ON_SALE:'ON SALE'}});
+  vm.runInContext(code,c);
+  assert.equal(c.validateSalePricing_([
+    {code:'A',quantity:1,price:450,priceSource:'SALE',saleReferenceId:'S1'},
+    {code:'A',quantity:3,price:400,priceSource:'SALE',saleReferenceId:'S2'}]).length,2);
+  assert.throws(()=>c.validateSalePricing_([
+    {code:'A',quantity:2,price:450,priceSource:'SALE',saleReferenceId:'S1'},
+    {code:'A',quantity:1,price:450,priceSource:'SALE',saleReferenceId:'S1'}]),/only 2 sale item/i);
+  assert.throws(()=>c.validateSalePricing_([{code:'A',quantity:1,price:450,priceSource:'SALE',saleReferenceId:'S2'}]),/sale price changed/i);
+});
+
+test('checkout consumes only the selected sale allocations', () => {
+  const source=fs.readFileSync(path.join(root,'Backend/Sales.js'),'utf8');
+  const code=source.slice(source.indexOf('function consumeSaleAllocations_'),source.indexOf('function getExpectedCashForCurrentCashier'));
+  const product={productCode:'A',rowNumber:2,status:'ON SALE',salePricesStored:true,salePrices:[
+    {price:450,quantity:2,remaining:2,referenceId:'S1'},
+    {price:400,quantity:4,remaining:4,referenceId:'S2'}]};
+  let written;
+  const sheet={getRange(){return {setValue(){}};}};
+  const c=vm.createContext({SpreadsheetApp:{getActiveSpreadsheet:()=>({getSheetByName:()=>sheet})},
+    SHEETS:{PRODUCT_MASTER:'Product Master'},PRODUCT_COL:{UPDATED_AT:11},PRODUCT_STATUS:{ON_SALE:'ON SALE'},
+    writeProductSalePrices_(_sheet,_row,tiers){written=tiers.filter(tier=>tier.remaining>0);return written;}});
+  vm.runInContext(code,c);
+  c.consumeSaleAllocations_([
+    {code:'A',quantity:2,priceSource:'SALE',saleReferenceId:'S1'},
+    {code:'A',quantity:1,priceSource:'SALE',saleReferenceId:'S2'}], 'Cashier', [product]);
+  assert.deepEqual(Array.from(written,tier=>[tier.referenceId,tier.remaining]),[['S2',3]]);
+});

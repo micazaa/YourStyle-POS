@@ -676,13 +676,13 @@ function getBulkDistributionData(deliveryId, omitProducts, sheetRow) {
   if (!sheet || sheet.getLastRow() < 2) throw new Error("No pending bundles found.");
   let resolvedRow = Number(sheetRow);
   if (Number.isInteger(resolvedRow) && resolvedRow >= 2 && resolvedRow <= sheet.getLastRow()) {
-    const row = sheet.getRange(resolvedRow, 1, 1, DELIVERY_LOG_COLUMN_COUNT).getDisplayValues()[0];
+    const row = sheet.getRange(resolvedRow, 1, 1, DELIVERY_LOG_COLUMN_COUNT).getValues()[0];
     const valid = String(row[DELIVERY_IDX.DELIVERY_ID]).trim() === deliveryId &&
       String(row[DELIVERY_IDX.RECEIVE_MODE]).trim().toUpperCase() === DELIVERY_RECEIVE_MODE.BULK &&
       [DELIVERY_STATUS.PENDING, DELIVERY_STATUS.PARTIAL].includes(String(row[DELIVERY_IDX.STATUS]).trim().toUpperCase());
     if (!valid) throw new Error("No pending bundles found for this delivery.");
   } else {
-    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELIVERY_LOG_COLUMN_COUNT).getDisplayValues();
+    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELIVERY_LOG_COLUMN_COUNT).getValues();
     const index = rows.findIndex(function(row) {
       return String(row[DELIVERY_IDX.DELIVERY_ID]).trim() === deliveryId &&
         String(row[DELIVERY_IDX.RECEIVE_MODE]).trim().toUpperCase() === DELIVERY_RECEIVE_MODE.BULK &&

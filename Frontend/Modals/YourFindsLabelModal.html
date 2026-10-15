@@ -201,6 +201,12 @@ let yourFindsLabelModalItems =
 let yourFindsLabelCurrentDeliveryId =
   "";
 
+function printableYourFindsLabelItems_(items) {
+  return (Array.isArray(items) ? items : []).filter(function(item) {
+    return item && item.printable !== false && String(item.status || "").toUpperCase() !== "CONVERTED";
+  });
+}
+
 
 /* ==========================================================
    OPEN LABEL MODAL
@@ -306,7 +312,7 @@ function openYourFindsLabelModal(
     "block";
 
 
-  if(refresh.cached!==undefined){yourFindsLabelModalItems=refresh.cached;renderYourFindsLabelItems();document.getElementById('yourFindsLabelLoading').style.display='none';}
+  if(refresh.cached!==undefined){yourFindsLabelModalItems=printableYourFindsLabelItems_(refresh.cached);renderYourFindsLabelItems();document.getElementById('yourFindsLabelLoading').style.display='none';}
   updateYourFindsLabelPrintButton();
 
 
@@ -355,12 +361,7 @@ function openYourFindsLabelModal(
         }
 
 
-        yourFindsLabelModalItems =
-          Array.isArray(
-            result.items
-          )
-            ? result.items
-            : [];
+        yourFindsLabelModalItems = printableYourFindsLabelItems_(result.items);
 
 
         refresh.save(yourFindsLabelModalItems);

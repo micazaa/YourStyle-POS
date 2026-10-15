@@ -63,7 +63,7 @@
           <option value="">All Status</option><option value="ACTIVE">Active</option><option value="DEACTIVATED">Inactive</option><option value="ON SALE">On Sale</option>
         </select>
         <select id="inventoryStockStatusFilter" class="form-select" style="width:180px;" aria-label="Inventory stock status" onchange="filterInventoryTable()">
-          <option value="">All Stock </option><option value="IN STOCK">In Stock</option><option value="LOW STOCK">Low Stock</option><option value="SOLD OUT">Sold Out</option><option value="INCOMPLETE">Incomplete</option><option value="RETURNED">Returned</option>
+          <option value="">All Stock </option><option value="IN STOCK">In Stock</option><option value="LOW STOCK">Low Stock</option><option value="SOLD OUT">Sold Out</option><option value="INCOMPLETE">Incomplete</option><option value="CONVERTED">Converted</option><option value="RETURNED">Returned</option>
         </select>
         <input style="flex:1;min-width:220px;" type="search" id="inventorySearch" class="form-control"
           aria-label="Search inventory" placeholder="Search code, product, category, size..."
@@ -236,7 +236,7 @@ function buildInventorySummaryGroups(items) {
     });
     const group = groups.get(key);
     // Preserve signed table balances; cards count positive units separately.
-    if (String(item.status || '').trim().toUpperCase() !== 'RETURNED') {
+    if (!['RETURNED','CONVERTED'].includes(String(item.status || '').trim().toUpperCase())) {
       const stock = Number(item.stock) || 0;
       group.stock += stock;
       group.positiveStock += Math.max(0, stock);
@@ -313,16 +313,25 @@ function sortInventoryTable(key) {
 function expandInventorySaleRows(items) {
   const rows = [];
   items.forEach(function(item) {
-    const onSale = String(item.productStatus || '').trim().toUpperCase() === 'ON SALE' && Number.isFinite(Number(item.salePrice));
-    if (!onSale) { rows.push(item); return; }
-    const stock = Number(item.stock) || 0;
-    if (item.saleRemaining === null || item.saleRemaining === undefined) {
-      rows.push(Object.assign({}, item, {baseName:item.name,price:Number(item.salePrice)||0,saleVariant:'ALL'}));
-      return;
+    const tiers = Array.isArray(item.salePrices) && item.salePrices.length ? item.salePrices :
+      (item.salePrice === null || item.salePrice === undefined ? [] : [{
+        price:item.salePrice,remaining:item.saleRemaining,referenceId:item.saleReferenceId,end:item.saleEnd
+      }]);
+    if (String(item.productStatus || '').trim().toUpperCase() !== 'ON SALE' || !tiers.length) {
+      rows.push(item); return;
     }
-    const allocated = Math.min(Math.max(0, Number(item.saleRemaining) || 0), Math.max(0, stock));
-    rows.push(Object.assign({}, item, {baseName:item.name,stock:stock-allocated,price:Number(item.regularPrice??item.price)||0,saleVariant:'REGULAR'}));
-    rows.push(Object.assign({}, item, {baseName:item.name,stock:allocated,price:Number(item.salePrice)||0,saleVariant:'SALE'}));
+    const stock = Number(item.stock) || 0;
+    let available = Math.max(0, stock);
+    const saleRows = tiers.map(function(tier, index) {
+      const allocated = tier.remaining === null || tier.remaining === undefined ? available :
+        Math.min(available, Math.max(0, Number(tier.remaining) || 0));
+      available -= allocated;
+      return Object.assign({}, item, {baseName:item.name,stock:allocated,price:Number(tier.price)||0,
+        saleVariant:'SALE',saleTierIndex:index,saleReferenceId:tier.referenceId||'',saleEnd:tier.end||''});
+    });
+    if (available > 0 || stock < 0) rows.push(Object.assign({}, item, {baseName:item.name,stock:stock<0?stock:available,
+      price:Number(item.regularPrice??item.price)||0,saleVariant:'REGULAR'}));
+    saleRows.forEach(function(row) { rows.push(row); });
   });
   return rows;
 }
@@ -378,6 +387,7 @@ function renderInventoryTable(items) {
     const productState = String(item.productStatus || (state === 'INACTIVE' ? 'DEACTIVATED' : 'ACTIVE')).trim().toUpperCase();
     const stock = Number(item.stock) || 0;
     const isYourFinds = inventoryIsYourFinds(item);
+    const isConverted = state === 'CONVERTED';
     const canToggle = state === 'ACTIVE' || state === 'INACTIVE';
     const isAllocatedSaleRow = item.saleVariant === 'SALE';
     const saleLabel = item.saleVariant === 'SALE' || item.saleVariant === 'ALL'
@@ -418,7 +428,7 @@ function renderInventoryTable(items) {
         isManager
           ? `
             <td>
-              ${isAllocatedSaleRow ? '<span class="badge bg-danger text-white">On Sale</span>' : `<select
+              ${isAllocatedSaleRow ? '<span class="badge bg-danger text-white">On Sale</span>' : isConverted ? '<span class="badge bg-secondary">Converted</span>' : `<select
                 class="form-select form-select-sm inventory-active"
                 aria-label="Active status for ${escapeInventoryHtml(item.code)}"
                 ${canToggle ? '' : 'disabled'}
@@ -493,7 +503,7 @@ function renderInventoryTable(items) {
       openInventoryDetails(item.code)
     );
 
-    if (isManager && !isAllocatedSaleRow) {
+    if (isManager && !isAllocatedSaleRow && !isConverted) {
       action('delete', 'Delete item', () => deleteInventoryRow(item));
     }
 
@@ -520,7 +530,7 @@ function changeInventoryActiveInline(item, select) {
   const auth = managerCredentials('Manager PIN to change status:');
   if (!auth) return;
   const matchingItems = (inventoryPageData || []).filter(row => String(row.code) === String(item.code));
-  const snapshots = matchingItems.map(row => ({row:row,status:row.status,productStatus:row.productStatus,salePrice:row.salePrice,saleQuantity:row.saleQuantity,saleRemaining:row.saleRemaining,saleEnd:row.saleEnd,saleReferenceId:row.saleReferenceId}));
+  const snapshots = matchingItems.map(row => ({row:row,status:row.status,productStatus:row.productStatus,salePrice:row.salePrice,saleQuantity:row.saleQuantity,saleRemaining:row.saleRemaining,saleEnd:row.saleEnd,saleReferenceId:row.saleReferenceId,salePrices:row.salePrices}));
   function applyStatus(targetStatus, productStatus) {
     matchingItems.forEach(function(row) {
       row.status = targetStatus;
@@ -530,6 +540,7 @@ function changeInventoryActiveInline(item, select) {
       row.saleRemaining = null;
       row.saleEnd = '';
       row.saleReferenceId = '';
+      row.salePrices = [];
     });
     filterInventoryTable();
   }
@@ -542,6 +553,7 @@ function changeInventoryActiveInline(item, select) {
       snapshot.row.saleRemaining = snapshot.saleRemaining;
       snapshot.row.saleEnd = snapshot.saleEnd;
       snapshot.row.saleReferenceId = snapshot.saleReferenceId;
+      snapshot.row.salePrices = snapshot.salePrices;
     });
     filterInventoryTable();
   }
@@ -606,6 +618,8 @@ function getInventoryDisplayStatus(
 
   if (status === "RETURNED") return "RETURNED";
 
+  if (status === "CONVERTED") return "CONVERTED";
+
   if (stock < 0) {
 
     return "NEGATIVE STOCK";
@@ -643,6 +657,8 @@ function getInventoryDisplayStatus(
 
 function buildInventoryStatusBadge(status) {
   if (status === "RETURNED") return '<span class="badge bg-secondary">Returned</span>';
+
+  if (status === "CONVERTED") return '<span class="badge bg-secondary">Converted</span>';
 
   if (status === "NEGATIVE STOCK") return '<span class="badge bg-danger">Sold Out</span>';
 
