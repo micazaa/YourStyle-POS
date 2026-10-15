@@ -431,26 +431,55 @@ function convertYourFindsDeliveryItem(payload) {
 
   const sourceCode = String(payload.sourceCode || "").trim();
   const requestedDeliveryId = String(payload.deliveryId || "").trim().toUpperCase();
-  const requestedTarget = normalizeYourFindsCustomSizeLabel_(payload.targetSize);
-  const customSize = normalizeYourFindsCustomSizeLabel_(payload.customSize);
-  const resultQuantity = Number(payload.resultQuantity);
   const employee = String(payload.employee || "").trim();
   const notes = String(payload.notes || "").trim();
 
   if (!sourceCode) throw new Error("Source Product Code is required.");
   if (!employee) throw new Error("Employee is required.");
-  if (!Number.isInteger(resultQuantity) || resultQuantity < 1 || resultQuantity > 999) {
-    throw new Error("Result quantity must be a whole number from 1 to 999.");
-  }
+  const auth = requireManager_(payload.managerPin, payload.managerToken);
 
   const standardSizes = YOURFINDS_SIZE_ORDER.filter(function(size) { return size !== "CUSTOM"; });
-  if (standardSizes.indexOf(requestedTarget) === -1 && requestedTarget !== "CUSTOM") {
-    throw new Error("Select a valid YourFinds result size.");
-  }
-
-  const targetSize = requestedTarget === "CUSTOM" ? customSize : requestedTarget;
-  if (!targetSize || (requestedTarget === "CUSTOM" && isStandardYourFindsSizeLabel_(targetSize))) {
-    throw new Error("Enter a valid custom YourFinds size.");
+  const rawTargets = Array.isArray(payload.targets) && payload.targets.length
+    ? payload.targets
+    : [{
+        targetSize: payload.targetSize,
+        customSize: payload.customSize,
+        quantity: payload.resultQuantity
+      }];
+  const usedTargetSizes = {};
+  let totalResultQuantity = 0;
+  const targets = rawTargets.map(function(rawTarget, index) {
+    rawTarget = rawTarget || {};
+    const requestedTarget = normalizeYourFindsCustomSizeLabel_(rawTarget.targetSize);
+    const customSize = normalizeYourFindsCustomSizeLabel_(rawTarget.customSize);
+    const resultQuantity = Number(
+      rawTarget.quantity === undefined ? rawTarget.resultQuantity : rawTarget.quantity
+    );
+    if (standardSizes.indexOf(requestedTarget) === -1 && requestedTarget !== "CUSTOM") {
+      throw new Error("Select a valid YourFinds result size for item " + (index + 1) + ".");
+    }
+    const targetSize = requestedTarget === "CUSTOM" ? customSize : requestedTarget;
+    if (!targetSize || (requestedTarget === "CUSTOM" && isStandardYourFindsSizeLabel_(targetSize))) {
+      throw new Error("Enter a valid custom YourFinds size for item " + (index + 1) + ".");
+    }
+    if (!Number.isInteger(resultQuantity) || resultQuantity < 1 || resultQuantity > 999) {
+      throw new Error("Each result quantity must be a whole number from 1 to 999.");
+    }
+    if (usedTargetSizes[targetSize]) {
+      throw new Error("Combine duplicate result size " + targetSize + " into one item.");
+    }
+    usedTargetSizes[targetSize] = true;
+    totalResultQuantity += resultQuantity;
+    return {
+      requestedTarget: requestedTarget,
+      targetSize: targetSize,
+      resultQuantity: resultQuantity,
+      codes: []
+    };
+  });
+  if (!targets.length) throw new Error("Add at least one result item.");
+  if (totalResultQuantity > 999) {
+    throw new Error("Total result quantity must not exceed 999.");
   }
 
   const lock = LockService.getScriptLock();
@@ -465,12 +494,14 @@ function convertYourFindsDeliveryItem(payload) {
   let sourceUpdatedAt = "";
   let inventoryStartRow = 0;
   let movementStartRow = movementSheet ? movementSheet.getLastRow() : 0;
-  let createdCustomProductRow = 0;
+  const createdCustomProductRows = [];
 
   try {
     if (!inventorySheet) throw new Error("Inventory sheet not found.");
     if (!movementSheet) throw new Error("Inventory Movement Log sheet not found.");
-    if (requestedTarget === "CUSTOM" && !productMasterSheet) throw new Error("Product Master sheet not found.");
+    if (targets.some(function(target) { return target.requestedTarget === "CUSTOM"; }) && !productMasterSheet) {
+      throw new Error("Product Master sheet not found.");
+    }
 
     const sourceResult = getInventoryItemByCode(sourceCode);
     if (!sourceResult || !sourceResult.success || !sourceResult.item) {
@@ -499,28 +530,53 @@ function convertYourFindsDeliveryItem(payload) {
     const deliveryDate = yourFindsDeliveryDateFromId_(deliveryId);
     const sourceSize = String(sourceItem.size || "").trim().toUpperCase();
     if (!sourceSize) throw new Error("Source YourFinds item has no size.");
-    if (sourceSize === targetSize) throw new Error("Result size must differ from source size.");
 
     const now = new Date();
-    if (requestedTarget === "CUSTOM") {
-      const customDefinition = ensureYourFindsCustomSizeDefinition_(productMasterSheet, targetSize, now);
-      createdCustomProductRow = customDefinition.created ? customDefinition.rowNumber : 0;
-    }
+    targets.forEach(function(target) {
+      if (target.requestedTarget !== "CUSTOM") return;
+      const customDefinition = ensureYourFindsCustomSizeDefinition_(productMasterSheet, target.targetSize, now);
+      if (customDefinition.created) createdCustomProductRows.push(customDefinition.rowNumber);
+    });
 
-    const targetCodes = generateYourFindsDeliveryCodes(
-      inventorySheet,
-      deliveryDate,
-      requestedTarget,
-      resultQuantity
-    );
-    if (targetCodes.length !== resultQuantity) throw new Error("Unable to generate all result Product Codes.");
+    const codeQuantities = {};
+    targets.forEach(function(target) {
+      codeQuantities[target.requestedTarget] =
+        (codeQuantities[target.requestedTarget] || 0) + target.resultQuantity;
+    });
+    const codesBySize = {};
+    Object.keys(codeQuantities).forEach(function(size) {
+      codesBySize[size] = generateYourFindsDeliveryCodes(
+        inventorySheet,
+        deliveryDate,
+        size,
+        codeQuantities[size]
+      );
+      if (codesBySize[size].length !== codeQuantities[size]) {
+        throw new Error("Unable to generate all result Product Codes.");
+      }
+    });
+    const codeOffsets = {};
+    targets.forEach(function(target) {
+      const offset = codeOffsets[target.requestedTarget] || 0;
+      target.codes = codesBySize[target.requestedTarget].slice(
+        offset,
+        offset + target.resultQuantity
+      );
+      codeOffsets[target.requestedTarget] = offset + target.resultQuantity;
+    });
+    const targetCodes = targets.reduce(function(codes, target) {
+      return codes.concat(target.codes);
+    }, []);
 
     inventoryStartRow = inventorySheet.getLastRow() + 1;
-    const inventoryRows = targetCodes.map(function(code) {
-      return [
-        code, "", targetSize, "YourFinds", INVENTORY_TYPE.UNIQUE, INVENTORY_STATUS.INCOMPLETE,
-        "", "", "", "", "", "", 0, 0, "", now, now
-      ];
+    const inventoryRows = [];
+    targets.forEach(function(target) {
+      target.codes.forEach(function(code) {
+        inventoryRows.push([
+          code, "", target.targetSize, "YourFinds", INVENTORY_TYPE.UNIQUE, INVENTORY_STATUS.INCOMPLETE,
+          "", "", "", "", "", "", 0, 0, "", now, now
+        ]);
+      });
     });
     inventorySheet.getRange(inventoryStartRow, 1, inventoryRows.length, INVENTORY_COLUMN_COUNT).setValues(inventoryRows);
     setInventoryCalculatedFields_(inventorySheet, inventoryStartRow, inventoryRows.length);
@@ -532,9 +588,17 @@ function convertYourFindsDeliveryItem(payload) {
       deliveryId: deliveryId,
       sourceCode: sourceCode,
       fromSize: sourceSize,
-      toSize: targetSize,
+      toSize: targets.length === 1 ? targets[0].targetSize : "",
       sourceQuantity: 1,
-      resultQuantity: resultQuantity,
+      resultQuantity: totalResultQuantity,
+      authorizedBy: auth.managerName,
+      targets: targets.map(function(target) {
+        return {
+          toSize: target.targetSize,
+          resultQuantity: target.resultQuantity,
+          targetCodes: target.codes.slice()
+        };
+      }),
       notes: notes
     };
     const movements = [{
@@ -548,17 +612,22 @@ function convertYourFindsDeliveryItem(payload) {
       source: INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,
       notes: JSON.stringify(Object.assign({}, detail, {targetCodes:targetCodes}))
     }];
-    targetCodes.forEach(function(code, index) {
-      movements.push({
-        code: code,
-        qtyChange: 1,
-        referenceId: adjustmentId,
-        sourceLineId: deliveryId,
-        employee: employee,
-        item: targetSize,
-        reason: "ITEM CONVERSION",
-        source: INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,
-        notes: JSON.stringify(Object.assign({}, detail, {targetIndex:index + 1}))
+    targets.forEach(function(target, targetGroupIndex) {
+      target.codes.forEach(function(code, targetIndex) {
+        movements.push({
+          code: code,
+          qtyChange: 1,
+          referenceId: adjustmentId,
+          sourceLineId: deliveryId,
+          employee: employee,
+          item: target.targetSize,
+          reason: "ITEM CONVERSION",
+          source: INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,
+          notes: JSON.stringify(Object.assign({}, detail, {
+            targetGroupIndex: targetGroupIndex + 1,
+            targetIndex: targetIndex + 1
+          }))
+        });
       });
     });
     changeInventoryStockBatch_(movements);
@@ -575,9 +644,17 @@ function convertYourFindsDeliveryItem(payload) {
       sourceCode: sourceCode,
       sourceStatus: INVENTORY_STATUS.CONVERTED,
       fromSize: sourceSize,
-      toSize: targetSize,
-      resultQuantity: resultQuantity,
-      codes: targetCodes
+      toSize: targets.length === 1 ? targets[0].targetSize : "",
+      resultQuantity: totalResultQuantity,
+      authorizedBy: auth.managerName,
+      codes: targetCodes,
+      targets: targets.map(function(target) {
+        return {
+          targetSize: target.targetSize,
+          resultQuantity: target.resultQuantity,
+          codes: target.codes.slice()
+        };
+      })
     };
   } catch (error) {
     try {
@@ -598,7 +675,9 @@ function convertYourFindsDeliveryItem(payload) {
       }
     } catch (sourceRollbackError) {}
     try {
-      if (createdCustomProductRow > 0) productMasterSheet.deleteRow(createdCustomProductRow);
+      createdCustomProductRows.sort(function(a, b) { return b - a; }).forEach(function(rowNumber) {
+        productMasterSheet.deleteRow(rowNumber);
+      });
     } catch (productRollbackError) {}
     SpreadsheetApp.flush();
     throw error;

@@ -19,10 +19,13 @@ function buildDeliveryReceiptHtml_(details) {
     return '<tr><td>'+safe(line.code)+'</td><td>'+safe(line.description)+'</td><td class="qty">'+safe(line.quantity)+'</td><td>'+safe(line.remarks)+'</td></tr>';
   }).join('');
   const adjustments=(details.adjustmentLines||[]).map(function(line) {
-    const from=[line.fromCode,line.fromSize].filter(Boolean).join(' · ');
-    const targets=(line.targetCodes||[]).join(', ');
-    const to=[targets,line.toSize].filter(Boolean).join(' · ');
-    return '<tr><td>'+safe(line.referenceId)+'</td><td>'+safe(from)+'</td><td class="qty">'+safe(line.fromQuantity)+'</td><td>'+safe(to)+'</td><td class="qty">'+safe(line.toQuantity)+'</td><td>'+safe(line.notes)+'</td></tr>';
+    const from=line.fromSize;
+    const targets=Array.isArray(line.targets)&&line.targets.length?line.targets:[{toSize:line.toSize,toQuantity:line.toQuantity,targetCodes:line.targetCodes||[]}];
+    const to=targets.map(function(target){
+      return safe(target.toSize||target.targetSize)+' × '+safe(target.toQuantity||target.resultQuantity||0);
+    }).join('<br>');
+    const total=targets.reduce(function(sum,target){return sum+(Number(target.toQuantity||target.resultQuantity)||0);},0);
+    return '<tr><td>'+safe(line.referenceId)+'</td><td>'+safe(from)+'</td><td class="qty">'+safe(line.fromQuantity)+'</td><td>'+to+'</td><td class="qty">'+safe(total)+'</td><td>'+safe(line.notes)+'</td></tr>';
   }).join('');
   const finalLines=(details.finalReportLines||[]).map(function(line) {
     return '<tr><td>'+safe(line.code)+'</td><td>'+safe(line.description)+'</td><td class="qty">'+safe(line.quantity)+'</td><td>'+safe(line.remarks)+'</td></tr>';

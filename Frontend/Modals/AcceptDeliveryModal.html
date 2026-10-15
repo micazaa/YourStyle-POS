@@ -461,7 +461,7 @@ function renderYourFindsDeliverySize(line) {
   }
   const sizes = type === "ELECTRONIC"
     ? [{ value:"SE", label:"SE" }, { value:"ME", label:"ME" }, { value:"LE", label:"LE" }, { value:"XLE", label:"XLE" }]
-    : [{ value:"SNE", label:"SNE" }, { value:"MNE", label:"MNE" }, { value:"LNE", label:"LNE" }, { value:"XLNE", label:"XLNE" }];
+    : [{ value:"SNE", label:"SNE" }, { value:"MNE", label:"MNE" }, { value:"LNE", label:"LNE" }, { value:"XLNE", label:"XLNE" }, { value:"NO SIZE", label:"NO SIZE" }, { value:"BNE", label:"BNE" }];
   container.innerHTML = '<select class="form-select form-select-sm yourfinds-line-size-select" aria-label="Size">' + sizes.map(function(size) { return '<option value="' + size.value + '">' + size.label + '</option>'; }).join("") + '</select>';
 }
 
@@ -499,7 +499,7 @@ function getYourFindsDeliveryLinesFromForm() {
 }
 
 function buildYourFindsDeliveryQuantities(lines) {
-  const quantities = { SNE:0, MNE:0, LNE:0, XLNE:0, SE:0, ME:0, LE:0, XLE:0, CUSTOM:0, CUSTOM_LABEL:"" };
+  const quantities = { SNE:0, MNE:0, LNE:0, XLNE:0, "NO SIZE":0, BNE:0, SE:0, ME:0, LE:0, XLE:0, CUSTOM:0, CUSTOM_LABEL:"" };
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > 999) throw new Error("Item " + (i + 1) + ": quantity must be a whole number from 1 to 999.");

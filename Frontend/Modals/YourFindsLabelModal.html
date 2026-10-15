@@ -201,6 +201,9 @@ let yourFindsLabelModalItems =
 let yourFindsLabelCurrentDeliveryId =
   "";
 
+let yourFindsLabelPreferredCodes =
+  null;
+
 function printableYourFindsLabelItems_(items) {
   return (Array.isArray(items) ? items : []).filter(function(item) {
     return item && item.printable !== false && String(item.status || "").toUpperCase() !== "CONVERTED";
@@ -219,7 +222,8 @@ function printableYourFindsLabelItems_(items) {
 ========================================================== */
 
 function openYourFindsLabelModal(
-  deliveryId
+  deliveryId,
+  selectedCodes
 ) {
 
   deliveryId =
@@ -264,6 +268,12 @@ function openYourFindsLabelModal(
 
   yourFindsLabelCurrentDeliveryId =
     deliveryId;
+
+
+  yourFindsLabelPreferredCodes =
+    Array.isArray(selectedCodes)
+      ? selectedCodes.map(function(code) { return String(code || "").trim(); }).filter(Boolean)
+      : null;
 
 
   yourFindsLabelModalItems =
@@ -440,6 +450,10 @@ function closeYourFindsLabelModal() {
 
   yourFindsLabelCurrentDeliveryId =
     "";
+
+
+  yourFindsLabelPreferredCodes =
+    null;
 
 }
 
@@ -768,17 +782,19 @@ function renderYourFindsLabelItems() {
     );
 
 
-  /*
-    For a newly-opened delivery selector,
-    select everything by default.
+  if (yourFindsLabelPreferredCodes === null) {
+    toggleAllYourFindsLabels(true);
+    return;
+  }
 
-    Staff can then uncheck labels they
-    don't want to print.
-  */
-
-  toggleAllYourFindsLabels(
-    true
-  );
+  const preferredCodes = {};
+  yourFindsLabelPreferredCodes.forEach(function(code) {
+    preferredCodes[code] = true;
+  });
+  document.querySelectorAll("#yourFindsLabelModal .yourfinds-label-checkbox").forEach(function(checkbox) {
+    checkbox.checked = preferredCodes[String(checkbox.value || "").trim()] === true;
+  });
+  updateYourFindsLabelSelection();
 
 }
 

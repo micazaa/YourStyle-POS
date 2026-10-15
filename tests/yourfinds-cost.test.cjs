@@ -17,7 +17,7 @@ function setup(){
   const c=vm.createContext({SpreadsheetApp:{getActiveSpreadsheet:()=>({getSheetByName:()=>sheet}),flush(){}},LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){releases++;}})}});
   for(const file of ['Constants.js','Inventory.js','InventoryMovement.js','SalesAutomation.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../Backend',file),'utf8'),c);
   c.verifyInventoryManagerSession_=token=>{if(token!=='manager')throw Error('Manager session invalid');return {success:true};};
-  c.getProductMaster_=()=>[{category:'YourFinds',description:'SNE',costPrice:50,active:true,imageUrl:'image'},{category:'YourFinds',description:'CUSTOM',costPrice:999,active:true,imageUrl:'image'}];
+  c.getProductMaster_=()=>[{category:'YourFinds',description:'SNE',costPrice:50,active:true,imageUrl:'image'},{category:'YourFinds',description:'NO SIZE',costPrice:60,active:true,imageUrl:'image'},{category:'YourFinds',description:'BULKY',costPrice:70,active:true,imageUrl:'image'},{category:'YourFinds',description:'CUSTOM',costPrice:999,active:true,imageUrl:'image'}];
   c.getActiveProducts=c.getProductMaster_;
   c.getFullInventory=()=>inventory.slice(1).map((r,i)=>({rowNumber:i+2,code:r[0],name:r[1],size:r[2],category:r[3],stock:-1}));
   c.readCostMap_=()=>({});
@@ -40,7 +40,8 @@ test('normal YourFinds editor saves standard and custom items at any stock witho
 });
 test('standard size aliases share cost, custom labels never inherit CUSTOM template cost',()=>{
   const {c}=setup();
-  for(const [input,expected] of [[' s ','SNE'],['M','MNE'],['L','LNE'],['XL','XLNE'],['SE','SE'],['FREE SIZE','CUSTOM'],['NO SIZE','CUSTOM']])assert.equal(c.normalizeYourFindsSaleSize_(input),expected);
+  for(const [input,expected] of [[' s ','SNE'],['M','MNE'],['L','LNE'],['XL','XLNE'],['SE','SE'],['NO SIZE','NO SIZE'],['BULKY','BNE'],['BNE','BNE'],['FREE SIZE','CUSTOM']])assert.equal(c.normalizeYourFindsSaleSize_(input),expected);
+  assert.equal(c.getYourFindsSaleTemplate_('BNE').description,'BULKY');
   const items=c.getInventoryForManagement('manager');assert.equal(items[0].costPrice,50);assert.equal(items[0].costSource,'SIZE');assert.equal(items[1].costPrice,null);assert.equal(items[1].costSource,'CUSTOM');
 });
 test('custom costs are manager-only, zero stays zero, and blank clears only that item',()=>{
@@ -67,5 +68,13 @@ test('POS/manual automation creates S as SNE, preserves FREE SIZE and NO SIZE, r
   c.saveYourFindsCustomCost({code:'B',costPrice:37,managerToken:'manager'});
   const before=inventory.length;c.ensureManualSaleInventoryItem_({code:'B',category:'YourFinds',name:'Item',size:'FREE SIZE',price:100});
   assert.equal(inventory.length,before);assert.equal(c.getInventoryForManagement('manager').find(i=>i.code==='B').costPrice,37);
-  assert.equal(c.getInventoryForManagement('manager').find(i=>i.code==='C').costPrice,null);
+  assert.equal(c.getInventoryForManagement('manager').find(i=>i.code==='C').costPrice,60);
+});
+
+test('BNE keeps the legacy BULKY barcode code and standard order',()=>{
+  const {c}=setup();
+  assert.equal(c.getYourFindsSizeCode('NO SIZE'),'10');
+  assert.equal(c.getYourFindsSizeCode('BULKY'),'11');
+  assert.equal(c.getYourFindsSizeCode('BNE'),'11');
+  assert.deepEqual(Array.from(vm.runInContext('YOURFINDS_SIZE_ORDER',c)).slice(4,6),['NO SIZE','BNE']);
 });

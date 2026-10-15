@@ -108,7 +108,8 @@ function normalizeYourFindsSaleSize_(size) {
     S: "SNE",
     M: "MNE",
     L: "LNE",
-    XL: "XLNE"
+    XL: "XLNE",
+    BULKY: "BNE"
   };
 
   if (aliases[normalized]) return aliases[normalized];
@@ -120,7 +121,8 @@ function getYourFindsSaleTemplate_(size) {
   const lookupSize = normalizeYourFindsSaleSize_(size);
   const product = getActiveProducts().find(function(candidate) {
     return String(candidate.category || "").trim().toUpperCase() === "YOURFINDS" &&
-      String(candidate.description || "").trim().toUpperCase() === lookupSize;
+      (String(candidate.description || "").trim().toUpperCase() === lookupSize ||
+        (lookupSize === "BNE" && String(candidate.description || "").trim().toUpperCase() === "BULKY"));
   });
 
   if (!product) {
@@ -319,7 +321,9 @@ function getFullInventory(options) {
 
       /* C — Size */
 
-      size: String(displayRow[INV_IDX.SIZE] || "").trim(),
+      size: String(displayRow[INV_IDX.CATEGORY] || "").trim().toUpperCase() === "YOURFINDS"
+        ? String(displayRow[INV_IDX.SIZE] || "").trim().replace(/^BULKY$/i, "BNE")
+        : String(displayRow[INV_IDX.SIZE] || "").trim(),
 
       /* K — Original Price */
 
@@ -757,8 +761,9 @@ function acceptYourFindsDelivery(
         sizeOrder[i];
 
 
-      const rawValue =
-        quantities[size];
+      const rawValue = size === "BNE" && quantities.BNE === undefined
+        ? quantities.BULKY
+        : quantities[size];
 
 
       /*
@@ -1904,7 +1909,9 @@ function generateMultiSizeYourFindsCodes(
   };
 
   sizeOrder.forEach(function (size) {
-    const quantity = Number(quantities[size]) || 0;
+    const quantity = size === "BNE" && quantities.BNE === undefined
+      ? Number(quantities.BULKY) || 0
+      : Number(quantities[size]) || 0;
 
     if (quantity <= 0) {
       result.bySize[size] = [];

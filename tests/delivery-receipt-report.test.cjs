@@ -55,15 +55,20 @@ test('delivery receipt keeps original items and adds conversion and final-summar
     reportTotal: '3',
     adjustmentLines: [{
       referenceId: 'ADJ-1', fromCode: '101326001', fromSize: 'ME', fromQuantity: 1,
-      toSize: 'SNE', toQuantity: 4, targetCodes: ['101321001', '101321002', '101321003', '101321004'],
-      notes: 'Actual contents were small items.'
+      toSize: 'SNE / MNE', toQuantity: 3, targetCodes: ['101321001', '101321002', '101322001'],
+      targets: [
+        {toSize:'SNE',toQuantity:2,targetCodes:['101321001','101321002']},
+        {toSize:'MNE',toQuantity:1,targetCodes:['101322001']}
+      ],
+      notes: 'Actual contents used mixed sizes.'
     }],
     finalReportLines: [
-      { code: 'SNE', description: 'Small non-electronic', quantity: 4, remarks: '' },
+      { code: 'SNE', description: 'Small non-electronic', quantity: 2, remarks: '' },
+      { code: 'MNE', description: 'Medium non-electronic', quantity: 1, remarks: '' },
       { code: 'LNE', description: 'Large non-electronic', quantity: 1, remarks: '' },
       { code: 'ME', description: 'Medium electronic', quantity: 1, remarks: '' }
     ],
-    finalReportTotal: '6'
+    finalReportTotal: '5'
   };
   const { context, getHtml } = loadReport(details);
   assert.equal(context.createDeliveryReceiptPdf(details.id).success, true);
@@ -71,8 +76,8 @@ test('delivery receipt keeps original items and adds conversion and final-summar
   assert.match(html, /<h2>Items Received<\/h2>/);
   assert.match(html, /<td>ME<\/td><td>Medium electronic<\/td><td class="qty">2<\/td>/);
   assert.match(html, /<h2>Adjustments<\/h2>/);
-  assert.match(html, /101326001 · ME/);
-  assert.match(html, /101321001, 101321002, 101321003, 101321004 · SNE/);
+  assert.match(html, /<td>ME<\/td><td class="qty">1<\/td><td>SNE × 2<br>MNE × 1<\/td>/);
+  assert.doesNotMatch(html, /101326001|101321001|101321002|101322001/);
   assert.match(html, /<h2>Final Items Received<\/h2>/);
-  assert.match(html, /Final inventory units<\/td><td class="qty">6<\/td>/);
+  assert.match(html, /Final inventory units<\/td><td class="qty">5<\/td>/);
 });

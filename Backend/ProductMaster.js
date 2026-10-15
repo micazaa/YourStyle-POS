@@ -254,12 +254,13 @@ function getActiveProducts() {
 }
 
 function normalizeYourFindsCustomSizeLabel_(value) {
-  return String(value || "").trim().replace(/\s+/g, " ").toUpperCase();
+  const label = String(value || "").trim().replace(/\s+/g, " ").toUpperCase();
+  return label === "BULKY" ? "BNE" : label;
 }
 
 function isStandardYourFindsSizeLabel_(value) {
   const label = normalizeYourFindsCustomSizeLabel_(value);
-  return ["S", "M", "L", "XL", "SNE", "MNE", "LNE", "XLNE", "SE", "ME", "LE", "XLE", "CUSTOM"].indexOf(label) !== -1;
+  return ["S", "M", "L", "XL", "SNE", "MNE", "LNE", "XLNE", "NO SIZE", "BNE", "SE", "ME", "LE", "XLE", "CUSTOM"].indexOf(label) !== -1;
 }
 
 function getYourFindsCustomSizes() {

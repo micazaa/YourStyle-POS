@@ -334,6 +334,15 @@ function escapeLabelHtml(value) {
    30mm wide × 20mm high
 ========================================================== */
 
+function formatYourFindsLabelSize_(value) {
+  const size = String(value || "").trim().replace(/\s+/g, " ").toUpperCase();
+  if (size === "BULKY") return "BNE";
+  if (size.length <= 4) return size;
+  const words = size.split(/[\s\-_/]+/).filter(Boolean);
+  // Printed sizes use word initials, or a short prefix for a single long word.
+  return words.length > 1 ? words.map(function(word) { return word.charAt(0); }).join("").slice(0, 4) : size.slice(0, 4);
+}
+
 function buildYourFindsLabelsHtml(
   labelItems
 ) {
@@ -417,7 +426,7 @@ function buildYourFindsLabelsHtml(
         <div class="label">
 
           <div class="size">
-            ${escapeLabelHtml(size)}
+            ${escapeLabelHtml(formatYourFindsLabelSize_(size))}
           </div>
 
           <div class="barcode">
@@ -977,7 +986,7 @@ function buildCompletedYourFindsLabelsHtml(labelItems) {
       <div class="label">
         <div class="top">
           <div class="description">${escapeLabelHtml(description)}</div>
-          <div class="size">${escapeLabelHtml(size)}</div>
+          <div class="size">${escapeLabelHtml(formatYourFindsLabelSize_(size))}</div>
         </div>
         <div class="price">${escapeLabelHtml(priceText)}</div>
         <div class="barcode">${barcodeSvg}</div>

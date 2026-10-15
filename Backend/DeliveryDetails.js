@@ -101,7 +101,7 @@ function getDeliveryDetails(deliveryId) {
   const bulkActual=groups.filter(g=>g.id!=='direct').reduce((sum,g)=>sum+g.items.reduce((total,i)=>total+i.quantity,0),0);
   const statuses=rows.map(r=>String(r[DELIVERY_IDX.STATUS]).toUpperCase());
   const status=statuses.includes('PARTIAL')?'PARTIAL':statuses.includes('PENDING')?'PENDING':statuses.includes('COMPLETED')?'COMPLETED':statuses[0];
-  const sizeDescriptions={SNE:'Small non-electronic',MNE:'Medium non-electronic',LNE:'Large non-electronic',XLNE:'Extra large non-electronic',SE:'Small electronic',ME:'Medium electronic',LE:'Large electronic',XLE:'Extra large electronic'};
+  const sizeDescriptions={SNE:'Small non-electronic',MNE:'Medium non-electronic',LNE:'Large non-electronic',XLNE:'Extra large non-electronic','NO SIZE':'No size non-electronic',BNE:'Bulky non-electronic',BULKY:'Bulky non-electronic',SE:'Small electronic',ME:'Medium electronic',LE:'Large electronic',XLE:'Extra large electronic'};
   const reportLines=yourFinds
     ? rows.filter(r=>String(r[DELIVERY_IDX.RECEIVE_MODE]).toUpperCase()==='DIRECT').map(r=>{
         const size=String(r[DELIVERY_IDX.CATEGORY]||'').trim();
@@ -128,11 +128,16 @@ function getDeliveryDetails(deliveryId) {
   });
   const adjustmentLines=Object.keys(conversionGroups).map(referenceId=>{
     const group=conversionGroups[referenceId],detail=group.detail;
-    return {referenceId:referenceId,fromCode:String(detail.sourceCode||''),fromSize:String(detail.fromSize||''),fromQuantity:Number(detail.sourceQuantity)||1,toSize:String(detail.toSize||''),toQuantity:Number(detail.resultQuantity)||group.targetCodes.length,targetCodes:group.targetCodes,notes:String(detail.notes||'')};
+    const targets=Array.isArray(detail.targets)&&detail.targets.length
+      ?detail.targets.map(target=>({toSize:String(target.toSize||target.targetSize||''),toQuantity:Number(target.resultQuantity||target.quantity)||0,targetCodes:Array.isArray(target.targetCodes)?target.targetCodes.map(String):(Array.isArray(target.codes)?target.codes.map(String):[])}))
+      :[{toSize:String(detail.toSize||''),toQuantity:Number(detail.resultQuantity)||group.targetCodes.length,targetCodes:group.targetCodes.slice()}];
+    if(targets.length===1&&!targets[0].targetCodes.length)targets[0].targetCodes=group.targetCodes.slice();
+    const targetCodes=targets.reduce((codes,target)=>codes.concat(target.targetCodes),[]);
+    return {referenceId:referenceId,fromCode:String(detail.sourceCode||''),fromSize:String(detail.fromSize||''),fromQuantity:Number(detail.sourceQuantity)||1,toSize:targets.map(target=>target.toSize).filter(Boolean).join(' / '),toQuantity:targets.reduce((total,target)=>total+target.toQuantity,0),targetCodes:targetCodes,targets:targets,notes:String(detail.notes||'')};
   });
   const finalBySize={};
   reportLines.forEach(line=>{if(typeof line.quantity==='number')finalBySize[String(line.code||'').trim()]=(finalBySize[String(line.code||'').trim()]||0)+line.quantity;});
-  adjustmentLines.forEach(line=>{finalBySize[line.fromSize]=(finalBySize[line.fromSize]||0)-line.fromQuantity;finalBySize[line.toSize]=(finalBySize[line.toSize]||0)+line.toQuantity;});
+  adjustmentLines.forEach(line=>{finalBySize[line.fromSize]=(finalBySize[line.fromSize]||0)-line.fromQuantity;(line.targets||[]).forEach(target=>{finalBySize[target.toSize]=(finalBySize[target.toSize]||0)+target.toQuantity;});});
   const finalSizeOrder=YOURFINDS_SIZE_ORDER.filter(size=>size!=='CUSTOM');
   const finalReportLines=yourFinds?Object.keys(finalBySize).filter(size=>finalBySize[size]>0).sort((a,b)=>{const ai=finalSizeOrder.indexOf(a),bi=finalSizeOrder.indexOf(b);return (ai<0?999:ai)-(bi<0?999:bi)||a.localeCompare(b);}).map(size=>({code:size,description:sizeDescriptions[size]||size,quantity:finalBySize[size],remarks:''})):reportLines.slice();
   const finalReportTotal=yourFinds?String(finalReportLines.reduce((sum,line)=>sum+(Number(line.quantity)||0),0)):reportTotal;

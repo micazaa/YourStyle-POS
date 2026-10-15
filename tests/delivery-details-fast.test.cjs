@@ -60,14 +60,18 @@ test('YourFinds delivery details retain original quantities and calculate conver
     return values;
   };
   const deliveryId = 'YFD-20261013-570';
-  const detail = {kind:'YOURFINDS_CONVERSION',deliveryId,sourceCode:'101366001',fromSize:'ME',toSize:'SNE',sourceQuantity:1,resultQuantity:4,notes:'Actual contents'};
-  const targetCodes = ['101361001','101361002','101361003','101361004'];
+  const targets = [
+    {toSize:'SNE',resultQuantity:2,targetCodes:['101361001','101361002']},
+    {toSize:'MNE',resultQuantity:1,targetCodes:['101362001']}
+  ];
+  const targetCodes = targets.flatMap(target => target.targetCodes);
+  const detail = {kind:'YOURFINDS_CONVERSION',deliveryId,sourceCode:'101366001',fromSize:'ME',sourceQuantity:1,resultQuantity:3,targets,notes:'Mixed contents'};
   const sheets = {
     'Delivery Log': [row(delivery, {DELIVERY_ID:deliveryId,DELIVERY_DATE:'2026-10-13',DELIVERY_TYPE:'YOURFINDS',CATEGORY:'ME',RECEIVE_MODE:'DIRECT',ACTUAL_QTY:2,STATUS:'COMPLETED'}, 20)],
     Inventory: [
       row(inventory, {CODE:'101366001',SIZE:'ME',CATEGORY:'YourFinds',INVENTORY_TYPE:'UNIQUE',STATUS:'CONVERTED'}, 17),
       row(inventory, {CODE:'101366002',SIZE:'ME',CATEGORY:'YourFinds',INVENTORY_TYPE:'UNIQUE',STATUS:'INCOMPLETE',STOCK:1}, 17),
-      ...targetCodes.map(code => row(inventory, {CODE:code,SIZE:'SNE',CATEGORY:'YourFinds',INVENTORY_TYPE:'UNIQUE',STATUS:'INCOMPLETE'}, 17))
+      ...targets.flatMap(target => target.targetCodes.map(code => row(inventory, {CODE:code,SIZE:target.toSize,CATEGORY:'YourFinds',INVENTORY_TYPE:'UNIQUE',STATUS:'INCOMPLETE'}, 17)))
     ],
     'Inventory Movement Log': [
       row(movement, {REFERENCE_ID:deliveryId,SOURCE:'DELIVERY',CODE:'101366001',QTY_CHANGE:1,ITEM:'ME'}, 16),
@@ -92,11 +96,15 @@ test('YourFinds delivery details retain original quantities and calculate conver
   assert.equal(result.reportLines[0].quantity, 2);
   assert.equal(result.adjustmentLines.length, 1);
   assert.deepEqual(Array.from(result.adjustmentLines[0].targetCodes), targetCodes);
+  assert.deepEqual(Array.from(result.adjustmentLines[0].targets, target => [target.toSize,target.toQuantity,Array.from(target.targetCodes)]), [
+    ['SNE',2,['101361001','101361002']],
+    ['MNE',1,['101362001']]
+  ]);
   assert.deepEqual(Array.from(result.groups[0].items, item => [item.code,item.status]), [
     ['101366001','CONVERTED'],['101366002','INCOMPLETE'],
-    ['101361001','INCOMPLETE'],['101361002','INCOMPLETE'],['101361003','INCOMPLETE'],['101361004','INCOMPLETE']
+    ['101361001','INCOMPLETE'],['101361002','INCOMPLETE'],['101362001','INCOMPLETE']
   ]);
-  assert.equal(result.actual, 5);
-  assert.deepEqual(Array.from(result.finalReportLines, line => [line.code, line.quantity]), [['SNE',4],['ME',1]]);
-  assert.equal(result.finalReportTotal, '5');
+  assert.equal(result.actual, 4);
+  assert.deepEqual(Array.from(result.finalReportLines, line => [line.code, line.quantity]), [['SNE',2],['MNE',1],['ME',1]]);
+  assert.equal(result.finalReportTotal, '4');
 });
