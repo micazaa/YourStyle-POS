@@ -334,6 +334,15 @@ function escapeLabelHtml(value) {
    30mm wide × 20mm high
 ========================================================== */
 
+function formatYourFindsLabelSize_(value) {
+  const size = String(value || "").trim().replace(/\s+/g, " ").toUpperCase();
+  if (size === "BULKY") return "BNE";
+  if (size.length <= 4) return size;
+  const words = size.split(/[\s\-_/]+/).filter(Boolean);
+  // Printed sizes use word initials, or a short prefix for a single long word.
+  return words.length > 1 ? words.map(function(word) { return word.charAt(0); }).join("").slice(0, 4) : size.slice(0, 4);
+}
+
 function buildYourFindsLabelsHtml(
   labelItems
 ) {
@@ -417,7 +426,7 @@ function buildYourFindsLabelsHtml(
         <div class="label">
 
           <div class="size">
-            ${escapeLabelHtml(size)}
+            ${escapeLabelHtml(formatYourFindsLabelSize_(size))}
           </div>
 
           <div class="barcode">
@@ -977,7 +986,7 @@ function buildCompletedYourFindsLabelsHtml(labelItems) {
       <div class="label">
         <div class="top">
           <div class="description">${escapeLabelHtml(description)}</div>
-          <div class="size">${escapeLabelHtml(size)}</div>
+          <div class="size">${escapeLabelHtml(formatYourFindsLabelSize_(size))}</div>
         </div>
         <div class="price">${escapeLabelHtml(priceText)}</div>
         <div class="barcode">${barcodeSvg}</div>
@@ -1109,6 +1118,16 @@ function getCompletedYourFindsItemsForLabelReprint() {
   };
 }
 
+function getYourFindsReprintLabelType_(item) {
+  const status = String(item && item.status || "").trim().toUpperCase();
+  const hasSellingDetails = String(item && item.imageUrl || "").trim() !== "" &&
+    String(item && item.name || "").trim() !== "" &&
+    Number(item && item.price) > 0;
+  return status === INVENTORY_STATUS.INCOMPLETE || !hasSellingDetails
+    ? "INCOMPLETE"
+    : "COMPLETED";
+}
+
 function getYourFindsItemsForLabelReprint() {
   const items = getFullInventory().filter(function(item) {
     const status = String(item.status || "").trim().toUpperCase();
@@ -1116,17 +1135,12 @@ function getYourFindsItemsForLabelReprint() {
       String(item.category || "").trim().toUpperCase() === "YOURFINDS" &&
       String(item.inventoryType || "").trim().toUpperCase() === INVENTORY_TYPE.UNIQUE;
 
-    if (!isYourFinds || status === INVENTORY_STATUS.RETURNED || Number(item.stock) <= 0) {
+    if (!isYourFinds || status === INVENTORY_STATUS.RETURNED || Number(item.stock) <= 0 ||
+      !String(item.code || "").trim() || !String(item.size || "").trim()) {
       return false;
     }
 
-    if (status === INVENTORY_STATUS.INCOMPLETE) {
-      return String(item.code || "").trim() !== "" && String(item.size || "").trim() !== "";
-    }
-
-    return String(item.imageUrl || "").trim() !== "" &&
-      String(item.name || "").trim() !== "" &&
-      Number(item.price) > 0;
+    return true;
   });
 
   return {
@@ -1139,7 +1153,7 @@ function getYourFindsItemsForLabelReprint() {
         size: item.size,
         sellingPrice: item.price,
         status: status,
-        labelType: status === INVENTORY_STATUS.INCOMPLETE ? "INCOMPLETE" : "COMPLETED",
+        labelType: getYourFindsReprintLabelType_(item),
         imageUrl: item.imageUrl,
         deliveryId: item.deliveryId || ""
       };
@@ -1239,8 +1253,7 @@ function createYourFindsReprintPDFByCodes(codes, labelType) {
     const code = String(value || "").trim();
     const item = inventoryMap[code];
     if (!item) throw new Error("Inventory Code " + code + " was not found.");
-    const status = String(item.status || "").trim().toUpperCase();
-    const actualType = status === INVENTORY_STATUS.INCOMPLETE ? "INCOMPLETE" : "COMPLETED";
+    const actualType = getYourFindsReprintLabelType_(item);
     if (actualType !== labelType) {
       throw new Error("Selected items must all use the same label type.");
     }
@@ -1399,6 +1412,15 @@ function getYourFindsLabelItemsByDeliveryId(
               .trim()
               .toUpperCase(),
 
+          stock:
+            Number(
+              item.stock
+            ) || 0,
+
+          printable:
+            String(item.status || "").trim().toUpperCase() !== INVENTORY_STATUS.CONVERTED &&
+            Number(item.stock) > 0,
+
           description:
             String(
               item.name || ""
@@ -1544,6 +1566,7 @@ function buildYourFindsDeliverySummaryFromInventory(deliveryId) {
   const normalizedDeliveryId = String(deliveryId || "").trim().toUpperCase();
   const items = getFullInventory().filter(function(item) {
     return String(item.deliveryId || "").trim().toUpperCase() === normalizedDeliveryId &&
+      String(item.status || "").trim().toUpperCase() !== INVENTORY_STATUS.CONVERTED &&
       (String(item.category || "").trim().toUpperCase() === "YOURFINDS" || String(item.inventoryType || "").trim().toUpperCase() === "UNIQUE");
   });
 

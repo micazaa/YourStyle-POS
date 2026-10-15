@@ -43,3 +43,41 @@ test('delivery receipt keeps title bold and information above table regular weig
   assert.match(html, /October 3, 2026/);
   assert.match(html, /<td>SNE<\/td><td>Small non-electronic<\/td><td class="qty">40<\/td>/);
 });
+
+test('delivery receipt keeps original items and adds conversion and final-summary tables', () => {
+  const details = {
+    id: 'YFD-20261013-570', date: '2026-10-13', yourFinds: true,
+    driver: 'Driver', plate: 'ABC 123', preparedBy: 'Preparer', acceptedBy: 'Receiver', remarks: '',
+    reportLines: [
+      { code: 'LNE', description: 'Large non-electronic', quantity: 1, remarks: '' },
+      { code: 'ME', description: 'Medium electronic', quantity: 2, remarks: '' }
+    ],
+    reportTotal: '3',
+    adjustmentLines: [{
+      referenceId: 'ADJ-1', fromCode: '101326001', fromSize: 'ME', fromQuantity: 1,
+      toSize: 'SNE / MNE', toQuantity: 3, targetCodes: ['101321001', '101321002', '101322001'],
+      targets: [
+        {toSize:'SNE',toQuantity:2,targetCodes:['101321001','101321002']},
+        {toSize:'MNE',toQuantity:1,targetCodes:['101322001']}
+      ],
+      notes: 'Actual contents used mixed sizes.'
+    }],
+    finalReportLines: [
+      { code: 'SNE', description: 'Small non-electronic', quantity: 2, remarks: '' },
+      { code: 'MNE', description: 'Medium non-electronic', quantity: 1, remarks: '' },
+      { code: 'LNE', description: 'Large non-electronic', quantity: 1, remarks: '' },
+      { code: 'ME', description: 'Medium electronic', quantity: 1, remarks: '' }
+    ],
+    finalReportTotal: '5'
+  };
+  const { context, getHtml } = loadReport(details);
+  assert.equal(context.createDeliveryReceiptPdf(details.id).success, true);
+  const html = getHtml();
+  assert.match(html, /<h2>Items Received<\/h2>/);
+  assert.match(html, /<td>ME<\/td><td>Medium electronic<\/td><td class="qty">2<\/td>/);
+  assert.match(html, /<h2>Adjustments<\/h2>/);
+  assert.match(html, /<td>ME<\/td><td class="qty">1<\/td><td>SNE × 2<br>MNE × 1<\/td>/);
+  assert.doesNotMatch(html, /101326001|101321001|101321002|101322001/);
+  assert.match(html, /<h2>Final Items Received<\/h2>/);
+  assert.match(html, /Final inventory units<\/td><td class="qty">5<\/td>/);
+});

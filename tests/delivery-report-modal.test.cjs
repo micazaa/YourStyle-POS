@@ -28,6 +28,33 @@ test('delivered items show five rows before their own scrollbar', () => {
   assert.equal(container.children[0].style.maxHeight, undefined);
 });
 
+test('incomplete YourFinds stock-one row shows conversion icon in active delivery modal', () => {
+  class Element {
+    constructor() { this.children = []; this.style = {}; this.attributes = {}; }
+    append(...nodes) { nodes.forEach(node => { node.parent = this; this.children.push(node); }); }
+    replaceChildren() { this.children = []; }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    getBoundingClientRect() { return { top: 0 }; }
+  }
+  let opened;
+  const context = vm.createContext({
+    document: { createElement: () => new Element() },
+    buildInventoryStatusBadge: status => status,
+    openYourFindsConversionModal: (item, view) => { opened = [item.code, view]; }
+  });
+  vm.runInContext(script, context);
+  vm.runInContext("deliveryViewData={yourFinds:true};selectedDeliveryReportId='YFD-1'", context);
+  const container = new Element();
+  context.renderStandardDeliveryItems({id:'direct',items:[{name:'',code:'YF-001',size:'LNE',status:'INCOMPLETE',stock:1,quantity:1}]}, container);
+  const row = container.children[0].children[0];
+  const button = row.children.at(-1);
+  assert.equal(button.title, 'Convert item');
+  assert.equal(button.textContent, '⇄');
+  button.onclick();
+  assert.deepEqual(opened, ['YF-001', 'STANDARD']);
+  assert.equal(context.currentDeliveryDetailsId, 'YFD-1');
+});
+
 test('Print Report shows generating state, blocks duplicate clicks, and restores button after failure', () => {
   let success, failure, requests = 0, message;
   const run = {

@@ -19,9 +19,13 @@ function buildYourFindsDeliveryInventory_(inventoryRows, movementRows) {
   const deliveryByCode = {};
   movementRows.forEach(function(row) {
     const source = String(row[MOVE_IDX.SOURCE] || "").trim().toUpperCase();
-    const deliveryId = String(row[MOVE_IDX.REFERENCE_ID] || "").trim();
+    const referenceId = String(row[MOVE_IDX.REFERENCE_ID] || "").trim();
+    const sourceLineId = String(row[MOVE_IDX.SOURCE_LINE_ID] || "").trim();
+    const deliveryId = source === INVENTORY_MOVEMENT_SOURCE.DELIVERY
+      ? referenceId
+      : (source === INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT && /^YFD-/i.test(sourceLineId) ? sourceLineId : "");
     const code = String(row[MOVE_IDX.CODE] || "").trim();
-    if (source === INVENTORY_MOVEMENT_SOURCE.DELIVERY && deliveryId && code) {
+    if (deliveryId && code) {
       deliveryByCode[code] = deliveryId;
     }
   });
@@ -34,6 +38,7 @@ function buildYourFindsDeliveryInventory_(inventoryRows, movementRows) {
     const category = String(row[INV_IDX.CATEGORY] || "").trim().toUpperCase();
     const inventoryType = String(row[INV_IDX.INVENTORY_TYPE] || "").trim().toUpperCase();
     if (category !== "YOURFINDS" && inventoryType !== INVENTORY_TYPE.UNIQUE) return;
+    if (String(row[INV_IDX.STATUS] || "").trim().toUpperCase() === INVENTORY_STATUS.CONVERTED) return;
     if (!summaries[deliveryId]) summaries[deliveryId] = { quantities: {}, totalQty: 0, codes: [] };
     const size = String(row[INV_IDX.SIZE] || "UNKNOWN").trim().toUpperCase() || "UNKNOWN";
     summaries[deliveryId].quantities[size] = (summaries[deliveryId].quantities[size] || 0) + 1;

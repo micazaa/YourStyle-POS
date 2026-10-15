@@ -161,7 +161,7 @@ var deliveriesPageLoading = false;
    → reload from Sheets
 ========================================================== */
 
-function loadDeliveriesPage(forceRefresh) {
+function loadDeliveriesPage(forceRefresh, keepVisible) {
 
   const tbody =
     document.getElementById(
@@ -180,7 +180,7 @@ function loadDeliveriesPage(forceRefresh) {
   }
 
 
-  if (forceRefresh) { pageReadCache.delete('standardDeliveryDetails'); pageReadCache.delete('deliveries'); pageReadCache.delete('deliverySummary'); }
+  if (forceRefresh) { if (!keepVisible) pageReadCache.delete('standardDeliveryDetails'); pageReadCache.delete('deliveries'); pageReadCache.delete('deliverySummary'); }
   const refresh = beginPageRead('deliveries', '', true);
   if (refresh.cached !== undefined) {
     if (deliveriesPageLoaded && deliveriesPageData === refresh.cached) return;
@@ -189,11 +189,11 @@ function loadDeliveriesPage(forceRefresh) {
   }
   if (!refresh.shouldFetch) return;
   deliveriesPageLoading = true;
-  if (refresh.cached === undefined) {
+  if (refresh.cached === undefined && !keepVisible) {
     deliverySummaryVisible = [];
     renderDeliverySummaryCards();
   }
-  if (refresh.cached === undefined)
+  if (refresh.cached === undefined && !keepVisible)
   tbody.innerHTML = `
 
     <tr>
@@ -346,31 +346,30 @@ function loadDeliveriesPage(forceRefresh) {
    DELIVERY CACHE
 ========================================================== */
 
-function invalidateDeliveriesCache() {
-  pageReadCache.delete('standardDeliveryDetails');
+function invalidateDeliveriesCache(keepData) {
+  if (!keepData) pageReadCache.delete('standardDeliveryDetails');
 
   pageReadCache.delete('deliveries');
   pageReadCache.delete('deliverySummary');
 
-  deliveriesPageLoaded =
-    false;
-
-
-  deliveriesPageData =
-    [];
+  if (!keepData) {
+    deliveriesPageLoaded = false;
+    deliveriesPageData = [];
+  }
 
 }
 
 
-function refreshDeliveriesPage() {
+function refreshDeliveriesPage(keepVisible) {
 
   pageReadCache.delete('inventory');
 
-  invalidateDeliveriesCache();
+  invalidateDeliveriesCache(keepVisible === true);
 
 
   loadDeliveriesPage(
-    true
+    true,
+    keepVisible === true
   );
 
 }
@@ -623,7 +622,7 @@ function renderDeliveriesTable(
             }
 
 
-                  <button type="button" class="btn btn-sm btn-outline-secondary" title="View delivery" aria-label="View delivery" onclick="viewDeliveryDetails('${escapeDeliveriesHtml(deliveryId)}')">${inventoryIcon('view')}</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" title="View delivery" aria-label="View delivery" onpointerenter="prefetchDeliveryDetails('${escapeDeliveriesHtml(deliveryId)}')" onfocus="prefetchDeliveryDetails('${escapeDeliveriesHtml(deliveryId)}')" ontouchstart="prefetchDeliveryDetails('${escapeDeliveriesHtml(deliveryId)}')" onclick="viewDeliveryDetails('${escapeDeliveriesHtml(deliveryId)}')">${inventoryIcon('view')}</button>
             ${deliveryType === "YOURFINDS" ? `
                   <button
                     type="button"

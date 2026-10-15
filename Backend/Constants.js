@@ -390,6 +390,7 @@ const INVENTORY_STATUS = {
   ACTIVE: "ACTIVE",
   INACTIVE: "INACTIVE",
   INCOMPLETE: "INCOMPLETE",
+  CONVERTED: "CONVERTED",
   RETURNED: "RETURNED"
 
 };
@@ -415,11 +416,15 @@ const YOURFINDS_SIZE_CODE = {
   ME: "6",
   LE: "7",
   XLE: "8",
-  CUSTOM: "9"
+  CUSTOM: "9",
+  "NO SIZE": "10",
+  BNE: "11",
+  BULKY: "11" // Legacy name shares the same barcode size code.
 };
 
 const YOURFINDS_SIZE_ORDER = [
   "SNE", "MNE", "LNE", "XLNE",
+  "NO SIZE", "BNE",
   "SE", "ME", "LE", "XLE",
   "CUSTOM"
 ];
@@ -588,7 +593,8 @@ const PRODUCT_IDX = {
   SALE_QUANTITY: 13,
   SALE_REMAINING: 14,
   SALE_END: 15,
-  SALE_REFERENCE_ID: 16
+  SALE_REFERENCE_ID: 16,
+  SALE_PRICES: 17
 
 };
 
@@ -612,7 +618,8 @@ const PRODUCT_COL = {
   SALE_QUANTITY: 14,
   SALE_REMAINING: 15,
   SALE_END: 16,
-  SALE_REFERENCE_ID: 17
+  SALE_REFERENCE_ID: 17,
+  SALE_PRICES: 18
 
 };
 

@@ -43,7 +43,7 @@ test('delivery page payload uses one read per source and includes cached summary
 });
 test('bundle shortcut selects the requested holder and rejects another delivery row',()=>{
  const {c,deliveries}=fixture();
- c.SpreadsheetApp={getActiveSpreadsheet:()=>({getSheetByName:()=>({getLastRow:()=>deliveries.length+1,getRange:()=>({getValues:()=>deliveries})})})};
+ c.SpreadsheetApp={getActiveSpreadsheet:()=>({getSheetByName:()=>({getLastRow:()=>deliveries.length+1,getRange:(start,_column,height)=>({getValues:()=>deliveries.slice(start-2,start-2+height)})})})};
  c.getBulkHolderDetails=(id,sheetRow)=>({holder:{deliveryId:id,sheetRow}});
  assert.equal(c.getBulkDistributionData('D2',true,3).holder.sheetRow,3);
  assert.throws(()=>c.getBulkDistributionData('D2',true,2),/No pending bundles/);

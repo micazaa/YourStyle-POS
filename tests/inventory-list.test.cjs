@@ -50,6 +50,7 @@ test('incomplete and returned statuses are retained; administrative state is sep
   const {context:c,elements}=frontend();
   assert.equal(c.getInventoryDisplayStatus({status:'INACTIVE',stock:3}),'IN STOCK');
   assert.equal(c.getInventoryDisplayStatus({status:'RETURNED',stock:0}),'RETURNED');
+  assert.equal(c.getInventoryDisplayStatus({status:'CONVERTED',stock:0}),'CONVERTED');
   c.renderInventoryTable([{code:'1',status:'INCOMPLETE',category:'YOURFINDS',inventoryType:'UNIQUE',stock:1}]);
   assert.match(elements.inventoryTableBody.children.at(-1).innerHTML,/inventory-active[^>]+disabled/);
 });
@@ -191,7 +192,8 @@ test('inventory stock status filter supports each displayed availability',()=>{
     {code:'3',name:'Sold out',stock:0},
     {code:'4',name:'Negative',stock:-1},
     {code:'5',name:'Incomplete',stock:1,status:'INCOMPLETE'},
-    {code:'6',name:'Returned',stock:0,status:'RETURNED'}
+    {code:'6',name:'Returned',stock:0,status:'RETURNED'},
+    {code:'7',name:'Converted',stock:0,status:'CONVERTED'}
   ];
   const filter=c.document.getElementById('inventoryStockStatusFilter');
   filter.value='IN STOCK';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['1']);
@@ -199,7 +201,8 @@ test('inventory stock status filter supports each displayed availability',()=>{
   filter.value='SOLD OUT';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['3','4']);
   filter.value='INCOMPLETE';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['5']);
   filter.value='RETURNED';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['6']);
-  filter.value='';assert.equal(c.getFilteredInventoryItems().length,6);
+  filter.value='CONVERTED';assert.deepEqual(Array.from(c.getFilteredInventoryItems(),x=>x.code),['7']);
+  filter.value='';assert.equal(c.getFilteredInventoryItems().length,7);
 });
 test('inventory product status filter is manager-only and resets when hidden',()=>{
   const {context:c}=frontend();
@@ -239,12 +242,12 @@ test('returning sale item to active updates base row immediately',()=>{
   success({success:true,inventoryStatus:'ACTIVE',productStatus:'ACTIVE'});
   assert.equal(item.productStatus,'ACTIVE');assert.equal(renders,2);assert.equal(reloads,1);
 });
-test('sale quantity selector switches between all stock and number input',()=>{
+test('multiple sale prices split visible inventory without duplicating stock',()=>{
   const {context:c}=frontend();
-  vm.runInContext(fs.readFileSync(path.join(root,'Frontend/Modals/InventoryManagementModal.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
-  const scope=c.document.getElementById('pmSaleScope'),quantity=c.document.getElementById('pmSaleQuantity');
-  scope.value='SPECIFIC';c.toggleProductSaleQuantity(true);assert.equal(c.document.getElementById('pmSaleQuantityWrap').style.display,'block');
-  quantity.value='4';scope.value='ALL';c.toggleProductSaleQuantity(true);assert.equal(quantity.value,'');assert.equal(c.document.getElementById('pmSaleQuantityWrap').style.display,'none');
+  const rows=c.expandInventorySaleRows([{code:'1',name:'Yellow',stock:10,price:500,regularPrice:500,productStatus:'ON SALE',
+    salePrices:[{price:450,remaining:6,referenceId:'S1'},{price:400,remaining:4,referenceId:'S2'}]}]);
+  assert.deepEqual(Array.from(rows,row=>[row.stock,row.price,row.saleReferenceId]),[[6,450,'S1'],[4,400,'S2']]);
+  assert.equal(rows.reduce((total,row)=>total+row.stock,0),10);
 });
 test('PINS detail view omits size and delivery metadata',()=>{
   const {c}=yourFindsEditor(true);
@@ -405,12 +408,34 @@ test('logout dismisses sidebar and item overlays before displaying login',()=>{
 });
 test('bulk label backend deduplicates codes and validates both groups before generating',()=>{
   const c=vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(root,'Backend/Constants.js'),'utf8'),c);
   vm.runInContext(fs.readFileSync(path.join(root,'Backend/Label.js'),'utf8'),c);
   c.getYourFindsItemsForLabelReprint=()=>({items:[{code:'A',labelType:'COMPLETED'},{code:'B',labelType:'INCOMPLETE'}]});
   const calls=[];c.createYourFindsReprintPDFByCodes=(codes,type)=>{calls.push(type);return {success:true,labelCount:codes.length,fileUrl:'https://example.com/'+type};};
   assert.throws(()=>c.createYourFindsReprintPDFByGroups(['A'],['missing']),/no longer available/);assert.equal(calls.length,0);
   const result=c.createYourFindsReprintPDFByGroups(['A','A'],[' B ']);
   assert.equal(result.labelCount,2);assert.equal(result.files.length,2);assert.equal(result.files[1].labelType,'INCOMPLETE');
+});
+test('reprint includes in-stock YourFinds missing selling details as initial labels',()=>{
+  const c=vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(root,'Backend/Constants.js'),'utf8'),c);
+  vm.runInContext(fs.readFileSync(path.join(root,'Backend/Label.js'),'utf8'),c);
+  c.getFullInventory=()=>[
+    {code:'YF1',name:'Bag',size:'MNE',category:'YOURFINDS',inventoryType:'UNIQUE',status:'ACTIVE',stock:1,price:0,imageUrl:''},
+    {code:'YF2',name:'Shoes',size:'LNE',category:'YOURFINDS',inventoryType:'UNIQUE',status:'ACTIVE',stock:2,price:250,imageUrl:'photo'},
+    {code:'YF3',name:'Draft',size:'NO SIZE',category:'YOURFINDS',inventoryType:'UNIQUE',status:'INCOMPLETE',stock:1},
+    {code:'YF4',name:'Sold',size:'SNE',category:'YOURFINDS',inventoryType:'UNIQUE',status:'ACTIVE',stock:0},
+    {code:'YF5',name:'Returned',size:'SNE',category:'YOURFINDS',inventoryType:'UNIQUE',status:'RETURNED',stock:1},
+    {code:'SKU1',name:'Pin',size:'',category:'PINS',inventoryType:'STOCK',status:'ACTIVE',stock:1,price:10,imageUrl:'photo'}
+  ];
+
+  const result=c.getYourFindsItemsForLabelReprint();
+  assert.deepEqual(Array.from(result.items,item=>[item.code,item.labelType]),[
+    ['YF1','INCOMPLETE'],['YF2','COMPLETED'],['YF3','INCOMPLETE']
+  ]);
+  c.createYourFindsLabelPDFByCodes=codes=>({success:true,labelCount:codes.length});
+  const pdf=c.createYourFindsReprintPDFByCodes(['YF1'],'INCOMPLETE');
+  assert.equal(pdf.labelCount,1);
 });
 test('desktop sidebar collapse persists and navigation does not dismiss it',()=>{
   const {context:c}=frontend();const store=new Map();let desktop=true;
@@ -511,6 +536,41 @@ test('specific sale quantity cannot exceed current inventory stock',()=>{
   const before=records['Product Master'][1].slice();
   assert.throws(()=>c.saveProductMaster({productCode:'123456',description:'Pin',category:'PINS',defaultPrice:100,lowStockAt:5,isNew:false,managerToken:'manager',status:'ON SALE',salePrice:80,saleQuantity:1}),/cannot exceed current stock of 0/);
   assert.deepEqual(records['Product Master'][1],before);
+});
+test('combined sale quantities cannot exceed the product stock',()=>{
+  const {c,records}=costHarness();
+  records.Inventory.push(['123456','Pin','','PINS','STOCK','ACTIVE',0,0,0,0,3,'IN STOCK',100]);
+  const before=records['Product Master'][1].slice();
+  assert.throws(()=>c.saveProductMaster({productCode:'123456',description:'Pin',category:'PINS',defaultPrice:100,
+    lowStockAt:5,isNew:false,managerToken:'manager',status:'ON SALE',
+    salePrices:[{price:80,quantity:2},{price:70,quantity:2}]}),/cannot exceed current stock of 3/);
+  assert.deepEqual(records['Product Master'][1],before);
+});
+test('sale prices persist as two allocations and legacy first-price columns remain readable',()=>{
+  const {c,records}=costHarness();
+  records.Inventory.push(['123456','Pin','','PINS','STOCK','ACTIVE',0,0,0,0,10,'IN STOCK',100]);
+  records['Inventory Movement Log']=[[]];
+  c.generateInventoryMovementId=()=> 'M1';
+  c.getInventoryMovementType=()=> 'PINS';
+  const result=c.saveProductMaster({productCode:'123456',description:'Pin',category:'PINS',defaultPrice:100,
+    lowStockAt:5,isNew:false,managerToken:'manager',status:'ON SALE',
+    salePrices:[{price:80,quantity:6,end:'2026-10-31'},{price:70,quantity:4,end:'2026-11-15'}]});
+  assert.equal(result.salePrices.length,2);
+  assert.equal(records['Product Master'][0][17],'Sale Prices');
+  assert.equal(records['Product Master'][1][12],80);
+  assert.equal(records['Product Master'][1][13],6);
+  assert.equal(JSON.parse(records['Product Master'][1][17]).length,2);
+  assert.deepEqual(Array.from(c.getProductMaster_()[0].salePrices,tier=>[tier.price,tier.remaining]),[[80,6],[70,4]]);
+});
+test('sale allocation refuses an occupied Product Master column R without altering it',()=>{
+  const {c,records}=costHarness();
+  records['Product Master'][0][17]='Existing Notes';
+  records.Inventory.push(['123456','Pin','','PINS','STOCK','ACTIVE',0,0,0,0,10,'IN STOCK',100]);
+  const original=records['Product Master'][1].slice();
+  assert.throws(()=>c.saveProductMaster({productCode:'123456',description:'Pin',category:'PINS',defaultPrice:100,
+    lowStockAt:5,isNew:false,managerToken:'manager',status:'ON SALE',salePrices:[{price:80,quantity:3}]}),/already in use/);
+  assert.deepEqual(records['Product Master'][1],original);
+  assert.equal(records['Product Master'][0][17],'Existing Notes');
 });
 test('new Product Master item creates a zero-stock Inventory row',()=>{
   const {c,records}=costHarness();let calculatedRow=0;

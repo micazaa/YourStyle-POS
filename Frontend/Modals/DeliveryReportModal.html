@@ -8,24 +8,31 @@
 <script>
 let selectedDeliveryReportId = '', deliveryViewRequest = 0, deliveryViewData = null;
 function closeStandardDeliveryDetails(){++deliveryViewRequest;document.getElementById('standardDeliveryDetails').style.display='none';}
+function deliveryDetailsCache_(){
+ const ownerKey=JSON.stringify(currentEmployee);
+ let cache=pageReadCache.get('standardDeliveryDetails');
+ if(!cache||cache.owner!==ownerKey){cache={owner:ownerKey,entries:new Map()};pageReadCache.set('standardDeliveryDetails',cache);}
+ return cache;
+}
+function requestDeliveryDetails_(deliveryId){
+ const id=String(deliveryId||'').trim(),cache=deliveryDetailsCache_();
+ let entry=cache.entries.get(id);
+ if(entry)return {cache:cache,entry:entry};
+ entry={};cache.entries.set(id,entry);
+ entry.promise=new Promise((resolve,reject)=>{
+  google.script.run.withSuccessHandler(data=>{entry.data=data;resolve(data);}).withFailureHandler(error=>{cache.entries.delete(id);reject(error);}).getDeliveryDetails(id);
+ });
+ return {cache:cache,entry:entry};
+}
+function prefetchDeliveryDetails(deliveryId){const entry=requestDeliveryDetails_(deliveryId).entry;if(entry.promise)entry.promise.catch(()=>{});}
 function viewDeliveryDetails(deliveryId) {
  selectedDeliveryReportId=String(deliveryId||'');
  const request=++deliveryViewRequest,owner=currentEmployee;
  document.getElementById('standardDeliveryId').textContent=selectedDeliveryReportId;
  document.getElementById('standardDeliveryContent').innerHTML=loadingIndicator('Loading delivery…');
  document.getElementById('standardDeliveryDetails').style.display='flex';
- const ownerKey=JSON.stringify(owner);
- let cache=pageReadCache.get('standardDeliveryDetails');
- if(!cache||cache.owner!==ownerKey){cache={owner:ownerKey,entries:new Map()};pageReadCache.set('standardDeliveryDetails',cache);}
- let entry=cache.entries.get(selectedDeliveryReportId);
+ const requested=requestDeliveryDetails_(selectedDeliveryReportId),cache=requested.cache,entry=requested.entry;
  if(entry&&entry.data){deliveryViewData=entry.data;renderStandardDeliveryDetails();return;}
- if(!entry){
-  const id=selectedDeliveryReportId;
-  entry={};cache.entries.set(id,entry);
-  entry.promise=new Promise((resolve,reject)=>{
-   google.script.run.withSuccessHandler(data=>{entry.data=data;resolve(data);}).withFailureHandler(error=>{cache.entries.delete(id);reject(error);}).getDeliveryDetails(id);
-  });
- }
  entry.promise.then(data=>{if(request!==deliveryViewRequest||currentEmployee!==owner||!currentEmployee||pageReadCache.get('standardDeliveryDetails')!==cache)return;deliveryViewData=data;renderStandardDeliveryDetails();}).catch(error=>{if(request!==deliveryViewRequest||currentEmployee!==owner)return;document.getElementById('standardDeliveryContent').textContent=error.message||String(error);});
 
 }
@@ -57,6 +64,7 @@ function renderStandardDeliveryItems(group,container){
   if(deliveryViewData.yourFinds){const size=document.createElement('div');size.className='small text-muted';size.textContent=item.status==='INCOMPLETE'?'Details not completed':item.size;info.append(size);}row.append(info);
   const qty=document.createElement('div');qty.className='text-end';qty.textContent=item.quantity+' pcs';
   if(deliveryViewData.yourFinds){const badge=document.createElement('div');badge.innerHTML=buildInventoryStatusBadge(item.status);qty.append(badge);}row.append(qty);list.append(row);
+  if(deliveryViewData.yourFinds&&String(item.status||'').toUpperCase()==='INCOMPLETE'&&Number(item.stock)===1){const convert=document.createElement('button');convert.type='button';convert.className='btn btn-sm btn-outline-secondary';convert.title='Convert item';convert.setAttribute('aria-label','Convert '+item.code);convert.textContent='⇄';convert.onclick=()=>{currentDeliveryDetailsId=selectedDeliveryReportId;openYourFindsConversionModal(item,'STANDARD');};row.append(convert);}
  });
  if(list.children.length>5){
   list.style.maxHeight=Math.ceil(list.children[5].getBoundingClientRect().top-list.children[0].getBoundingClientRect().top)+'px';

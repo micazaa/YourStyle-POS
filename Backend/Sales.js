@@ -174,10 +174,11 @@ function executeCheckoutBackend(
 
 function validateSalePricing_(lines, productSnapshot) {
   const products = {};
+  const requested = {};
   (Array.isArray(productSnapshot) ? productSnapshot : getProductMaster_()).forEach(function(product) {
     products[String(product.productCode || "").trim()] = product;
   });
-  return lines.map(function(line) {
+  const validated = lines.map(function(line) {
     const source = String(line.priceSource || (line.isCustom ? "MANUAL" : "REGULAR")).trim().toUpperCase();
     if (source !== "SALE") {
       line.priceSource = source === "MANUAL" ? "MANUAL" : "REGULAR";
@@ -188,27 +189,37 @@ function validateSalePricing_(lines, productSnapshot) {
     if (!product || product.status !== PRODUCT_STATUS.ON_SALE) {
       throw new Error((line.name || line.code) + " is no longer on sale. Refresh inventory.");
     }
-    if (String(product.saleReferenceId || "") !== String(line.saleReferenceId || "")) {
+    const tiers = Array.isArray(product.salePrices) && product.salePrices.length
+      ? product.salePrices : [{price: product.salePrice, remaining: product.saleRemaining,
+          referenceId: product.saleReferenceId}];
+    const tier = tiers.find(function(entry) {
+      return String(entry.referenceId || "") === String(line.saleReferenceId || "");
+    });
+    if (!tier) {
       throw new Error((line.name || line.code) + " sale changed. Refresh inventory.");
     }
-    if (Math.abs((Number(product.salePrice) || 0) - (Number(line.price) || 0)) > 0.001) {
+    if (Math.abs((Number(tier.price) || 0) - (Number(line.price) || 0)) > 0.001) {
       throw new Error((line.name || line.code) + " sale price changed. Refresh inventory.");
     }
-    if (product.saleRemaining !== null && Number(line.quantity) > Number(product.saleRemaining)) {
-      throw new Error((line.name || line.code) + " has only " + product.saleRemaining + " sale item(s) left.");
-    }
+    const key = JSON.stringify([line.code, tier.referenceId]);
+    requested[key] = (requested[key] || 0) + Number(line.quantity);
+    if (tier.remaining !== null && requested[key] > Number(tier.remaining))
+      throw new Error((line.name || line.code) + " has only " + tier.remaining + " sale item(s) left.");
     line.priceSource = "SALE";
-    line.saleReferenceId = product.saleReferenceId;
+    line.saleReferenceId = tier.referenceId;
     return line;
   });
+  return validated;
 }
 
 function consumeSaleAllocations_(lines, employee, productSnapshot) {
   const totals = {};
   lines.forEach(function(line) {
     if (String(line.priceSource || "").toUpperCase() !== "SALE") return;
-    const key = String(line.code || "").trim();
-    totals[key] = (totals[key] || 0) + (Number(line.quantity) || 0);
+    const code = String(line.code || "").trim();
+    const reference = String(line.saleReferenceId || "").trim();
+    if (!totals[code]) totals[code] = {};
+    totals[code][reference] = (totals[code][reference] || 0) + (Number(line.quantity) || 0);
   });
   const codes = Object.keys(totals);
   if (!codes.length) return;
@@ -217,17 +228,29 @@ function consumeSaleAllocations_(lines, employee, productSnapshot) {
   const products = Array.isArray(productSnapshot) ? productSnapshot : getProductMaster_();
   codes.forEach(function(code) {
     const product = products.find(function(row) { return String(row.productCode) === code; });
-    if (!product || product.status !== PRODUCT_STATUS.ON_SALE || product.saleRemaining === null) return;
-    const remaining = Math.max(0, Number(product.saleRemaining) - totals[code]);
-    if (remaining > 0) {
-      sheet.getRange(product.rowNumber, PRODUCT_COL.SALE_REMAINING).setValue(remaining);
-      sheet.getRange(product.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(new Date());
-      return;
+    if (!product || product.status !== PRODUCT_STATUS.ON_SALE) return;
+    const tiers = Array.isArray(product.salePrices) && product.salePrices.length
+      ? product.salePrices : [{price: product.salePrice, quantity: product.saleQuantity,
+          remaining: product.saleRemaining, end: product.saleEnd, referenceId: product.saleReferenceId}];
+    const updated = tiers.map(function(tier) {
+      const used = totals[code][String(tier.referenceId || "")] || 0;
+      return Object.assign({}, tier, {
+        remaining: tier.remaining === null ? null : Math.max(0, Number(tier.remaining) - used)
+      });
+    });
+    const active = product.salePricesStored === false && updated.length === 1
+      ? updated.filter(function(tier) { return tier.remaining === null || tier.remaining > 0; })
+      : writeProductSalePrices_(sheet, product.rowNumber, updated);
+    if (product.salePricesStored === false && updated.length === 1) {
+      if (active.length) sheet.getRange(product.rowNumber, PRODUCT_COL.SALE_REMAINING).setValue(active[0].remaining);
+      else {
+        sheet.getRange(product.rowNumber, PRODUCT_COL.ACTIVE).setValue(true);
+        sheet.getRange(product.rowNumber, PRODUCT_COL.STATUS).setValue(PRODUCT_STATUS.ACTIVE);
+        sheet.getRange(product.rowNumber, PRODUCT_COL.SALE_PRICE, 1, 5).clearContent();
+      }
     }
-    sheet.getRange(product.rowNumber, PRODUCT_COL.ACTIVE).setValue(true);
-    sheet.getRange(product.rowNumber, PRODUCT_COL.STATUS).setValue(PRODUCT_STATUS.ACTIVE);
-    sheet.getRange(product.rowNumber, PRODUCT_COL.SALE_PRICE, 1, 5).clearContent();
     sheet.getRange(product.rowNumber, PRODUCT_COL.UPDATED_AT).setValue(new Date());
+    if (active.length) return;
     const item = getInventoryItemByCode(code);
     logProductStatusChange_({
       code: code,
