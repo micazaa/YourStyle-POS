@@ -82,6 +82,19 @@ function harness() {
   return {c,clock,reports,sheets,cache,login,payload,sale,realPdf,failClose(){failCloseWrite=true;},failReopen(){failReopenWrite=true;},events:()=>sheets.get('Petty Cash Handovers')?.rows.slice(1)||[]};
 }
 
+test('username cashier sign-in records the original employee name and resumes the same report',()=>{
+  const h=harness(),{c,reports}=h,source=c.getLatestPettyHandover();
+  const ana=c.loginAndStartShift('ANACASHIER2@YS.SYS','2222',source.received,source.version);
+  assert.equal(ana.success,true);assert.equal(ana.employee.fullName,'Ana Cashier');
+  assert.equal(reports[2][4],'Ana Cashier');assert.equal(c.getLatestPettyHandover().holder,'Ana Cashier');
+  assert.equal(ana.shift.hasSavedReport,false);assert.equal(ana.shift.savedReport,null);
+  c.saveCashierShiftExit(h.payload(ana));
+  const latest=c.getLatestPettyHandover();
+  const resumed=c.loginAndStartShift('anacashier2@ys.sys','2222',latest.received,latest.version);
+  assert.equal(resumed.success,true);assert.equal(resumed.shift.reportId,ana.shift.reportId);
+  assert.equal(reports.length,3);
+});
+
 test('pause hands over only petty cash; another cashier receives it; resume retains report and reconciles each segment',()=>{
   const h=harness(), {c,clock,reports}=h;
   h.sale('2026-10-30T00:30:00Z','Ana Cashier',99);
@@ -110,6 +123,7 @@ test('pause hands over only petty cash; another cashier receives it; resume reta
   clock.now='2026-10-30T10:00:00Z';
   c.saveCashierShiftExit(h.payload(bea,'PAUSE',{pettyBreakdown:{1000:1,500:1,200:1,50:1},voucherNo:'PCV-B',reason:'Transport'}));
   const resumed=h.login();assert.equal(resumed.shift.reportId,ana.shift.reportId);assert.equal(resumed.shift.pettyReceived,1750);
+  assert.equal(c.getCashierShiftContext(resumed.employee.dashboardToken,resumed.shift.reportId).pettyBreakdown,null);
   assert.throws(()=>c.saveCashierShiftExit({...pause,requestId:'another_request'}),/custody changed/);
   h.sale('2026-10-30T10:30:00Z','Ana Cashier',400);
   clock.now='2026-10-30T11:00:00Z';
@@ -127,13 +141,19 @@ test('pause hands over only petty cash; another cashier receives it; resume reta
   clock.now='2026-10-30T12:00:00Z';
   const rowCount=reports.length,originalStart=reports[2][6];
   const second=h.login();assert.equal(second.shift.reportId,ana.shift.reportId);
+  assert.equal(second.shift.pettyBreakdown[1000],1);assert.equal(second.shift.savedReport.cashCounted,700);
   assert.equal(reports.length,rowCount);assert.equal(reports[2][35],'OPEN');
   assert.equal(reports[2][7],'');assert.equal(reports[2][6],originalStart);
   assert.equal(reports[2][18],700);
   const todayReport=c.getCashReportByDate('Ana Cashier','2026-10-30');
   assert.equal(todayReport.found,true);assert.equal(todayReport.report.reportId,ana.shift.reportId);
   assert.equal(todayReport.report.cashCounted,700);assert.equal(todayReport.report.status,'OPEN');
-  assert.equal(c.getCashierShiftContext(second.employee.dashboardToken,second.shift.reportId).cashBreakdown[500],1);
+  const loaded=c.getCashierShiftContext(second.employee.dashboardToken,second.shift.reportId);
+  assert.equal(loaded.cashBreakdown[500],1);
+  assert.equal(loaded.savedReport.manager,'Mia Manager');assert.equal(loaded.savedReport.pettyRemark,'Supplies');
+  assert.equal(loaded.hasSavedReport,true);assert.equal(loaded.savedReport.pettyReturned,3550);
+  assert.equal(loaded.pettyBreakdown[1000],1);assert.equal(loaded.pettyBreakdown[200],1);
+  assert.equal(Object.entries(loaded.pettyBreakdown).reduce((total,[d,count])=>total+Number(d)*count,0),1750);
   h.sale('2026-10-30T12:10:00Z','Ana Cashier',200);
   clock.now='2026-10-30T12:30:00Z';
   c.saveCashierShiftExit(h.payload(second,'END',{pettyBreakdown:{1000:1,500:1,200:1,50:1},cashBreakdown:{500:1,200:2}}));

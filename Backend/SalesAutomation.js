@@ -19,6 +19,7 @@ function onOpen() {
     .addItem("Create / Repair SYNC Button", "createSalesSyncButtonFromMenu")
     .addItem("Process Pending Sales Now", "processPendingSalesLogRowsFromMenu")
     .addItem("Check Automation Status", "showSalesAutomationStatus")
+    .addItem("Refresh Employee Usernames", "refreshEmployeeUsernames_")
     .addToUi();
 }
 

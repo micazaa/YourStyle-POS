@@ -14,12 +14,14 @@ function cashierLiteral_(value) {
 
 function pettyHandoverRows_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PETTY_HANDOVER_SHEET);
-  if (!sheet || sheet.getLastRow() === 0) return [];
-  const headers = sheet.getRange(1, 1, 1, PETTY_HANDOVER_HEADERS.length).getValues()[0];
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (!lastRow) return [];
+  const data = sheet.getRange(1, 1, lastRow, PETTY_HANDOVER_HEADERS.length).getValues();
+  const headers = data[0];
   if (headers.some((value, i) => value !== PETTY_HANDOVER_HEADERS[i]))
     throw new Error('Petty Cash Handovers headers do not match the expected layout.');
-  if (sheet.getLastRow() < 2) return [];
-  return sheet.getRange(2, 1, sheet.getLastRow() - 1, PETTY_HANDOVER_HEADERS.length).getValues();
+  return data.slice(1);
 }
 
 function appendPettyHandover_(reportId, employee, event, received, returned, breakdown, voucher, reason, requestId, snapshot) {
@@ -106,22 +108,33 @@ function cashierShiftTarget_(employee, reportId, data, events) {
     const event = lastPettyEvent_(events, row[0]);
     if (!reportId && (event && event[4] === 'END' || (!event || !['RECEIVE', 'PAUSE'].includes(event[4])) && String(row[CASH_REPORT_IDX.STATUS]).trim().toUpperCase() !== 'OPEN' ||
         dateString_(row[CASH_REPORT_IDX.REPORT_DATE]) !== today && (!event || !['PAUSE', 'RECEIVE'].includes(event[4])))) continue;
-    return {row: i + 2, values: row, event: event};
+    const lastReturn = events.slice().reverse().find(entry => entry[2] === row[0] && ['PAUSE', 'END'].includes(entry[4]));
+    return {row: i + 2, values: row, event: event, lastReturn: lastReturn};
   }
   throw new Error('No active cashier shift found. Sign in using Start cashier shift.');
 }
 
 function cashierShiftContext_(target) {
   const row = target.values, event = target.event;
+  const savedReport = buildCashReportObject([], row);
+  const received = event && event[4] === 'RECEIVE' ? Number(event[5]) : Number(row[CASH_REPORT_IDX.PETTY_RECEIVED]) || 0;
+  // Report petty totals include earlier returns. Prefill only a real handover
+  // count matching the current receipt, never an accumulated daily total.
+  const savedPetty = target.lastReturn ? cashierCount_(JSON.parse(target.lastReturn[8])) : savedReport.pettyBreakdown;
+  const pettyBreakdown = sumBreakdown(savedPetty) === received ? savedPetty : null;
+  const hasSavedReport = row[CASH_REPORT_IDX.CASH_COUNTED] !== '' && row[CASH_REPORT_IDX.CASH_COUNTED] !== undefined && row[CASH_REPORT_IDX.CASH_COUNTED] !== null;
   return {
     success: true, reportId: String(row[0]), reportDate: dateString_(row[CASH_REPORT_IDX.REPORT_DATE]),
     shiftStart: rpcDate_(row[CASH_REPORT_IDX.SHIFT_START]),
     status: event && event[4] === 'END' ? 'CLOSED' : event && event[4] === 'PAUSE' ? 'PAUSED' : event && event[4] === 'RECEIVE' ? 'OPEN' : String(row[CASH_REPORT_IDX.STATUS]).trim().toUpperCase(),
-    pettyReceived: event && event[4] === 'RECEIVE' ? Number(event[5]) : Number(row[CASH_REPORT_IDX.PETTY_RECEIVED]) || 0,
+    pettyReceived: received,
     receiveId: event && event[4] === 'RECEIVE' ? String(event[0]) : '',
-    cashBreakdown: buildCashReportObject([], row).cashBreakdown,
+    cashBreakdown: savedReport.cashBreakdown,
     cashRemark: String(row[CASH_REPORT_IDX.CASH_REMARK] || ''),
     managerName: String(row[CASH_REPORT_IDX.MANAGER] || ''),
+    pettyBreakdown: pettyBreakdown,
+    hasSavedReport: hasSavedReport,
+    savedReport: hasSavedReport ? savedReport : null,
   };
 }
 
@@ -217,6 +230,7 @@ function startManagedCashierShift_(employee, firstPetty, expectedVersion) {
     const amount = target.event || reopening ? received : resumed ? Number(target.values[CASH_REPORT_IDX.PETTY_RECEIVED]) || 0 : received;
     const event = appendPettyHandover_(target.values[0], employee, 'RECEIVE', amount, 0, {}, '', '',
       'receive:' + target.values[0] + ':' + (target.event ? target.event[0] : 'initial'), reopening ? target.values : null);
+    if (target.event && ['PAUSE', 'END'].includes(target.event[4])) target.lastReturn = target.event;
     target.event = event;
     reopenCashierDailyReport_(target, data.sheet);
     const context = cashierShiftContext_(target);

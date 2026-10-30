@@ -123,6 +123,7 @@ function openInventoryWorkspace(){
       currentSessionIsCashier = false;
       currentShiftPettyCash = 0;
       currentShiftReportId = '';
+      if (typeof clearCashierReportCache === 'function') clearCashierReportCache();
       if (typeof phase10ReportLoadId !== 'undefined') ++phase10ReportLoadId;
       if(typeof updateCashierNavigationAvailability==='function')updateCashierNavigationAvailability();
       updatePettyCashDisplay();
