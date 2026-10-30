@@ -5,7 +5,7 @@
 >
 
   <div
-    class="custom-popup-card"
+    class="custom-popup-card login-card"
     style="
       max-width:440px;
       width:94%;
@@ -17,7 +17,7 @@
          HEADER
     ====================================================== -->
 
-    <div class="text-center mb-4">
+    <div class="text-center login-header">
 
       <img
         src="https://drive.google.com/thumbnail?sz=w300&id=1MsTEIjhHkeq0i74lngukOKemXDoq_O7u"
@@ -33,29 +33,29 @@
       >
 
       <h4 class="fw-bold text-dark mb-1">
-        Welcome Back
+        Welcome back
       </h4>
 
-      <p class="text-muted small mb-0">
-        Log in to start your system shift
+      <p id="loginModeSubtitle" class="text-muted mb-0">
+        Sign in to continue.
       </p>
 
     </div>
 
-
     <!-- =====================================================
-         EMPLOYEE
+         USERNAME
     ====================================================== -->
 
     <div class="mb-3">
 
-      <label class="form-label fw-semibold">
-        Cashier Name
+      <label class="form-label fw-semibold" for="cashierSelect">
+        Username
       </label>
 
       <select
         class="form-select"
         id="cashierSelect"
+        onchange="updateLoginReady()"
       >
         <option value="">
           Loading employees...
@@ -66,28 +66,31 @@
 
 
     <!-- =====================================================
-         PIN
+         PASSWORD
     ====================================================== -->
 
     <div class="mb-4">
 
-      <label class="form-label fw-semibold">
-        PIN Code
+      <label class="form-label fw-semibold" for="cashierPin">
+        Password
       </label>
 
-      <input
-        type="password"
-        class="form-control text-center fw-bold"
-        id="cashierPin"
-        placeholder="••••"
-        autocomplete="off"
-        style="letter-spacing:4px;"
-        onkeydown="
-          if(event.key === 'Enter'){
-            unlockTerminalSession();
-          }
-        "
-      >
+      <div class="login-password-wrap">
+        <input
+          type="password"
+          class="form-control"
+          id="cashierPin"
+          placeholder="Enter your password"
+          autocomplete="current-password"
+          oninput="updateLoginReady()"
+          onkeydown="
+            if(event.key === 'Enter'){
+              unlockTerminalSession();
+            }
+          "
+        >
+        <button id="loginPasswordToggle" class="login-password-toggle" type="button" aria-label="Show password" aria-controls="cashierPin" aria-pressed="false" onclick="toggleLoginPassword()">Show</button>
+      </div>
 
     </div>
 
@@ -97,11 +100,8 @@
     ====================================================== -->
 
     <div
-      class="rounded p-3 mb-4"
-      style="
-        background:var(--pink-light);
-        border:1px solid rgba(0,0,0,.06);
-      "
+      id="pettyHandoverPanel"
+      class="login-petty-panel mb-4"
     >
 
       <div
@@ -110,15 +110,8 @@
 
         <div>
 
-          <div class="fw-semibold">
-            Starting Petty Cash
-          </div>
-
-          <div
-            id="pettyHandoverHint"
-            class="small text-muted mt-1"
-          >
-            Loading petty handover...
+          <div class="login-petty-title">
+            Petty Cash
           </div>
 
         </div>
@@ -132,10 +125,9 @@
 
       </div>
 
+      <div class="input-group login-petty-amount">
 
-      <div class="input-group mt-3">
-
-        <span class="input-group-text bg-white">
+        <span class="input-group-text">
           ₱
         </span>
 
@@ -151,10 +143,17 @@
 
       </div>
 
+      <label class="login-petty-confirm" for="confirmPettyHandover">
+        <input id="confirmPettyHandover" class="form-check-input" type="checkbox" onchange="updateLoginReady()">
+        <span>I received and verify this amount.</span>
+      </label>
+
 
       <div
         id="pettyHandoverSource"
-        class="small mt-2"
+        class="login-petty-source"
+        role="status"
+        aria-live="polite"
         style="display:none;"
       ></div>
 
@@ -165,14 +164,19 @@
          LOGIN
     ====================================================== -->
 
+    <div class="login-shift-prompt">
+      <span id="loginShiftPromptText">Are you a cashier?</span>
+      <button id="loginShiftToggle" class="login-shift-link" type="button" aria-expanded="false" aria-controls="pettyHandoverPanel" onclick="changeLoginMode(selectedLoginMode === 'CASHIER' ? 'STAFF' : 'CASHIER')">Start shift</button>
+    </div>
+
     <button
       id="loginShiftButton"
       type="button"
-      class="btn btn-pink w-100 py-2"
+      class="btn btn-pink w-100 py-2 login-submit"
       onclick="unlockTerminalSession()"
       disabled
     >
-      <span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading shift…</span>
+      <span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading employees…</span>
     </button>
 
   </div>
@@ -192,6 +196,32 @@ var phase10EmployeesLoaded =
 var phase10PettyLoaded =
   false;
 
+var selectedLoginMode = "STAFF";
+
+function changeLoginMode(mode) {
+  selectedLoginMode = mode === "STAFF" ? "STAFF" : "CASHIER";
+  const cashierMode = selectedLoginMode === "CASHIER";
+  document.getElementById("pettyHandoverPanel").style.display = cashierMode ? "block" : "none";
+  const shiftToggle = document.getElementById("loginShiftToggle");
+  document.getElementById("loginShiftPromptText").textContent = cashierMode ? "Not starting a shift?" : "Are you a cashier?";
+  shiftToggle.textContent = cashierMode ? "Sign in normally" : "Start shift";
+  shiftToggle.setAttribute("aria-expanded", String(cashierMode));
+  if (!cashierMode) document.getElementById("confirmPettyHandover").checked = false;
+  document.getElementById("loginShiftButton").textContent = cashierMode ? "Start cashier shift" : "Sign in";
+  updateLoginReady();
+}
+
+function toggleLoginPassword() {
+  const input = document.getElementById("cashierPin");
+  const button = document.getElementById("loginPasswordToggle");
+  const showing = input.type === "password";
+  input.type = showing ? "text" : "password";
+  button.textContent = showing ? "Hide" : "Show";
+  button.setAttribute("aria-label", showing ? "Hide password" : "Show password");
+  button.setAttribute("aria-pressed", String(showing));
+  input.focus();
+}
+
 
 /* ==========================================================
    INITIALIZE LOGIN
@@ -204,6 +234,14 @@ let loginSetupRequest = null;
 let loginSetupGeneration = 0;
 function initializeLogin() {
   ++loginSetupGeneration;
+  selectedLoginMode = "STAFF";
+  document.getElementById("confirmPettyHandover").checked = false;
+  document.getElementById("cashierPin").value = "";
+  document.getElementById("cashierPin").type = "password";
+  document.getElementById("loginPasswordToggle").textContent = "Show";
+  document.getElementById("loginPasswordToggle").setAttribute("aria-label", "Show password");
+  document.getElementById("loginPasswordToggle").setAttribute("aria-pressed", "false");
+  changeLoginMode("STAFF");
   loginSetupRequest = new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getLoginSetup());
 
   phase10EmployeesLoaded =
@@ -224,7 +262,7 @@ function initializeLogin() {
     loginButton.disabled =
       true;
 
-    loginButton.innerHTML = loadingIndicator("Loading shift…");
+    loginButton.innerHTML = loadingIndicator("Loading employees…");
 
   }
 
@@ -255,16 +293,27 @@ function updateLoginReady() {
   }
 
 
-  const ready =
-    phase10EmployeesLoaded &&
-    phase10PettyLoaded;
+  const hasCredentials =
+    !!document.getElementById("cashierSelect").value &&
+    !!document.getElementById("cashierPin").value;
+  const ready = selectedLoginMode === "CASHIER"
+    ? phase10EmployeesLoaded && phase10PettyLoaded && document.getElementById("confirmPettyHandover").checked
+    : phase10EmployeesLoaded && hasCredentials;
 
 
   button.disabled =
     !ready;
 
 
-  button.innerHTML = ready ? "Log In" : loadingIndicator("Loading shift…");
+  if (ready) {
+    button.textContent = selectedLoginMode === "CASHIER" ? "Start cashier shift" : "Sign in";
+  } else if (!phase10EmployeesLoaded) {
+    button.innerHTML = loadingIndicator("Loading employees…");
+  } else if (selectedLoginMode === "CASHIER" && !phase10PettyLoaded) {
+    button.innerHTML = loadingIndicator("Loading shift…");
+  } else {
+    button.textContent = selectedLoginMode === "CASHIER" ? "Start cashier shift" : "Sign in";
+  }
 
 }
 
@@ -289,15 +338,12 @@ function loadEmployees() {
 
 
   select.innerHTML = '<option value="">Loading employees...</option>';
-  setControlLoading(select, true, 'Loading employees…');
 
 
   const generation = loginSetupGeneration;
   loginSetupRequest.then(result=>result.employees).then(
       function(employees) {
         if (generation !== loginSetupGeneration) return;
-        setControlLoading(select, false);
-
         select.innerHTML =
           "";
 
@@ -363,8 +409,6 @@ function loadEmployees() {
     .catch(
       function(err) {
         if (generation !== loginSetupGeneration) return;
-        setControlLoading(select, false);
-
         console.error(
           "Employee loading error:",
           err
@@ -422,10 +466,7 @@ function loadPettyHandover() {
     );
 
 
-  if (
-    !input ||
-    !hint
-  ) {
+  if (!input) {
 
     return;
 
@@ -442,8 +483,9 @@ function loadPettyHandover() {
     true;
 
 
-  hint.textContent =
-    "Loading petty handover...";
+  if (hint) {
+    hint.textContent = "Loading petty handover...";
+  }
 
 
   if (source) {
@@ -491,6 +533,9 @@ function loadPettyHandover() {
               : ""
           ).trim();
 
+        const previousEmployee = String(data && data.previousEmployee || "").trim();
+        const previousCountedAt = String(data && data.previousCountedAt || "").trim();
+
 
         const hasPrevious =
           !!previousReportId;
@@ -520,36 +565,25 @@ function loadPettyHandover() {
 
         if (hasPrevious) {
 
-          hint.textContent =
-            "Petty cash carried from the previous closed shift.";
-
-
           if (source) {
 
             source.style.display =
               "block";
 
 
-            source.innerHTML = `
-
-              <span class="text-success fw-semibold">
-                ✓ Handover ready
-              </span>
-
-              <span class="text-muted">
-                · ${escapeLoginHtml(
-                  previousReportId
-                )}
-              </span>
-
-            `;
+            const countedBy = previousEmployee
+              ? `Last counted by ${previousEmployee}${previousCountedAt ? ` · ${previousCountedAt}` : ""}`
+              : "Previous petty cash handover";
+            source.textContent = countedBy;
 
           }
 
         } else {
 
-          hint.textContent =
-            "No previous petty handover found. Enter the initial petty cash.";
+          if (hint) {
+            hint.textContent =
+              "No previous petty handover found. Enter the initial petty cash.";
+          }
 
 
           if (source) {
@@ -610,8 +644,9 @@ function loadPettyHandover() {
           false;
 
 
-        hint.textContent =
-          "Unable to load previous petty cash.";
+        if (hint) {
+          hint.textContent = "Unable to load previous petty cash.";
+        }
 
 
         if (source) {
@@ -676,31 +711,39 @@ let loginAttempt = 0;
 function unlockTerminalSession() {
   const name=document.getElementById('cashierSelect').value;
   const pin=document.getElementById('cashierPin').value;
+  const cashierMode=selectedLoginMode==='CASHIER';
   const petty=Number(document.getElementById('startingPettyCashInput').value);
   const button=document.getElementById('loginShiftButton');
   if(button.disabled)return;
-  if(!name||!pin)return showNotificationToast('Please choose your name and enter your PIN.',true);
-  if(!Number.isFinite(petty)||petty<0)return showNotificationToast('Starting petty cash cannot be negative.',true);
+  if(!name||!pin)return showNotificationToast('Select a username and enter your password.',true);
+  if(cashierMode&&(!Number.isFinite(petty)||petty<0))return showNotificationToast('Starting petty cash cannot be negative.',true);
+  if(cashierMode&&!document.getElementById('confirmPettyHandover').checked)return showNotificationToast('Confirm the petty cash you received before starting your shift.',true);
   const attempt=++loginAttempt;
   button.disabled=true;button.innerHTML=loadingIndicator('Logging in…');
-  const failed=error=>{if(attempt!==loginAttempt)return;button.disabled=false;button.textContent='Log In';showNotificationToast(error.message||String(error),true);};
-  google.script.run.withSuccessHandler(response=>{
+  const failed=error=>{if(attempt!==loginAttempt)return;button.disabled=false;button.textContent=cashierMode?'Start cashier shift':'Sign in';showNotificationToast(error.message||String(error),true);};
+  const onLoginSuccess=response=>{
     if(attempt!==loginAttempt)return;
     if(!response||!response.success)return failed(new Error(response&&response.message||'Login failed.'));
-    const result=response.employee;
+    const result=response.employee||(cashierMode?null:response);
+    if(!result)return failed(new Error('Employee sign-in did not return an account.'));
+    if(cashierMode&&(!response.shift||!response.shift.success))return failed(new Error(response&&response.shift&&response.shift.message||'Unable to start cashier shift.'));
     pageReadCache.clear();
     localStorage.removeItem('ys_pos_inventory_tab');
-    currentEmployee=result;currentCashier=result.fullName;
-    currentShiftPettyCash=Number(response.shift.pettyReceived)||0;
+    currentEmployee=result;currentCashier=result.fullName;currentSessionIsCashier=cashierMode;
+    currentShiftPettyCash=cashierMode?(Number(response.shift.pettyReceived)||0):0;
     updateSidebarProfile(result);
     document.getElementById('cashierManagerReportBtn').style.display=Number(result.accessLevel)<=1?'block':'none';
     document.getElementById('loginOverlay').style.display='none';
     document.getElementById('terminalWorkspace').style.display='block';
     document.getElementById('appSidebar').style.display='flex';
-    button.disabled=false;button.textContent='Log In';document.getElementById('cashierPin').value='';
-    showPage('posPage');saveSession();
+    button.disabled=false;button.textContent=cashierMode?'Start cashier shift':'Sign in';document.getElementById('cashierPin').value='';
+    updateCashierNavigationAvailability();
+    showPage(cashierMode?'posPage':'dashboardPage');saveSession();
     if(typeof refreshInventory==='function')refreshInventory();
-  }).withFailureHandler(failed).loginAndStartShift(name,pin,petty);
+  };
+  const runner=google.script.run.withSuccessHandler(onLoginSuccess).withFailureHandler(failed);
+  if(cashierMode)runner.loginAndStartShift(name,pin,petty);
+  else runner.verifyEmployee(name,pin);
 }
 
 /* ==========================================================

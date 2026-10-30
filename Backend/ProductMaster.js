@@ -87,7 +87,10 @@ function getProductMaster_() {
     const legacyActive =
       rawActive === true || String(rawActive).trim().toUpperCase() === "TRUE";
     const storedStatus = String(displayRow[PRODUCT_IDX.STATUS] || "").trim().toUpperCase();
-    const status = storedStatus === PRODUCT_STATUS.ON_SALE || storedStatus === PRODUCT_STATUS.DEACTIVATED
+    /* Status is authoritative when present. Older rows use the Active checkbox. */
+    const status = storedStatus === PRODUCT_STATUS.ACTIVE ||
+      storedStatus === PRODUCT_STATUS.ON_SALE ||
+      storedStatus === PRODUCT_STATUS.DEACTIVATED
       ? storedStatus
       : (legacyActive ? PRODUCT_STATUS.ACTIVE : PRODUCT_STATUS.DEACTIVATED);
     const active = status !== PRODUCT_STATUS.DEACTIVATED;

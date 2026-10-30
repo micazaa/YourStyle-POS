@@ -155,6 +155,14 @@ function getLatestPettyHandover() {
       received: pettyReturned,
 
       previousReportId: reportId,
+      previousEmployee: String(row[CASH_REPORT_IDX.EMPLOYEE] || '').trim(),
+      previousCountedAt: row[CASH_REPORT_IDX.UPDATED_AT] instanceof Date
+        ? Utilities.formatDate(
+            row[CASH_REPORT_IDX.UPDATED_AT],
+            Session.getScriptTimeZone(),
+            'h:mm a'
+          )
+        : '',
     };
   }
 
@@ -186,6 +194,9 @@ function startCashierShift(employee, firstShiftPetty) {
 
     const tz = Session.getScriptTimeZone();
 
+    const now = new Date();
+    const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+
     /* ======================================================
        READ CASH REPORT LOG ONCE
     ====================================================== */
@@ -197,7 +208,7 @@ function startCashierShift(employee, firstShiftPetty) {
     }
 
     /* ======================================================
-       RESUME EXISTING OPEN SHIFT
+       RESUME TODAY'S EXISTING OPEN CASHIER SHIFT
     ====================================================== */
 
     for (let i = rows.length - 1; i >= 0; i--) {
@@ -209,7 +220,14 @@ function startCashierShift(employee, firstShiftPetty) {
         .trim()
         .toUpperCase();
 
-      if (rowEmployee === employee && status === 'OPEN') {
+      // Older open reports remain available for reconciliation. They must
+      // not silently turn a new day's sign-in into a historical shift.
+      if (
+        rowEmployee === employee &&
+        status === 'OPEN' &&
+        String(row[CASH_REPORT_IDX.REPORT_TYPE] || '').trim().toUpperCase() === 'CASHIER SHIFT' &&
+        dateString_(row[CASH_REPORT_IDX.REPORT_DATE]) === today
+      ) {
         const shiftStart = row[CASH_REPORT_IDX.SHIFT_START];
 
         return {
@@ -264,8 +282,6 @@ function startCashierShift(employee, firstShiftPetty) {
        GENERATE REPORT ID
     ====================================================== */
 
-    const now = new Date();
-
     const datePart = Utilities.formatDate(now, tz, 'yyyyMMdd');
 
     const prefix = 'CR-' + datePart + '-';
@@ -300,7 +316,7 @@ function startCashierShift(employee, firstShiftPetty) {
 
     row[CASH_REPORT_IDX.REPORT_TYPE] = 'CASHIER SHIFT';
 
-    row[CASH_REPORT_IDX.REPORT_DATE] = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    row[CASH_REPORT_IDX.REPORT_DATE] = today;
 
     row[CASH_REPORT_IDX.EMPLOYEE] = employee;
 
