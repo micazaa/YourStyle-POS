@@ -84,94 +84,10 @@ function findOpenShift_(employee) {
 }
 
 function getLatestPettyHandover() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  const sheet = ss.getSheetByName('Cash Report Log');
-
-  if (!sheet) {
-    throw new Error('Cash Report Log sheet not found.');
-  }
-
-  const lastRow = sheet.getLastRow();
-
-  /*
-    No previous reports yet.
-  */
-
-  if (lastRow < 2) {
-    return {
-      success: true,
-      received: 0,
-      previousReportId: '',
-    };
-  }
-
-  /*
-    Cash Report Log:
-
-    A  Report ID
-    ...
-    AF Petty Returned
-    ...
-    AJ Status
-  */
-
-  const data = sheet.getRange(2, 1, lastRow - 1, 37).getValues();
-
-  /*
-    Search from newest → oldest.
-
-    We want the latest CLOSED report
-    that has a valid Petty Returned value.
-
-    INITIAL-PETTY is intentionally allowed.
-  */
-
-  for (let i = data.length - 1; i >= 0; i--) {
-    const row = data[i];
-
-    const reportId = String(row[0] || '').trim();
-
-    const pettyReturned = Number(row[31]) || 0;
-
-    const status = String(row[35] || '')
-      .trim()
-      .toUpperCase();
-
-    if (status !== 'CLOSED') {
-      continue;
-    }
-
-    /*
-      A CLOSED report with Petty Returned = 0
-      is still valid.
-
-      This means the next shift starts with ₱0.
-    */
-
-    return {
-      success: true,
-
-      received: pettyReturned,
-
-      previousReportId: reportId,
-    };
-  }
-
-  /*
-    No previous CLOSED report.
-  */
-
-  return {
-    success: true,
-
-    received: 0,
-
-    previousReportId: '',
-  };
+  return latestPettyHandover_();
 }
 
-function startCashierShift(employee, firstShiftPetty) {
+function startCashierShift(employee, firstShiftPetty, handoverResolved) {
   try {
     employee = String(employee || '').trim();
 
@@ -186,6 +102,9 @@ function startCashierShift(employee, firstShiftPetty) {
 
     const tz = Session.getScriptTimeZone();
 
+    const now = new Date();
+    const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+
     /* ======================================================
        READ CASH REPORT LOG ONCE
     ====================================================== */
@@ -197,7 +116,7 @@ function startCashierShift(employee, firstShiftPetty) {
     }
 
     /* ======================================================
-       RESUME EXISTING OPEN SHIFT
+       RESUME TODAY'S EXISTING OPEN CASHIER SHIFT
     ====================================================== */
 
     for (let i = rows.length - 1; i >= 0; i--) {
@@ -209,7 +128,14 @@ function startCashierShift(employee, firstShiftPetty) {
         .trim()
         .toUpperCase();
 
-      if (rowEmployee === employee && status === 'OPEN') {
+      // Older open reports remain available for reconciliation. They must
+      // not silently turn a new day's sign-in into a historical shift.
+      if (
+        rowEmployee === employee &&
+        status === 'OPEN' &&
+        String(row[CASH_REPORT_IDX.REPORT_TYPE] || '').trim().toUpperCase() === 'CASHIER SHIFT' &&
+        dateString_(row[CASH_REPORT_IDX.REPORT_DATE]) === today
+      ) {
         const shiftStart = row[CASH_REPORT_IDX.SHIFT_START];
 
         return {
@@ -242,7 +168,7 @@ function startCashierShift(employee, firstShiftPetty) {
 
     let previousReportId = '';
 
-    for (let i = rows.length - 1; i >= 0; i--) {
+    for (let i = rows.length - 1; !handoverResolved && i >= 0; i--) {
       const row = rows[i];
 
       const status = String(row[CASH_REPORT_IDX.STATUS] || '')
@@ -263,8 +189,6 @@ function startCashierShift(employee, firstShiftPetty) {
     /* ======================================================
        GENERATE REPORT ID
     ====================================================== */
-
-    const now = new Date();
 
     const datePart = Utilities.formatDate(now, tz, 'yyyyMMdd');
 
@@ -300,7 +224,7 @@ function startCashierShift(employee, firstShiftPetty) {
 
     row[CASH_REPORT_IDX.REPORT_TYPE] = 'CASHIER SHIFT';
 
-    row[CASH_REPORT_IDX.REPORT_DATE] = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    row[CASH_REPORT_IDX.REPORT_DATE] = today;
 
     row[CASH_REPORT_IDX.EMPLOYEE] = employee;
 
@@ -437,6 +361,15 @@ function closeCashierShift(
           2, 1, sheet.getLastRow() - 1, CASH_REPORT_COLUMN_COUNT
         ).getValues()
       : [];
+
+    const managedReports = typeof pettyHandoverRows_ === 'function'
+      ? new Set(pettyHandoverRows_().map(event => event[2])) : new Set();
+    if (rows.some(row => managedReports.has(String(row[0])) &&
+        String(row[CASH_REPORT_IDX.EMPLOYEE] || '').trim() === employee &&
+        dateString_(row[CASH_REPORT_IDX.REPORT_DATE]) <= dateStr &&
+        dateString_(row[CASH_REPORT_IDX.SHIFT_END] || now) >= dateStr)) {
+      throw new Error('Use End shift from cashier logout for an active shift, or Regenerate Report for a saved shift.');
+    }
 
     let openTarget = null;
     let closedTarget = null;
@@ -940,7 +873,9 @@ function correctClosedCashReport(payload) {
         'Voucher No. and petty explanation are required when petty received and returned do not match.'
       );
     row[CASH_REPORT_IDX.MANAGER] = auth.managerName || row[CASH_REPORT_IDX.MANAGER] || '';
-    const correctedExpected = expectedCashForDate_(
+    const correctedExpected = typeof cashierReportHasEvents_ === 'function' && cashierReportHasEvents_(String(row[0]))
+      ? roundToTwo(buildPaymentSummary(cashierShiftMetrics_(row)).cashSales)
+      : expectedCashForDate_(
       String(row[CASH_REPORT_IDX.EMPLOYEE] || ''),
       dateString_(row[CASH_REPORT_IDX.REPORT_DATE])
     );
@@ -972,18 +907,26 @@ function buildClosedCashierPdf_(report) {
   if (!sales) return { success: false, message: 'Sales Log sheet not found.' };
   const tz = Session.getScriptTimeZone(),
     salesData = sales.getDataRange().getValues();
-  const metrics = collectSalesMetrics(salesData, report.reportDate, report.employee, null, null);
+  const managed = typeof cashierReportHasEvents_ === 'function' && cashierReportHasEvents_(report.reportId);
+  const savedShift = managed ? findReportById_(report.reportId) : null;
+  const shiftStart = savedShift ? savedShift.values[CASH_REPORT_IDX.SHIFT_START] : report.shiftStart;
+  const shiftEnd = savedShift ? savedShift.values[CASH_REPORT_IDX.SHIFT_END] : report.shiftEnd;
+  const metrics = collectSalesMetrics(salesData, report.reportDate, report.employee,
+    managed ? shiftStart : null, managed ? shiftEnd : null,
+    managed ? {endDate: dateString_(shiftEnd)} : undefined);
   const payment = buildPaymentSummary(metrics),
     salesRowsHtml = buildSalesSummary(metrics.categoryGroups);
   const expectedForPdf = roundToTwo(payment.cashSales);
   const varianceForPdf = roundToTwo((Number(report.cashCounted) || 0) - expectedForPdf);
   const pettyRemarkText =
     report.pettyRemark + (report.pettyVoucherNo ? ' (Voucher: ' + report.pettyVoucherNo + ')' : '');
+  const escapeReportText = text => String(text || '').replace(/[&<>"']/g, character =>
+    ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[character]);
   const pettyRemarkHtml = pettyRemarkText
-    ? `<p class="report-remark">REMARKS: ${pettyRemarkText}</p>`
+    ? `<p class="report-remark">REMARKS: ${escapeReportText(pettyRemarkText)}</p>`
     : '';
   const cashRemarkHtml = report.cashRemark
-    ? `<p class="report-remark">REMARKS: ${report.cashRemark}</p>`
+    ? `<p class="report-remark">REMARKS: ${escapeReportText(report.cashRemark)}</p>`
     : '';
   let rowCount = Object.keys(metrics.items).length,
     zoom = 1;
@@ -996,11 +939,11 @@ function buildClosedCashierPdf_(report) {
     managerName: report.manager,
     cashierName: report.employee,
     todayDisplay: Utilities.formatDate(new Date(report.reportDate + 'T00:00:00'), tz, 'MM/dd/yyyy'),
-    shiftStartDisplay: report.shiftStart
-      ? Utilities.formatDate(new Date(report.shiftStart), tz, 'h:mm a')
+    shiftStartDisplay: shiftStart
+      ? Utilities.formatDate(new Date(shiftStart), tz, 'h:mm a')
       : '—',
-    shiftEndDisplay: report.shiftEnd
-      ? Utilities.formatDate(new Date(report.shiftEnd), tz, 'h:mm a')
+    shiftEndDisplay: shiftEnd
+      ? Utilities.formatDate(new Date(shiftEnd), tz, 'h:mm a')
       : '—',
     metrics: metrics,
     salesRowsHtml: salesRowsHtml,
@@ -1381,29 +1324,9 @@ function getCashReportByDate(employee, reportDate) {
     };
   }
 
-  /*
-    CRITICAL:
-
-    If there is an OPEN shift for this cashier/date,
-    ALWAYS use it instead of an older CLOSED report.
-  */
-
-  let selected = matches.find(function (match) {
-    return match.status === 'OPEN';
-  });
-
-  /*
-    Otherwise use the most recent matching CLOSED report.
-  */
-
-  if (!selected) {
-    selected = matches
-      .slice()
-      .reverse()
-      .find(function (match) {
-        return match.status === 'CLOSED';
-      });
-  }
+  // Same-day sign-in reopens the cashier's existing daily report.
+  const selected = matches.slice().reverse().find(match => match.status === 'OPEN') ||
+    matches.slice().reverse().find(match => match.status === 'CLOSED');
 
   if (!selected) {
     return {

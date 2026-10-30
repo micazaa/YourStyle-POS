@@ -41,8 +41,8 @@
   function getManagerSessionCredential() {
     return inventoryIsManager() ? {managerToken:currentEmployee.inventoryManagerToken || ''} : null;
   }
-  function requestManagerPin(message, callback) {
-    const credential = getManagerSessionCredential();
+  function requestManagerPin(message, callback, forcePin = false) {
+    const credential = forcePin ? null : getManagerSessionCredential();
     if (credential) { callback(credential); return; }
 
     document.getElementById("managerPinModalMessage").textContent = message;

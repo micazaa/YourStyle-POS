@@ -19,6 +19,7 @@ function onOpen() {
     .addItem("Create / Repair SYNC Button", "createSalesSyncButtonFromMenu")
     .addItem("Process Pending Sales Now", "processPendingSalesLogRowsFromMenu")
     .addItem("Check Automation Status", "showSalesAutomationStatus")
+    .addItem("Refresh Employee Usernames", "refreshEmployeeUsernames_")
     .addToUi();
 }
 
@@ -56,26 +57,10 @@ function createOrRepairSalesSyncButton_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
   if (!sheet) throw new Error("Sales Log sheet not found.");
 
-  const buttonRange = sheet.getRange("AD2:AF3");
-  const alreadyMerged = buttonRange.getMergedRanges().some(function(range) {
-    return range.getA1Notation() === "AD2:AF3";
-  });
-  if (!alreadyMerged) {
-    buttonRange.breakApart();
-    buttonRange.merge();
-  }
-  buttonRange
-    .setValue("SYNC")
-    .setBackground("#1F6F54")
-    .setFontColor("#FFFFFF")
-    .setFontWeight("bold")
-    .setFontSize(14)
-    .setHorizontalAlignment("center")
-    .setVerticalAlignment("middle")
-    .setNote("Click to process all pending manual Sales Log rows.");
-
-  sheet.setColumnWidths(30, 3, 60);
-  sheet.setRowHeights(2, 2, 28);
+  /*
+    The clickable image is the SYNC button. Do not merge or format cells here:
+    a user-owned merge that overlaps this area blocks all pending-sales sync.
+  */
 
   let buttonImage = null;
   sheet.getImages().forEach(function(image) {

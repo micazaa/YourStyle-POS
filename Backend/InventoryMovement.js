@@ -183,7 +183,7 @@ function getInventoryMovementType(category, inventoryType) {
 
   if (normalizedCategory === "YOURFINDS" || normalizedInventoryType === INVENTORY_TYPE.UNIQUE) return INVENTORY_MOVEMENT_TYPE.YOURFINDS;
   if (normalizedCategory === "PINS") return INVENTORY_MOVEMENT_TYPE.PINS;
-  if (normalizedCategory === "OTHERS") return INVENTORY_MOVEMENT_TYPE.OTHERS;
+  if (normalizedCategory === "OTHERS" || normalizedCategory === "WHOLE SALE") return INVENTORY_MOVEMENT_TYPE.OTHERS;
   throw new Error("Unable to determine Inventory Movement Type for category: " + normalizedCategory);
 }
 

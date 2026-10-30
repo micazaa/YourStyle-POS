@@ -410,18 +410,6 @@ function getExpectedCashForManager(reportDate) {
       ) || 0;
 
 
-    Logger.log(
-      "MATCH: " +
-      rowDate +
-      " | " +
-      paymentMethod +
-      " | " +
-      status +
-      " | " +
-      amount
-    );
-
-
     if (
       status !== "COMPLETED"
     ) {

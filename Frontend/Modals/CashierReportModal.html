@@ -1,12 +1,50 @@
-<div id="shiftReportModal" class="generic-overlay-blur" style="display: none">
-  <div class="custom-popup-card" style="max-width: 820px">
+<div id="cashierLogoutModal" class="generic-overlay-blur" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cashierLogoutTitle">
+  <div class="custom-popup-card cashier-logout-card">
+    <div class="cashier-logout-heading">
+      <h2 id="cashierLogoutTitle">Pause or end your shift?</h2>
+      <button type="button" class="btn-close" aria-label="Cancel logout" onclick="closeCashierLogoutChoices()"></button>
+    </div>
+    <p class="cashier-logout-description">Your sales cash stays with you while paused.</p>
+    <div class="cashier-logout-options">
+      <button type="button" class="cashier-logout-option" onclick="chooseCashierLogout('pause')">
+        <span class="cashier-logout-copy"><span class="cashier-logout-label">Pause shift</span>
+        <span class="cashier-logout-detail">Return petty cash. Resume this shift later.</span></span>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg>
+      </button>
+      <button type="button" class="cashier-logout-option cashier-logout-end" onclick="chooseCashierLogout('end')">
+        <span class="cashier-logout-copy"><span class="cashier-logout-label">End shift</span>
+        <span class="cashier-logout-detail">Count sales cash and close your report.</span></span>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg>
+      </button>
+    </div>
+    <button type="button" class="cashier-logout-cancel" onclick="closeCashierLogoutChoices()">Keep working</button>
+  </div>
+</div>
+<div id="shiftReportModal" class="generic-overlay-blur" style="display: none" role="dialog" aria-modal="true" aria-labelledby="shiftReportTitle">
+  <div id="shiftReportCard" class="custom-popup-card" style="max-width: 820px">
     <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-      <h5 class="fw-bold m-0 text-dark">Cashier Daily Sales Report</h5>
-      <button type="button" class="btn-close" onclick="toggleShiftReportModal(false)"></button>
+      <h5 id="shiftReportTitle" class="fw-bold m-0 text-dark">Cashier Daily Sales Report</h5>
+      <button type="button" class="btn btn-link btn-sm ms-auto me-2 text-secondary" aria-label="Refresh report" title="Refresh report" onclick="refreshCashierReport()">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 7v5h-5M4 17v-5h5"/>
+          <path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17"/>
+        </svg>
+      </button>
+      <button type="button" class="btn-close" aria-label="Close cashier report" onclick="toggleShiftReportModal(false)"></button>
+    </div>
+    <div id="cashierReportLoading" role="status" aria-live="polite" style="padding:64px 16px;text-align:center;" hidden></div>
+    <div id="cashierReportContent">
+    <p id="cashierExitHint" class="small text-muted mb-3" hidden></p>
+    <p id="cashierClosingDate" class="cashier-closing-date" hidden></p>
+    <div id="cashierEndManagerField" class="mb-3" hidden>
+      <label class="form-label" for="cashierEndManager">Verifying manager</label>
+      <select id="cashierEndManager" class="form-select" onchange="updateCashierExitReady()" disabled>
+        <option value="">Select a manager</option>
+      </select>
     </div>
 
-    <div class="row g-3 mb-3">
-      <div class="col-md-6">
+    <div id="cashierReportMetadata" class="row g-3 mb-3">
+      <div id="cashierReportManagerField" class="col-md-6">
         <label class="form-label">Verifying Manager</label>
         <select class="form-select form-select-sm" id="reportManagerName">
           <option value="">-- Select Verifying Manager --</option>
@@ -16,7 +54,7 @@
       </div>
 
       <div class="col-md-6">
-        <label class="form-label">Report Date</label>
+        <label class="form-label" for="cashierReportDate">Report Date</label>
         <input
           type="date"
           id="cashierReportDate"
@@ -28,7 +66,7 @@
     </div>
 
     <div class="denom-columns mb-2">
-      <div class="denom-column">
+      <div id="cashierPettyColumn" class="denom-column">
         <div
           class="d-flex justify-content-between align-items-center p-2 mb-3 rounded"
           style="background-color: var(--pink-light)"
@@ -50,7 +88,7 @@
               min="0"
               id="pr1000"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updatePettyReturnTotal()"
             />
@@ -62,7 +100,7 @@
               min="0"
               id="pr500"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updatePettyReturnTotal()"
             />
@@ -74,7 +112,7 @@
               min="0"
               id="pr200"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updatePettyReturnTotal()"
             />
@@ -86,7 +124,7 @@
               min="0"
               id="pr100"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updatePettyReturnTotal()"
             />
@@ -98,7 +136,7 @@
               min="0"
               id="pr50"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updatePettyReturnTotal()"
             />
@@ -110,7 +148,7 @@
               min="0"
               id="pr20"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updatePettyReturnTotal()"
             />
@@ -122,7 +160,7 @@
               min="0"
               id="pr10"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updatePettyReturnTotal()"
             />
@@ -134,7 +172,7 @@
               min="0"
               id="pr5"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updatePettyReturnTotal()"
             />
@@ -146,7 +184,7 @@
               min="0"
               id="pr1"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updatePettyReturnTotal()"
             />
@@ -182,7 +220,7 @@
         </div>
       </div>
 
-      <div class="denom-column">
+      <div id="cashierSalesCashColumn" class="denom-column">
         <p class="fw-bold small text-uppercase text-muted mb-2">Cash Drawer Bill/Coin Count</p>
         <div
           class="row g-2 border p-3 rounded bg-light text-center mb-2"
@@ -194,7 +232,7 @@
               type="number"
               id="d1000"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updateShiftCashDrawerTotal()"
             />
@@ -205,7 +243,7 @@
               type="number"
               id="d500"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updateShiftCashDrawerTotal()"
             />
@@ -216,7 +254,7 @@
               type="number"
               id="d200"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updateShiftCashDrawerTotal()"
             />
@@ -227,7 +265,7 @@
               type="number"
               id="d100"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updateShiftCashDrawerTotal()"
             />
@@ -238,7 +276,7 @@
               type="number"
               id="d50"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updateShiftCashDrawerTotal()"
             />
@@ -249,7 +287,7 @@
               type="number"
               id="d20"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updateShiftCashDrawerTotal()"
             />
@@ -260,7 +298,7 @@
               type="number"
               id="d10"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updateShiftCashDrawerTotal()"
             />
@@ -271,7 +309,7 @@
               type="number"
               id="d5"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updateShiftCashDrawerTotal()"
             />
@@ -282,7 +320,7 @@
               type="number"
               id="d1"
               class="form-control form-control-sm denom-input"
-              placeholder="0"
+              placeholder=""
               value=""
               oninput="updateShiftCashDrawerTotal()"
             />
@@ -307,7 +345,7 @@
     <div id="phase10HistoricalBox" class="border rounded p-3 mb-3 bg-light" style="display: none">
       <div class="d-flex justify-content-between align-items-start gap-3">
         <div>
-          <div class="fw-bold small text-uppercase text-muted">Historical Cash Report</div>
+          <div class="fw-bold small text-uppercase text-muted">Saved Cash Report</div>
           <div id="phase10ClosedReportInfo" class="small text-muted mt-1"></div>
         </div>
         <span class="badge bg-secondary">CLOSED</span>
@@ -347,21 +385,257 @@
       </div>
     </div>
 
+    <p id="cashierExitError" class="small text-danger" role="alert" hidden></p>
+    <button id="cashierExitRetry" type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick="loadCashierExitContext()" hidden>Retry loading shift</button>
+    <div id="cashierExitReauth" class="mb-3" hidden>
+      <label for="cashierExitPassword" class="form-label">Confirm your password to continue</label>
+      <input id="cashierExitPassword" type="password" class="form-control mb-2" autocomplete="current-password">
+      <button type="button" class="btn btn-outline-pink" onclick="reauthenticateCashierExit()">Verify &amp; reload shift</button>
+    </div>
     <button
+      id="shiftReportSubmit"
       type="button"
       class="btn btn-dark-custom w-100 py-2.5 fw-bold"
       onclick="submitShiftReportTally()"
     >
       Compile & Download Shift PDF
     </button>
+    </div>
   </div>
 </div>
 <script>
   var phase10ReportLoadId = 0;
+  var cashierReportIntent = 'report';
+  var cashierExitBusy = false;
+  var cashierExitContext = null;
+  var cashierExitRequestId = '';
+  var cashierReportLoadingActive = false;
+  var cashierReportWriting = false;
+  var cashierReportContextCache = null;
+  var cashierReportDateCache = null;
+
+  function clearCashierReportCache() {
+    cashierReportContextCache = null;
+    cashierReportDateCache = null;
+  }
+
+  function rememberCashierReportContext(context) {
+    if (!currentEmployee || !context || !context.success || context.status !== 'OPEN') return;
+    cashierReportContextCache = {owner: currentEmployee.dashboardToken, day: getCashReportToday(), time: Date.now(),
+      data: JSON.parse(JSON.stringify(context))};
+  }
+
+  function cachedCashierReportContext() {
+    const cached = cashierReportContextCache;
+    if (!cached || !currentEmployee || cached.owner !== currentEmployee.dashboardToken || cached.day !== getCashReportToday() ||
+        cached.data.reportId !== currentShiftReportId || cached.data.status !== 'OPEN') return null;
+    // A new report has no saved counts to retrieve. Its receipt ID is still
+    // checked against the current sheet on Save; completed reports refresh sooner.
+    if (cached.data.hasSavedReport !== false && Date.now() - cached.time > 30000) return null;
+    return JSON.parse(JSON.stringify(cached.data));
+  }
+
+  function refreshCashierReport() {
+    if (cashierReportLoadingActive || cashierExitBusy || cashierReportWriting) return;
+    clearCashierReportCache();
+    if (cashierReportIntent === 'report') loadCashReportByDate(true);
+    else loadCashierExitContext(true);
+  }
+
+  function setCashierReportLoading(loading, message) {
+    cashierReportLoadingActive = loading;
+    document.getElementById('cashierReportContent').hidden = loading;
+    const state = document.getElementById('cashierReportLoading');
+    state.hidden = !loading;
+    if (loading) state.innerHTML = loadingIndicator(message || 'Retrieving report…');
+    document.getElementById('shiftReportModal').setAttribute('aria-busy', String(loading));
+  }
+
+  function openCashierLogoutChoices() {
+    if (cashierExitBusy) return;
+    if (cart.length) return showNotificationToast('Complete or clear the current sale before pausing or ending your shift.', true);
+    toggleSidebar(false);
+    document.getElementById('cashierLogoutModal').style.display = 'flex';
+  }
+
+  function closeCashierLogoutChoices() {
+    document.getElementById('cashierLogoutModal').style.display = 'none';
+  }
+
+  function chooseCashierLogout(intent) {
+    closeCashierLogoutChoices();
+    toggleShiftReportModal(true, intent);
+  }
+
+  function updateCashierExitReady() {
+    if (cashierReportIntent === 'report') return;
+    document.getElementById('shiftReportSubmit').disabled = cashierExitBusy || cashierReportLoadingActive || !cashierExitContext ||
+      (cashierReportIntent === 'end' && !document.getElementById('cashierEndManager').value);
+  }
+
+  function setCashierExitBusy(busy) {
+    cashierExitBusy = busy;
+    setCashierReportLoading(busy, 'Saving report…');
+    const modal = document.getElementById('shiftReportModal');
+    modal.querySelectorAll('input, select, textarea, .btn-close').forEach(el => { el.disabled = busy; });
+    document.getElementById('cashierReportDate').disabled = true;
+    const submit = document.getElementById('shiftReportSubmit');
+    submit.innerHTML = busy ? loadingIndicator('Saving…') : cashierReportIntent === 'pause'
+      ? 'Save handover & pause' : 'Save report & sign out';
+    updateCashierExitReady();
+  }
+
+  function cashierExitError(message) {
+    const error = document.getElementById('cashierExitError');
+    error.textContent = message;
+    error.hidden = false;
+    if (/expired|account changed/i.test(message)) document.getElementById('cashierExitReauth').hidden = false;
+  }
+
+  function loadCashierExitContext(forceRefresh) {
+    if (cashierReportLoadingActive) return;
+    const request = ++phase10ReportLoadId;
+    const owner = currentEmployee && currentEmployee.dashboardToken;
+    cashierExitContext = null;
+    document.getElementById('cashierEndManager').disabled = true;
+    document.getElementById('cashierExitRetry').hidden = true;
+    document.getElementById('cashierExitError').hidden = true;
+    document.getElementById('cashierExitReauth').hidden = true;
+    const cached = forceRefresh ? null : cachedCashierReportContext();
+    if (!cached) setCashierReportLoading(true);
+    updateCashierExitReady();
+    function current() { return request === phase10ReportLoadId && currentEmployee && currentEmployee.dashboardToken === owner; }
+    function failed(error) {
+      if (!current()) return;
+      setCashierReportLoading(false);
+      cashierExitError(error.message || String(error));
+      document.getElementById('cashierExitRetry').hidden = false;
+      document.getElementById('cashierExitReauth').hidden = !/expired|account changed/i.test(error.message || '');
+      setCashierExitBusy(false);
+    }
+    function loaded(context) {
+      if (!current()) return;
+      setCashierReportLoading(false);
+      if (!context || !context.success) return failed(new Error(context && context.message || 'Unable to load cashier shift.'));
+      if (context.status === 'CLOSED' || context.status === 'PAUSED') {
+        clearCashierReportCache();
+        completeCleanLogout();
+        showNotificationToast(context.status === 'PAUSED' ? 'Your shift is already paused. You are signed out.' : 'Your shift is already closed. You are signed out.');
+        return;
+      }
+      if (!cached) rememberCashierReportContext(context);
+      cashierExitContext = context;
+      const saved = context.savedReport || context;
+      if (cashierReportIntent === 'end') {
+        const manager = document.getElementById('cashierEndManager');
+        const previous = manager.value;
+        manager.replaceChildren(new Option('Select a manager', ''));
+        (context.managers || []).forEach(name => manager.add(new Option(name, name)));
+        const savedManager = saved.manager || context.managerName || '';
+        manager.value = (context.managers || []).includes(previous) ? previous :
+          (context.managers || []).includes(savedManager) ? savedManager : '';
+        if (!context.managers || !context.managers.length)
+          cashierExitError('No active managers available. Update the Employees sheet, then reopen this form.');
+      }
+      currentShiftReportId = context.reportId;
+      currentShiftPettyCash = Number(context.pettyReceived) || 0;
+      setDisplayedPettyReceived(currentShiftPettyCash);
+      if (cashierReportIntent === 'end') {
+        PETTY_DENOMS.forEach(d => {
+          document.getElementById('d' + d).value = Number((saved.cashBreakdown || {})[d]) || '';
+          document.getElementById('pr' + d).value = context.pettyBreakdown ? Number(context.pettyBreakdown[d]) || '' : '';
+        });
+        document.getElementById('cashDrawerVarianceReason').value = saved.cashRemark || '';
+        if (context.pettyBreakdown) updatePettyReturnTotal();
+        updateShiftCashDrawerTotal();
+      }
+      setCashierClosingDate();
+      saveSession();
+      setCashierExitBusy(false);
+    }
+    if (cached) loaded(cached);
+    else google.script.run.withSuccessHandler(loaded).withFailureHandler(failed).getCashierShiftContext(owner, currentShiftReportId);
+  }
+
+  function reauthenticateCashierExit() {
+    if (cashierExitBusy) return;
+    const field = document.getElementById('cashierExitPassword');
+    const password = field.value;
+    field.value = '';
+    if (!password) return cashierExitError('Enter your password.');
+    const employee = currentCashier;
+    setCashierExitBusy(true);
+    google.script.run.withSuccessHandler(result => {
+      if (currentCashier !== employee) return;
+      setCashierExitBusy(false);
+      if (!result || !result.success) return cashierExitError(result && result.message || 'Sign-in failed.');
+      currentEmployee = result;
+      saveSession();
+      loadCashierExitContext();
+    }).withFailureHandler(error => {
+      if (currentCashier !== employee) return;
+      setCashierExitBusy(false);
+      cashierExitError(error.message || String(error));
+    }).verifyEmployee(employee, password);
+  }
+
+  function submitCashierExitTally() {
+    if (cashierExitBusy || cashierReportLoadingActive || !cashierExitContext) return;
+    const managerName = document.getElementById('cashierEndManager').value;
+    if (cashierReportIntent === 'end' && !managerName)
+      return cashierExitError('Select a verifying manager.');
+    const petty = {}, cash = {};
+    for (const d of PETTY_DENOMS) {
+      for (const [prefix, target] of [['pr', petty], ['d', cash]]) {
+        if (prefix === 'd' && cashierReportIntent === 'pause') continue;
+        const count = Number(document.getElementById(prefix + d).value || 0);
+        if (!Number.isSafeInteger(count) || count < 0)
+          return cashierExitError('Bill and coin counts must be non-negative whole numbers.');
+        target[d] = count;
+      }
+    }
+    const voucher = document.getElementById('pettyVoucherNo').value.trim();
+    const reason = document.getElementById('pettyVarianceReason').value.trim();
+    if (Math.abs(updatePettyReturnTotal() - getDisplayedPettyReceived()) > .001 && (!voucher || !reason))
+      return cashierExitError('Enter the petty cash voucher number and explanation for the difference.');
+    const payload = {
+      token: currentEmployee.dashboardToken, reportId: cashierExitContext.reportId,
+      receiveId: cashierExitContext.receiveId, requestId: cashierExitRequestId,
+      action: cashierReportIntent === 'pause' ? 'PAUSE' : 'END',
+      managerName: cashierReportIntent === 'end' ? managerName : '',
+      pettyBreakdown: petty, voucherNo: voucher, reason: reason, cashBreakdown: cash,
+      cashRemark: document.getElementById('cashDrawerVarianceReason').value.trim(),
+    };
+    document.getElementById('cashierExitError').hidden = true;
+    setCashierExitBusy(true);
+    const owner = currentEmployee.dashboardToken;
+    function send(credential) {
+      if (credential === null) { setCashierExitBusy(false); return; }
+      if (!currentEmployee || currentEmployee.dashboardToken !== owner) return;
+      payload.managerCredential = credential;
+      clearCashierReportCache();
+      google.script.run.withSuccessHandler(result => {
+        if (!currentEmployee || currentEmployee.dashboardToken !== owner) return;
+        setCashierExitBusy(false);
+        if (!result || !result.success) return cashierExitError(result && result.message || 'Unable to save the shift.');
+        if (result.downloadUrl) window.open(result.downloadUrl);
+        completeCleanLogout();
+        showNotificationToast(result.pdfWarning || (result.status === 'PAUSED'
+          ? 'Petty cash handed over. Your shift is paused and you are signed out.'
+          : 'Cashier report saved. Your shift has ended and you are signed out.'));
+      }).withFailureHandler(error => {
+        if (!currentEmployee || currentEmployee.dashboardToken !== owner) return;
+        setCashierExitBusy(false);
+        cashierExitError(error.message || String(error));
+      }).saveCashierShiftExit(payload);
+    }
+    if (payload.action === 'END') requestManagerPin('Enter ' + managerName + "'s Manager PIN to end this shift:", send, managerName !== currentCashier);
+    else send(undefined);
+  }
 
   function getCashReportToday() {
     const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Singapore',
+      timeZone: 'Asia/Manila',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
@@ -373,6 +647,15 @@
     });
 
     return values.year + '-' + values.month + '-' + values.day;
+  }
+
+  function setCashierClosingDate() {
+    const today = getCashReportToday();
+    document.getElementById('cashierReportDate').value = today;
+    document.getElementById('cashierReportDate').max = today;
+    document.getElementById('cashierClosingDate').textContent = 'Today · ' +
+      new Intl.DateTimeFormat('en-PH', {timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric'})
+        .format(new Date(today + 'T12:00:00+08:00'));
   }
 
   function getDisplayedPettyReceived() {
@@ -392,8 +675,41 @@
       '₱' + amount.toFixed(2);
   }
 
-  function toggleShiftReportModal(show) {
+  function toggleShiftReportModal(show, intent) {
+    if (cashierExitBusy || cashierReportWriting) return;
+    if (show && cashierReportLoadingActive && document.getElementById('shiftReportModal').style.display !== 'none') return;
+    ++phase10ReportLoadId;
+    if (show) cashierReportIntent = intent || (currentSessionIsCashier ? 'end' : 'report');
     document.getElementById('shiftReportModal').style.display = show ? 'flex' : 'none';
+    if (!show) { cashierExitContext = null; setCashierReportLoading(false); return; }
+    const lifecycle = cashierReportIntent !== 'report';
+    const pause = cashierReportIntent === 'pause';
+    document.getElementById('cashierExitHint').hidden = !pause;
+    document.getElementById('cashierExitHint').textContent = pause
+      ? 'Count and hand over petty cash. Keep your sales cash until you end your shift.' : '';
+    document.getElementById('cashierClosingDate').hidden = !lifecycle || pause;
+    document.getElementById('cashierEndManagerField').hidden = cashierReportIntent !== 'end';
+    document.getElementById('cashierEndManager').value = '';
+    document.getElementById('shiftReportTitle').textContent = pause ? 'Hand over petty cash' : lifecycle ? 'End cashier shift' : 'Cashier Daily Sales Report';
+    document.getElementById('shiftReportCard').style.maxWidth = pause ? '560px' : '820px';
+    document.getElementById('cashierReportMetadata').hidden = lifecycle;
+    document.getElementById('cashierReportManagerField').hidden = lifecycle;
+    document.getElementById('cashierSalesCashColumn').hidden = pause;
+    document.getElementById('cashierExitError').hidden = true;
+    document.getElementById('cashierExitRetry').hidden = true;
+    document.getElementById('cashierExitReauth').hidden = true;
+    document.getElementById('cashierReportDate').disabled = lifecycle;
+    document.getElementById('shiftReportSubmit').disabled = false;
+    document.getElementById('shiftReportSubmit').textContent = 'Compile & Download Shift PDF';
+    if (lifecycle) {
+      clearCashReportModal();
+      setCashierClosingDate();
+      document.getElementById('cashierReportDate').disabled = true;
+      document.getElementById('shiftReportSubmit').style.display = 'block';
+      cashierExitRequestId = 'exit_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      loadCashierExitContext();
+      return;
+    }
     restoreForm('shiftReportModal');
     if (show) {
       const now = new Date();
@@ -421,7 +737,7 @@
       document.getElementById('cashDrawerVarianceReason').value = '';
       document.getElementById('cashDrawerCountTotalOut').textContent = '₱0.00';
       resetHistoricalState();
-      setTimeout(loadCashReportByDate, 50);
+      loadCashReportByDate();
     }
   }
 
@@ -458,6 +774,8 @@
   }
 
   function submitShiftReportTally() {
+    if (cashierReportLoadingActive) return;
+    if (cashierReportIntent !== 'report') return submitCashierExitTally();
     let mgr = document.getElementById('reportManagerName').value.trim();
     if (!mgr) {
       alert('Please provide supervisor verification check signature name.');
@@ -472,8 +790,13 @@
         'This cashier report was already downloaded today. Enter Manager PIN to continue:',
         function (pin) {
           if (pin === null) return;
+          if (cashierReportLoadingActive) return;
+          cashierReportWriting = true;
+          setCashierReportLoading(true, 'Verifying manager…');
           google.script.run
             .withSuccessHandler(function (result) {
+              cashierReportWriting = false;
+              setCashierReportLoading(false);
               if (!result.success) {
                 showNotificationToast(result.message, true);
                 return;
@@ -482,6 +805,8 @@
               proceedWithShiftReportTally(mgr, downloadKey);
             })
             .withFailureHandler(function (err) {
+              cashierReportWriting = false;
+              setCashierReportLoading(false);
               showNotificationToast(err.message || 'Authorization failed.', true);
             })
             .verifyManagerPin(pin);
@@ -493,6 +818,7 @@
   }
 
   function proceedWithShiftReportTally(mgr, downloadKey) {
+    if (cashierReportLoadingActive) return;
     let pettyReturnBreakdown = {};
     const reportDate = document.getElementById('cashierReportDate').value;
     PETTY_DENOMS.forEach((d) => {
@@ -537,9 +863,14 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
     let cashOnHandObj = { breakdown: cashBreakdown };
 
     showNotificationToast('Generating Cashier Shift Report PDF...', false);
+    clearCashierReportCache();
+    cashierReportWriting = true;
+    setCashierReportLoading(true, 'Generating report…');
 
     google.script.run
       .withSuccessHandler(function (res) {
+        cashierReportWriting = false;
+        setCashierReportLoading(false);
         if (res.success) {
           localStorage.setItem(downloadKey, '1');
           window.open(res.downloadUrl);
@@ -549,6 +880,8 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
         }
       })
       .withFailureHandler(function (err) {
+        cashierReportWriting = false;
+        setCashierReportLoading(false);
         showNotificationToast(err.message || 'Failed to generate report.', true);
       })
       .generateCashierShiftReportPDF(
@@ -592,11 +925,13 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
     if (submit) submit.style.display = 'block';
   }
 
-  function loadCashReportByDate() {
+  function loadCashReportByDate(forceRefresh) {
+    if (cashierReportIntent !== 'report' || document.getElementById('shiftReportModal').style.display === 'none') return;
     const requestId = ++phase10ReportLoadId;
     const dateInput = document.getElementById('cashierReportDate');
     const date = String(dateInput.value || '').trim();
     const cashier = currentCashier;
+    const owner = currentEmployee && currentEmployee.dashboardToken;
     const today = getCashReportToday();
 
     const submit = document.querySelector(
@@ -614,17 +949,25 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
       showNotificationToast('Report date cannot be in the future.', true);
       return;
     }
+    const cachedContext = forceRefresh ? null : cachedCashierReportContext();
+    const cachedDate = !forceRefresh && cashierReportDateCache && cashierReportDateCache.owner === owner &&
+      cashierReportDateCache.cashier === cashier && cashierReportDateCache.date === date &&
+      Date.now() - cashierReportDateCache.time < 30000 ? cashierReportDateCache.result : null;
+    const initialReport = cachedContext && cachedContext.reportDate === date
+      ? {success: true, found: !!cachedContext.savedReport, report: cachedContext.savedReport} : null;
+    const cached = initialReport || cachedDate;
+    if (!cached) setCashierReportLoading(true);
 
     function isCurrentRequest() {
       return requestId === phase10ReportLoadId &&
         dateInput.value === date &&
-        currentCashier === cashier;
+        currentCashier === cashier && currentEmployee && currentEmployee.dashboardToken === owner;
     }
 
-    google.script.run
-      .withSuccessHandler(function(res) {
+    function loaded(res) {
         // Ignore a response for a date the user has already changed.
         if (!isCurrentRequest()) return;
+        setCashierReportLoading(false);
 
         if (!res || !res.success) {
           showNotificationToast(
@@ -635,6 +978,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
           );
           return;
         }
+        if (!cached) cashierReportDateCache = {owner: owner, cashier: cashier, date: date, time: Date.now(), result: res};
 
         if (!res.found || !res.report) {
           // Do not copy today's petty cash into a historical report.
@@ -671,10 +1015,10 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
 
         PETTY_DENOMS.forEach(function(denomination) {
           document.getElementById('pr' + denomination).value =
-            Number((report.pettyBreakdown || {})[denomination]) || 0;
+            Number((report.pettyBreakdown || {})[denomination]) || '';
 
           document.getElementById('d' + denomination).value =
-            Number((report.cashBreakdown || {})[denomination]) || 0;
+            Number((report.cashBreakdown || {})[denomination]) || '';
         });
 
         document.getElementById('pettyVoucherNo').value =
@@ -689,8 +1033,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
         updatePettyReturnTotal();
         updateShiftCashDrawerTotal();
 
-        const historicalClosed =
-          date !== today && status === 'CLOSED';
+        const historicalClosed = status === 'CLOSED';
 
         if (historicalClosed) {
           phase10LoadedClosedReport = report;
@@ -715,9 +1058,11 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
           setReportFieldsReadOnly(false);
           if (submit) submit.style.display = 'block';
         }
-      })
-      .withFailureHandler(function(error) {
+      }
+    if (cached) loaded(cached);
+    else google.script.run.withSuccessHandler(loaded).withFailureHandler(function(error) {
         if (!isCurrentRequest()) return;
+        setCashierReportLoading(false);
 
         showNotificationToast(
           error && error.message ? error.message : String(error),
@@ -728,6 +1073,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
   }
 
   function regenerateClosedReport() {
+    if (cashierReportLoadingActive) return;
     if (!phase10LoadedClosedReport) {
       showNotificationToast('Select a date with a CLOSED report first.', true);
       return;
@@ -735,9 +1081,14 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
     const id = phase10LoadedClosedReport.reportId;
     requestManagerPin('Enter Manager PIN to regenerate this historical report:', function (pin) {
       if (pin === null) return;
+      if (cashierReportLoadingActive) return;
+      cashierReportWriting = true;
+      setCashierReportLoading(true, 'Generating report…');
       showNotificationToast('Regenerating recorded report...', false);
       google.script.run
         .withSuccessHandler(function (res) {
+          cashierReportWriting = false;
+          setCashierReportLoading(false);
           if (!res || !res.success) {
             showNotificationToast(res && res.message ? res.message : 'Regeneration failed.', true);
             return;
@@ -746,6 +1097,8 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
           showNotificationToast('Report ' + id + ' regenerated. Historical log was not changed.');
         })
         .withFailureHandler(function (e) {
+          cashierReportWriting = false;
+          setCashierReportLoading(false);
           showNotificationToast(e.message || String(e), true);
         })
         .regenerateCashierReport(id, pin);
@@ -761,6 +1114,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
   }
 
   function correctLoadedReport() {
+    if (cashierReportLoadingActive) return;
     if (!phase10LoadedClosedReport || !phase10CorrectionMode) {
       showNotificationToast('Load a CLOSED report and choose Correct Report first.', true);
       return;
@@ -790,8 +1144,14 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
         pettyRemark: document.getElementById('pettyVarianceReason').value.trim(),
         cashRemark: document.getElementById('cashDrawerVarianceReason').value.trim(),
       };
+      if (cashierReportLoadingActive) return;
+      clearCashierReportCache();
+      cashierReportWriting = true;
+      setCashierReportLoading(true, 'Saving report…');
       google.script.run
         .withSuccessHandler(function (res) {
+          cashierReportWriting = false;
+          setCashierReportLoading(false);
           if (!res || !res.success) {
             showNotificationToast(res && res.message ? res.message : 'Correction failed.', true);
             return;
@@ -804,6 +1164,8 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
           loadCashReportByDate();
         })
         .withFailureHandler(function (e) {
+          cashierReportWriting = false;
+          setCashierReportLoading(false);
           showNotificationToast(e.message || String(e), true);
         })
         .correctClosedCashReport(payload);

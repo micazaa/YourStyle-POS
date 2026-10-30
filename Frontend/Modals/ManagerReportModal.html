@@ -4,10 +4,14 @@
     <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
       <h5 class="fw-bold m-0 text-dark">Manager Daily Report</h5>
       <button type="button" class="btn-close"
-              onclick="document.getElementById('managerDailyModal').style.display='none';">
+              onclick="closeManagerReportModal()" aria-label="Close manager report">
       </button>
     </div>
 
+    <div id="managerReportLoading" role="status" aria-live="polite" style="padding:64px 16px;text-align:center;" hidden></div>
+    <p id="managerReportError" class="small text-danger" role="alert" hidden></p>
+    <button id="managerReportRetry" class="btn btn-outline-secondary btn-sm" type="button" onclick="updateManagerExpectedCash()" hidden>Retry</button>
+    <div id="managerReportContent">
     <div class="row g-2 mb-3">
 
       <div class="denom-column">
@@ -55,47 +59,47 @@
 
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
             <span>1,000</span>
-            <input type="number" id="mgrd1000" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+            <input type="number" id="mgrd1000" class="form-control form-control-sm denom-input" placeholder="" oninput="updateManagerCashDrawerTotal()">
           </div>
 
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
             <span>500</span>
-            <input type="number" id="mgrd500" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+            <input type="number" id="mgrd500" class="form-control form-control-sm denom-input" placeholder="" oninput="updateManagerCashDrawerTotal()">
           </div>
 
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
             <span>200</span>
-            <input type="number" id="mgrd200" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+            <input type="number" id="mgrd200" class="form-control form-control-sm denom-input" placeholder="" oninput="updateManagerCashDrawerTotal()">
           </div>
 
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
             <span>100</span>
-            <input type="number" id="mgrd100" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+            <input type="number" id="mgrd100" class="form-control form-control-sm denom-input" placeholder="" oninput="updateManagerCashDrawerTotal()">
           </div>
 
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
             <span>50</span>
-            <input type="number" id="mgrd50" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+            <input type="number" id="mgrd50" class="form-control form-control-sm denom-input" placeholder="" oninput="updateManagerCashDrawerTotal()">
           </div>
 
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
             <span>20</span>
-            <input type="number" id="mgrd20" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+            <input type="number" id="mgrd20" class="form-control form-control-sm denom-input" placeholder="" oninput="updateManagerCashDrawerTotal()">
           </div>
 
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
             <span>10</span>
-            <input type="number" id="mgrd10" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+            <input type="number" id="mgrd10" class="form-control form-control-sm denom-input" placeholder="" oninput="updateManagerCashDrawerTotal()">
           </div>
 
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
             <span>5</span>
-            <input type="number" id="mgrd5" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+            <input type="number" id="mgrd5" class="form-control form-control-sm denom-input" placeholder="" oninput="updateManagerCashDrawerTotal()">
           </div>
 
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
             <span>1</span>
-            <input type="number" id="mgrd1" class="form-control form-control-sm denom-input" placeholder="0" oninput="updateManagerCashDrawerTotal()">
+            <input type="number" id="mgrd1" class="form-control form-control-sm denom-input" placeholder="" oninput="updateManagerCashDrawerTotal()">
           </div>
 
         </div>
@@ -127,10 +131,11 @@
 
     </div>
 
-    <button class="btn btn-dark w-100 py-2.5 fw-bold"
+    <button id="managerReportSubmit" class="btn btn-dark w-100 py-2.5 fw-bold"
             onclick="generateManagerDailyReport()">
       Download Daily Report
     </button>
+    </div>
 
   </div>
 </div>
@@ -141,7 +146,36 @@
    MANAGER DAILY REPORT
 ========================================================== */
 
+var managerReportLoadId = 0;
+var managerReportLoadingActive = false;
+var managerReportGenerating = false;
+var managerReportExpectedReady = false;
+var managerReportLoadDate = '';
+var managerReportLoadOwner = '';
+
+function setManagerReportLoading(loading, message) {
+  managerReportLoadingActive = loading;
+  document.getElementById('managerReportContent').hidden = loading;
+  document.getElementById('managerReportLoading').hidden = !loading;
+  document.getElementById('managerReportSubmit').disabled = loading || !managerReportExpectedReady;
+  document.getElementById('managerDailyModal').setAttribute('aria-busy', String(loading));
+  if (loading) {
+    document.getElementById('managerReportLoading').innerHTML = loadingIndicator(message || 'Retrieving report…');
+    document.getElementById('managerReportError').hidden = true;
+    document.getElementById('managerReportRetry').hidden = true;
+  }
+}
+
+function closeManagerReportModal() {
+  if (managerReportGenerating) return;
+  ++managerReportLoadId;
+  document.getElementById('managerDailyModal').style.display = 'none';
+  managerReportExpectedReady = false;
+  setManagerReportLoading(false);
+}
+
 function openManagerReportModal() {
+  if (managerReportGenerating || managerReportLoadingActive && document.getElementById('managerDailyModal').style.display !== 'none') return;
 
   if (!currentEmployee) {
     showNotificationToast("No employee is currently logged in.", true);
@@ -164,7 +198,7 @@ function openManagerReportModal() {
     currentEmployee.fullName;
 
   // Default business date to today
-  const today = new Date().toISOString().split("T")[0];
+  const today = getCashReportToday();
 
   const dateInput =
     document.getElementById("managerReportDate");
@@ -224,6 +258,7 @@ function openManagerReportModal() {
 ========================================================== */
 
 function updateManagerExpectedCash() {
+  if (managerReportGenerating) return;
 
   const expectedEl =
     document.getElementById(
@@ -234,6 +269,12 @@ function updateManagerExpectedCash() {
     document.getElementById(
       "managerReportDate"
     ).value;
+  const owner = currentEmployee && (currentEmployee.dashboardToken || currentEmployee.fullName);
+  if (managerReportLoadingActive && managerReportLoadDate === reportDate && managerReportLoadOwner === owner) return;
+  const request = ++managerReportLoadId;
+  managerReportLoadDate = reportDate;
+  managerReportLoadOwner = owner;
+  managerReportExpectedReady = false;
 
   if (!reportDate) {
 
@@ -241,13 +282,30 @@ function updateManagerExpectedCash() {
 
     expectedEl.textContent = "₱0.00";
     expectedEl.dataset.expected = "0";
-
+    setManagerReportLoading(false);
     return;
   }
 
+  setManagerReportLoading(true);
+  function current() {
+    return request === managerReportLoadId && document.getElementById('managerDailyModal').style.display !== 'none' &&
+      document.getElementById('managerReportDate').value === reportDate && currentEmployee &&
+      (currentEmployee.dashboardToken || currentEmployee.fullName) === owner;
+  }
+  function failed(err) {
+    if (!current()) return;
+    setManagerReportLoading(false);
+    document.getElementById('managerReportContent').hidden = true;
+    document.getElementById('managerReportError').hidden = false;
+    document.getElementById('managerReportError').textContent = err.message || 'Unable to calculate expected cash.';
+    document.getElementById('managerReportRetry').hidden = false;
+  }
   google.script.run
 
     .withSuccessHandler(function(expectedCashData) {
+      if (!current()) return;
+      if (expectedCashData === null || expectedCashData === undefined || expectedCashData.success === false)
+        return failed(new Error(expectedCashData && expectedCashData.message || 'Unable to calculate expected cash.'));
 
       console.log(
         "MANAGER EXPECTED CASH RESPONSE:",
@@ -273,24 +331,12 @@ function updateManagerExpectedCash() {
         currentManagerExpectedCash.toFixed(2);
 
       updateManagerCashDrawerTotal();
+      managerReportExpectedReady = true;
+      setManagerReportLoading(false);
 
     })
 
-    .withFailureHandler(function(err) {
-
-      console.error(err);
-
-      currentManagerExpectedCash = 0;
-
-      expectedEl.textContent = "₱0.00";
-      expectedEl.dataset.expected = "0";
-
-      showNotificationToast(
-        err.message || "Unable to calculate expected cash.",
-        true
-      );
-
-    })
+    .withFailureHandler(failed)
 
     .getExpectedCashForManager(reportDate);
 }
@@ -352,6 +398,7 @@ function updateManagerCashDrawerTotal() {
    GENERATE REPORT
 ========================================================== */
 function generateManagerDailyReport() {
+  if (managerReportLoadingActive || managerReportGenerating || !managerReportExpectedReady) return;
   if (!currentEmployee) {
     showNotificationToast(
       'No employee is currently logged in.',
@@ -393,6 +440,7 @@ function proceedWithManagerDailyReport(
   managerName,
   reportDate
 ) {
+  if (managerReportLoadingActive || managerReportGenerating || !managerReportExpectedReady) return;
 
   const cashBreakdown = {};
 
@@ -455,19 +503,20 @@ function proceedWithManagerDailyReport(
   showNotificationToast(
     "Generating Manager Daily Report PDF..."
   );
-
+  managerReportGenerating = true;
+  setManagerReportLoading(true, 'Generating report…');
 
   google.script.run
 
     .withSuccessHandler(function(result) {
+      managerReportGenerating = false;
+      setManagerReportLoading(false);
 
-      if (result.success) {
+      if (result && result.success) {
 
         window.open(result.downloadUrl);
 
-        document.getElementById(
-          "managerDailyModal"
-        ).style.display = "none";
+        closeManagerReportModal();
 
         showNotificationToast(
           "Manager daily report generated."
@@ -476,7 +525,7 @@ function proceedWithManagerDailyReport(
       } else {
 
         showNotificationToast(
-          result.message ||
+          result && result.message ||
           "Failed to generate report.",
           true
         );
@@ -486,6 +535,8 @@ function proceedWithManagerDailyReport(
     })
 
     .withFailureHandler(function(err) {
+      managerReportGenerating = false;
+      setManagerReportLoading(false);
 
       showNotificationToast(
         err.message ||

@@ -77,8 +77,10 @@
 
   let currentEmployee = null;
   let currentCashier = "";
+  let currentSessionIsCashier = false;
 
   let currentShiftPettyCash = 0;
+  let currentShiftReportId = '';
   let currentShiftExpectedCash = 0;
   let currentManagerExpectedCash = 0;
 
@@ -98,7 +100,9 @@
     const session = {
       currentEmployee,
       currentCashier,
+      isCashierSession: currentSessionIsCashier,
       currentShiftPettyCash,
+      currentShiftReportId,
       cart,
       activePage: localStorage.getItem("ys_pos_active_page") || "posPage",
       globalDiscountType: document.getElementById("globalDiscountType").value,
@@ -121,6 +125,7 @@
     const session = JSON.parse(raw);
 
     currentEmployee = session.currentEmployee;
+    currentSessionIsCashier = session.isCashierSession !== false;
 
     updateSidebarProfile(currentEmployee);
 
@@ -128,6 +133,7 @@
 
     currentCashier = session.currentCashier;
     currentShiftPettyCash = session.currentShiftPettyCash;
+    currentShiftReportId = session.currentShiftReportId || '';
     updatePettyCashDisplay();
     cart = session.cart || [];
 
@@ -143,6 +149,7 @@
 
     document.getElementById("cashierManagerReportBtn").style.display =
       currentEmployee.accessLevel <= 1 ? "block" : "none";
+    updateCashierNavigationAvailability();
 
     document.getElementById("loginOverlay").style.display = "none";
     document.getElementById("terminalWorkspace").style.display = "block";
