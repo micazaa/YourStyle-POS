@@ -466,7 +466,7 @@ test('report actions are in cashier page; cashier displays petty cash and cashie
   assert.doesNotMatch(sidebar,/sidebarCollapseBtn|openPettyCashSidebar|onclick="toggleVoidModal|onclick="openCustomerExchangeModal/);
   assert.match(cashier,/onclick="toggleVoidModal\(true\)"/);assert.match(cashier,/onclick="openCustomerExchangeModal\(\)"/);
   assert.match(cashier,/id="cashierManagerReportBtn"/);
-  assert.match(cashier,/toggleShiftReportModal\(true\)/);
+  assert.match(cashier,/toggleShiftReportModal\(true, 'report'\)/);
 });
 
 function costHarness() {

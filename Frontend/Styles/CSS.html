@@ -284,6 +284,54 @@
     max-height: 90vh;
   }
 
+  #cashierLogoutModal, #shiftReportModal {
+    backdrop-filter: none;
+    padding: 16px;
+  }
+  #cashierLogoutModal {
+    --logout-muted: #606068;
+    --logout-ground: #f6f6f7;
+    --logout-border: #e4e4e7;
+    --logout-accent: #843f51;
+  }
+  #cashierLogoutModal .cashier-logout-card {
+    max-width: 480px;
+    padding: 28px;
+    border: 0;
+    border-radius: 20px;
+  }
+  .cashier-logout-heading { display: flex; align-items: start; gap: 16px; }
+  .cashier-logout-heading h2 { flex: 1; margin: 0; font-size: 24px; line-height: 1.25; font-weight: 650; letter-spacing: -.02em; }
+  #cashierLogoutModal .btn-close { flex: none; width: 24px; height: 24px; padding: 10px; margin: -8px -8px 0 0; }
+  .cashier-logout-description { margin: 12px 0 24px; color: var(--logout-muted); font-size: 14px; line-height: 1.5; }
+  .cashier-logout-options { display: grid; gap: 12px; }
+  .cashier-logout-option {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    width: 100%; padding: 20px; border: 1px solid var(--logout-border); border-radius: 8px;
+    background: var(--card-bg); color: var(--text-dark); text-align: left; font: inherit;
+  }
+  .cashier-logout-copy { min-width: 0; }
+  .cashier-logout-label { display: block; font-size: 17px; font-weight: 650; line-height: 1.4; }
+  .cashier-logout-detail { display: block; margin-top: 4px; color: var(--logout-muted); font-size: 14px; line-height: 1.5; font-weight: 400; }
+  .cashier-logout-option svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+  .cashier-logout-end { border-color: var(--pink-light); background: var(--pink-light); }
+  .cashier-logout-end .cashier-logout-label { color: var(--logout-accent); }
+  .cashier-logout-option:hover { border-color: var(--logout-muted); }
+  .cashier-logout-option:active { transform: translateY(1px); }
+  .cashier-logout-cancel { width: 100%; min-height: 44px; margin-top: 20px; border: 0; border-radius: 8px; background: transparent; color: var(--text-dark); font: inherit; font-size: 14px; font-weight: 600; }
+  .cashier-logout-cancel:hover { background: var(--logout-ground); }
+  #cashierLogoutModal button:focus-visible { outline: 2px solid var(--logout-accent); outline-offset: 3px; }
+  .cashier-closing-date { margin: -4px 0 20px; color: #606068; font-size: 14px; font-variant-numeric: tabular-nums; }
+  #shiftReportModal .denom-columns { font-variant-numeric: tabular-nums; }
+  #shiftReportModal .btn-close { min-width: 24px; min-height: 24px; padding: 10px; }
+  #shiftReportSubmit { min-height: 44px; }
+  @media (max-width: 480px) {
+    #cashierLogoutModal .cashier-logout-card { padding: 24px 20px; }
+    .cashier-logout-heading h2 { font-size: 22px; }
+    .cashier-logout-option { padding: 16px; gap: 12px; }
+    #shiftReportModal .custom-popup-card { padding: 20px; }
+  }
+
   .badge-cashier {
     background-color: var(--pink-light);
     color: var(--pink-hover);

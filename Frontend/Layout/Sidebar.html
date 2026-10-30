@@ -70,7 +70,14 @@ function openInventoryWorkspace(){
  navigateSidebar(['inventoryPage','deliveriesPage','supplierReturnsPage'].includes(saved)?saved:'inventoryPage');
 }
   function triggerCleanLogout() {
-    if (confirm("Are you sure you want to log out?")) {
+    if (typeof currentSessionIsCashier !== 'undefined' && currentSessionIsCashier && currentEmployee) {
+      openCashierLogoutChoices();
+      return;
+    }
+    if (confirm("Are you sure you want to log out?")) completeCleanLogout();
+  }
+
+  function completeCleanLogout() {
       // The sidebar backdrop sits above login; always dismiss it first.
       toggleSidebar(false);
       document.querySelectorAll('.generic-overlay-blur').forEach(function(overlay) {
@@ -115,6 +122,8 @@ function openInventoryWorkspace(){
       currentCashier = "";
       currentSessionIsCashier = false;
       currentShiftPettyCash = 0;
+      currentShiftReportId = '';
+      if (typeof phase10ReportLoadId !== 'undefined') ++phase10ReportLoadId;
       if(typeof updateCashierNavigationAvailability==='function')updateCashierNavigationAvailability();
       updatePettyCashDisplay();
       cart = [];
@@ -137,7 +146,6 @@ function openInventoryWorkspace(){
       document.getElementById("appSidebar").style.display = "none";
       renderCart();
       initializeLogin();
-    }
   }
 
   window.addEventListener("click",function(event){if(event.target.classList.contains('sidebar-overlay'))toggleSidebar(false);});

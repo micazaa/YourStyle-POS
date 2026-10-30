@@ -197,6 +197,8 @@ var phase10PettyLoaded =
   false;
 
 var selectedLoginMode = "STAFF";
+var loginPettyHandover = null;
+var loginPettyError = false;
 
 function changeLoginMode(mode) {
   selectedLoginMode = mode === "STAFF" ? "STAFF" : "CASHIER";
@@ -249,6 +251,8 @@ function initializeLogin() {
 
   phase10PettyLoaded =
     false;
+  loginPettyHandover = null;
+  loginPettyError = false;
 
 
   const loginButton =
@@ -296,8 +300,10 @@ function updateLoginReady() {
   const hasCredentials =
     !!document.getElementById("cashierSelect").value &&
     !!document.getElementById("cashierPin").value;
+  const pettyAvailable = !loginPettyHandover || !loginPettyHandover.holder ||
+    loginPettyHandover.holder === document.getElementById("cashierSelect").value;
   const ready = selectedLoginMode === "CASHIER"
-    ? phase10EmployeesLoaded && phase10PettyLoaded && document.getElementById("confirmPettyHandover").checked
+    ? phase10EmployeesLoaded && phase10PettyLoaded && pettyAvailable && document.getElementById("confirmPettyHandover").checked
     : phase10EmployeesLoaded && hasCredentials;
 
 
@@ -309,7 +315,7 @@ function updateLoginReady() {
     button.textContent = selectedLoginMode === "CASHIER" ? "Start cashier shift" : "Sign in";
   } else if (!phase10EmployeesLoaded) {
     button.innerHTML = loadingIndicator("Loading employees…");
-  } else if (selectedLoginMode === "CASHIER" && !phase10PettyLoaded) {
+  } else if (selectedLoginMode === "CASHIER" && !phase10PettyLoaded && !loginPettyError) {
     button.innerHTML = loadingIndicator("Loading shift…");
   } else {
     button.textContent = selectedLoginMode === "CASHIER" ? "Start cashier shift" : "Sign in";
@@ -441,6 +447,7 @@ function loadEmployees() {
 ========================================================== */
 
 function loadPettyHandover() {
+  loginPettyError = false;
 
   const input =
     document.getElementById(
@@ -511,6 +518,8 @@ function loadPettyHandover() {
   loginSetupRequest.then(result=>result.petty).then(
       function(data) {
         if (generation !== loginSetupGeneration) return;
+        if (!data || !data.success) throw new Error(data && data.message || 'Unable to load petty cash.');
+        loginPettyHandover = data;
 
         console.log(
           "Phase 10 petty handover:",
@@ -575,6 +584,7 @@ function loadPettyHandover() {
               ? `Last counted by ${previousEmployee}${previousCountedAt ? ` · ${previousCountedAt}` : ""}`
               : "Previous petty cash handover";
             source.textContent = countedBy;
+            if (data.holder) source.textContent += ' · Currently with ' + data.holder;
 
           }
 
@@ -613,8 +623,7 @@ function loadPettyHandover() {
         }
 
 
-        phase10PettyLoaded =
-          true;
+        phase10PettyLoaded = true;
 
 
         updateLoginReady();
@@ -681,15 +690,17 @@ function loadPettyHandover() {
         }
 
 
-        /*
-          Do NOT leave the screen loading forever.
-
-          We deliberately allow login after showing the error,
-          but petty becomes manually editable.
-        */
-
-        phase10PettyLoaded =
-          true;
+        loginPettyError = true;
+        phase10PettyLoaded = false;
+        input.disabled = true;
+        if (source) {
+          const retry = document.createElement('button');
+          retry.type = 'button';
+          retry.className = 'btn btn-outline-secondary btn-sm ms-2';
+          retry.textContent = 'Retry';
+          retry.onclick = reloadLoginPettyHandover;
+          source.appendChild(retry);
+        }
 
 
         updateLoginReady();
@@ -708,6 +719,14 @@ function loadPettyHandover() {
 ========================================================== */
 
 let loginAttempt = 0;
+function reloadLoginPettyHandover() {
+  document.getElementById('confirmPettyHandover').checked = false;
+  phase10PettyLoaded = false;
+  loginPettyError = false;
+  loginSetupRequest = new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getLoginSetup());
+  loadPettyHandover();
+  updateLoginReady();
+}
 function unlockTerminalSession() {
   const name=document.getElementById('cashierSelect').value;
   const pin=document.getElementById('cashierPin').value;
@@ -720,7 +739,7 @@ function unlockTerminalSession() {
   if(cashierMode&&!document.getElementById('confirmPettyHandover').checked)return showNotificationToast('Confirm the petty cash you received before starting your shift.',true);
   const attempt=++loginAttempt;
   button.disabled=true;button.innerHTML=loadingIndicator('Logging in…');
-  const failed=error=>{if(attempt!==loginAttempt)return;button.disabled=false;button.textContent=cashierMode?'Start cashier shift':'Sign in';showNotificationToast(error.message||String(error),true);};
+  const failed=error=>{if(attempt!==loginAttempt)return;button.disabled=false;button.textContent=cashierMode?'Start cashier shift':'Sign in';showNotificationToast(error.message||String(error),true);if(cashierMode)reloadLoginPettyHandover();};
   const onLoginSuccess=response=>{
     if(attempt!==loginAttempt)return;
     if(!response||!response.success)return failed(new Error(response&&response.message||'Login failed.'));
@@ -731,6 +750,7 @@ function unlockTerminalSession() {
     localStorage.removeItem('ys_pos_inventory_tab');
     currentEmployee=result;currentCashier=result.fullName;currentSessionIsCashier=cashierMode;
     currentShiftPettyCash=cashierMode?(Number(response.shift.pettyReceived)||0):0;
+    currentShiftReportId=cashierMode?response.shift.reportId:'';
     updateSidebarProfile(result);
     document.getElementById('cashierManagerReportBtn').style.display=Number(result.accessLevel)<=1?'block':'none';
     document.getElementById('loginOverlay').style.display='none';
@@ -742,7 +762,7 @@ function unlockTerminalSession() {
     if(typeof refreshInventory==='function')refreshInventory();
   };
   const runner=google.script.run.withSuccessHandler(onLoginSuccess).withFailureHandler(failed);
-  if(cashierMode)runner.loginAndStartShift(name,pin,petty);
+  if(cashierMode)runner.loginAndStartShift(name,pin,petty,loginPettyHandover&&loginPettyHandover.version);
   else runner.verifyEmployee(name,pin);
 }
 

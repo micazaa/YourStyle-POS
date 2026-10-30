@@ -59,9 +59,14 @@ function verifyEmployee(employeeName, pin) {
   };
 }
 
-function verifyManagerPin(pin) {
+function verifyManagerPin(pin, expectedManagerName) {
   if (pin && typeof pin === "object") {
-    try { return verifyInventoryManagerSession_(pin.managerToken); }
+    try {
+      const auth = verifyInventoryManagerSession_(pin.managerToken);
+      if (expectedManagerName && auth.managerName !== expectedManagerName)
+        return {success: false, message: 'Authorization must match the selected manager.'};
+      return auth;
+    }
     catch (error) { return { success: false, message: error.message || String(error) }; }
   }
 
@@ -184,6 +189,8 @@ function verifyManagerPin(pin) {
 
     /* ================= PIN ================= */
 
+    if (expectedManagerName && (firstName + ' ' + lastName).trim() !== expectedManagerName) continue;
+
     if (
       storedPin !==
       enteredPin
@@ -296,10 +303,12 @@ function revokeInventoryManagerSession(token) {
   return { success: true };
 }
 
-function loginAndStartShift(name, pin, petty) {
+function loginAndStartShift(name, pin, petty, handoverVersion) {
   const employee = verifyEmployee(name, pin);
   if (!employee || !employee.success) return employee;
-  const shift = startCashierShift(employee.fullName, petty);
+  let shift;
+  try { shift = startManagedCashierShift_(employee.fullName, petty, handoverVersion); }
+  catch (error) { shift = {success: false, message: error.message || String(error)}; }
   if (!shift || !shift.success) {
     revokeDashboardSession(employee.dashboardToken);
     if (employee.inventoryManagerToken) revokeInventoryManagerSession(employee.inventoryManagerToken);
@@ -309,5 +318,9 @@ function loginAndStartShift(name, pin, petty) {
 }
 
 function getLoginSetup() {
-  return {employees:getEmployees(), petty:getLatestPettyHandover()};
+  const employees = getEmployees();
+  let petty;
+  try { petty = getLatestPettyHandover(); }
+  catch (error) { petty = {success:false,message:error.message || String(error)}; }
+  return {employees:employees, petty:petty};
 }
