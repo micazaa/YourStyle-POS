@@ -874,6 +874,29 @@ function voidAndRefundTransactionBackend(
    TRANSACTION HISTORY
 ========================================================== */
 
+function readTransactionHistoryRows_(sheet, fromTime, untilTime) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return {data: [], notes: []};
+  // Scan one column first. Read receipt fields only for the selected date span.
+  // Find both ends instead of assuming manually entered sales are chronological.
+  const timestamps = sheet.getRange(2, SALES_COL.TIMESTAMP, lastRow - 1, 1).getValues();
+  let first = -1, last = -1;
+  timestamps.forEach(function(row, index) {
+    if (!row[0]) return;
+    const time = new Date(row[0]).getTime();
+    if (time >= fromTime && time < untilTime) {
+      if (first === -1) first = index;
+      last = index;
+    }
+  });
+  if (first === -1) return {data: [], notes: []};
+  const startRow = first + 2, count = last - first + 1;
+  return {
+    data: sheet.getRange(startRow, 1, count, SALES_COL.STATUS).getValues(),
+    notes: sheet.getRange(startRow, SALES_COL.STATUS, count, 1).getNotes()
+  };
+}
+
 function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -887,36 +910,28 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
       };
     }
 
-    const salesRange = sheet.getDataRange();
-    const data = salesRange.getValues();
-    const statusNotes = sheet
-      .getRange(1, SALES_COL.STATUS, salesRange.getNumRows(), 1)
-      .getNotes();
-
     const tz = Session.getScriptTimeZone();
 
     /* ======================================================
        CASHIER DATE SECURITY
 
-       Cashier is ALWAYS today.
-
-       Even if somebody manipulates the frontend and sends
-       another date, backend ignores it.
+       Cashiers can read their own sales within the latest seven store dates.
     ====================================================== */
 
     const now =
       new Date();
 
-    const localToday = new Date(
-      now.getTime() - now.getTimezoneOffset() * 60000
-    );
-    const today = localToday.toISOString().split("T")[0];
-    const cashierStartDate = new Date(localToday);
-    cashierStartDate.setDate(cashierStartDate.getDate() - 6);
+    const today = Utilities.formatDate(now, tz, "yyyy-MM-dd");
+    const cashierStartDate = new Date(today + "T00:00:00Z");
+    cashierStartDate.setUTCDate(cashierStartDate.getUTCDate() - 6);
     const cashierFromDate = cashierStartDate.toISOString().split("T")[0];
 
     const selectedFromDate = String(fromDate || (isManager ? today : cashierFromDate));
     const selectedToDate = String(toDate || (isManager ? selectedFromDate : today));
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedFromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(selectedToDate)) {
+      return {success: false, message: "Select valid transaction dates."};
+    }
 
     if (!isManager &&
       (selectedFromDate < cashierFromDate || selectedToDate > today)) {
@@ -933,13 +948,25 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
       };
     }
 
+    const fromTime = Utilities.parseDate(selectedFromDate, tz, "yyyy-MM-dd").getTime();
+    const endDate = Utilities.parseDate(selectedToDate, tz, "yyyy-MM-dd");
+    if (Utilities.formatDate(new Date(fromTime), tz, "yyyy-MM-dd") !== selectedFromDate ||
+        Utilities.formatDate(endDate, tz, "yyyy-MM-dd") !== selectedToDate) {
+      return {success: false, message: "Select valid transaction dates."};
+    }
+    const nextDate = new Date(selectedToDate + "T00:00:00Z");
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    const untilTime = Utilities.parseDate(nextDate.toISOString().slice(0, 10), tz, "yyyy-MM-dd").getTime();
+    const snapshot = readTransactionHistoryRows_(sheet, fromTime, untilTime);
+    const data = snapshot.data, statusNotes = snapshot.notes;
+
     /* ======================================================
        GROUP SALES LOG LINES BY RECEIPT
     ====================================================== */
 
-    const receiptMap = {};
+    const receiptMap = Object.create(null);
 
-    for (let i = 1; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       const row = data[i];
 
       if (!row[SALES_IDX.TIMESTAMP]) {
@@ -948,9 +975,7 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
 
       const timestamp = new Date(row[SALES_IDX.TIMESTAMP]);
 
-      const rowDate = Utilities.formatDate(timestamp, tz, "yyyy-MM-dd");
-
-      if (rowDate < selectedFromDate || rowDate > selectedToDate) {
+      if (!Number.isFinite(timestamp.getTime()) || timestamp.getTime() < fromTime || timestamp.getTime() >= untilTime) {
         continue;
       }
 
@@ -989,6 +1014,10 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
           status: String(row[SALES_IDX.STATUS] || "").trim(),
 
           itemNames: [],
+
+          barcodes: new Set(),
+
+          sortTimestamp: timestamp.getTime(),
         };
       }
 
@@ -1005,6 +1034,8 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
       }
 
       const itemName = String(row[SALES_IDX.ITEM_NAME] || "").trim();
+      const barcode = String(row[SALES_IDX.CODE] || "").trim();
+      if (barcode) tx.barcodes.add(barcode);
 
       if (itemName && effectiveStatus !== "VOIDED") {
         tx.itemNames.push(itemName);
@@ -1036,6 +1067,7 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
       delete tx.hasCompleted;
 
       tx.itemNames = tx.itemNames.join(", ");
+      tx.barcodes = Array.from(tx.barcodes);
     });
 
     /*

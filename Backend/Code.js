@@ -6,7 +6,7 @@ function doGet() {
   return HtmlService
     .createTemplateFromFile("Frontend/Index")
     .evaluate()
-    .setTitle("YourStyle Caloocan POS")
+    .setTitle(getYourStyleAppTitle_())
     .addMetaTag(
       "viewport",
       "width=device-width, initial-scale=1"
@@ -14,6 +14,17 @@ function doGet() {
     .setXFrameOptionsMode(
       HtmlService.XFrameOptionsMode.DEFAULT
     );
+}
+
+function getYourStyleAppTitle_() {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    return spreadsheet && spreadsheet.getId() === DEVELOPMENT_SPREADSHEET_ID
+      ? "YourStyle UAT"
+      : "YourStyle";
+  } catch (error) {
+    return "YourStyle";
+  }
 }
 
 

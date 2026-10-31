@@ -97,7 +97,8 @@
           type="text"
           id="transactionHistorySearch"
           class="form-control"
-          placeholder="Receipt, cashier, item..."
+          placeholder="Barcode, receipt, cashier, item..."
+          aria-label="Search barcode, receipt, cashier, or item"
           oninput="scheduleTransactionHistoryFilter()"
         >
 
@@ -299,6 +300,7 @@
 
 var transactionHistoryData = [];
 var transactionHistoryFilterTimer = null;
+var transactionHistoryLoadedAt = 0;
 var transactionHistorySort = {
   key: "time",
   direction: "desc"
@@ -470,7 +472,13 @@ function scheduleTransactionHistoryFilter() {
    LOAD
 ========================================================== */
 
-function loadTransactionHistory() {
+function loadTransactionHistory(forceRefresh) {
+
+  if (!currentEmployee) return;
+  if (forceRefresh === true || (transactionHistoryLoadedAt && Date.now() - transactionHistoryLoadedAt > 60000)) {
+    pageReadCache.delete('transactions');
+    transactionHistoryLoadedAt = 0;
+  }
 
   const tbody =
     document.getElementById(
@@ -504,7 +512,7 @@ function loadTransactionHistory() {
     ) <= 1;
 
 
-  const refresh = beginPageRead('transactions', JSON.stringify([fromDate, toDate, isManager]));
+  const refresh = beginPageRead('transactions', JSON.stringify([fromDate, toDate, isManager]), true);
   if (refresh.cached !== undefined) {
     transactionHistoryData = refresh.cached;
     populateTransactionPaymentFilter(transactionHistoryData);
@@ -525,6 +533,7 @@ function loadTransactionHistory() {
 
 
   }
+  if (!refresh.shouldFetch) return;
   google.script.run
 
     .withSuccessHandler(function(result) {
@@ -534,6 +543,7 @@ function loadTransactionHistory() {
         !result ||
         result.success !== true
       ) {
+        refresh.fail();
 
         const message =
           result && result.message
@@ -572,6 +582,11 @@ function loadTransactionHistory() {
           ? result.transactions
           : [];
 
+      transactionHistoryData.forEach(function(tx) {
+        tx.searchText = [tx.receiptId, tx.cashier, tx.paymentMethod, tx.status, tx.itemNames]
+          .concat(tx.barcodes || []).join(' ').toLowerCase();
+      });
+      transactionHistoryLoadedAt = Date.now();
       refresh.save(transactionHistoryData);
       populateTransactionPaymentFilter(
         transactionHistoryData
@@ -585,6 +600,7 @@ function loadTransactionHistory() {
 
     .withFailureHandler(function(err) {
       if (!refresh.current()) return;
+      refresh.fail();
 
       console.error(
         "TRANSACTION HISTORY SERVER ERROR:",
@@ -764,8 +780,8 @@ function getSortedTransactionHistory(items) {
     let second = b[key];
 
     if (key === "time") {
-      first = Date.parse("1970/01/01 " + String(first || ""));
-      second = Date.parse("1970/01/01 " + String(second || ""));
+      first = a.sortTimestamp ?? Date.parse("1970/01/01 " + String(first || ""));
+      second = b.sortTimestamp ?? Date.parse("1970/01/01 " + String(second || ""));
     } else if (key === "items" || key === "total") {
       first = Number(first) || 0;
       second = Number(second) || 0;
@@ -1023,14 +1039,15 @@ function filterTransactionHistoryTable() {
 
         /* ================= SEARCH ================= */
 
-        const searchable =
+        const searchable = tx.searchText ||
           [
 
             tx.receiptId,
             tx.cashier,
             tx.paymentMethod,
             tx.status,
-            tx.itemNames
+            tx.itemNames,
+            (tx.barcodes || []).join(' ')
 
           ]
             .map(

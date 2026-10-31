@@ -57,6 +57,7 @@
         class="form-control"
         id="cashierSelect"
         placeholder="name0123@ys.sys"
+        list="loginUsernameSuggestions"
         autocomplete="username"
         autocapitalize="none"
         autocorrect="off"
@@ -64,6 +65,8 @@
         oninput="updateLoginReady()"
         onkeydown="if(event.key === 'Enter'){ unlockTerminalSession(); }"
       >
+
+      <datalist id="loginUsernameSuggestions"></datalist>
 
     </div>
 
@@ -207,6 +210,43 @@ var loginPettyError = false;
 var loginEmployees = [];
 var loginEmployeesError = false;
 var loginBusy = false;
+var LOGIN_USERNAME_CACHE_KEY = "ys_pos_recent_usernames";
+
+function getRecentLoginUsernames() {
+  try {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const usernames = storage && JSON.parse(storage.getItem(LOGIN_USERNAME_CACHE_KEY) || "[]");
+    return Array.isArray(usernames) ? usernames.filter(function(username) {
+      return /^[a-z0-9]+(?:\.[a-z0-9]+)?\d+@ys\.sys$/.test(String(username || ""));
+    }).slice(0, 5) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function renderRecentLoginUsernames() {
+  const list = document.getElementById("loginUsernameSuggestions");
+  if (!list) return;
+  list.innerHTML = "";
+  getRecentLoginUsernames().forEach(function(username) {
+    const option = document.createElement("option");
+    option.value = username;
+    list.appendChild(option);
+  });
+}
+
+function rememberLoginUsername(username) {
+  username = String(username || "").trim().toLowerCase();
+  if (!/^[a-z0-9]+(?:\.[a-z0-9]+)?\d+@ys\.sys$/.test(username)) return;
+  try {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    if (!storage) return;
+    storage.setItem(LOGIN_USERNAME_CACHE_KEY, JSON.stringify([username].concat(
+      getRecentLoginUsernames().filter(function(saved) { return saved !== username; })
+    ).slice(0, 5)));
+    renderRecentLoginUsernames();
+  } catch (error) {}
+}
 
 function changeLoginMode(mode) {
   selectedLoginMode = mode === "STAFF" ? "STAFF" : "CASHIER";
@@ -250,6 +290,7 @@ function initializeLogin() {
   loginEmployees = [];
   loginEmployeesError = false;
   document.getElementById("cashierSelect").value = "";
+  renderRecentLoginUsernames();
   document.getElementById("confirmPettyHandover").checked = false;
   document.getElementById("cashierPin").value = "";
   document.getElementById("cashierPin").type = "password";
@@ -693,6 +734,7 @@ function unlockTerminalSession() {
     pageReadCache.clear();
     localStorage.removeItem('ys_pos_inventory_tab');
     currentEmployee=result;currentCashier=result.fullName;currentSessionIsCashier=cashierMode;
+    rememberLoginUsername(name);
     currentShiftPettyCash=cashierMode?(Number(response.shift.pettyReceived)||0):0;
     currentShiftReportId=cashierMode?response.shift.reportId:'';
     if (typeof clearCashierReportCache === 'function') clearCashierReportCache();
