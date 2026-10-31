@@ -152,6 +152,42 @@ var managerReportGenerating = false;
 var managerReportExpectedReady = false;
 var managerReportLoadDate = '';
 var managerReportLoadOwner = '';
+var managerExpectedCashWarmCache = null;
+
+function getWarmManagerExpectedCash(reportDate) {
+  const cached = managerExpectedCashWarmCache;
+  return cached && cached.date === reportDate && Date.now() - cached.time < 60000
+    ? cached.data
+    : null;
+}
+
+function warmManagerExpectedCash(reportDate) {
+  if (!reportDate || getWarmManagerExpectedCash(reportDate)) return;
+  google.script.run
+    .withSuccessHandler(function(data) {
+      if (data && data.success !== false) {
+        managerExpectedCashWarmCache = { date: reportDate, time: Date.now(), data: data };
+      }
+    })
+    .withFailureHandler(function() {})
+    .getExpectedCashForManager(reportDate);
+}
+
+function clearManagerExpectedCashCache() {
+  managerExpectedCashWarmCache = null;
+}
+
+function applyManagerExpectedCash(expectedCashData) {
+  const expectedCash = expectedCashData && typeof expectedCashData === "object"
+    ? expectedCashData.expectedCashDrawer || 0
+    : parseFloat(expectedCashData) || 0;
+  currentManagerExpectedCash = Math.round((Number(expectedCash) || 0) * 100) / 100;
+  const expectedEl = document.getElementById("managerExpectedCashCountDisplay");
+  expectedEl.textContent = "₱" + currentManagerExpectedCash.toFixed(2);
+  expectedEl.dataset.expected = currentManagerExpectedCash.toFixed(2);
+  updateManagerCashDrawerTotal();
+  managerReportExpectedReady = true;
+}
 
 function setManagerReportLoading(loading, message) {
   managerReportLoadingActive = loading;
@@ -286,6 +322,13 @@ function updateManagerExpectedCash() {
     return;
   }
 
+  const cachedExpected = getWarmManagerExpectedCash(reportDate);
+  if (cachedExpected) {
+    applyManagerExpectedCash(cachedExpected);
+    setManagerReportLoading(false);
+    return;
+  }
+
   setManagerReportLoading(true);
   function current() {
     return request === managerReportLoadId && document.getElementById('managerDailyModal').style.display !== 'none' &&
@@ -312,26 +355,8 @@ function updateManagerExpectedCash() {
         expectedCashData
       );
 
-      const expectedCash =
-        expectedCashData &&
-        typeof expectedCashData === "object"
-          ? expectedCashData.expectedCashDrawer || 0
-          : parseFloat(expectedCashData) || 0;
-
-      currentManagerExpectedCash =
-      Math.round(
-        (Number(expectedCash) || 0) * 100
-      ) / 100;
-
-      expectedEl.textContent =
-        "₱" +
-        currentManagerExpectedCash.toFixed(2);
-
-      expectedEl.dataset.expected =
-        currentManagerExpectedCash.toFixed(2);
-
-      updateManagerCashDrawerTotal();
-      managerReportExpectedReady = true;
+      managerExpectedCashWarmCache = { date: reportDate, time: Date.now(), data: expectedCashData };
+      applyManagerExpectedCash(expectedCashData);
       setManagerReportLoading(false);
 
     })

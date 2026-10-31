@@ -35,6 +35,18 @@
 
     </div>
 
+    <div
+      id="transactionHistoryLoading"
+      class="text-center text-muted py-5"
+      role="status"
+      aria-live="polite"
+      style="display:none;"
+    >
+      <div class="spinner-border spinner-border-sm text-secondary me-2" aria-hidden="true"></div>
+      Loading transaction history…
+    </div>
+
+    <div id="transactionHistoryContent">
 
     <!-- FILTER BAR -->
 
@@ -223,6 +235,12 @@
 
           <tr>
 
+            <th id="transactionHistoryDateHeader" style="display:none;">
+              <button type="button" class="btn btn-link p-0 text-reset text-decoration-none" onclick="sortTransactionHistory('date')">
+                Date <span id="transactionSortDate" aria-hidden="true">↕</span>
+              </button>
+            </th>
+
             <th>
               <button type="button" class="btn btn-link p-0 text-reset text-decoration-none" onclick="sortTransactionHistory('time')">
                 Time <span id="transactionSortTime" aria-hidden="true">↕</span>
@@ -291,6 +309,7 @@
 
     </div>
 
+    </div>
   </div>
 
 </div>
@@ -301,6 +320,7 @@
 var transactionHistoryData = [];
 var transactionHistoryFilterTimer = null;
 var transactionHistoryLoadedAt = 0;
+var transactionHistoryWarmCache = null;
 var transactionHistorySort = {
   key: "time",
   direction: "desc"
@@ -467,6 +487,77 @@ function scheduleTransactionHistoryFilter() {
   }, 180);
 }
 
+function setTransactionHistoryLoading(isLoading) {
+  const loader = document.getElementById("transactionHistoryLoading");
+  const content = document.getElementById("transactionHistoryContent");
+
+  if (loader) loader.style.display = isLoading ? "block" : "none";
+  if (content) content.style.display = isLoading ? "none" : "block";
+}
+
+function shouldShowTransactionHistoryDate() {
+  const from = document.getElementById("transactionHistoryFromDate");
+  const to = document.getElementById("transactionHistoryToDate");
+  return Boolean(from && to && from.value && to.value && from.value !== to.value);
+}
+
+function updateTransactionHistoryDateColumn() {
+  const header = document.getElementById("transactionHistoryDateHeader");
+  if (header) header.style.display = shouldShowTransactionHistoryDate() ? "" : "none";
+}
+
+function getTransactionHistoryColumnCount() {
+  return shouldShowTransactionHistoryDate() ? 8 : 7;
+}
+
+function getTransactionHistoryToday() {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+    .toISOString()
+    .split("T")[0];
+}
+
+function getTransactionHistoryCacheKey(fromDate, toDate, isManager) {
+  return JSON.stringify([currentCashier, fromDate, toDate, Boolean(isManager)]);
+}
+
+function prepareTransactionHistoryData(transactions) {
+  return (Array.isArray(transactions) ? transactions : []).map(function(tx) {
+    tx.searchText = [tx.receiptId, tx.cashier, tx.paymentMethod, tx.status, tx.itemNames]
+      .concat(tx.sizes || [], tx.barcodes || []).join(" ").toLowerCase();
+    return tx;
+  });
+}
+
+function warmTransactionHistory() {
+  if (!currentEmployee || !currentCashier) return;
+
+  const today = getTransactionHistoryToday();
+  const isManager = Number(currentEmployee.accessLevel) <= 1;
+  const key = getTransactionHistoryCacheKey(today, today, isManager);
+
+  if (transactionHistoryWarmCache && transactionHistoryWarmCache.key === key) return;
+
+  transactionHistoryWarmCache = {key: key, pending: true, data: null, loadedAt: 0};
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (!result || result.success !== true || !transactionHistoryWarmCache || transactionHistoryWarmCache.key !== key) return;
+      transactionHistoryWarmCache.data = prepareTransactionHistoryData(result.transactions);
+      transactionHistoryWarmCache.pending = false;
+      transactionHistoryWarmCache.loadedAt = Date.now();
+    })
+    .withFailureHandler(function() {
+      if (transactionHistoryWarmCache && transactionHistoryWarmCache.key === key) transactionHistoryWarmCache = null;
+    })
+    .getTransactionHistory(currentCashier, today, today, isManager);
+}
+
+function clearTransactionHistoryCache() {
+  transactionHistoryWarmCache = null;
+  transactionHistoryLoadedAt = 0;
+  if (typeof pageReadCache !== "undefined") pageReadCache.delete("transactions");
+}
+
 
 /* ==========================================================
    LOAD
@@ -475,6 +566,7 @@ function scheduleTransactionHistoryFilter() {
 function loadTransactionHistory(forceRefresh) {
 
   if (!currentEmployee) return;
+  updateTransactionHistoryDateColumn();
   if (forceRefresh === true || (transactionHistoryLoadedAt && Date.now() - transactionHistoryLoadedAt > 60000)) {
     pageReadCache.delete('transactions');
     transactionHistoryLoadedAt = 0;
@@ -511,17 +603,36 @@ function loadTransactionHistory(forceRefresh) {
       currentEmployee.accessLevel
     ) <= 1;
 
+  const cacheKey = getTransactionHistoryCacheKey(fromDate, toDate, isManager);
+  const warm = transactionHistoryWarmCache;
+  if (
+    forceRefresh !== true &&
+    warm &&
+    warm.key === cacheKey &&
+    warm.data !== null &&
+    Date.now() - warm.loadedAt <= 60000
+  ) {
+    setTransactionHistoryLoading(false);
+    transactionHistoryData = warm.data;
+    transactionHistoryLoadedAt = warm.loadedAt;
+    populateTransactionPaymentFilter(transactionHistoryData);
+    filterTransactionHistoryTable();
+    return;
+  }
+
 
   const refresh = beginPageRead('transactions', JSON.stringify([fromDate, toDate, isManager]), true);
   if (refresh.cached !== undefined) {
+    setTransactionHistoryLoading(false);
     transactionHistoryData = refresh.cached;
     populateTransactionPaymentFilter(transactionHistoryData);
     filterTransactionHistoryTable();
   } else {
+  setTransactionHistoryLoading(true);
   tbody.innerHTML = `
     <tr>
       <td
-        colspan="7"
+        colspan="${getTransactionHistoryColumnCount()}"
         class="text-center text-muted py-5"
         role="status"
         aria-label="Loading transactions"
@@ -557,13 +668,14 @@ function loadTransactionHistory(forceRefresh) {
         );
 
 
-        if (refresh.cached !== undefined) { showNotificationToast('Transaction refresh failed. Showing previously loaded data.', true); return; }
+        if (refresh.cached !== undefined) { setTransactionHistoryLoading(false); showNotificationToast('Transaction refresh failed. Showing previously loaded data.', true); return; }
 
 
+        setTransactionHistoryLoading(false);
         tbody.innerHTML = `
           <tr>
             <td
-              colspan="7"
+              colspan="${getTransactionHistoryColumnCount()}"
               class="text-center text-danger py-5"
             >
               ${escapeTransactionHtml(message)}
@@ -582,12 +694,10 @@ function loadTransactionHistory(forceRefresh) {
           ? result.transactions
           : [];
 
-      transactionHistoryData.forEach(function(tx) {
-        tx.searchText = [tx.receiptId, tx.cashier, tx.paymentMethod, tx.status, tx.itemNames]
-          .concat(tx.barcodes || []).join(' ').toLowerCase();
-      });
+      transactionHistoryData = prepareTransactionHistoryData(transactionHistoryData);
       transactionHistoryLoadedAt = Date.now();
       refresh.save(transactionHistoryData);
+      setTransactionHistoryLoading(false);
       populateTransactionPaymentFilter(
         transactionHistoryData
       );
@@ -608,14 +718,15 @@ function loadTransactionHistory(forceRefresh) {
       );
 
 
-      if (refresh.cached !== undefined) { showNotificationToast('Transaction refresh failed. Showing previously loaded data.', true); return; }
+      if (refresh.cached !== undefined) { setTransactionHistoryLoading(false); showNotificationToast('Transaction refresh failed. Showing previously loaded data.', true); return; }
 
 
+      setTransactionHistoryLoading(false);
       tbody.innerHTML = `
         <tr>
 
           <td
-            colspan="7"
+            colspan="${getTransactionHistoryColumnCount()}"
             class="text-center text-danger py-5"
           >
 
@@ -749,7 +860,7 @@ function sortTransactionHistory(key) {
       : "asc";
   } else {
     transactionHistorySort.key = key;
-    transactionHistorySort.direction = key === "time" || key === "total" || key === "items"
+    transactionHistorySort.direction = key === "date" || key === "time" || key === "total" || key === "items"
       ? "desc"
       : "asc";
   }
@@ -758,7 +869,7 @@ function sortTransactionHistory(key) {
 }
 
 function updateTransactionHistorySortIndicators() {
-  const keys = ["time", "receiptId", "cashier", "items", "paymentMethod", "total", "status"];
+  const keys = ["date", "time", "receiptId", "cashier", "items", "paymentMethod", "total", "status"];
 
   keys.forEach(function(key) {
     const indicator = document.getElementById("transactionSort" + key.charAt(0).toUpperCase() + key.slice(1));
@@ -779,7 +890,7 @@ function getSortedTransactionHistory(items) {
     let first = a[key];
     let second = b[key];
 
-    if (key === "time") {
+    if (key === "date" || key === "time") {
       first = a.sortTimestamp ?? Date.parse("1970/01/01 " + String(first || ""));
       second = b.sortTimestamp ?? Date.parse("1970/01/01 " + String(second || ""));
     } else if (key === "items" || key === "total") {
@@ -811,6 +922,9 @@ function renderTransactionHistory(items) {
 
 
   tbody.innerHTML = "";
+  updateTransactionHistoryDateColumn();
+  const showDate = shouldShowTransactionHistoryDate();
+  const columnCount = getTransactionHistoryColumnCount();
   updateTransactionHistorySortIndicators();
 
 
@@ -822,7 +936,7 @@ function renderTransactionHistory(items) {
     tbody.innerHTML = `
       <tr>
         <td
-          colspan="7"
+          colspan="${columnCount}"
           class="text-center text-muted py-5"
         >
           No transactions found.
@@ -854,6 +968,8 @@ function renderTransactionHistory(items) {
     };
 
     row.innerHTML = `
+
+      ${showDate ? `<td>${escapeTransactionHtml(tx.date || "")}</td>` : ""}
 
       <td>
         ${escapeTransactionHtml(tx.time)}
@@ -1047,6 +1163,7 @@ function filterTransactionHistoryTable() {
             tx.paymentMethod,
             tx.status,
             tx.itemNames,
+            (tx.sizes || []).join(' '),
             (tx.barcodes || []).join(' ')
 
           ]

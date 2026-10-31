@@ -611,7 +611,8 @@ if (voidReason === "Other") {
           /* UPDATE INVENTORY */
 
           pageReadCache.delete('inventory');
-          pageReadCache.delete('transactions');
+    if (typeof clearTransactionHistoryCache === 'function') clearTransactionHistoryCache();
+    else pageReadCache.delete('transactions');
           masterInventory =
             Array.isArray(
               res.updatedInventory

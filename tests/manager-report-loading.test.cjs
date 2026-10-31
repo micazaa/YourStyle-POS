@@ -54,6 +54,16 @@ test('manager fetch failure keeps counts unavailable until a successful retry',(
   assert.equal(elements.managerReportSubmit.disabled,false);
 });
 
+test('warmed today report opens without a second expected-cash request',()=>{
+  const {c,elements,calls}=client();
+  c.warmManagerExpectedCash('2026-10-30');
+  calls.at(-1).success({expectedCashDrawer:0});
+  c.openManagerReportModal();
+  assert.equal(calls.length,1);
+  assert.equal(elements.managerExpectedCashCountDisplay.textContent,'₱0.00');
+  assert.equal(elements.managerReportLoading.hidden,true);
+});
+
 test('manager generation hides the body, writes once, and restores entered counts on failure',()=>{
   const {c,elements,calls,downloads}=client();c.openManagerReportModal();calls.at(-1).success({expectedCashDrawer:1500});
   elements.mgrd1000.value='1';elements.mgrd500.value='1';

@@ -752,6 +752,10 @@ function unlockTerminalSession() {
     updateCashierNavigationAvailability();
     showPage(cashierMode?'posPage':'dashboardPage');saveSession();
     if(typeof refreshInventory==='function')refreshInventory();
+    if (Number(result.accessLevel) <= 1 && typeof warmManagerExpectedCash === 'function') {
+      warmManagerExpectedCash(getCashReportToday());
+    }
+    if (typeof warmTransactionHistory === 'function') warmTransactionHistory();
   };
   const runner=google.script.run.withSuccessHandler(onLoginSuccess).withFailureHandler(failed);
   if(cashierMode)runner.loginAndStartShift(name,pin,petty,loginPettyHandover&&loginPettyHandover.version);

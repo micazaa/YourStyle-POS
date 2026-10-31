@@ -17,7 +17,7 @@ function backend(rows, notes={}) {
     Session:{getScriptTimeZone:()=> 'Asia/Manila'},
     Utilities:{
       parseDate(value){return new Date(value+'T00:00:00+08:00');},
-      formatDate(value,_zone,pattern){formats++;const local=new Date(new Date(value).getTime()+8*3600000);return pattern==='yyyy-MM-dd'?local.toISOString().slice(0,10):local.toISOString().slice(11,16);}
+      formatDate(value,_zone,pattern){formats++;const local=new Date(new Date(value).getTime()+8*3600000);if(pattern==='yyyy-MM-dd')return local.toISOString().slice(0,10);if(pattern==='h:mm a')return local.toISOString().slice(11,16);return 'Oct 30, 2026';}
     },roundToTwo:n=>Math.round(n*100)/100
   });
   vm.runInContext(fs.readFileSync('Backend/Constants.js','utf8'),c);
@@ -32,7 +32,7 @@ function line(receipt,code,time='2026-10-30T12:00:00+08:00',extra={}) {
 
 test('history includes all receipt barcodes, preserving leading zeros and void totals',()=>{
   const {c}=backend([
-    line('R1','001234'),line('R1','SECOND',undefined,{7:2,12:200}),
+    line('R1','001234'),line('R1','SECOND',undefined,{5:'MNE',7:2,12:200}),
     line('R1','VOID',undefined,{15:'VOIDED'}),line('R2','OTHER',undefined,{15:'VOIDED'}),
     line('R3','PARTIAL',undefined,{15:'VOIDED',7:1,12:25})
   ],{6:'PARTIALLY VOIDED'});
@@ -40,6 +40,7 @@ test('history includes all receipt barcodes, preserving leading zeros and void t
   assert.equal(result.success,true);
   const tx=result.transactions.find(tx=>tx.receiptId==='R1');
   assert.deepEqual(Array.from(tx.barcodes),['001234','SECOND','VOID']);
+  assert.deepEqual(Array.from(tx.sizes),['MNE']);
   assert.equal(tx.items,3);assert.equal(tx.total,300);assert.equal(tx.status,'PARTIALLY VOIDED');
   assert.equal(result.transactions.find(tx=>tx.receiptId==='R2').total,0);
   assert.equal(result.transactions.find(tx=>tx.receiptId==='R3').total,25);
@@ -53,7 +54,7 @@ test('history reads one timestamp column then only required fields in date span'
   assert.deepEqual(h.reads.map(r=>[r.kind,r.count,r.width]),[['values',10100,1],['values',100,16],['notes',100,1]]);
   const cells=h.reads.reduce((sum,r)=>sum+r.count*r.width,0);
   assert.equal(cells,11800);
-  assert.ok(h.formats()<110,'date formatting must not run for all historical rows');
+  assert.ok(h.formats()<210,'date formatting must not run for all historical rows');
 });
 
 test('date span handles unsorted manual entries and store midnight boundaries',()=>{
@@ -88,12 +89,13 @@ test('barcode search uses cached receipt data and composes with payment filter',
   const {c,calls}=frontend();
   c.loadTransactionHistory();c.loadTransactionHistory();assert.equal(calls.length,1);
   calls[0].success({success:true,transactions:[
-    {receiptId:'R1',barcodes:['001234','ABC'],paymentMethod:'Cash'},
+    {receiptId:'R1',barcodes:['001234','ABC'],sizes:['SNE'],paymentMethod:'Cash'},
     {receiptId:'R2',barcodes:['009999'],paymentMethod:'GCash'}
   ]});
   c.document.getElementById('transactionHistorySearch').value='001234';c.filterTransactionHistoryTable();
   assert.deepEqual(Array.from(c.visible,tx=>tx.receiptId),['R1']);
   c.document.getElementById('transactionHistoryPaymentFilter').value='GCash';c.filterTransactionHistoryTable();assert.equal(c.visible.length,0);
+  c.document.getElementById('transactionHistoryPaymentFilter').value='';c.document.getElementById('transactionHistorySearch').value='sne';c.filterTransactionHistoryTable();assert.deepEqual(Array.from(c.visible,tx=>tx.receiptId),['R1']);
   c.loadTransactionHistory();assert.equal(calls.length,1);
   c.loadTransactionHistory(true);assert.equal(calls.length,2);
 });
@@ -126,6 +128,44 @@ test('history expires cached reads and sorts across dates by timestamp',()=>{
     {receiptId:'TODAY',time:'1:00 AM',sortTimestamp:200}
   ]);
   assert.deepEqual(Array.from(sorted,tx=>tx.receiptId),['TODAY','YESTERDAY']);
+  c.transactionHistorySort={key:'date',direction:'asc'};
+  assert.deepEqual(Array.from(c.getSortedTransactionHistory([{receiptId:'LATER',sortTimestamp:200},{receiptId:'EARLIER',sortTimestamp:100}]),tx=>tx.receiptId),['EARLIER','LATER']);
+});
+
+test('history keeps its header visible while the loading body is locked',()=>{
+  const {c,calls,elements}=frontend();
+  c.loadTransactionHistory();
+  assert.equal(elements.transactionHistoryLoading.style.display,'block');
+  assert.equal(elements.transactionHistoryContent.style.display,'none');
+  calls[0].success({success:true,transactions:[]});
+  assert.equal(elements.transactionHistoryLoading.style.display,'none');
+  assert.equal(elements.transactionHistoryContent.style.display,'block');
+});
+
+test('history shows Date column only for multi-day range',()=>{
+  const {c,elements}=frontend();
+  c.document.getElementById('transactionHistoryFromDate').value='2026-10-29';
+  c.document.getElementById('transactionHistoryToDate').value='2026-10-30';
+  c.updateTransactionHistoryDateColumn();
+  assert.equal(elements.transactionHistoryDateHeader.style.display,'');
+  assert.equal(c.getTransactionHistoryColumnCount(),8);
+  c.document.getElementById('transactionHistoryToDate').value='2026-10-29';
+  c.updateTransactionHistoryDateColumn();
+  assert.equal(elements.transactionHistoryDateHeader.style.display,'none');
+  assert.equal(c.getTransactionHistoryColumnCount(),7);
+});
+
+test('today history warmed after login is reused without a second server read',()=>{
+  const {c,calls}=frontend();
+  const today=c.getTransactionHistoryToday();
+  c.warmTransactionHistory();
+  assert.equal(calls.length,1);
+  calls[0].success({success:true,transactions:[{receiptId:'READY',barcodes:[],paymentMethod:'Cash'}]});
+  c.document.getElementById('transactionHistoryFromDate').value=today;
+  c.document.getElementById('transactionHistoryToDate').value=today;
+  c.loadTransactionHistory();
+  assert.equal(calls.length,1);
+  assert.equal(c.transactionHistoryData[0].receiptId,'READY');
 });
 
 test('successful sales mutations invalidate cached transaction lists',()=>{

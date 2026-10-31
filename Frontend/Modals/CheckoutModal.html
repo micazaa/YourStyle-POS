@@ -352,7 +352,9 @@ function handleCheckoutFailure(message) {
   /* ================= INVENTORY ================= */
 
   pageReadCache.delete('inventory');
-  pageReadCache.delete('transactions');
+    if (typeof clearTransactionHistoryCache === 'function') clearTransactionHistoryCache();
+    else pageReadCache.delete('transactions');
+  if (typeof clearManagerExpectedCashCache === 'function') clearManagerExpectedCashCache();
   masterInventory =
     Array.isArray(response.updatedInventory)
       ? response.updatedInventory

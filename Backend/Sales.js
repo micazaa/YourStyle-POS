@@ -302,152 +302,29 @@ function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart
 }
 
 function getExpectedCashForManager(reportDate) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
+  const lastRow = sheet && sheet.getLastRow();
+  if (!sheet || lastRow < 2) return { expectedCashDrawer: 0 };
 
-  const ss =
-    SpreadsheetApp.getActiveSpreadsheet();
-
-  const sheet =
-    ss.getSheetByName(
-      SHEETS.SALES_LOG
-    );
-
-
-  if (!sheet) {
-
-    return {
-      expectedCashDrawer: 0
-    };
-
-  }
-
-
-  const data =
-    sheet
-      .getDataRange()
-      .getValues();
-
-
-  const tz =
-    Session.getScriptTimeZone();
-
+  /* One contiguous read; avoid per-row Utilities.formatDate calls. */
+  const rowCount = lastRow - 1;
+  const rows = sheet.getRange(2, SALES_COL.TIMESTAMP, rowCount, SALES_COL.STATUS).getValues();
+  const tz = Session.getScriptTimeZone();
+  const start = Utilities.parseDate(String(reportDate || '').trim() + " 00:00:00", tz, "yyyy-MM-dd HH:mm:ss");
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
   let cashSales = 0;
 
-
-  Logger.log(
-    "===== MANAGER EXPECTED CASH ====="
-  );
-
-  Logger.log(
-    "Requested Date: " +
-    reportDate
-  );
-
-
-  for (
-    let i = 1;
-    i < data.length;
-    i++
-  ) {
-
-    const row =
-      data[i];
-
-    const timestamp =
-      row[
-        SALES_IDX.TIMESTAMP
-      ];
-
-
-    if (!timestamp) {
-      continue;
-    }
-
-
-    const rowDate =
-      Utilities.formatDate(
-        new Date(timestamp),
-        tz,
-        "yyyy-MM-dd"
-      );
-
-
-    /*
-      Ignore every other date BEFORE logging.
-    */
-
-    if (
-      rowDate !== reportDate
-    ) {
-      continue;
-    }
-
-
-    const paymentMethod =
-      String(
-        row[
-          SALES_IDX.PAYMENT_METHOD
-        ] || ""
-      )
-        .trim()
-        .toUpperCase();
-
-
-    const status =
-      String(
-        row[
-          SALES_IDX.STATUS
-        ] || ""
-      )
-        .trim()
-        .toUpperCase();
-
-
-    const amount =
-      Number(
-        row[
-          SALES_IDX.NET_TOTAL
-        ]
-      ) || 0;
-
-
-    if (
-      status !== "COMPLETED"
-    ) {
-      continue;
-    }
-
-
-    if (
-      paymentMethod !== "CASH"
-    ) {
-      continue;
-    }
-
-
-    cashSales +=
-      amount;
-
+  for (let i = 0; i < rowCount; i++) {
+    const row = rows[i];
+    const timestamp = row[SALES_IDX.TIMESTAMP];
+    const saleTime = timestamp ? new Date(timestamp) : null;
+    if (!saleTime || isNaN(saleTime.getTime()) || saleTime < start || saleTime >= end) continue;
+    if (String(row[SALES_IDX.STATUS] || "").trim().toUpperCase() !== "COMPLETED") continue;
+    if (String(row[SALES_IDX.PAYMENT_METHOD] || "").trim().toUpperCase() !== "CASH") continue;
+    cashSales += Number(row[SALES_IDX.NET_TOTAL]) || 0;
   }
 
-
-  cashSales =
-    roundToTwo(
-      cashSales
-    );
-
-
-  Logger.log(
-    "FINAL EXPECTED CASH = " +
-    cashSales
-  );
-
-
-  return {
-
-    expectedCashDrawer:
-      cashSales
-
-  };
+  return { expectedCashDrawer: roundToTwo(cashSales) };
 
 }
 
@@ -1001,6 +878,8 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
 
           timestamp: timestamp,
 
+          date: Utilities.formatDate(timestamp, tz, "MMM d, yyyy"),
+
           time: Utilities.formatDate(timestamp, tz, "h:mm a"),
 
           cashier: rowCashier,
@@ -1014,6 +893,8 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
           status: String(row[SALES_IDX.STATUS] || "").trim(),
 
           itemNames: [],
+
+          sizes: new Set(),
 
           barcodes: new Set(),
 
@@ -1041,6 +922,9 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
         tx.itemNames.push(itemName);
       }
 
+      const size = String(row[SALES_IDX.SIZE] || "").trim();
+      if (size && effectiveStatus !== "VOIDED") tx.sizes.add(size);
+
       /*
         If ANY row is VOIDED,
         receipt should display VOIDED.
@@ -1067,6 +951,7 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
       delete tx.hasCompleted;
 
       tx.itemNames = tx.itemNames.join(", ");
+      tx.sizes = Array.from(tx.sizes);
       tx.barcodes = Array.from(tx.barcodes);
     });
 
