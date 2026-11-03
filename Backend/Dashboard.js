@@ -14,12 +14,14 @@ const DASHBOARD_TASK_HEADERS = [
   'Completed At',
   'Version',
 ];
+const ACCOUNT_SESSION_SECONDS = 21600;
+const ACCOUNT_SESSION_EXPIRED_MESSAGE = 'Dashboard session expired or account changed. Please sign out and sign in again.';
 function createDashboardSession_(employeeId, fullName) {
   const token = Utilities.getUuid() + Utilities.getUuid();
   CacheService.getScriptCache().put(
     'dashboard:' + token,
-    JSON.stringify({ id: String(employeeId), name: fullName }),
-    21600
+    JSON.stringify({ id: String(employeeId), name: fullName, expiresAt: new Date().getTime() + ACCOUNT_SESSION_SECONDS * 1000 }),
+    ACCOUNT_SESSION_SECONDS
   );
   return token;
 }
@@ -29,12 +31,16 @@ function revokeDashboardSession(token) {
   return { success: true };
 }
 function dashboardEmployee_(token) {
-  const error = 'Dashboard session expired or account changed. Please sign out and sign in again.';
+  const error = ACCOUNT_SESSION_EXPIRED_MESSAGE;
   if (!/^[a-f0-9-]{72}$/i.test(String(token || ''))) throw new Error(error);
   const cache = CacheService.getScriptCache(),
     raw = cache.get('dashboard:' + token);
   if (!raw) throw new Error(error);
   const saved = JSON.parse(raw);
+  if (saved.expiresAt && new Date().getTime() >= Number(saved.expiresAt)) {
+    cache.remove('dashboard:' + token);
+    throw new Error(error);
+  }
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.EMPLOYEES);
   const row =
     sheet &&
@@ -55,8 +61,18 @@ function dashboardEmployee_(token) {
     id: saved.id,
     name: saved.name,
     firstName: String(row[1]),
+    expiresAt: Number(saved.expiresAt) || 0,
     manager: String(row[5]).trim() !== '' && Number.isFinite(Number(row[5])) && Number(row[5]) <= 1,
   };
+}
+function getAccountSessionStatus(token) {
+  try {
+    const employee = dashboardEmployee_(token);
+    return {success: true, active: true, expiresAt: employee.expiresAt};
+  } catch (error) {
+    if (error.message === ACCOUNT_SESSION_EXPIRED_MESSAGE) return {success: true, active: false};
+    throw error;
+  }
 }
 function dashboardDate_(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value < '1900-01-01')

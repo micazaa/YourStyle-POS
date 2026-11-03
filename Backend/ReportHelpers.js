@@ -80,6 +80,33 @@ function denomRowsHtml(breakdown) {
    SALES SUMMARY BUILDER
 ========================================================== */
 
+// Keep payment stages separate, sharing Net Total only for the same receipt/item/day.
+function salesSummaryDisplayRows_(items) {
+  const groups = new Map();
+  items.forEach(function(item) {
+    if (!item.reservationGroupKey) return;
+    if (!groups.has(item.reservationGroupKey)) groups.set(item.reservationGroupKey, []);
+    groups.get(item.reservationGroupKey).push(item);
+  });
+  const rendered = new Set(), rows = [];
+  items.forEach(function(item) {
+    const key = item.reservationGroupKey;
+    if (!key) { rows.push({item:item, netTotal:item.total, netRowSpan:1}); return; }
+    if (rendered.has(key)) return;
+    rendered.add(key);
+    const group = groups.get(key).slice().sort(function(a, b) {
+      return (a.reason === 'RESERVATION DEPOSIT' ? 0 : 1) - (b.reason === 'RESERVATION DEPOSIT' ? 0 : 1);
+    });
+    const merge = group.length === 2 && group[0].reason === 'RESERVATION DEPOSIT' && group[1].reason === 'RESERVATION BALANCE';
+    const total = roundToTwo(group.reduce((sum, payment) => sum + (Number(payment.total) || 0), 0));
+    group.forEach(function(payment, index) {
+      rows.push({item:payment, netTotal:merge ? total : payment.total,
+        netRowSpan:merge ? group.length : 1, omitNetTotal:merge && index > 0});
+    });
+  });
+  return rows;
+}
+
 function buildSalesSummary(categoryGroups) {
   let html = "";
   const categories = Object.keys(categoryGroups || {}).sort(function(a,b){ return a.localeCompare(b); });
@@ -103,7 +130,8 @@ function buildSalesSummary(categoryGroups) {
         <td class="sales-money">${fmtMoney(group.total)}</td>
       </tr>`;
 
-    items.forEach(function(item) {
+    salesSummaryDisplayRows_(items).forEach(function(display) {
+      const item = display.item;
       const exchange = !!item.isExchange;
       html += `
         <tr class="${exchange ? "sales-exchange-row" : "sales-item-row"}">
@@ -113,7 +141,7 @@ function buildSalesSummary(categoryGroups) {
           <td class="sales-money">${fmtMoney(item.price)}</td>
           <td class="sales-money">${fmtDiscount(item.discount)}</td>
           <td class="sales-center ${Number(item.qty) < 0 ? "sales-negative" : ""}">${item.qty}</td>
-          <td class="sales-money ${Number(item.total) < 0 ? "sales-negative" : ""}">${fmtMoney(item.total)}</td>
+          ${display.omitNetTotal ? '' : `<td rowspan="${display.netRowSpan}" style="vertical-align:middle;" class="sales-money ${Number(display.netTotal) < 0 ? "sales-negative" : ""}">${fmtMoney(display.netTotal)}</td>`}
         </tr>`;
     });
   });
@@ -453,7 +481,19 @@ function collectSalesMetrics(
   };
 
   const receiptIds = new Set();
+  const splitPaymentReceipts = new Set();
   const replacementAnchors = new Map();
+
+  function addPayment(method, amount, reference) {
+    const paymentMethod = String(method || 'Cash').trim() || 'Cash';
+    const paymentReference = String(reference || 'N/A').trim() || 'N/A';
+    if (!metrics.payments[paymentMethod]) metrics.payments[paymentMethod] = { gross: 0, count: 0 };
+    metrics.payments[paymentMethod].gross += Number(amount) || 0;
+    metrics.payments[paymentMethod].count++;
+    if (!metrics.paymentDetail[paymentMethod]) metrics.paymentDetail[paymentMethod] = {};
+    metrics.paymentDetail[paymentMethod][paymentReference] =
+      (metrics.paymentDetail[paymentMethod][paymentReference] || 0) + (Number(amount) || 0);
+  }
 
   function reasonOf(row) {
     return String(row[19] || '').trim().toUpperCase();
@@ -501,6 +541,7 @@ function collectSalesMetrics(
 
     const exchange =
       reason === 'EXCHANGE RETURN' ||
+      reason === 'RESERVATION CREDIT' ||
       reason === 'EXCHANGE REPLACEMENT';
 
     const anchor = exchange
@@ -574,7 +615,10 @@ function collectSalesMetrics(
       'yyyy-MM-dd'
     );
 
-    const itemKey = exchange
+    const reservationPayment = reason === 'RESERVATION DEPOSIT' || reason === 'RESERVATION BALANCE';
+    const itemKey = reservationPayment
+      ? JSON.stringify(['RESERVATION', receiptId, reason, code, size, price, actualDate])
+      : exchange
       ? JSON.stringify([
           'EX', receiptId, reason, code, size, price, actualDate
         ])
@@ -595,6 +639,7 @@ function collectSalesMetrics(
         isExchange: exchange,
         receiptId: receiptId,
         reason: reason,
+        reservationGroupKey: reservationPayment ? JSON.stringify([receiptId, code, size, actualDate]) : '',
         exchangeReason: exchange ? reason : '',
         reportDateDisplay: Utilities.formatDate(
           actualTimestamp,
@@ -623,19 +668,19 @@ function collectSalesMetrics(
       name: name, size: size, units: countedQty, sales: netTotal, exchange: exchange
     });
 
-    if (!metrics.payments[paymentMethod]) {
-      metrics.payments[paymentMethod] = { gross: 0, count: 0 };
+    const paymentOneMethod = String(row[28] || '').trim();
+    const paymentTwoMethod = String(row[31] || '').trim();
+    const isSplitPayment = paymentOneMethod && paymentTwoMethod;
+    if (isSplitPayment) {
+      const paymentKey = salesPaymentKey_(row);
+      if (!splitPaymentReceipts.has(paymentKey)) {
+        splitPaymentReceipts.add(paymentKey);
+        addPayment(paymentOneMethod, row[29], row[30]);
+        addPayment(paymentTwoMethod, row[32], row[33]);
+      }
+    } else {
+      addPayment(paymentMethod, netTotal, reference);
     }
-
-    metrics.payments[paymentMethod].gross += netTotal;
-    metrics.payments[paymentMethod].count++;
-
-    if (!metrics.paymentDetail[paymentMethod]) {
-      metrics.paymentDetail[paymentMethod] = {};
-    }
-
-    metrics.paymentDetail[paymentMethod][reference] =
-      (metrics.paymentDetail[paymentMethod][reference] || 0) + netTotal;
 
     if (!metrics.byCashier[reportingCashier]) {
       metrics.byCashier[reportingCashier] = {
@@ -1343,7 +1388,13 @@ function buildClassicDailyReportHTML_(data, isManager) {
   function isExchange(item) {
     return Boolean(item.isExchange) ||
       reason(item) === 'EXCHANGE RETURN' ||
+      reason(item) === 'RESERVATION CREDIT' ||
       reason(item) === 'EXCHANGE REPLACEMENT';
+  }
+
+  function exchangeType(item) {
+    if (reason(item) === 'RESERVATION CREDIT') return 'Reservation';
+    return reason(item) === 'EXCHANGE RETURN' ? 'Return' : 'Replacement';
   }
 
   function sum(list, field) {
@@ -1368,24 +1419,24 @@ function buildClassicDailyReportHTML_(data, isManager) {
 
   const reportStripeIndex = { sales: 0, exchange: 0 };
 
-  function itemRow(item, exchange) {
+  function itemRow(item, exchange, display) {
+    display = display || {netTotal:item.total, netRowSpan:1};
     const section = exchange ? 'exchange' : 'sales';
     const index = reportStripeIndex[section]++;
     const background = index % 2 === 0 ? '#e8edf2' : '#ffffff';
 
-    function cell(content, className) {
+    function cell(content, className, rowSpan) {
       return `
         <td
           class="${className || ''}"
           bgcolor="${background}"
-          style="background-color:${background} !important;"
+          ${rowSpan > 1 ? `rowspan="${rowSpan}"` : ''}
+          style="background-color:${background} !important;${rowSpan > 1 ? 'vertical-align:middle;' : ''}"
         >${content}</td>
       `;
     }
 
-    const type = reason(item) === 'EXCHANGE RETURN'
-      ? 'Return'
-      : 'Replacement';
+    const type = exchangeType(item);
 
     return `
       <tr>
@@ -1407,9 +1458,10 @@ function buildClassicDailyReportHTML_(data, isManager) {
           Number(item.qty) || 0,
           'center ' + (Number(item.qty) < 0 ? 'negative' : '')
         )}
-        ${cell(
-          fmtMoney(item.total),
-          'money ' + (Number(item.total) < 0 ? 'negative' : '')
+        ${display.omitNetTotal ? '' : cell(
+          fmtMoney(display.netTotal),
+          'money ' + (Number(display.netTotal) < 0 ? 'negative' : ''),
+          display.netRowSpan
         )}
       </tr>
     `;
@@ -1486,8 +1538,8 @@ function buildClassicDailyReportHTML_(data, isManager) {
         <td class="center">${quantity(group)}</td>
         <td class="money">${fmtMoney(sum(group, 'total'))}</td>
       </tr>
-      ${group.map(function(item) {
-        return itemRow(item, false);
+      ${salesSummaryDisplayRows_(group).map(function(display) {
+        return itemRow(display.item, false, display);
       }).join('')}
     `;
   });
@@ -1530,8 +1582,8 @@ function buildClassicDailyReportHTML_(data, isManager) {
 
     groups.forEach(function(group) {
       const sorted = group.items.slice().sort(function(a, b) {
-        const aReturn = reason(a) === 'EXCHANGE RETURN';
-        const bReturn = reason(b) === 'EXCHANGE RETURN';
+        const aReturn = reason(a) === 'EXCHANGE RETURN' || reason(a) === 'RESERVATION CREDIT';
+        const bReturn = reason(b) === 'EXCHANGE RETURN' || reason(b) === 'RESERVATION CREDIT';
 
         if (aReturn !== bReturn) return aReturn ? -1 : 1;
 
@@ -1581,9 +1633,7 @@ function buildClassicDailyReportHTML_(data, isManager) {
             ${exchangeCell(esc(item.name))}
             ${exchangeCell(esc(item.code))}
             ${exchangeCell(
-              reason(item) === 'EXCHANGE RETURN'
-                ? 'Return'
-                : 'Replacement'
+              exchangeType(item)
             )}
             ${exchangeCell(
               esc(item.reportDateDisplay || data.todayDisplay),

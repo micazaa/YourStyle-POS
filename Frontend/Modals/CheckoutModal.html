@@ -8,16 +8,40 @@
     <div class="text-center py-3 rounded mb-3" style="background-color: var(--pink-light);">
       <span class="small fw-bold text-muted">TOTAL DUE:</span>
       <h2 class="fw-bold m-0 text-dark">₱<span id="modalGrandTotal">0.00</span></h2>
+      <div id="checkoutRemainingAmount" class="small text-muted mt-1" role="status" aria-live="polite" hidden></div>
     </div>
 
     <div class="mb-3">
+      <div id="checkoutReservationNote" class="small text-muted mb-3" hidden></div>
       <label class="form-label">Payment Method</label>
       <select class="form-select fw-bold" id="paymentMethod" onchange="recalculateModalTotals()">
             <option value="Cash">Cash</option>
             <option value="GCash">GCash</option>
             <option value="QR Code">QR Code (+1.0% Fee)</option>
             <option value="Credit Card">Credit Card</option>
+            <option value="Cash + GCash">Cash + GCash</option>
+            <option value="Cash + Credit Card">Cash + Card</option>
+            <option value="GCash + Credit Card">GCash + Card</option>
           </select>
+    </div>
+
+    <div id="splitPaymentFields" style="display:none;">
+      <div class="mb-3" id="splitPaymentOneAmountBox">
+        <label class="form-label" id="splitPaymentOneLabel">Payment 1 Amount (₱)</label>
+        <input type="number" class="form-control form-control-lg fw-bold text-end" id="splitPaymentOneAmount" placeholder="0.00" oninput="recalculateModalTotals()">
+      </div>
+      <div class="mb-3" id="splitPaymentOneReferenceBox" style="display:none;">
+        <label class="form-label" id="splitPaymentOneReferenceLabel">Payment 1 Reference <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" id="splitPaymentOneReference" placeholder="Enter reference number">
+      </div>
+      <div class="mb-3" id="splitPaymentTwoAmountBox">
+        <label class="form-label" id="splitPaymentTwoLabel">Payment 2 Amount (₱)</label>
+        <input type="number" class="form-control form-control-lg fw-bold text-end" id="splitPaymentTwoAmount" placeholder="0.00" oninput="recalculateModalTotals()">
+      </div>
+      <div class="mb-3" id="splitPaymentTwoReferenceBox" style="display:none;">
+        <label class="form-label" id="splitPaymentTwoReferenceLabel">Payment 2 Reference <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" id="splitPaymentTwoReference" placeholder="Enter reference number">
+      </div>
     </div>
 
     <div class="mb-3 p-2 bg-light rounded" id="referenceNumberContainer"
@@ -50,18 +74,34 @@
   </div>
 </div>
 <script>
-  function triggerCheckoutConsoleModal() {
-    if (cart.length === 0) {
+  var activeCheckoutContext = null;
+  var checkoutSubmitting = false;
+  function checkoutBaseTotal() {
+    return activeCheckoutContext ? Number(activeCheckoutContext.amountDue) || 0 : calculatedBaseTotalDue;
+  }
+  function triggerCheckoutConsoleModal(context) {
+    if (checkoutSubmitting) return;
+    const reserved = !context && cartReservation();
+    if (reserved) context = {kind:'RESERVATION_BALANCE', owner:currentEmployee, originalReceiptId:reserved.reservationReceiptId,
+      requestId:reserved.balanceRequestId, amountDue:reserved.balanceDue};
+    activeCheckoutContext = context && ['EXCHANGE','RESERVATION_DEPOSIT','RESERVATION_BALANCE'].includes(context.kind) ? context : null;
+    const note = document.getElementById('checkoutReservationNote');
+    note.hidden = !activeCheckoutContext || activeCheckoutContext.kind === 'EXCHANGE';
+    note.textContent = activeCheckoutContext && activeCheckoutContext.kind === 'RESERVATION_DEPOSIT'
+      ? '50% down payment · Non-refundable; usable as exchange credit.'
+      : activeCheckoutContext && activeCheckoutContext.kind === 'RESERVATION_BALANCE' ? 'Remaining balance · ' + activeCheckoutContext.originalReceiptId : '';
+    if (!activeCheckoutContext && cart.length === 0) {
       showNotificationToast("Shopping basket summary is empty.", true);
       return;
     }
 
     document.getElementById("modalGrandTotal").textContent =
-      calculatedBaseTotalDue.toFixed(2);
+      checkoutBaseTotal().toFixed(2);
     document.getElementById("paymentMethod").value = "Cash";
     document.getElementById("cardFeeToggleBox").style.display = "none";
     document.getElementById("referenceNumberContainer").style.display = "none";
     document.getElementById("cashReceivedFieldWrapper").style.display = "block";
+    document.getElementById("splitPaymentFields").style.display = "none";
     document.getElementById("changeDueDisplayFieldWrapper").style.display =
       "flex";
 
@@ -71,11 +111,15 @@
       applyCardFeeCheckbox.checked = false;
     }
 
-    finalActiveGrandTotal = calculatedBaseTotalDue;
+    finalActiveGrandTotal = checkoutBaseTotal();
     toggleCheckoutModal(true);
+    calculateChangeValue();
   }
 
   function toggleCheckoutModal(show) {
+    if (!show && checkoutSubmitting) return;
+    const returningToExchange = !show && activeCheckoutContext && activeCheckoutContext.kind === 'EXCHANGE';
+    document.getElementById("checkoutModal").style.zIndex = show && activeCheckoutContext ? '10020' : '';
     document.getElementById("checkoutModal").style.display = show
       ? "flex"
       : "none";
@@ -83,9 +127,19 @@
     if (show) {
       document.getElementById("customerCashPaid").value = "";
       document.getElementById("paymentReferenceInput").value = "";
+      document.getElementById("splitPaymentOneAmount").value = "";
+      document.getElementById("splitPaymentTwoAmount").value = "";
+      document.getElementById("splitPaymentOneReference").value = "";
+      document.getElementById("splitPaymentTwoReference").value = "";
       document.getElementById("customerChangeDue").textContent = "0.00";
       document.getElementById("customerCashPaid").focus();
     } else {
+      activeCheckoutContext = null;
+      finalActiveGrandTotal = calculatedBaseTotalDue;
+      if (returningToExchange) {
+        document.getElementById('exchangeConfirmBtn').focus();
+        return;
+      }
       setTimeout(() => {
         const codeInput =
           document.getElementById("codeInput");
@@ -103,7 +157,16 @@
 
     let applyCardFeeCheckbox = document.getElementById("applyCardFeeCheckbox");
 
-    if (method !== "Cash") {
+    const splitMethods = getSplitPaymentMethods(method);
+    const isSplit = Boolean(splitMethods);
+    document.getElementById("splitPaymentFields").style.display = isSplit ? "block" : "none";
+
+    if (isSplit) {
+      document.getElementById("referenceNumberContainer").style.display = "none";
+      document.getElementById("cashReceivedFieldWrapper").style.display = "none";
+      document.getElementById("changeDueDisplayFieldWrapper").style.display = "flex";
+      configureSplitPaymentFields(splitMethods);
+    } else if (method !== "Cash") {
       document.getElementById("referenceNumberContainer").style.display =
         "block";
       document.getElementById("cashReceivedFieldWrapper").style.display =
@@ -119,36 +182,126 @@
         "flex";
     }
 
+    const cardIndex = isSplit ? splitMethods.indexOf('Credit Card') : -1;
+    const feeAnchor = cardIndex >= 0
+      ? document.getElementById('splitPayment' + (cardIndex === 0 ? 'One' : 'Two') + 'ReferenceBox')
+      : document.getElementById('referenceNumberContainer');
+    const feeToggle = document.getElementById('cardFeeToggleBox');
+    if (feeAnchor.nextElementSibling !== feeToggle) feeAnchor.insertAdjacentElement('afterend', feeToggle);
+
     // FIX: Force checkbox state to false if the payment method is not Credit Card
-    if (method !== "Credit Card") {
+    if (method !== "Credit Card" && !(isSplit && splitMethods.includes("Credit Card"))) {
       if (applyCardFeeCheckbox) {
         applyCardFeeCheckbox.checked = false;
       }
     }
 
-    if (method === "Credit Card") {
+    if (method === "Credit Card" || (isSplit && splitMethods.includes("Credit Card"))) {
       document.getElementById("cardFeeToggleBox").style.display = "block";
       let applyFee = applyCardFeeCheckbox
         ? applyCardFeeCheckbox.checked
         : false;
-      if (applyFee) feeApplied = calculatedBaseTotalDue * 0.032;
+      const cardAmount = isSplit ? getSplitPaymentAmount("Credit Card") : checkoutBaseTotal();
+      if (applyFee) feeApplied = cardAmount * 0.032;
     } else {
       document.getElementById("cardFeeToggleBox").style.display = "none";
-      if (method === "QR Code") feeApplied = calculatedBaseTotalDue * 0.01;
+      if (method === "QR Code") feeApplied = checkoutBaseTotal() * 0.01;
     }
 
-    finalActiveGrandTotal = calculatedBaseTotalDue + feeApplied;
+    finalActiveGrandTotal = checkoutBaseTotal() + feeApplied;
     document.getElementById("modalGrandTotal").textContent =
       finalActiveGrandTotal.toFixed(2);
     calculateChangeValue();
   }
 
+  function getSplitPaymentMethods(method) {
+    const pairs = {
+      "Cash + GCash": ["Cash", "GCash"],
+      "Cash + Credit Card": ["Cash", "Credit Card"],
+      "GCash + Credit Card": ["GCash", "Credit Card"]
+    };
+    return pairs[method] || null;
+  }
+
+  function getSplitPaymentAmount(method) {
+    const methods = getSplitPaymentMethods(document.getElementById("paymentMethod").value) || [];
+    const position = methods.indexOf(method);
+    const id = position === 0 ? "splitPaymentOneAmount" : "splitPaymentTwoAmount";
+    return Number(document.getElementById(id).value) || 0;
+  }
+
+  function configureSplitPaymentFields(methods) {
+    const fields = document.getElementById('splitPaymentFields');
+    const layout = methods.join('|');
+    if (fields.dataset.paymentLayout === layout) return;
+    [0, 1].forEach(function(index) {
+      const method = methods[index];
+      const number = index + 1;
+      document.getElementById("splitPayment" + (index === 0 ? "One" : "Two") + "Label").textContent = (method === "Cash" ? "Cash Received" : method + " Amount") + " (₱)";
+      const referenceBox = document.getElementById("splitPayment" + (index === 0 ? "One" : "Two") + "ReferenceBox");
+      referenceBox.style.display = method === "Cash" ? "none" : "block";
+      document.getElementById("splitPayment" + (index === 0 ? "One" : "Two") + "ReferenceLabel").innerHTML = method + " Reference <span class=\"text-danger\">*</span>";
+    });
+    const order = methods[1] === 'Credit Card' ? ['Two', 'One'] : ['One', 'Two'];
+    order.forEach(function(suffix) {
+      fields.appendChild(document.getElementById('splitPayment' + suffix + 'AmountBox'));
+      fields.appendChild(document.getElementById('splitPayment' + suffix + 'ReferenceBox'));
+    });
+    fields.dataset.paymentLayout = layout;
+  }
+
+  function updateCheckoutRemainingAmount(paid) {
+    const hint = document.getElementById('checkoutRemainingAmount');
+    const remainingCents = Math.max(0, Math.round(finalActiveGrandTotal * 100) - Math.round(paid * 100));
+    hint.textContent = remainingCents ? '₱' + (remainingCents / 100).toFixed(2) + ' more needed' : '';
+    hint.hidden = remainingCents === 0;
+  }
+
   function calculateChangeValue() {
+    const split = getSplitPaymentSummary();
+    if (split) {
+      const enteredTotal = split.rawAmounts.reduce(function(total, amount) { return total + amount; }, 0);
+      const totalDue = Number(finalActiveGrandTotal.toFixed(2));
+      const excess = Math.max(0, enteredTotal - totalDue);
+      document.getElementById("customerChangeDue").textContent = excess.toFixed(2);
+      updateCheckoutRemainingAmount(enteredTotal);
+      return;
+    }
     let paid =
       parseFloat(document.getElementById("customerCashPaid").value) || 0;
     let change = paid - finalActiveGrandTotal;
     document.getElementById("customerChangeDue").textContent =
       change > 0 ? change.toFixed(2) : "0.00";
+    if (document.getElementById('paymentMethod').value === 'Cash') updateCheckoutRemainingAmount(paid);
+    else document.getElementById('checkoutRemainingAmount').hidden = true;
+  }
+
+  function getSplitPaymentSummary() {
+    const methods = getSplitPaymentMethods(document.getElementById("paymentMethod").value);
+    if (!methods) return null;
+    const rawAmounts = methods.map(function(method, index) {
+      const suffix = index === 0 ? "One" : "Two";
+      return Number(document.getElementById("splitPayment" + suffix + "Amount").value) || 0;
+    });
+    const cardPosition = methods.indexOf("Credit Card");
+    const applyCardFee = cardPosition >= 0 && document.getElementById("applyCardFeeCheckbox").checked;
+    const cardFee = applyCardFee ? Number((rawAmounts[cardPosition] * 0.032).toFixed(2)) : 0;
+    const paid = Number(rawAmounts.reduce(function(total, amount) { return total + amount; }, 0).toFixed(2));
+    const cashPosition = methods.indexOf("Cash");
+    const change = cashPosition >= 0 ? Math.max(0, Number((paid - Number(finalActiveGrandTotal.toFixed(2))).toFixed(2))) : 0;
+    const parts = methods.map(function(method, index) {
+      const suffix = index === 0 ? "One" : "Two";
+      const part = {
+        method: method,
+        amount: Number((method === "Cash" ? Math.max(0, rawAmounts[index] - change)
+          : method === "Credit Card" && applyCardFee ? rawAmounts[index] - cardFee : rawAmounts[index]).toFixed(2)),
+        reference: String(document.getElementById("splitPayment" + suffix + "Reference").value || "").trim()
+      };
+      // Entered card amounts include the displayed fee; ledger allocations exclude it.
+      if (method === 'Credit Card' && applyCardFee) part.receivedAmount = rawAmounts[index];
+      return part;
+    });
+    return { methods: methods, rawAmounts: rawAmounts, parts: parts, paid: paid, change: change, cashReceived: cashPosition >= 0 ? rawAmounts[cashPosition] : 0 };
   }
 
   function buildCheckoutPayload() {
@@ -161,7 +314,7 @@
             document.getElementById("customerCashPaid").value
         ) || 0;
 
-    const referenceNumber =
+    let referenceNumber =
         document.getElementById("paymentReferenceInput")
         .value
         .trim();
@@ -199,30 +352,58 @@
       day +
       random;
 
-    const changeGiven =
-        paymentMethod === "Cash"
-            ? Math.max(0, cashReceived - finalActiveGrandTotal)
-            : 0;
+    const splitSummary = getSplitPaymentSummary();
+    const changeGiven = splitSummary
+      ? splitSummary.change
+      : paymentMethod === "Cash" ? Math.max(0, cashReceived - finalActiveGrandTotal) : 0;
 
     const applyCardFee =
-        paymentMethod === "Credit Card"
+        (paymentMethod === "Credit Card" || (getSplitPaymentMethods(paymentMethod) || []).includes("Credit Card"))
             ? document.getElementById("applyCardFeeCheckbox").checked
             : false;
 
+    const splitMethods = getSplitPaymentMethods(paymentMethod);
+    const paymentParts = splitMethods
+      ? splitSummary.parts
+      : [{ method: paymentMethod, amount: checkoutBaseTotal(), reference: referenceNumber }];
+
+    if (splitMethods) referenceNumber = "";
+
     return {
         paymentMethod,
-        cashReceived,
+        cashReceived: splitSummary ? splitSummary.cashReceived : cashReceived,
         referenceNumber,
         globalDiscountType,
         globalDiscountValue,
         receiptId,
         changeGiven,
-        applyCardFee
+        applyCardFee,
+        paymentParts
     };
 
   }
 
   function validateCheckout(payload){
+
+    const splitMethods = getSplitPaymentMethods(payload.paymentMethod);
+    if (splitMethods) {
+        const amount = payload.paymentParts.reduce(function(total, part) { return total + Number(part.amount || 0); }, 0);
+        if (Math.abs(amount - checkoutBaseTotal()) > 0.01) {
+          showNotificationToast("Split payment amounts must equal sale total.", true);
+          return false;
+        }
+        const totalPaid = getSplitPaymentSummary().paid;
+        if (totalPaid + 0.01 < finalActiveGrandTotal) {
+          showNotificationToast("Split payment is insufficient.", true);
+          return false;
+        }
+        const missingReference = payload.paymentParts.some(function(part) { return part.method !== "Cash" && !part.reference; });
+        if (missingReference) {
+          showNotificationToast("Enter reference number for each non-cash payment.", true);
+          return false;
+        }
+        return true;
+    }
 
     if(
         payload.paymentMethod !== "Cash" &&
@@ -257,6 +438,7 @@
   }
 
   function setCheckoutLoading(isLoading){
+    checkoutSubmitting = isLoading;
 
     const btn =
         document.getElementById("completeOrderBtn");
@@ -280,6 +462,7 @@ function handleCheckoutFailure(message) {
 }
 
   function checkoutTransaction(){
+    if (checkoutSubmitting) return;
 
     const payload =
         buildCheckoutPayload();
@@ -288,6 +471,11 @@ function handleCheckoutFailure(message) {
         return;
 
     setCheckoutLoading(true);
+    if (activeCheckoutContext) {
+      if (activeCheckoutContext.kind === 'EXCHANGE') submitCustomerExchangeCheckout(payload, activeCheckoutContext);
+      else submitReservationCheckout(payload, activeCheckoutContext);
+      return;
+    }
 
     showNotificationToast(
         "Processing transaction..."
@@ -340,6 +528,7 @@ function handleCheckoutFailure(message) {
             payload.cashReceived,
             payload.changeGiven,
             payload.applyCardFee
+            ,payload.paymentParts
         );
 
   }
@@ -352,14 +541,12 @@ function handleCheckoutFailure(message) {
   /* ================= INVENTORY ================= */
 
   pageReadCache.delete('inventory');
-  masterInventory =
-    Array.isArray(response.updatedInventory)
-      ? response.updatedInventory
-      : [];
-
-  populateManualDropdown(
-    masterInventory
-  );
+  invalidateDeliveryItemCaches();
+    if (typeof clearTransactionHistoryCache === 'function') clearTransactionHistoryCache();
+    else pageReadCache.delete('transactions');
+  if (typeof clearManagerExpectedCashCache === 'function') clearManagerExpectedCashCache();
+  if (Array.isArray(response.updatedInventory)) rememberCashierInventory(response.updatedInventory);
+  else { pageReadCache.delete('cashierInventory'); refreshInventory(); }
 
 
   /* ================= RESET CHECKOUT ================= */

@@ -4,7 +4,12 @@
   style="display:none;"
 >
 
-  <div
+  <form
+    id="loginForm"
+    autocomplete="on"
+    onsubmit="event.preventDefault();updateLoginReady();unlockTerminalSession();"
+    onfocusin="requestAnimationFrame(updateLoginReady)"
+    onpointerdown="updateLoginReady()"
     class="custom-popup-card login-card"
     style="
       max-width:440px;
@@ -56,14 +61,18 @@
         type="text"
         class="form-control"
         id="cashierSelect"
+        name="username"
         placeholder="name0123@ys.sys"
+        list="loginUsernameSuggestions"
         autocomplete="username"
         autocapitalize="none"
         autocorrect="off"
         spellcheck="false"
         oninput="updateLoginReady()"
-        onkeydown="if(event.key === 'Enter'){ unlockTerminalSession(); }"
+        onchange="updateLoginReady()"
       >
+
+      <datalist id="loginUsernameSuggestions"></datalist>
 
     </div>
 
@@ -83,17 +92,15 @@
           type="password"
           class="form-control"
           id="cashierPin"
+          name="password"
           placeholder="Enter your password"
           autocomplete="current-password"
           oninput="updateLoginReady()"
-          onkeydown="
-            if(event.key === 'Enter'){
-              unlockTerminalSession();
-            }
-          "
+          onchange="updateLoginReady()"
         >
         <button id="loginPasswordToggle" class="login-password-toggle" type="button" aria-label="Show password" aria-controls="cashierPin" aria-pressed="false" onclick="toggleLoginPassword()">Show</button>
       </div>
+      <div class="small text-muted mt-2">Use your browser’s Save password option to remember this login.</div>
 
     </div>
 
@@ -174,9 +181,8 @@
 
     <button
       id="loginShiftButton"
-      type="button"
+      type="submit"
       class="btn btn-pink w-100 py-2 login-submit"
-      onclick="unlockTerminalSession()"
       disabled
     >
       Sign in
@@ -184,7 +190,7 @@
 
     <p id="loginShiftBlockedReason" class="small text-muted mt-2 mb-0" role="status" aria-live="polite" hidden></p>
 
-  </div>
+  </form>
 
 </div>
 
@@ -207,6 +213,43 @@ var loginPettyError = false;
 var loginEmployees = [];
 var loginEmployeesError = false;
 var loginBusy = false;
+var LOGIN_USERNAME_CACHE_KEY = "ys_pos_recent_usernames";
+
+function getRecentLoginUsernames() {
+  try {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const usernames = storage && JSON.parse(storage.getItem(LOGIN_USERNAME_CACHE_KEY) || "[]");
+    return Array.isArray(usernames) ? usernames.filter(function(username) {
+      return /^[a-z0-9]+(?:\.[a-z0-9]+)?\d+@ys\.sys$/.test(String(username || ""));
+    }).slice(0, 5) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function renderRecentLoginUsernames() {
+  const list = document.getElementById("loginUsernameSuggestions");
+  if (!list) return;
+  list.innerHTML = "";
+  getRecentLoginUsernames().forEach(function(username) {
+    const option = document.createElement("option");
+    option.value = username;
+    list.appendChild(option);
+  });
+}
+
+function rememberLoginUsername(username) {
+  username = String(username || "").trim().toLowerCase();
+  if (!/^[a-z0-9]+(?:\.[a-z0-9]+)?\d+@ys\.sys$/.test(username)) return;
+  try {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    if (!storage) return;
+    storage.setItem(LOGIN_USERNAME_CACHE_KEY, JSON.stringify([username].concat(
+      getRecentLoginUsernames().filter(function(saved) { return saved !== username; })
+    ).slice(0, 5)));
+    renderRecentLoginUsernames();
+  } catch (error) {}
+}
 
 function changeLoginMode(mode) {
   selectedLoginMode = mode === "STAFF" ? "STAFF" : "CASHIER";
@@ -250,6 +293,7 @@ function initializeLogin() {
   loginEmployees = [];
   loginEmployeesError = false;
   document.getElementById("cashierSelect").value = "";
+  renderRecentLoginUsernames();
   document.getElementById("confirmPettyHandover").checked = false;
   document.getElementById("cashierPin").value = "";
   document.getElementById("cashierPin").type = "password";
@@ -693,6 +737,7 @@ function unlockTerminalSession() {
     pageReadCache.clear();
     localStorage.removeItem('ys_pos_inventory_tab');
     currentEmployee=result;currentCashier=result.fullName;currentSessionIsCashier=cashierMode;
+    rememberLoginUsername(name);
     currentShiftPettyCash=cashierMode?(Number(response.shift.pettyReceived)||0):0;
     currentShiftReportId=cashierMode?response.shift.reportId:'';
     if (typeof clearCashierReportCache === 'function') clearCashierReportCache();
@@ -710,6 +755,10 @@ function unlockTerminalSession() {
     updateCashierNavigationAvailability();
     showPage(cashierMode?'posPage':'dashboardPage');saveSession();
     if(typeof refreshInventory==='function')refreshInventory();
+    if (Number(result.accessLevel) <= 1 && typeof warmManagerExpectedCash === 'function') {
+      warmManagerExpectedCash(getCashReportToday());
+    }
+    if (typeof warmTransactionHistory === 'function') warmTransactionHistory();
   };
   const runner=google.script.run.withSuccessHandler(onLoginSuccess).withFailureHandler(failed);
   if(cashierMode)runner.loginAndStartShift(name,pin,petty,loginPettyHandover&&loginPettyHandover.version);

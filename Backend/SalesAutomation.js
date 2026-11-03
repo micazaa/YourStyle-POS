@@ -19,6 +19,7 @@ function onOpen() {
     .addItem("Create / Repair SYNC Button", "createSalesSyncButtonFromMenu")
     .addItem("Process Pending Sales Now", "processPendingSalesLogRowsFromMenu")
     .addItem("Check Automation Status", "showSalesAutomationStatus")
+    .addItem("Sync Production Data to Dev", "syncProductionToDevelopmentFromMenu")
     .addItem("Refresh Employee Usernames", "refreshEmployeeUsernames_")
     .addToUi();
 }
@@ -50,7 +51,7 @@ function processPendingSalesLogRowsFromButton() {
 
 function createSalesSyncButtonFromMenu() {
   createOrRepairSalesSyncButton_();
-  SpreadsheetApp.getUi().alert("The SYNC button is ready on Sales Log at AD2:AF3.");
+  SpreadsheetApp.getUi().alert("The SYNC button is ready on Sales Log at AJ2:AL3.");
 }
 
 function createOrRepairSalesSyncButton_() {
@@ -77,7 +78,7 @@ function createOrRepairSalesSyncButton_() {
   }
 
   buttonImage
-    .setAnchorCell(sheet.getRange("AD2"))
+    .setAnchorCell(sheet.getRange("AJ2"))
     .setWidth(180)
     .setHeight(56)
     .setAltTextTitle(SALES_SYNC_BUTTON_TITLE)
@@ -85,7 +86,7 @@ function createOrRepairSalesSyncButton_() {
     .assignScript("processPendingSalesLogRowsFromButton");
 
   SpreadsheetApp.flush();
-  return { success: true, range: "AD2:AF3" };
+  return { success: true, range: "AJ2:AL3" };
 }
 
 function showSalesAutomationStatus() {
@@ -383,6 +384,7 @@ function processSalesRows_(sheet, rowNumbers) {
         if (!saleStatus) throw new Error("Status is required.");
 
         if (saleStatus === "COMPLETED" && code && !movementIds[salesLineId]) {
+          assertInventoryNotReserved_(code);
           const inventoryResolution = ensureManualSaleInventoryItem_({
             code: code,
             name: itemName,

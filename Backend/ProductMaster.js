@@ -22,10 +22,34 @@
    K  Updated At
 ========================================================== */
 
-function getProductMaster_() {
+function getProductMasterSheet_(ss) {
+  ss = ss || SpreadsheetApp.getActiveSpreadsheet();
+  const exact = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
+  if (exact) return exact;
+
+  const normalizedTarget = String(SHEETS.PRODUCT_MASTER).replace(/[^a-z0-9]/gi, "").toUpperCase();
+  const nameMatch = ss.getSheets().find(function(candidate) {
+    return String(candidate.getName()).replace(/[^a-z0-9]/gi, "").toUpperCase() === normalizedTarget;
+  });
+  if (nameMatch) return nameMatch;
+
+  /* Sync copies can retain a renamed tab. Identify Product Master by headers. */
+  return ss.getSheets().find(function(candidate) {
+    if (candidate.getLastRow() < 1 || candidate.getMaxColumns() < 6) return false;
+    const headers = candidate.getRange(1, 1, 1, 6).getDisplayValues()[0]
+      .map(function(value) { return String(value || "").trim().toUpperCase(); });
+    return headers[0] === "PRODUCT CODE" && headers[1] === "DESCRIPTION" &&
+      headers[2] === "CATEGORY" && headers[3] === "INVENTORY TYPE" &&
+      (headers[4] === "SELLING PRICE" || headers[4] === "DEFAULT PRICE") &&
+      (headers[5] === "COST PRICE" || headers[5] === "ORIGINAL PRICE");
+  }) || null;
+}
+
+function getProductMaster_(options) {
+  options = options || {};
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  const sheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
+  const sheet = getProductMasterSheet_(ss);
 
   if (!sheet) {
     throw new Error("Product Master sheet not found.");
@@ -184,9 +208,9 @@ function getProductMaster_() {
 
       imageUrl: String(displayRow[PRODUCT_IDX.IMAGE] || "").trim(),
 
-      createdAt: formatProductMasterDateForClient(row[PRODUCT_IDX.CREATED_AT]),
+      createdAt: options.cashierOnly ? "" : formatProductMasterDateForClient(row[PRODUCT_IDX.CREATED_AT]),
 
-      updatedAt: formatProductMasterDateForClient(row[PRODUCT_IDX.UPDATED_AT]),
+      updatedAt: options.cashierOnly ? "" : formatProductMasterDateForClient(row[PRODUCT_IDX.UPDATED_AT]),
     });
   }
 
@@ -297,7 +321,7 @@ function generateYourFindsSizeProductCode_() {
 }
 
 function prepareYourFindsCustomSizes() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.PRODUCT_MASTER);
+  const sheet = getProductMasterSheet_(SpreadsheetApp.getActiveSpreadsheet());
   if (!sheet) throw new Error("Product Master sheet not found.");
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);

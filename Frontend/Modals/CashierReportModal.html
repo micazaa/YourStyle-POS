@@ -4,7 +4,6 @@
       <h2 id="cashierLogoutTitle">Pause or end your shift?</h2>
       <button type="button" class="btn-close" aria-label="Cancel logout" onclick="closeCashierLogoutChoices()"></button>
     </div>
-    <p class="cashier-logout-description">Your sales cash stays with you while paused.</p>
     <div class="cashier-logout-options">
       <button type="button" class="cashier-logout-option" onclick="chooseCashierLogout('pause')">
         <span class="cashier-logout-copy"><span class="cashier-logout-label">Pause shift</span>
@@ -46,7 +45,7 @@
     <div id="cashierReportMetadata" class="row g-3 mb-3">
       <div id="cashierReportManagerField" class="col-md-6">
         <label class="form-label">Verifying Manager</label>
-        <select class="form-select form-select-sm" id="reportManagerName">
+        <select class="form-select form-select-sm" id="reportManagerName" onchange="updateCashierReportReady()">
           <option value="">-- Select Verifying Manager --</option>
           <option value="Bea Alcozero">Bea Alcozero</option>
           <option value="Mica Tambalong">Mica Tambalong</option>
@@ -60,7 +59,7 @@
           id="cashierReportDate"
           class="form-control form-control-sm"
           max=""
-          onchange="loadCashReportByDate()"
+          onchange="loadCashReportByDate(); updateCashierReportReady()"
         />
       </div>
     </div>
@@ -82,111 +81,129 @@
           style="max-height: 200px; overflow-y: auto"
         >
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>1,000</span
+            <span class="denom-label">1,000</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr1000"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>500</span
+            <span class="denom-label">500</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr500"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>200</span
+            <span class="denom-label">200</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr200"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>100</span
+            <span class="denom-label">100</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr100"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>50</span
+            <span class="denom-label">50</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr50"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>20</span
+            <span class="denom-label">20</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr20"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>10</span
+            <span class="denom-label">10</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr10"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>5</span
+            <span class="denom-label">5</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr5"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>1</span
+            <span class="denom-label">1</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr1"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
         </div>
@@ -206,6 +223,7 @@
               id="pettyVoucherNo"
               class="form-control form-control-sm"
               placeholder="e.g. PCV-0045"
+              oninput="updateCashierReportReady()"
             />
           </div>
           <div>
@@ -215,6 +233,7 @@
               class="form-control form-control-sm"
               rows="2"
               placeholder="Explain what the petty cash was used for"
+              oninput="updateCashierReportReady()"
             ></textarea>
           </div>
         </div>
@@ -227,102 +246,129 @@
           style="max-height: 240px; overflow-y: auto"
         >
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>1,000</span
+            <span class="denom-label">1,000</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d1000"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>500</span
+            <span class="denom-label">500</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d500"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>200</span
+            <span class="denom-label">200</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d200"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>100</span
+            <span class="denom-label">100</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d100"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>50</span
+            <span class="denom-label">50</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d50"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>20</span
+            <span class="denom-label">20</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d20"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>10</span
+            <span class="denom-label">10</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d10"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>5</span
+            <span class="denom-label">5</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d5"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>1</span
+            <span class="denom-label">1</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d1"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
         </div>
@@ -392,6 +438,10 @@
       <input id="cashierExitPassword" type="password" class="form-control mb-2" autocomplete="current-password">
       <button type="button" class="btn btn-outline-pink" onclick="reauthenticateCashierExit()">Verify &amp; reload shift</button>
     </div>
+    <div id="cashierEndAcknowledgment" class="form-check my-3" hidden>
+      <input id="cashierEndAcknowledged" class="form-check-input" type="checkbox" onchange="updateCashierExitReady()">
+      <label class="form-check-label small" for="cashierEndAcknowledged">I confirm that all sales and cash counts recorded for this shift are true and complete. I understand that I am responsible for the cash and petty cash I hand over and for explaining any differences.</label>
+    </div>
     <button
       id="shiftReportSubmit"
       type="button"
@@ -401,6 +451,15 @@
       Compile & Download Shift PDF
     </button>
     </div>
+  </div>
+</div>
+<div id="cashierShiftSavedModal" class="generic-overlay-blur" style="display:none" role="dialog" aria-modal="true" aria-labelledby="cashierShiftSavedTitle">
+  <div class="custom-popup-card" style="max-width:480px">
+    <h5 id="cashierShiftSavedTitle" class="fw-bold mb-3">Shift saved</h5>
+    <p class="text-muted">Your report and cash handover have been recorded. Your shift has ended.</p>
+    <p id="cashierShiftPrintError" class="small text-danger" role="alert" hidden></p>
+    <button id="cashierShiftPrintLogout" type="button" class="btn btn-dark-custom w-100 mb-2" onclick="printCashierShiftAndLogout()">Print report &amp; sign out</button>
+    <button id="cashierShiftJustLogout" type="button" class="btn btn-outline-secondary w-100" onclick="finishCashierShiftLogout()">Just sign out</button>
   </div>
 </div>
 <script>
@@ -413,6 +472,8 @@
   var cashierReportWriting = false;
   var cashierReportContextCache = null;
   var cashierReportDateCache = null;
+  var cashierSavedExit = null;
+  var cashierShiftPrintBusy = false;
 
   function clearCashierReportCache() {
     cashierReportContextCache = null;
@@ -449,6 +510,22 @@
     state.hidden = !loading;
     if (loading) state.innerHTML = loadingIndicator(message || 'Retrieving report…');
     document.getElementById('shiftReportModal').setAttribute('aria-busy', String(loading));
+    updateCashierReportReady();
+  }
+
+  // Cash counts may stay blank: blank means zero. Only report approval and
+  // mismatch documentation are required before a cashier report can compile.
+  function updateCashierReportReady() {
+    if (cashierReportIntent !== 'report') { updateCashierExitReady(); return; }
+    const submit = document.getElementById('shiftReportSubmit');
+    if (!submit || submit.style.display === 'none') return;
+    const manager = String(document.getElementById('reportManagerName').value || '').trim();
+    const reportDate = String(document.getElementById('cashierReportDate').value || '').trim();
+    const pettyMismatch = Math.abs(updatePettyReturnTotalValue_() - getDisplayedPettyReceived()) > 0.001;
+    const voucher = String(document.getElementById('pettyVoucherNo').value || '').trim();
+    const reason = String(document.getElementById('pettyVarianceReason').value || '').trim();
+    submit.disabled = Boolean(cashierReportLoadingActive || cashierReportWriting || !manager || !reportDate ||
+      (pettyMismatch && (!voucher || !reason)));
   }
 
   function openCashierLogoutChoices() {
@@ -469,8 +546,11 @@
 
   function updateCashierExitReady() {
     if (cashierReportIntent === 'report') return;
+    const end = cashierReportIntent === 'end';
+    const mismatch = Math.abs(updatePettyReturnTotalValue_() - getDisplayedPettyReceived()) > 0.001;
+    const documented = !mismatch || (document.getElementById('pettyVoucherNo').value.trim() && document.getElementById('pettyVarianceReason').value.trim());
     document.getElementById('shiftReportSubmit').disabled = cashierExitBusy || cashierReportLoadingActive || !cashierExitContext ||
-      (cashierReportIntent === 'end' && !document.getElementById('cashierEndManager').value);
+      (end && (!document.getElementById('cashierEndManager').value || !document.getElementById('cashierEndAcknowledged').checked || !documented));
   }
 
   function setCashierExitBusy(busy) {
@@ -481,7 +561,7 @@
     document.getElementById('cashierReportDate').disabled = true;
     const submit = document.getElementById('shiftReportSubmit');
     submit.innerHTML = busy ? loadingIndicator('Saving…') : cashierReportIntent === 'pause'
-      ? 'Save handover & pause' : 'Save report & sign out';
+      ? 'Save handover & pause' : 'Save & end shift';
     updateCashierExitReady();
   }
 
@@ -519,8 +599,9 @@
       if (!context || !context.success) return failed(new Error(context && context.message || 'Unable to load cashier shift.'));
       if (context.status === 'CLOSED' || context.status === 'PAUSED') {
         clearCashierReportCache();
+        if (context.status === 'CLOSED') { showSavedCashierShift(context); return; }
         completeCleanLogout();
-        showNotificationToast(context.status === 'PAUSED' ? 'Your shift is already paused. You are signed out.' : 'Your shift is already closed. You are signed out.');
+        showNotificationToast('Your shift is already paused. You are signed out.');
         return;
       }
       if (!cached) rememberCashierReportContext(context);
@@ -545,8 +626,10 @@
           document.getElementById('d' + d).value = Number((saved.cashBreakdown || {})[d]) || '';
           document.getElementById('pr' + d).value = context.pettyBreakdown ? Number(context.pettyBreakdown[d]) || '' : '';
         });
+        document.getElementById('pettyVoucherNo').value = context.pettyVoucherNo || '';
+        document.getElementById('pettyVarianceReason').value = context.pettyRemark || '';
         document.getElementById('cashDrawerVarianceReason').value = saved.cashRemark || '';
-        if (context.pettyBreakdown) updatePettyReturnTotal();
+        updatePettyReturnTotal();
         updateShiftCashDrawerTotal();
       }
       setCashierClosingDate();
@@ -584,6 +667,8 @@
     const managerName = document.getElementById('cashierEndManager').value;
     if (cashierReportIntent === 'end' && !managerName)
       return cashierExitError('Select a verifying manager.');
+    if (cashierReportIntent === 'end' && !document.getElementById('cashierEndAcknowledged').checked)
+      return cashierExitError('Confirm the sales and cash handover acknowledgment before ending your shift.');
     const petty = {}, cash = {};
     for (const d of PETTY_DENOMS) {
       for (const [prefix, target] of [['pr', petty], ['d', cash]]) {
@@ -602,6 +687,7 @@
       token: currentEmployee.dashboardToken, reportId: cashierExitContext.reportId,
       receiveId: cashierExitContext.receiveId, requestId: cashierExitRequestId,
       action: cashierReportIntent === 'pause' ? 'PAUSE' : 'END',
+      acknowledged: cashierReportIntent === 'end' && document.getElementById('cashierEndAcknowledged').checked,
       managerName: cashierReportIntent === 'end' ? managerName : '',
       pettyBreakdown: petty, voucherNo: voucher, reason: reason, cashBreakdown: cash,
       cashRemark: document.getElementById('cashDrawerVarianceReason').value.trim(),
@@ -618,11 +704,9 @@
         if (!currentEmployee || currentEmployee.dashboardToken !== owner) return;
         setCashierExitBusy(false);
         if (!result || !result.success) return cashierExitError(result && result.message || 'Unable to save the shift.');
-        if (result.downloadUrl) window.open(result.downloadUrl);
+        if (result.status === 'CLOSED') { showSavedCashierShift(result); return; }
         completeCleanLogout();
-        showNotificationToast(result.pdfWarning || (result.status === 'PAUSED'
-          ? 'Petty cash handed over. Your shift is paused and you are signed out.'
-          : 'Cashier report saved. Your shift has ended and you are signed out.'));
+        showNotificationToast('Petty cash handed over. Your shift is paused and you are signed out.');
       }).withFailureHandler(error => {
         if (!currentEmployee || currentEmployee.dashboardToken !== owner) return;
         setCashierExitBusy(false);
@@ -631,6 +715,52 @@
     }
     if (payload.action === 'END') requestManagerPin('Enter ' + managerName + "'s Manager PIN to end this shift:", send, managerName !== currentCashier);
     else send(undefined);
+  }
+
+  function showSavedCashierShift(result) {
+    cashierSavedExit = {reportId: result.reportId, token: currentEmployee.dashboardToken};
+    toggleShiftReportModal(false);
+    cashierShiftPrintBusy = false;
+    document.getElementById('cashierShiftPrintError').hidden = true;
+    document.getElementById('cashierShiftPrintLogout').disabled = false;
+    document.getElementById('cashierShiftPrintLogout').textContent = 'Print report & sign out';
+    document.getElementById('cashierShiftJustLogout').disabled = false;
+    document.getElementById('cashierShiftSavedModal').style.display = 'flex';
+  }
+
+  function finishCashierShiftLogout() {
+    if (cashierShiftPrintBusy || !cashierSavedExit) return;
+    cashierSavedExit = null;
+    document.getElementById('cashierShiftSavedModal').style.display = 'none';
+    completeCleanLogout();
+    showNotificationToast('Cashier report saved. Your shift has ended and you are signed out.');
+  }
+
+  function printCashierShiftAndLogout() {
+    if (cashierShiftPrintBusy || !cashierSavedExit) return;
+    const saved = cashierSavedExit;
+    cashierShiftPrintBusy = true;
+    document.getElementById('cashierShiftPrintLogout').disabled = true;
+    document.getElementById('cashierShiftJustLogout').disabled = true;
+    document.getElementById('cashierShiftPrintLogout').innerHTML = loadingIndicator('Preparing report…');
+    document.getElementById('cashierShiftPrintError').hidden = true;
+    function failed(error) {
+      if (cashierSavedExit !== saved || !currentEmployee || currentEmployee.dashboardToken !== saved.token) return;
+      cashierShiftPrintBusy = false;
+      document.getElementById('cashierShiftPrintLogout').disabled = false;
+      document.getElementById('cashierShiftPrintLogout').textContent = 'Print report & sign out';
+      document.getElementById('cashierShiftJustLogout').disabled = false;
+      const message = document.getElementById('cashierShiftPrintError');
+      message.textContent = 'Your shift is saved. ' + (error.message || 'Could not prepare the PDF. Try again or choose Just sign out.');
+      message.hidden = false;
+    }
+    google.script.run.withSuccessHandler(result => {
+      if (cashierSavedExit !== saved || !currentEmployee || currentEmployee.dashboardToken !== saved.token) return;
+      if (!result || !result.success || !result.downloadUrl) return failed(result || {});
+      window.open(result.downloadUrl);
+      cashierShiftPrintBusy = false;
+      finishCashierShiftLogout();
+    }).withFailureHandler(failed).printEndedCashierShiftReport(saved.token, saved.reportId);
   }
 
   function getCashReportToday() {
@@ -689,6 +819,8 @@
       ? 'Count and hand over petty cash. Keep your sales cash until you end your shift.' : '';
     document.getElementById('cashierClosingDate').hidden = !lifecycle || pause;
     document.getElementById('cashierEndManagerField').hidden = cashierReportIntent !== 'end';
+    document.getElementById('cashierEndAcknowledgment').hidden = cashierReportIntent !== 'end';
+    document.getElementById('cashierEndAcknowledged').checked = false;
     document.getElementById('cashierEndManager').value = '';
     document.getElementById('shiftReportTitle').textContent = pause ? 'Hand over petty cash' : lifecycle ? 'End cashier shift' : 'Cashier Daily Sales Report';
     document.getElementById('shiftReportCard').style.maxWidth = pause ? '560px' : '820px';
@@ -699,7 +831,7 @@
     document.getElementById('cashierExitRetry').hidden = true;
     document.getElementById('cashierExitReauth').hidden = true;
     document.getElementById('cashierReportDate').disabled = lifecycle;
-    document.getElementById('shiftReportSubmit').disabled = false;
+    document.getElementById('shiftReportSubmit').disabled = lifecycle ? false : true;
     document.getElementById('shiftReportSubmit').textContent = 'Compile & Download Shift PDF';
     if (lifecycle) {
       clearCashReportModal();
@@ -742,14 +874,7 @@
   }
 
   function updatePettyReturnTotal() {
-    let total = 0;
-
-    PETTY_DENOMS.forEach(function(denomination) {
-      const quantity =
-        parseInt(document.getElementById('pr' + denomination).value, 10) || 0;
-
-      total += denomination * quantity;
-    });
+    const total = updatePettyReturnTotalValue_();
 
     document.getElementById('pettyReturnedTotalOut').textContent =
       '₱' + total.toFixed(2);
@@ -759,6 +884,19 @@
 
     document.getElementById('pettyVarianceBox').style.display =
       mismatch ? 'block' : 'none';
+    updateCashierReportReady();
+    return total;
+  }
+
+  function updatePettyReturnTotalValue_() {
+    let total = 0;
+
+    PETTY_DENOMS.forEach(function(denomination) {
+      const quantity =
+        parseInt(document.getElementById('pr' + denomination).value, 10) || 0;
+
+      total += denomination * quantity;
+    });
 
     return total;
   }
@@ -770,6 +908,7 @@
       total += d * qty;
     });
     document.getElementById('cashDrawerCountTotalOut').textContent = '₱' + total.toFixed(2);
+    updateCashierReportReady();
     return total;
   }
 
@@ -875,6 +1014,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
           localStorage.setItem(downloadKey, '1');
           window.open(res.downloadUrl);
           toggleShiftReportModal(false);
+          if (res.preview) showNotificationToast('Report saved. Shift remains open.');
         } else {
           alert('PDF Engine Error: ' + res.message);
         }
@@ -988,6 +1128,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
 
           setReportFieldsReadOnly(false);
           if (submit) submit.style.display = 'block';
+          updateCashierReportReady();
 
           if (date !== today) {
             showNotificationToast(
@@ -1057,6 +1198,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
 
           setReportFieldsReadOnly(false);
           if (submit) submit.style.display = 'block';
+          updateCashierReportReady();
         }
       }
     if (cached) loaded(cached);

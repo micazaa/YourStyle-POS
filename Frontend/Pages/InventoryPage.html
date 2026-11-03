@@ -65,6 +65,9 @@
         <select id="inventoryStockStatusFilter" class="form-select" style="width:180px;" aria-label="Inventory stock status" onchange="filterInventoryTable()">
           <option value="">All Stock </option><option value="IN STOCK">In Stock</option><option value="LOW STOCK">Low Stock</option><option value="SOLD OUT">Sold Out</option><option value="INCOMPLETE">Incomplete</option><option value="CONVERTED">Converted</option><option value="RETURNED">Returned</option>
         </select>
+        <select id="inventoryExcludeStatusFilter" class="form-select" style="width:200px;" aria-label="Exclude inventory status" onchange="filterInventoryTable()">
+          <option value="">Exclude: None</option><option value="DEACTIVATED">Exclude: Inactive</option><option value="ON SALE">Exclude: On Sale</option><option value="IN STOCK">Exclude: In Stock</option><option value="LOW STOCK">Exclude: Low Stock</option><option value="SOLD OUT">Exclude: Sold Out</option><option value="INCOMPLETE">Exclude: Incomplete</option><option value="CONVERTED">Exclude: Converted</option><option value="RETURNED">Exclude: Returned</option>
+        </select>
         <input style="flex:1;min-width:220px;" type="search" id="inventorySearch" class="form-control"
           aria-label="Search inventory" placeholder="Search code, product, category, size..."
           oninput="filterInventoryTable()">
@@ -204,12 +207,23 @@ function loadInventoryPage(forceRefresh = false, keepVisible = false) {
     showNotificationToast(error.message || String(error), true);
   }).getInventoryForManagement(readToken);
 }
+function isInventoryItemExcluded(item) {
+  const excluded = document.getElementById('inventoryExcludeStatusFilter').value;
+  if (!excluded) return false;
+  const state = String(item.status || '').trim().toUpperCase();
+  const productStatus = String(item.productStatus || state).trim().toUpperCase();
+  if (excluded === 'DEACTIVATED') return [state, productStatus].some(status => ['INACTIVE', 'DEACTIVATED', 'DISABLED'].includes(status));
+  if (excluded === 'ON SALE') return productStatus === 'ON SALE';
+  const stockStatus = getInventoryDisplayStatus(item);
+  return stockStatus === excluded || (excluded === 'SOLD OUT' && stockStatus === 'NEGATIVE STOCK');
+}
 function getFilteredInventoryItems() {
   const search = document.getElementById('inventorySearch').value.trim().toLowerCase();
   const category = document.getElementById('inventoryCategoryFilter').value;
   const statusFilter = document.getElementById('inventoryStatusFilter').value;
   const stockStatusFilter = document.getElementById('inventoryStockStatusFilter').value;
   return inventoryPageData.filter(function(item) {
+    if (isInventoryItemExcluded(item)) return false;
     if(inventoryIncompleteOnly && !(String(item.category).toUpperCase()==='YOURFINDS' && String(item.status).toUpperCase()==='INCOMPLETE'))return false;
     const productStatus = String(item.productStatus || (String(item.status || '').trim().toUpperCase() === 'INACTIVE' ? 'DEACTIVATED' : 'ACTIVE')).trim().toUpperCase();
     const stockStatus = getInventoryDisplayStatus(item);
@@ -253,7 +267,7 @@ function getInventorySummaryItems(kind) {
   // Match search/category against individual records, then show the whole group.
   // Searching one barcode must not turn a well-stocked size into a low-stock size.
   const matchingKeys = new Set(getFilteredInventoryItems().map(inventorySummaryGroupKey));
-  return buildInventorySummaryGroups(inventoryPageData).filter(function(group) {
+  return buildInventorySummaryGroups(inventoryPageData.filter(item => !isInventoryItemExcluded(item))).filter(function(group) {
     if (!matchingKeys.has(group.key)) return false;
     if (kind === 'stock') return group.stock > 0;
     if (kind === 'low') return group.status === 'LOW STOCK';
@@ -428,7 +442,7 @@ function renderInventoryTable(items) {
         isManager
           ? `
             <td>
-              ${isAllocatedSaleRow ? '<span class="badge bg-danger text-white">On Sale</span>' : isConverted ? '<span class="badge bg-secondary">Converted</span>' : `<select
+              ${state === 'RESERVED' ? '<input class="form-control form-control-sm" value="Reserved" disabled aria-label="Reserved inventory status">' : isAllocatedSaleRow ? '<span class="badge bg-danger text-white">On Sale</span>' : isConverted ? '<span class="badge bg-secondary">Converted</span>' : `<select
                 class="form-select form-select-sm inventory-active"
                 aria-label="Active status for ${escapeInventoryHtml(item.code)}"
                 ${canToggle ? '' : 'disabled'}
@@ -616,6 +630,7 @@ function getInventoryDisplayStatus(
   }
 
 
+  if (status === "RESERVED") return "RESERVED";
   if (status === "RETURNED") return "RETURNED";
 
   if (status === "CONVERTED") return "CONVERTED";
@@ -656,6 +671,7 @@ function getInventoryDisplayStatus(
 ========================================================== */
 
 function buildInventoryStatusBadge(status) {
+  if (status === "RESERVED") return '<span class="badge bg-warning text-dark">Reserved</span>';
   if (status === "RETURNED") return '<span class="badge bg-secondary">Returned</span>';
 
   if (status === "CONVERTED") return '<span class="badge bg-secondary">Converted</span>';

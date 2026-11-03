@@ -37,11 +37,11 @@ test('SYNC button repair does not merge or alter Sales Log cells', () => {
 
   assert.deepEqual(
     JSON.parse(JSON.stringify(context.createOrRepairSalesSyncButton_())),
-    { success: true, range: 'AD2:AF3' }
+    { success: true, range: 'AJ2:AL3' }
   );
   assert.deepEqual(calls, [
     ['insert'],
-    ['anchor', 'AD2'],
+    ['anchor', 'AJ2'],
     ['width', 180],
     ['height', 56],
     ['title', 'YourStyle Sales Sync Button'],

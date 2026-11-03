@@ -5,6 +5,93 @@ function saleDisplayName_(name, priceSource) {
     : value;
 }
 
+const SALES_LOG_SPLIT_PAYMENT_HEADERS_ = [
+  "Payment 1 Method", "Payment 1 Amount", "Payment 1 Reference",
+  "Payment 2 Method", "Payment 2 Amount", "Payment 2 Reference"
+];
+
+function ensureSalesLogSplitPaymentColumns_(sheet) {
+  const firstColumn = SALES_COL.PAYMENT_1_METHOD;
+  const lastColumn = SALES_COL.PAYMENT_2_REFERENCE;
+  if (sheet.getMaxColumns() < lastColumn) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), lastColumn - sheet.getMaxColumns());
+  }
+  const existing = sheet.getRange(1, firstColumn, 1, SALES_LOG_SPLIT_PAYMENT_HEADERS_.length).getDisplayValues()[0];
+  const values = existing.map(function(value, index) {
+    const actual = String(value || "").trim();
+    const expected = SALES_LOG_SPLIT_PAYMENT_HEADERS_[index];
+    if (actual && actual !== expected) throw new Error("Sales Log column " + (firstColumn + index) + " must be \"" + expected + "\".");
+    return expected;
+  });
+  sheet.getRange(1, firstColumn, 1, values.length).setValues([values]);
+  const allowedPaymentMethods = ["Cash", "GCash", "QR Code", "Credit Card", "Cash + GCash", "Cash + Credit Card", "GCash + Credit Card"];
+  const paymentRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(allowedPaymentMethods, true)
+    .setAllowInvalid(false)
+    .build();
+  const dataRows = Math.max(1, sheet.getMaxRows() - 1);
+  sheet.getRange(2, SALES_COL.PAYMENT_METHOD, dataRows, 1).setDataValidation(paymentRule);
+  if (typeof SALES_SYNC_BUTTON_TITLE !== "undefined") {
+    sheet.getImages().forEach(function(image) {
+      if (image.getAltTextTitle() === SALES_SYNC_BUTTON_TITLE) image.setAnchorCell(sheet.getRange("AJ2"));
+    });
+  }
+}
+
+function normalizeCheckoutPaymentParts_(paymentMethod, paymentParts, baseTotal) {
+  const method = String(paymentMethod || "Cash").trim();
+  const splitMethods = {
+    "Cash + GCash": ["Cash", "GCash"],
+    "Cash + Credit Card": ["Cash", "Credit Card"],
+    "GCash + Credit Card": ["GCash", "Credit Card"]
+  };
+  const methods = splitMethods[method] || (["Cash", "GCash", "QR Code", "Credit Card"].includes(method) ? [method] : null);
+  if (!methods) throw new Error("Select a valid payment method.");
+  if (!Array.isArray(paymentParts) || !paymentParts.length) {
+    if (methods.length === 2) throw new Error("Enter two valid split payments.");
+    return [{ method: method, amount: roundToTwo(baseTotal), reference: "" }];
+  }
+  const parts = paymentParts.map(function(part) {
+    const normalized = {
+      method: String(part && part.method || "").trim(),
+      amount: roundToTwo(Number(part && part.amount)),
+      reference: String(part && part.reference || "").trim()
+    };
+    if (part && part.receivedAmount !== undefined) {
+      const received = Number(part.receivedAmount);
+      if (normalized.method !== "Credit Card" || !Number.isFinite(received) || received < 0) {
+        throw new Error("Enter a valid credit card amount.");
+      }
+      const fee = roundToTwo(received * 0.032);
+      if (Math.round((roundToTwo(received) - fee) * 100) !== Math.round(normalized.amount * 100)) {
+        throw new Error("Credit card amount does not match its fee and sale allocation.");
+      }
+      normalized.receivedAmount = roundToTwo(received);
+    }
+    return normalized;
+  });
+  if (parts.length !== methods.length || parts.some(function(part, index) {
+    return part.method !== methods[index] || !Number.isFinite(part.amount) || part.amount < 0;
+  })) throw new Error(methods.length === 2 ? "Enter two valid split payments." : "Enter a valid payment.");
+  const total = parts.reduce(function(sum, part) { return sum + part.amount; }, 0);
+  if (Math.abs(total - Number(baseTotal)) > 0.01) throw new Error(methods.length === 2
+    ? "Split payment amounts must equal sale total." : "Payment amount must equal sale total.");
+  parts.forEach(function(part) {
+    if (part.method.toUpperCase() !== "CASH" && !part.reference) throw new Error("Reference number is required for " + part.method + ".");
+  });
+  return parts;
+}
+
+function splitCashAmountForSalesRow_(row) {
+  const firstMethod = String(row[SALES_IDX.PAYMENT_1_METHOD] || "").trim().toUpperCase();
+  const secondMethod = String(row[SALES_IDX.PAYMENT_2_METHOD] || "").trim().toUpperCase();
+  if (!firstMethod || !secondMethod) return null;
+  let cash = 0;
+  if (firstMethod === "CASH") cash += Number(row[SALES_IDX.PAYMENT_1_AMOUNT]) || 0;
+  if (secondMethod === "CASH") cash += Number(row[SALES_IDX.PAYMENT_2_AMOUNT]) || 0;
+  return roundToTwo(cash);
+}
+
 function executeCheckoutBackend(
   cart,
   paymentMethod,
@@ -15,9 +102,16 @@ function executeCheckoutBackend(
   cashierName,
   cashReceived,
   changeGiven,
-  applyCardFee
+  applyCardFee,
+  paymentParts
 ) {
+  const checkoutLock = LockService.getScriptLock();
   try {
+    checkoutLock.waitLock(30000);
+    (cart || []).forEach(item => {
+      if (item.reservationReceiptId) throw new Error("Complete reserved items through reservation checkout.");
+    });
+    assertInventoryNotReserved_((cart || []).map(item => item.code));
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
     const salesLogSheet = ss.getSheetByName(SHEETS.SALES_LOG);
@@ -35,6 +129,13 @@ function executeCheckoutBackend(
         message: "Cart is empty.",
       });
     }
+
+    if (salesLogSheet.getLastRow() > 1 && salesLogSheet.getRange(2, SALES_COL.RECEIPT_ID, salesLogSheet.getLastRow() - 1, 1)
+      .createTextFinder(String(receiptId)).matchCase(false).matchEntireCell(true).findNext()) {
+      throw new Error("Receipt number already exists. Reopen checkout before submitting again.");
+    }
+
+    ensureSalesLogSplitPaymentColumns_(salesLogSheet);
 
     // 1) Per-line raw total and item-level discount
     let lines = cart.map((item) => {
@@ -74,6 +175,7 @@ function executeCheckoutBackend(
     const baseTotalDue = roundToTwo(
       Math.max(0, subtotalAfterItemDiscounts - globalReduction)
     );
+    const normalizedPaymentParts = normalizeCheckoutPaymentParts_(paymentMethod, paymentParts, baseTotalDue);
 
     lines.forEach((l) => {
       const share =
@@ -94,15 +196,15 @@ function executeCheckoutBackend(
     //    Cash / GCash: no fee.
     let feeRateCharged = 0;
     let feeRateAbsorbed = 0;
-    if (paymentMethod === "QR Code") {
-      feeRateCharged = 0.01;
-    } else if (paymentMethod === "Credit Card") {
+    const cardBase = normalizedPaymentParts.filter(function(part) { return part.method.toUpperCase() === "CREDIT CARD"; }).reduce(function(total, part) { return total + part.amount; }, 0);
+    const chargedCardBase = normalizedPaymentParts.filter(function(part) { return part.method.toUpperCase() === "CREDIT CARD"; }).reduce(function(total, part) { return total + (part.receivedAmount === undefined ? part.amount : part.receivedAmount); }, 0);
+    const qrBase = normalizedPaymentParts.filter(function(part) { return part.method.toUpperCase() === "QR CODE"; }).reduce(function(total, part) { return total + part.amount; }, 0);
+    if (cardBase) {
       if (applyCardFee) feeRateCharged = 0.032;
       else feeRateAbsorbed = 0.032;
     }
-
-    const totalFeeCharged = roundToTwo(baseTotalDue * feeRateCharged);
-    const totalFeeAbsorbed = roundToTwo(baseTotalDue * feeRateAbsorbed);
+    const totalFeeCharged = roundToTwo(qrBase * 0.01 + chargedCardBase * feeRateCharged);
+    const totalFeeAbsorbed = roundToTwo(cardBase * feeRateAbsorbed);
 
     const sumLineNet = lines.reduce((s, l) => s + l.lineNet, 0) || 1;
     lines.forEach((l) => {
@@ -148,6 +250,12 @@ function executeCheckoutBackend(
       "", // Z Sync Error
       l.priceSource || (l.isCustom ? "MANUAL" : "REGULAR"), // AA Price Source
       l.saleReferenceId || "", // AB Sale Reference ID
+      normalizedPaymentParts[0].method, // AC Payment 1 Method
+      normalizedPaymentParts[0].amount, // AD Payment 1 Amount
+      normalizedPaymentParts[0].reference, // AE Payment 1 Reference
+      normalizedPaymentParts[1] ? normalizedPaymentParts[1].method : "", // AF Payment 2 Method
+      normalizedPaymentParts[1] ? normalizedPaymentParts[1].amount : "", // AG Payment 2 Amount
+      normalizedPaymentParts[1] ? normalizedPaymentParts[1].reference : "", // AH Payment 2 Reference
     ]);
     salesLogSheet
       .getRange(
@@ -169,7 +277,7 @@ function executeCheckoutBackend(
     });
   } catch (err) {
     return JSON.stringify({ success: false, message: err.toString() });
-  }
+  } finally { if (checkoutLock.hasLock()) checkoutLock.releaseLock(); }
 }
 
 function validateSalePricing_(lines, productSnapshot) {
@@ -280,6 +388,7 @@ function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart
   const today = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
   const shiftStartDate = shiftStart ? new Date(shiftStart) : null;
   let cashSales = 0;
+  const processedSplitReceipts = {};
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
@@ -292,8 +401,17 @@ function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart
     const paymentMethod = String(row[SALES_IDX.PAYMENT_METHOD] || "").trim().toUpperCase();
     const status = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
 
-    if (rowDate === today && rowCashier === cashierName && paymentMethod === "CASH" && status === "COMPLETED") {
-      cashSales += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+    if (rowDate === today && rowCashier === cashierName && status === "COMPLETED") {
+      const splitCash = splitCashAmountForSalesRow_(row);
+      if (splitCash !== null) {
+        const receiptId = salesPaymentKey_(row);
+        if (receiptId && !processedSplitReceipts[receiptId]) {
+          processedSplitReceipts[receiptId] = true;
+          cashSales += splitCash;
+        }
+      } else if (paymentMethod === "CASH") {
+        cashSales += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+      }
     }
   }
 
@@ -302,152 +420,39 @@ function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart
 }
 
 function getExpectedCashForManager(reportDate) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
+  const lastRow = sheet && sheet.getLastRow();
+  if (!sheet || lastRow < 2) return { expectedCashDrawer: 0 };
 
-  const ss =
-    SpreadsheetApp.getActiveSpreadsheet();
-
-  const sheet =
-    ss.getSheetByName(
-      SHEETS.SALES_LOG
-    );
-
-
-  if (!sheet) {
-
-    return {
-      expectedCashDrawer: 0
-    };
-
-  }
-
-
-  const data =
-    sheet
-      .getDataRange()
-      .getValues();
-
-
-  const tz =
-    Session.getScriptTimeZone();
-
+  /* One contiguous read; avoid per-row Utilities.formatDate calls. */
+  const rowCount = lastRow - 1;
+  const salesLogWidth = typeof SALES_LOG_COLUMN_COUNT === "number" ? SALES_LOG_COLUMN_COUNT : SALES_COL.STATUS;
+  const rows = sheet.getRange(2, SALES_COL.TIMESTAMP, rowCount, salesLogWidth).getValues();
+  const tz = Session.getScriptTimeZone();
+  const start = Utilities.parseDate(String(reportDate || '').trim() + " 00:00:00", tz, "yyyy-MM-dd HH:mm:ss");
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
   let cashSales = 0;
+  const processedSplitReceipts = {};
 
-
-  Logger.log(
-    "===== MANAGER EXPECTED CASH ====="
-  );
-
-  Logger.log(
-    "Requested Date: " +
-    reportDate
-  );
-
-
-  for (
-    let i = 1;
-    i < data.length;
-    i++
-  ) {
-
-    const row =
-      data[i];
-
-    const timestamp =
-      row[
-        SALES_IDX.TIMESTAMP
-      ];
-
-
-    if (!timestamp) {
-      continue;
+  for (let i = 0; i < rowCount; i++) {
+    const row = rows[i];
+    const timestamp = row[SALES_IDX.TIMESTAMP];
+    const saleTime = timestamp ? new Date(timestamp) : null;
+    if (!saleTime || isNaN(saleTime.getTime()) || saleTime < start || saleTime >= end) continue;
+    if (String(row[SALES_IDX.STATUS] || "").trim().toUpperCase() !== "COMPLETED") continue;
+    const splitCash = typeof splitCashAmountForSalesRow_ === "function" ? splitCashAmountForSalesRow_(row) : null;
+    if (splitCash !== null) {
+      const receiptId = salesPaymentKey_(row);
+      if (receiptId && !processedSplitReceipts[receiptId]) {
+        processedSplitReceipts[receiptId] = true;
+        cashSales += splitCash;
+      }
+    } else if (String(row[SALES_IDX.PAYMENT_METHOD] || "").trim().toUpperCase() === "CASH") {
+      cashSales += Number(row[SALES_IDX.NET_TOTAL]) || 0;
     }
-
-
-    const rowDate =
-      Utilities.formatDate(
-        new Date(timestamp),
-        tz,
-        "yyyy-MM-dd"
-      );
-
-
-    /*
-      Ignore every other date BEFORE logging.
-    */
-
-    if (
-      rowDate !== reportDate
-    ) {
-      continue;
-    }
-
-
-    const paymentMethod =
-      String(
-        row[
-          SALES_IDX.PAYMENT_METHOD
-        ] || ""
-      )
-        .trim()
-        .toUpperCase();
-
-
-    const status =
-      String(
-        row[
-          SALES_IDX.STATUS
-        ] || ""
-      )
-        .trim()
-        .toUpperCase();
-
-
-    const amount =
-      Number(
-        row[
-          SALES_IDX.NET_TOTAL
-        ]
-      ) || 0;
-
-
-    if (
-      status !== "COMPLETED"
-    ) {
-      continue;
-    }
-
-
-    if (
-      paymentMethod !== "CASH"
-    ) {
-      continue;
-    }
-
-
-    cashSales +=
-      amount;
-
   }
 
-
-  cashSales =
-    roundToTwo(
-      cashSales
-    );
-
-
-  Logger.log(
-    "FINAL EXPECTED CASH = " +
-    cashSales
-  );
-
-
-  return {
-
-    expectedCashDrawer:
-      cashSales
-
-  };
+  return { expectedCashDrawer: roundToTwo(cashSales) };
 
 }
 
@@ -577,6 +582,8 @@ function voidAndRefundTransactionBackend(
 
     }
 
+
+    if (findReservation_(receiptId)) throw new Error("Reservation payments cannot be voided. Use the reservation actions in Transaction History.");
 
     const salesRange = salesLogSheet.getDataRange();
     const data = salesRange.getValues();
@@ -846,7 +853,7 @@ function voidAndRefundTransactionBackend(
           : matchedRows.length + " line item(s))."),
 
       updatedInventory:
-        getFullInventory()
+        getSellableInventory()
 
     };
 
@@ -874,6 +881,29 @@ function voidAndRefundTransactionBackend(
    TRANSACTION HISTORY
 ========================================================== */
 
+function readTransactionHistoryRows_(sheet, fromTime, untilTime) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return {data: [], notes: []};
+  // Scan one column first. Read receipt fields only for the selected date span.
+  // Find both ends instead of assuming manually entered sales are chronological.
+  const timestamps = sheet.getRange(2, SALES_COL.TIMESTAMP, lastRow - 1, 1).getValues();
+  let first = -1, last = -1;
+  timestamps.forEach(function(row, index) {
+    if (!row[0]) return;
+    const time = new Date(row[0]).getTime();
+    if (time >= fromTime && time < untilTime) {
+      if (first === -1) first = index;
+      last = index;
+    }
+  });
+  if (first === -1) return {data: [], notes: []};
+  const startRow = first + 2, count = last - first + 1;
+  return {
+    data: sheet.getRange(startRow, 1, count, SALES_COL.STATUS).getValues(),
+    notes: sheet.getRange(startRow, SALES_COL.STATUS, count, 1).getNotes()
+  };
+}
+
 function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -887,36 +917,32 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
       };
     }
 
-    const salesRange = sheet.getDataRange();
-    const data = salesRange.getValues();
-    const statusNotes = sheet
-      .getRange(1, SALES_COL.STATUS, salesRange.getNumRows(), 1)
-      .getNotes();
-
     const tz = Session.getScriptTimeZone();
 
     /* ======================================================
        CASHIER DATE SECURITY
 
-       Cashier is ALWAYS today.
-
-       Even if somebody manipulates the frontend and sends
-       another date, backend ignores it.
+       Cashiers can read their own sales for seven store dates, and everyone's
+       sales for today and yesterday.
     ====================================================== */
 
     const now =
       new Date();
 
-    const localToday = new Date(
-      now.getTime() - now.getTimezoneOffset() * 60000
-    );
-    const today = localToday.toISOString().split("T")[0];
-    const cashierStartDate = new Date(localToday);
-    cashierStartDate.setDate(cashierStartDate.getDate() - 6);
+    const today = Utilities.formatDate(now, tz, "yyyy-MM-dd");
+    const cashierStartDate = new Date(today + "T00:00:00Z");
+    cashierStartDate.setUTCDate(cashierStartDate.getUTCDate() - 6);
     const cashierFromDate = cashierStartDate.toISOString().split("T")[0];
+    const sharedStartDate = new Date(today + "T00:00:00Z");
+    sharedStartDate.setUTCDate(sharedStartDate.getUTCDate() - 1);
+    const sharedFromTime = Utilities.parseDate(sharedStartDate.toISOString().slice(0, 10), tz, "yyyy-MM-dd").getTime();
 
     const selectedFromDate = String(fromDate || (isManager ? today : cashierFromDate));
     const selectedToDate = String(toDate || (isManager ? selectedFromDate : today));
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedFromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(selectedToDate)) {
+      return {success: false, message: "Select valid transaction dates."};
+    }
 
     if (!isManager &&
       (selectedFromDate < cashierFromDate || selectedToDate > today)) {
@@ -933,13 +959,25 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
       };
     }
 
+    const fromTime = Utilities.parseDate(selectedFromDate, tz, "yyyy-MM-dd").getTime();
+    const endDate = Utilities.parseDate(selectedToDate, tz, "yyyy-MM-dd");
+    if (Utilities.formatDate(new Date(fromTime), tz, "yyyy-MM-dd") !== selectedFromDate ||
+        Utilities.formatDate(endDate, tz, "yyyy-MM-dd") !== selectedToDate) {
+      return {success: false, message: "Select valid transaction dates."};
+    }
+    const nextDate = new Date(selectedToDate + "T00:00:00Z");
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    const untilTime = Utilities.parseDate(nextDate.toISOString().slice(0, 10), tz, "yyyy-MM-dd").getTime();
+    const snapshot = readTransactionHistoryRows_(sheet, fromTime, untilTime);
+    const data = snapshot.data, statusNotes = snapshot.notes;
+
     /* ======================================================
        GROUP SALES LOG LINES BY RECEIPT
     ====================================================== */
 
-    const receiptMap = {};
+    const receiptMap = Object.create(null);
 
-    for (let i = 1; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       const row = data[i];
 
       if (!row[SALES_IDX.TIMESTAMP]) {
@@ -948,19 +986,14 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
 
       const timestamp = new Date(row[SALES_IDX.TIMESTAMP]);
 
-      const rowDate = Utilities.formatDate(timestamp, tz, "yyyy-MM-dd");
-
-      if (rowDate < selectedFromDate || rowDate > selectedToDate) {
+      if (!Number.isFinite(timestamp.getTime()) || timestamp.getTime() < fromTime || timestamp.getTime() >= untilTime) {
         continue;
       }
 
       const rowCashier = String(row[SALES_IDX.CASHIER] || "").trim();
 
-      /*
-        Cashier only sees themselves.
-      */
-
-      if (!isManager && rowCashier !== cashierName) {
+      // Earlier transactions remain visible only to their cashier or a manager.
+      if (!isManager && rowCashier !== cashierName && timestamp.getTime() < sharedFromTime) {
         continue;
       }
 
@@ -976,6 +1009,8 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
 
           timestamp: timestamp,
 
+          date: Utilities.formatDate(timestamp, tz, "MMM d, yyyy"),
+
           time: Utilities.formatDate(timestamp, tz, "h:mm a"),
 
           cashier: rowCashier,
@@ -989,6 +1024,12 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
           status: String(row[SALES_IDX.STATUS] || "").trim(),
 
           itemNames: [],
+
+          sizes: new Set(),
+
+          barcodes: new Set(),
+
+          sortTimestamp: timestamp.getTime(),
         };
       }
 
@@ -1005,10 +1046,15 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
       }
 
       const itemName = String(row[SALES_IDX.ITEM_NAME] || "").trim();
+      const barcode = String(row[SALES_IDX.CODE] || "").trim();
+      if (barcode) tx.barcodes.add(barcode);
 
       if (itemName && effectiveStatus !== "VOIDED") {
         tx.itemNames.push(itemName);
       }
+
+      const size = String(row[SALES_IDX.SIZE] || "").trim();
+      if (size && effectiveStatus !== "VOIDED") tx.sizes.add(size);
 
       /*
         If ANY row is VOIDED,
@@ -1023,6 +1069,7 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
        ARRAY
     ====================================================== */
 
+    const reservations = new Map(readReservations_().map(item => [item.receiptId, item]));
     const transactions = Object.values(receiptMap);
 
     transactions.forEach(function (tx) {
@@ -1032,10 +1079,18 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
         : tx.hasVoided
           ? "VOIDED"
           : "COMPLETED";
+      const reservation = reservations.get(tx.receiptId);
+      if (reservation) {
+        tx.reservation = reservationForClient_(reservation);
+        tx.status = reservation.status;
+        if (reservation.status === "RESERVED") tx.items = 1;
+      }
       delete tx.hasVoided;
       delete tx.hasCompleted;
 
       tx.itemNames = tx.itemNames.join(", ");
+      tx.sizes = Array.from(tx.sizes);
+      tx.barcodes = Array.from(tx.barcodes);
     });
 
     /*
@@ -1191,9 +1246,19 @@ function getTransactionDetails(receiptId) {
           total: 0,
 
           items: [],
+          payments: [],
         };
       }
 
+      const paymentReason = String(row[SALES_IDX.REASON] || '');
+      if (/^RESERVATION (DEPOSIT|BALANCE)$/.test(paymentReason)) {
+        transaction.payments.push({stage:paymentReason === 'RESERVATION DEPOSIT' ? 'Down payment' : 'Balance payment',
+          amount:roundToTwo((Number(row[SALES_IDX.NET_TOTAL]) || 0) + (Number(row[SALES_IDX.FEE_ABSORBED]) || 0)), fee:Number(row[SALES_IDX.FEE_CHARGED]) || 0,
+          method:String(row[SALES_IDX.PAYMENT_METHOD]), cashier:String(row[SALES_IDX.CASHIER]),
+          reference:String(row[SALES_IDX.REFERENCE] || ''), cashReceived:Number(row[SALES_IDX.CASH_RECEIVED]) || 0,
+          change:Number(row[SALES_IDX.CHANGE]) || 0,
+          dateTime:Utilities.formatDate(new Date(row[SALES_IDX.TIMESTAMP]), tz, 'MM/dd/yyyy h:mm a')});
+      }
       /* ================= ITEM ================= */
 
       const itemStatus = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
@@ -1275,6 +1340,15 @@ function getTransactionDetails(receiptId) {
       : transaction.hasVoided
         ? "VOIDED"
         : "COMPLETED";
+    const reservation = findReservation_(receiptId);
+    if (reservation) {
+      transaction.reservation = reservationForClient_(reservation);
+      transaction.status = reservation.status;
+      transaction.paymentMethod = Array.from(new Set(transaction.payments.map(payment => payment.method))).join(' / ');
+      transaction.cashReceived = roundToTwo(transaction.payments.reduce((sum, payment) => sum + payment.cashReceived, 0));
+      transaction.changeGiven = roundToTwo(transaction.payments.reduce((sum, payment) => sum + payment.change, 0));
+      transaction.referenceNumber = transaction.payments.map(payment => payment.reference).filter(value => value && value !== 'N/A').join(' / ');
+    }
     delete transaction.hasVoided;
     delete transaction.hasCompleted;
 

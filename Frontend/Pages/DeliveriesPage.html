@@ -363,6 +363,7 @@ function invalidateDeliveriesCache(keepData) {
 function refreshDeliveriesPage(keepVisible) {
 
   pageReadCache.delete('inventory');
+  pageReadCache.delete('cashierInventory');
 
   invalidateDeliveriesCache(keepVisible === true);
 

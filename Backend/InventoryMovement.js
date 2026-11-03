@@ -42,6 +42,7 @@ function changeInventoryStock(options) {
   if (inventoryRow === -1) throw new Error("Inventory Code " + code + " was not found.");
 
   const rowValues = inventorySheet.getRange(inventoryRow, 1, 1, INVENTORY_COLUMN_COUNT).getDisplayValues()[0];
+  if (String(rowValues[INV_IDX.STATUS]).toUpperCase() === INVENTORY_STATUS.RESERVED) throw new Error("Reserved stock can only be changed by completing or exchanging its reservation.");
   const inventoryType = String(rowValues[INV_IDX.INVENTORY_TYPE] || "").trim().toUpperCase();
   const category = String(rowValues[INV_IDX.CATEGORY] || "").trim().toUpperCase();
   const movementType = getInventoryMovementType(category, inventoryType);
@@ -112,6 +113,7 @@ function changeInventoryStockBatch_(movements) {
     if (!source) throw new Error("Inventory movement Source is required.");
     const target = byCode[code];
     if (!target) throw new Error("Inventory Code " + code + " was not found.");
+    if (String(target.row[INV_IDX.STATUS]).toUpperCase() === INVENTORY_STATUS.RESERVED) throw new Error("Reserved stock can only be changed by completing or exchanging its reservation.");
     const stockBefore = target.stock;
     const stockAfter = stockBefore + qtyChange;
     target.stock = stockAfter;
@@ -412,17 +414,7 @@ function yourFindsDeliveryDateFromId_(deliveryId) {
 }
 
 function setConvertedInventoryStatus_(cell) {
-  const validation = SpreadsheetApp.newDataValidation()
-    .requireValueInList([
-      INVENTORY_STATUS.ACTIVE,
-      INVENTORY_STATUS.INACTIVE,
-      INVENTORY_STATUS.INCOMPLETE,
-      INVENTORY_STATUS.CONVERTED,
-      INVENTORY_STATUS.RETURNED
-    ], true)
-    .setAllowInvalid(false)
-    .build();
-  cell.setDataValidation(validation);
+  setInventoryStatusValidation_(cell);
   cell.setValue(INVENTORY_STATUS.CONVERTED);
 }
 
@@ -569,6 +561,7 @@ function convertYourFindsDeliveryItem(payload) {
     }, []);
 
     inventoryStartRow = inventorySheet.getLastRow() + 1;
+    ensureInventoryDeliveryMetadataColumns_(inventorySheet);
     const inventoryRows = [];
     targets.forEach(function(target) {
       target.codes.forEach(function(code) {
@@ -579,6 +572,8 @@ function convertYourFindsDeliveryItem(payload) {
       });
     });
     inventorySheet.getRange(inventoryStartRow, 1, inventoryRows.length, INVENTORY_COLUMN_COUNT).setValues(inventoryRows);
+    writeInventoryDeliveryMetadata_(inventorySheet,
+      inventoryRows.map((row,index) => inventoryStartRow + index), deliveryId, sourceItem.dateDelivered || deliveryDate);
     setInventoryCalculatedFields_(inventorySheet, inventoryStartRow, inventoryRows.length);
     SpreadsheetApp.flush();
 
@@ -1221,6 +1216,7 @@ function deleteUnusedInventoryItem(payload) {
     const matches = getFullInventory().filter(function(item) { return String(item.code) === code; });
     if (matches.length !== 1) throw new Error("Item is missing or its barcode is duplicated. Reload inventory.");
     const item = matches[0];
+    if (String(item.status).toUpperCase() === INVENTORY_STATUS.RESERVED) throw new Error("Reserved items cannot be deleted.");
     if (Number(item.stock) !== 0) throw new Error("Only zero-stock items can be deleted. Use a stock adjustment first.");
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const excluded = [SHEETS.INVENTORY, SHEETS.PRODUCT_MASTER, SHEETS.EMPLOYEES];

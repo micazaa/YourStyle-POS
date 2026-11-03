@@ -72,7 +72,7 @@ function harness() {
     const context=c.getCashierShiftContext(session.employee.dashboardToken,session.shift.reportId);
     return {token:session.employee.dashboardToken,reportId:session.shift.reportId,receiveId:context.receiveId,
       requestId:'exit_'+randomUUID(),action,pettyBreakdown:{1000:1,500:1,200:1,100:1,50:1,20:1},
-      cashBreakdown:{},managerCredential:'1234',managerName:'Mia Manager',...extra};
+      cashBreakdown:{},managerCredential:'1234',managerName:'Mia Manager',acknowledged:true,...extra};
   }
   function sale(time, employee, amount) {
     const row=Array(21).fill('');
@@ -124,7 +124,7 @@ test('pause hands over only petty cash; another cashier receives it; resume reta
   c.saveCashierShiftExit(h.payload(bea,'PAUSE',{pettyBreakdown:{1000:1,500:1,200:1,50:1},voucherNo:'PCV-B',reason:'Transport'}));
   const resumed=h.login();assert.equal(resumed.shift.reportId,ana.shift.reportId);assert.equal(resumed.shift.pettyReceived,1750);
   assert.equal(c.getCashierShiftContext(resumed.employee.dashboardToken,resumed.shift.reportId).pettyBreakdown,null);
-  assert.throws(()=>c.saveCashierShiftExit({...pause,requestId:'another_request'}),/custody changed/);
+  assert.throws(()=>c.saveCashierShiftExit({...pause,token:resumed.employee.dashboardToken,requestId:'another_request'}),/custody changed/);
   h.sale('2026-10-30T10:30:00Z','Ana Cashier',400);
   clock.now='2026-10-30T11:00:00Z';
   const end=c.saveCashierShiftExit(h.payload(resumed,'END',{pettyBreakdown:{1000:1,500:1,200:1,50:1},cashBreakdown:{500:1,200:1}}));
@@ -205,6 +205,7 @@ test('a same-day legacy closed report keeps its prior petty totals and vouchers 
   legacy[22]=1;legacy[31]=1000;legacy[32]=-200;legacy[33]='PCV-OLD';legacy[34]='Earlier expense';
   legacy[35]='CLOSED';legacy[36]=legacy[7];reports.push(legacy);
   const ana=h.login();assert.equal(ana.shift.reportId,legacy[0]);assert.equal(ana.shift.pettyReceived,1000);
+  assert.equal(ana.shift.pettyVoucherNo,'');assert.equal(ana.shift.pettyRemark,'');
   c.saveCashierShiftExit(h.payload(ana,'END',{pettyBreakdown:{1000:1}}));
   assert.equal(reports[2][21],2200);assert.equal(reports[2][31],2000);assert.equal(reports[2][32],-200);
   assert.equal(reports[2][33],'PCV-OLD');assert.match(reports[2][34],/Earlier expense/);
@@ -216,6 +217,7 @@ test('ownership, manager verification, voucher requirements, whole counts and st
   for(const change of [
     {token:'forged'}, {pettyBreakdown:{1000:-1}}, {pettyBreakdown:{1000:1.5}},
     {pettyBreakdown:{1000:1}}, {action:'END',managerCredential:'wrong'}, {receiveId:'stale'},
+    {action:'END',acknowledged:false},
   ]) assert.throws(()=>c.saveCashierShiftExit({...valid,...change}));
   const bea=c.verifyEmployee('Bea Cashier','3333');
   assert.throws(()=>c.saveCashierShiftExit({...valid,token:bea.dashboardToken}),/No active cashier shift/);
@@ -254,14 +256,62 @@ test('END retry repairs a partial report write without duplicating handover or r
   c.saveCashierShiftExit(end);assert.equal(reports[2][20],'Manager corrected remark');
 });
 
-test('PDF failure preserves closed report, and a paused shift can resume after midnight with its current handover',()=>{
+test('saving ends the shift without generating a PDF; optional print failure keeps the saved report',()=>{
   const h=harness(),{c,clock,reports}=h,ana=h.login();
   c.saveCashierShiftExit(h.payload(ana));
   clock.now='2026-10-30T16:30:00Z';
   const resumed=h.login();assert.equal(resumed.shift.reportId,ana.shift.reportId);
   c.buildClosedCashierPdf_=()=>{throw new Error('PDF offline');};
   const result=c.saveCashierShiftExit(h.payload(resumed,'END'));
-  assert.equal(result.success,true);assert.match(result.pdfWarning,/Report saved/);assert.equal(reports[2][35],'CLOSED');
+  assert.equal(result.success,true);assert.equal(result.downloadUrl,undefined);assert.equal(reports[2][35],'CLOSED');
+  assert.throws(()=>c.printEndedCashierShiftReport(resumed.employee.dashboardToken,result.reportId),/PDF offline/);
+  assert.equal(reports[2][35],'CLOSED');
+});
+
+test('printed draft restores mismatched petty counts and voucher for its current receipt without handing over cash',()=>{
+  const h=harness(),{c,reports,clock}=h,ana=h.login();
+  clock.now='2026-10-30T02:00:00Z';
+  c.saveOpenCashierShiftPreview_(c.findOpenShift_('Ana Cashier'),'Mia Manager',
+    {returnBreakdown:{1000:1,500:1,100:3},voucherNo:'PCV-82',reason:'Supplies'}, {breakdown:{500:2}},1000,'Count checked');
+  const ctx=c.getCashierShiftContext(ana.employee.dashboardToken,ana.shift.reportId);
+  assert.equal(ctx.status,'OPEN');assert.equal(ctx.pettyBreakdown[100],3);
+  assert.equal(ctx.pettyVoucherNo,'PCV-82');assert.equal(ctx.pettyRemark,'Supplies');
+  assert.equal(ctx.savedReport.cashCounted,1000);
+  assert.equal(c.getLatestPettyHandover().holder,'Ana Cashier');
+  assert.equal(c.getLatestPettyHandover().received,1870);
+  assert.equal(ctx.receiveId,h.events()[0][0]);assert.equal(h.events().at(-1)[4],'REPORT_SAVED');
+  const saved=c.saveCashierShiftExit(h.payload(ana,'END',{pettyBreakdown:ctx.pettyBreakdown,
+    voucherNo:ctx.pettyVoucherNo,reason:ctx.pettyRemark,cashBreakdown:{500:2}}));
+  assert.equal(saved.status,'CLOSED');assert.equal(reports[2][21],1870);assert.equal(reports[2][31],1800);
+  assert.equal(reports[2][33],'PCV-82');
+  const snapshot=JSON.parse(h.events().at(-1)[12]);
+  assert.equal(snapshot.acknowledgment.accepted,true);assert.equal(snapshot.acknowledgment.employee,'Ana Cashier');
+  assert.match(snapshot.acknowledgment.statement,/true and complete/);
+  assert.equal(c.printEndedCashierShiftReport(ana.employee.dashboardToken,saved.reportId).success,true);
+  const bea=c.verifyEmployee('Bea Cashier','3333');
+  assert.throws(()=>c.printEndedCashierShiftReport(bea.dashboardToken,saved.reportId),/another cashier/);
+  const resumed=h.login();
+  const reopened=c.getCashierShiftContext(resumed.employee.dashboardToken,resumed.shift.reportId);
+  assert.equal(reopened.pettyVoucherNo,'');assert.equal(reopened.pettyRemark,'');
+  assert.equal(reopened.pettyBreakdown[100],3);
+  assert.throws(()=>c.printEndedCashierShiftReport(resumed.employee.dashboardToken,saved.reportId),/Only CLOSED/);
+});
+
+test('old printed snapshots keep their voucher and mismatched counts, and resumed drafts never duplicate earlier returns',()=>{
+  const h=harness(),{c,reports}=h,ana=h.login();
+  reports[2][18]=1000;reports[2][22]=1;reports[2][25]=3;reports[2][31]=1300;
+  reports[2][33]='PCV-OLD';reports[2][34]='Existing draft';
+  const legacy=c.getCashierShiftContext(ana.employee.dashboardToken,ana.shift.reportId);
+  assert.equal(legacy.pettyBreakdown[100],3);assert.equal(legacy.pettyVoucherNo,'PCV-OLD');
+  c.saveCashierShiftExit(h.payload(ana,'PAUSE',{pettyBreakdown:{1000:1,500:1,100:3},voucherNo:'PCV-1',reason:'Earlier supplies'}));
+  const resumed=h.login();
+  c.saveOpenCashierShiftPreview_(c.findOpenShift_('Ana Cashier'),'Mia Manager',
+    {returnBreakdown:{1000:1,500:1,200:1},voucherNo:'PCV-2',reason:'Later supplies'},{breakdown:{}},0,'');
+  const ctx=c.getCashierShiftContext(resumed.employee.dashboardToken,resumed.shift.reportId);
+  assert.equal(ctx.pettyVoucherNo,'PCV-2');assert.equal(ctx.pettyBreakdown[200],1);
+  c.saveCashierShiftExit(h.payload(resumed,'END',{pettyBreakdown:ctx.pettyBreakdown,voucherNo:ctx.pettyVoucherNo,reason:ctx.pettyRemark}));
+  assert.equal(reports[2][21],3670);assert.equal(reports[2][31],3500);
+  assert.equal(reports[2][33],'PCV-1, PCV-2');
 });
 
 test('legacy close cannot bypass the managed shift handover and verification flow',()=>{
@@ -286,4 +336,25 @@ test('a managed active shift continues across midnight, while the daily close ca
   const resumed=h.login();assert.equal(resumed.shift.reportId,ana.shift.reportId);assert.equal(h.events().length,1);
   assert.throws(()=>h.c.closeCashierShift('Mia Manager','Ana Cashier','2026-10-31',{}, {},''),/Use End shift/);
   assert.equal(h.reports.length,3);
+});
+
+test('Cashier Shift Report prints and saves the ongoing shift after midnight, then End Shift sees the same entries',()=>{
+  const h=harness(),{c,clock,reports}=h,ana=h.login();
+  h.sale('2026-10-30T02:00:00Z','Ana Cashier',300);
+  clock.now='2026-10-30T17:00:00Z';
+  h.sale('2026-10-30T16:30:00Z','Ana Cashier',500);
+  const resumed=h.login();assert.equal(resumed.shift.reportId,ana.shift.reportId);
+  let rendered;
+  c.buildCashierReportHTML=data=>{rendered=data;return '<p>Shift</p>';};
+  c.createPdfFromHtml=()=>({success:true,downloadUrl:'https://example.test/shift.pdf'});
+  const printed=c.generateCashierShiftReportPDF('Mia Manager','Ana Cashier','2026-10-31',
+    {received:1870,returnBreakdown:{1000:1,500:1,100:3},voucherNo:'PCV-midnight',reason:'Supplies'},
+    {breakdown:{500:1,100:3}},'Drawer checked');
+  assert.equal(printed.success,true,printed.message);
+  assert.equal(printed.preview,true);assert.equal(reports.length,3);assert.equal(reports[2][35],'OPEN');
+  assert.equal(reports[2][8],800);assert.equal(rendered.expectedCashDrawer,800);
+  const context=c.getCashierShiftContext(resumed.employee.dashboardToken,resumed.shift.reportId);
+  assert.equal(context.savedReport.cashCounted,800);assert.equal(context.pettyBreakdown[100],3);
+  assert.equal(context.pettyVoucherNo,'PCV-midnight');assert.equal(context.pettyRemark,'Supplies');
+  assert.equal(context.savedReport.cashRemark,'Drawer checked');
 });

@@ -5,7 +5,7 @@ const vm = require('node:vm');
 
 function client() {
   const html=fs.readFileSync('Frontend/Modals/CashierReportModal.html','utf8');
-  const elements={},calls=[],timers=[];
+  const elements={},calls=[],timers=[],downloads=[];
   const clock={now:Date.now()};
   class ClientDate extends Date {constructor(...args){super(...(args.length?args:[clock.now]));}static now(){return clock.now;}}
   for(const match of html.matchAll(/id="([^"]+)"/g)) elements[match[1]]={style:{},dataset:{},value:'',checked:false,hidden:false,disabled:false,textContent:'',innerHTML:'',setAttribute(name,value){this[name]=value;}};
@@ -19,7 +19,7 @@ function client() {
     document:{getElementById:id=>elements[id],querySelector:()=>elements.shiftReportSubmit},
     loadingIndicator:label=>label,saveSession(){},toggleSidebar(){},showNotificationToast(){},
     restoreForm(){},setTimeout:callback=>{timers.push(callback);},
-    window:{open(){}},
+    window:{open(url){downloads.push(url);}},
     google:{script:{get run(){const call={};calls.push(call);const runner=new Proxy({}, {get(_target,key){
       if(key==='withSuccessHandler')return fn=>{call.success=fn;return runner;};
       if(key==='withFailureHandler')return fn=>{call.failure=fn;return runner;};
@@ -34,8 +34,8 @@ function client() {
   c.requestManagerPin=(message,callback,forcePin)=>{managerPrompt=callback;c.managerPromptMessage=message;c.managerForcePin=forcePin;};
   const context={success:true,reportId:'CR-20261030-001',receiveId:'PH-receive',reportDate:'2026-10-29',status:'OPEN',pettyReceived:1870,managers:['Mia Manager']};
   function loaded(intent='pause') {c.chooseCashierLogout(intent);calls.at(-1).success(context);}
-  function count() {for(const d of [1000,500,200,100,50,20])elements['pr'+d].value='1';c.updateCashierExitReady();}
-  return {c,elements,calls,timers,clock,loaded,count,logouts:()=>logouts,manager:()=>managerPrompt};
+  function count() {for(const d of [1000,500,200,100,50,20])elements['pr'+d].value='1';elements.cashierEndAcknowledged.checked=true;c.updateCashierExitReady();}
+  return {c,elements,calls,timers,clock,loaded,count,downloads,logouts:()=>logouts,manager:()=>managerPrompt};
 }
 
 test('a new shift uses its sign-in state immediately, with no saved-report fetch or loading overlay',()=>{
@@ -81,7 +81,7 @@ test('refreshing a new report discovers saved values, and a save attempt invalid
   c.refreshCashierReport();assert.equal(calls.at(-1).method,'getCashierShiftContext');
   calls.at(-1).success({success:true,status:'OPEN',reportId:'CR-20261030-001',receiveId:'receipt',pettyReceived:1000,
     managers:['Mia Manager'],hasSavedReport:true,pettyBreakdown:{1000:1},savedReport:{manager:'Mia Manager',cashBreakdown:{500:2}}});
-  assert.equal(elements.d500.value,2);c.submitShiftReportTally();h.manager()('1234');
+  assert.equal(elements.d500.value,2);elements.cashierEndAcknowledged.checked=true;c.submitShiftReportTally();h.manager()('1234');
   assert.equal(calls.at(-1).method,'saveCashierShiftExit');assert.equal(c.cashierReportContextCache,null);
   assert.equal(c.cashierReportDateCache,null);
 });
@@ -116,6 +116,26 @@ test('Cashier Shift Report button opens date navigation while End shift keeps to
   assert.equal(elements.cashierReportDate.disabled,true);
   assert.equal(elements.cashierReportDate.value,c.getCashReportToday());
   assert.equal(h.logouts(),0);
+});
+
+test('cashier report compile requires manager and mismatch documentation, not blank cash counts',()=>{
+  const {c,elements,calls}=client();
+  c.toggleShiftReportModal(true,'report');
+  calls.at(-1).success({success:true,found:false});
+  assert.equal(elements.shiftReportSubmit.disabled,true);
+  elements.reportManagerName.value='Bea Alcozero';
+  c.updateCashierReportReady();
+  assert.equal(elements.shiftReportSubmit.disabled,true);
+  // With zero petty received, blank count fields mean zero and are valid.
+  c.setDisplayedPettyReceived(0);
+  c.updateCashierReportReady();
+  assert.equal(elements.shiftReportSubmit.disabled,false);
+  c.setDisplayedPettyReceived(100);
+  c.updatePettyReturnTotal();
+  assert.equal(elements.shiftReportSubmit.disabled,true);
+  elements.pettyVoucherNo.value='PCV-1'; elements.pettyVarianceReason.value='Petty cash used';
+  c.updateCashierReportReady();
+  assert.equal(elements.shiftReportSubmit.disabled,false);
 });
 
 test('cashier logout opens choices and pause shows only petty cash; cancel and failures keep session active',()=>{
@@ -154,8 +174,10 @@ test('end shift shows cash count and waits for real manager authorization and sa
   c.submitShiftReportTally();h.manager()('1234');
   assert.equal(calls.at(-1).args[0].action,'END');assert.equal(calls.at(-1).args[0].managerCredential,'1234');
   assert.equal(calls.at(-1).args[0].managerName,'Mia Manager');
-  calls.at(-1).success({success:true,status:'CLOSED',pdfWarning:'Report saved. PDF unavailable.'});
-  assert.equal(h.logouts(),1);
+  assert.equal(calls.at(-1).args[0].acknowledged,true);
+  calls.at(-1).success({success:true,status:'CLOSED',reportId:'CR-20261030-001'});
+  assert.equal(h.logouts(),0);assert.equal(elements.cashierShiftSavedModal.style.display,'flex');
+  c.finishCashierShiftLogout();assert.equal(h.logouts(),1);
 });
 
 test('a reopened daily report retains the saved cash count and sends the updated total without adding it twice',()=>{
@@ -176,11 +198,40 @@ test('a reopened daily report retains the saved cash count and sends the updated
   assert.equal(elements.d1000.value,'');assert.equal(elements.pr10.value,'');
   assert.equal(elements.pettyVoucherNo.value,'');assert.equal(elements.pettyVarianceReason.value,'');
   elements.d200.value='2';
+  elements.cashierEndAcknowledged.checked=true;
   c.submitShiftReportTally();h.manager()('1234');
   assert.equal(calls.at(-1).args[0].reportId,'CR-20261030-001');
   assert.equal(calls.at(-1).args[0].cashBreakdown[500],1);
   assert.equal(calls.at(-1).args[0].cashBreakdown[200],2);
   assert.equal(calls.at(-1).args[0].pettyBreakdown[1000],1);assert.equal(calls.at(-1).args[0].voucherNo,'');
+});
+
+test('end shift restores printed petty details, requires acknowledgment, then offers optional printing',()=>{
+  const h=client(),{c,elements,calls}=h;
+  c.chooseCashierLogout('end');
+  calls.at(-1).success({success:true,status:'OPEN',reportId:'CR-20261030-001',receiveId:'PH-current',
+    pettyReceived:1870,managers:['Mia Manager'],pettyBreakdown:{1000:1,500:1,100:3},
+    pettyVoucherNo:'PCV-82',pettyRemark:'Supplies',savedReport:{manager:'Mia Manager',cashBreakdown:{500:2}}});
+  assert.equal(elements.pettyReturnedTotalOut.textContent,'₱1800.00');
+  assert.equal(elements.pettyVoucherNo.value,'PCV-82');assert.equal(elements.pettyVarianceReason.value,'Supplies');
+  assert.equal(elements.pettyVarianceBox.style.display,'block');
+  assert.equal(elements.cashierEndAcknowledged.checked,false);assert.equal(elements.shiftReportSubmit.disabled,true);
+  c.submitShiftReportTally();assert.match(elements.cashierExitError.textContent,/acknowledgment/);
+  elements.cashierEndAcknowledged.checked=true;c.updateCashierExitReady();assert.equal(elements.shiftReportSubmit.disabled,false);
+  elements.pettyVoucherNo.value='';c.updateCashierReportReady();assert.equal(elements.shiftReportSubmit.disabled,true);
+  elements.pettyVoucherNo.value='PCV-82';c.updateCashierReportReady();assert.equal(elements.shiftReportSubmit.disabled,false);
+  c.submitShiftReportTally();h.manager()('1234');
+  assert.equal(calls.at(-1).args[0].voucherNo,'PCV-82');assert.equal(calls.at(-1).args[0].acknowledged,true);
+  calls.at(-1).success({success:true,status:'CLOSED',reportId:'CR-20261030-001'});
+  assert.equal(h.logouts(),0);assert.equal(h.downloads.length,0);
+  c.printCashierShiftAndLogout();c.printCashierShiftAndLogout();
+  assert.equal(calls.filter(call=>call.method==='printEndedCashierShiftReport').length,1);
+  assert.equal(elements.cashierShiftJustLogout.disabled,true);
+  calls.at(-1).failure({message:'PDF offline'});
+  assert.equal(h.logouts(),0);assert.equal(elements.cashierShiftJustLogout.disabled,false);
+  assert.match(elements.cashierShiftPrintError.textContent,/shift is saved/);
+  c.printCashierShiftAndLogout();calls.at(-1).success({success:true,downloadUrl:'https://example.test/report.pdf'});
+  assert.equal(h.logouts(),1);assert.deepEqual(h.downloads,['https://example.test/report.pdf']);
 });
 
 test('saved zero counts still load; inactive saved managers require choosing an active manager',()=>{

@@ -611,17 +611,11 @@ if (voidReason === "Other") {
           /* UPDATE INVENTORY */
 
           pageReadCache.delete('inventory');
-          masterInventory =
-            Array.isArray(
-              res.updatedInventory
-            )
-              ? res.updatedInventory
-              : [];
-
-
-          populateManualDropdown(
-            masterInventory
-          );
+          invalidateDeliveryItemCaches();
+    if (typeof clearTransactionHistoryCache === 'function') clearTransactionHistoryCache();
+    else pageReadCache.delete('transactions');
+          if (Array.isArray(res.updatedInventory)) rememberCashierInventory(res.updatedInventory);
+          else refreshInventory();
 
 
           /* CLOSE VOID */
