@@ -220,8 +220,47 @@ function readProductPhoto(input,onLoad){
 }
 function getCurrentEmployeeName(){ return String((typeof currentCashier!=="undefined"&&currentCashier) ? currentCashier : (typeof currentEmployee!=="undefined"&&currentEmployee ? (currentEmployee.fullName||currentEmployee.name||"") : "")).trim(); }
 function closeModal(id){ const e=document.getElementById(id); if(e)e.style.display="none"; }
+var inventoryItemDetailCache=new Map(), inventoryItemDetailPending=new Map(), inventoryItemOpenRequest=0, inventoryItemDetailEpoch=0;
+function clearInventoryItemDetailCache() {
+ inventoryItemDetailCache.clear();inventoryItemDetailPending.clear();++inventoryItemOpenRequest;++inventoryItemDetailEpoch;
+}
+function withInventoryItemDetails(code,callback,onFailure) {
+ const owner=currentEmployee&&currentEmployee.dashboardToken,version=inventoryListVersion,epoch=inventoryItemDetailEpoch;
+ if(!owner)return;
+ const cached=inventoryItemDetailCache.get(String(code));
+ if(cached&&cached.owner===owner&&cached.version===version&&Date.now()-cached.time<15000){callback(cached.item);return;}
+ let pending=inventoryItemDetailPending.get(String(code));
+ if(!pending||pending.owner!==owner){
+  pending={owner:owner};
+  pending.promise=new Promise((resolve,reject)=>secureScriptRun.withSuccessHandler(result=>{
+   if(!result||!result.success)return reject(new Error(result&&result.message||'Item unavailable.'));
+   if(currentEmployee&&currentEmployee.dashboardToken===owner&&inventoryListVersion===version&&epoch===inventoryItemDetailEpoch)
+    inventoryItemDetailCache.set(String(code),{owner:owner,version:version,time:Date.now(),item:result.item});
+   if(inventoryItemDetailCache.size>100)inventoryItemDetailCache.delete(inventoryItemDetailCache.keys().next().value);
+   resolve(result.item);
+  }).withFailureHandler(reject).getInventoryItemDetails(String(code)));
+  inventoryItemDetailPending.set(String(code),pending);
+  pending.promise.finally(()=>{if(inventoryItemDetailPending.get(String(code))===pending)inventoryItemDetailPending.delete(String(code));}).catch(()=>{});
+ }
+ pending.promise.then(item=>{if(currentEmployee&&currentEmployee.dashboardToken===owner&&epoch===inventoryItemDetailEpoch)callback(item);}).catch(error=>{
+  if(!currentEmployee||currentEmployee.dashboardToken!==owner)return;
+  if(onFailure)onFailure(error);else showNotificationToast(error.message||String(error),true);
+ });
+}
 function openInventoryDetails(code){
- const item=(inventoryPageData||[]).find(x=>String(x.code)===String(code)); if(!item)return; phase8SelectedItem=item;
+ const request=++inventoryItemOpenRequest;
+ document.getElementById('invDetailTitle').textContent='Inventory Item';document.getElementById('invDetailCode').textContent=String(code);
+ document.getElementById('invDetailBody').innerHTML=loadingIndicator('Loading item…');
+ ['invHistoryBtn','invAdjustBtn','invChangeBtn','invDetailEditSellingBtn','invYfEditBtn','invLabelBtn'].forEach(id=>document.getElementById(id).disabled=true);
+ document.getElementById('inventoryDetailsModal').style.display='flex';
+ withInventoryItemDetails(code,item=>{
+  if(request!==inventoryItemOpenRequest||document.getElementById('inventoryDetailsModal').style.display!=='flex')return;
+  ['invHistoryBtn','invAdjustBtn','invChangeBtn','invDetailEditSellingBtn','invYfEditBtn','invLabelBtn'].forEach(id=>document.getElementById(id).disabled=false);
+  renderInventoryDetails(item);
+ },error=>{if(request!==inventoryItemOpenRequest)return;document.getElementById('invDetailBody').textContent=error.message||'Unable to load item.';});
+}
+function renderInventoryDetails(item){
+ phase8SelectedItem=item;
  const status=String(item.status||'').toUpperCase(); const unique=String(item.inventoryType||'').toUpperCase()==='UNIQUE'; const yourFinds=unique&&String(item.category||'').toUpperCase()==='YOURFINDS'; const incomplete=yourFinds&&status==='INCOMPLETE'; const completed=yourFinds&&!incomplete&&status!=='RETURNED'&&Number(item.stock)>0; const editable=incomplete||completed;
  document.getElementById('invDetailTitle').textContent=item.name||(incomplete?'YourFinds Item':'Inventory Item'); document.getElementById('invDetailCode').textContent=item.code;
  const isPins=String(item.category||'').trim().toUpperCase()==='PINS';
@@ -358,10 +397,27 @@ function updateStockAdjustmentPreview(){
 }
 function submitStockAdjustment(){const auth=managerCredentials('Manager PIN:',document.getElementById('adjustManagerPin').value);if(!auth)return; secureScriptRun.withSuccessHandler(r=>{ if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Adjustment failed',true);return;} closeModal('stockAdjustmentModal');closeModal('inventoryDetailsModal');showNotificationToast(`Adjustment saved · ${r.referenceId}`);loadInventoryPage(true); }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).adjustInventoryStock({code:phase8SelectedItem.code,direction:document.getElementById('adjustDirection').value,quantity:Number(document.getElementById('adjustQty').value),reason:document.getElementById('adjustReason').value,notes:document.getElementById('adjustNotes').value,...auth,employee:getCurrentEmployeeName()}); }
 function openChangeItem(){
- if(!phase8SelectedItem)return; changeItemChoices=(inventoryPageData||[]).filter(x=>String(x.inventoryType).toUpperCase()==='STOCK'&&String(x.code)!==String(phase8SelectedItem.code)&&String(x.status).toUpperCase()==='ACTIVE');
- const initial=changeItemChoices[0]||null; document.getElementById('changeToSearch').value=initial?initial.name:''; document.getElementById('changeToCode').value=initial?initial.code:''; hideChangeItemOptions();
- document.getElementById('changeFromName').textContent=phase8SelectedItem.name||'—'; document.getElementById('changeFromCode').textContent=phase8SelectedItem.code||'—'; document.getElementById('changeFromCategory').textContent=phase8SelectedItem.category||'—'; document.getElementById('changeQty').value=1; document.getElementById('changeManagerPinWrap').style.display=canAuthorizeManagerActions()?'none':'block';document.getElementById('changeManagerPin').value=''; updateChangeItemPreview(); document.getElementById('changeItemModal').style.display='flex';
+ if(!phase8SelectedItem)return;
+ const source=phase8SelectedItem,owner=currentEmployee&&currentEmployee.dashboardToken;
+ changeItemChoices=[];hideChangeItemOptions();
+ document.getElementById('changeToSearch').value='';document.getElementById('changeToCode').value='';
+ document.getElementById('changeFromName').textContent=source.name||'—';document.getElementById('changeFromCode').textContent=source.code||'—';
+ document.getElementById('changeFromCategory').textContent=source.category||'—';document.getElementById('changeQty').value=1;
+ document.getElementById('changeManagerPinWrap').style.display=canAuthorizeManagerActions()?'none':'block';document.getElementById('changeManagerPin').value='';
+ updateChangeItemPreview();document.getElementById('changeItemModal').style.display='flex';
+ const input=document.getElementById('changeToSearch');setControlLoading(input,true,'Loading products…');input.disabled=true;
+ const read=beginPageRead('inventoryChangeChoices',inventoryListVersion+':'+source.code,true);
+ const current=()=>phase8SelectedItem===source&&currentEmployee&&currentEmployee.dashboardToken===owner;
+ const apply=items=>{if(!current())return;changeItemChoices=items.filter(item=>String(item.code)!==String(source.code));
+  const initial=changeItemChoices[0];input.value=initial?initial.name:'';document.getElementById('changeToCode').value=initial?initial.code:'';
+  input.disabled=false;setControlLoading(input,false);updateChangeItemPreview();};
+ if(read.cached!==undefined){apply(read.cached);if(!read.shouldFetch)return;}
+ if(!read.shouldFetch)return;
+ secureScriptRun.withSuccessHandler(result=>{if(!read.current())return;if(!result||!result.success)return failed(result||{});read.save(result.items||[]);apply(result.items||[]);})
+  .withFailureHandler(failed).getInventoryChangeChoices();
+ function failed(error){if(read.current())read.fail();if(!current())return;input.disabled=false;setControlLoading(input,false);showNotificationToast(error.message||'Unable to load products.',true);}
 }
+
 function matchingChangeItemOptions(query){const search=String(query||'').trim().toLowerCase();return changeItemChoices.filter(item=>!search||`${item.name||''} ${item.code||''} ${item.category||''} ${item.price||''}`.toLowerCase().includes(search)).slice(0,12);}
 function renderChangeItemOptions(query){const results=document.getElementById('changeToResults');const matches=matchingChangeItemOptions(query);changeItemHighlightedIndex=-1;results.innerHTML=matches.length?matches.map(item=>`<button type="button" class="list-group-item list-group-item-action change-item-option" role="option" data-code="${escapeInventoryHtml(item.code)}" onmousedown="event.preventDefault()" onclick="selectChangeItemDestination(this.dataset.code)"><span><strong>${escapeInventoryHtml(item.name)}</strong><span class="change-item-option-meta">${escapeInventoryHtml(item.code)} · ${escapeInventoryHtml(item.category)}</span></span><span class="change-item-option-price">₱${(Number(item.price)||0).toFixed(2)}</span></button>`).join(''):'<div class="list-group-item text-muted">No matching products.</div>';results.style.display='block';document.getElementById('changeToSearch').setAttribute('aria-expanded','true');}
 function hideChangeItemOptions(){const results=document.getElementById('changeToResults');if(results)results.style.display='none';const search=document.getElementById('changeToSearch');if(search)search.setAttribute('aria-expanded','false');changeItemHighlightedIndex=-1;}
@@ -369,7 +425,7 @@ function handleChangeItemSearch(value){document.getElementById('changeToCode').v
 function selectChangeItemDestination(code){const item=changeItemChoices.find(x=>String(x.code)===String(code));document.getElementById('changeToCode').value=item?item.code:'';document.getElementById('changeToSearch').value=item?item.name:'';hideChangeItemOptions();updateChangeItemPreview();}
 function handleChangeItemSearchKey(event){const options=Array.from(document.querySelectorAll('#changeToResults .change-item-option'));if(event.key==='Escape'){hideChangeItemOptions();return;}if(!['ArrowDown','ArrowUp','Enter'].includes(event.key))return;if(!options.length){renderChangeItemOptions(event.currentTarget.value);return;}event.preventDefault();if(event.key==='Enter'){if(changeItemHighlightedIndex>=0)options[changeItemHighlightedIndex].click();return;}changeItemHighlightedIndex=event.key==='ArrowDown'?Math.min(changeItemHighlightedIndex+1,options.length-1):Math.max(changeItemHighlightedIndex-1,0);options.forEach((option,index)=>option.classList.toggle('active',index===changeItemHighlightedIndex));options[changeItemHighlightedIndex].scrollIntoView({block:'nearest'});}
 function updateChangeItemPreview(){
- if(!phase8SelectedItem)return; const to=(inventoryPageData||[]).find(x=>String(x.code)===String(document.getElementById('changeToCode').value)); const qty=Number(document.getElementById('changeQty').value)||0; const fc=Number(phase8SelectedItem.stock)||0; const tc=to?(Number(to.stock)||0):0; const fa=fc-qty; const ta=tc+qty;
+ if(!phase8SelectedItem)return; const to=changeItemChoices.find(x=>String(x.code)===String(document.getElementById('changeToCode').value)); const qty=Number(document.getElementById('changeQty').value)||0; const fc=Number(phase8SelectedItem.stock)||0; const tc=to?(Number(to.stock)||0):0; const fa=fc-qty; const ta=tc+qty;
  document.getElementById('changeFromCurrent').textContent=fc; document.getElementById('changeFromAfter').textContent=fa; document.getElementById('changeToMeta').textContent=to?`${to.code} · ${to.category}`:'No destination available'; document.getElementById('changeToCurrent').textContent=tc; document.getElementById('changeToAfter').textContent=ta;
  const invalid=!to||!Number.isInteger(qty)||qty<1||fa<0; const error=document.getElementById('changePreviewError'); error.textContent=fa<0?`Not enough stock. ${phase8SelectedItem.name} has ${fc} available.`:(!to?'Choose a destination product.':(!Number.isInteger(qty)||qty<1?'Enter a positive whole quantity.':'')); error.style.display=invalid?'block':'none'; document.getElementById('changeConfirmBtn').disabled=invalid;
 }
@@ -464,7 +520,7 @@ function populateProductMasterEditor(p,requestedStatus){
  document.getElementById('productEditorModal').style.display='flex';
 }
 function editProductMaster(code,requestedStatus){const p=(window.phase8Products||[]).find(x=>String(x.productCode)===String(code));populateProductMasterEditor(p,requestedStatus);}
-function editInventoryProduct(item,requestedStatus){const cached=(window.phase8Products||[]).find(x=>String(x.productCode)===String(item.code));const p=cached||{productCode:item.code,description:item.baseName||item.name,category:item.category,defaultPrice:item.regularPrice??item.price,costPrice:item.costPrice,lowStockAt:item.lowStockAt,status:item.productStatus,salePrice:item.salePrice,saleQuantity:item.saleQuantity,saleRemaining:item.saleRemaining,saleEnd:item.saleEnd,saleReferenceId:item.saleReferenceId,salePrices:item.salePrices,imageUrl:item.imageUrl,active:item.productStatus!=='DEACTIVATED'};populateProductMasterEditor(p,requestedStatus);}
+function editInventoryProduct(item,requestedStatus){const p={productCode:item.code,description:item.baseName||item.name,category:item.category,defaultPrice:item.regularPrice??item.price,costPrice:item.costPrice,lowStockAt:item.lowStockAt,status:item.productStatus,salePrice:item.salePrice,saleQuantity:item.saleQuantity,saleRemaining:item.saleRemaining,saleEnd:item.saleEnd,saleReferenceId:item.saleReferenceId,salePrices:item.salePrices,imageUrl:item.imageUrl,active:item.productStatus!=='DEACTIVATED'};populateProductMasterEditor(p,requestedStatus);}
 function clearProductMasterForm(){document.getElementById('pmCostWrap').style.display=inventoryIsManager()?'block':'none';document.getElementById('pmCode').dataset.editing='false';document.getElementById('pmModeLabel').textContent='Create a PINS or OTHERS product';['pmCode','pmDescription','pmPrice','pmCost','pmLow'].forEach(id=>document.getElementById(id).value='');document.getElementById('pmSaleRows').replaceChildren();document.getElementById('pmStatus').value='ACTIVE';toggleProductSaleFields();document.getElementById('pmPhotoEmpty').style.display='block';document.getElementById('pmPhoto').value='';document.getElementById('pmPhotoPreview').removeAttribute('src');document.getElementById('pmPhotoPreview').style.display='none';phase8ProductPhotoDataUrl='';phase8ProductPhotoFileName='';document.getElementById('pmCode').readOnly=true;document.getElementById('pmCategory').value='PINS';document.getElementById('pmSaveButton').disabled=false;document.getElementById('pmSaveButton').textContent='Save';}
 function applySavedProductToInventory_(result){
  if(typeof window!=='undefined'&&Array.isArray(window.phase8Products)){

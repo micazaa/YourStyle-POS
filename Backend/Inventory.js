@@ -329,13 +329,11 @@ function getFullInventory(options) {
      READ INVENTORY, INCLUDING STORED RECEIPT FIELDS WHEN AVAILABLE
   ======================================================== */
 
-  const data = sheet
-    .getRange(2, 1, lastRow - 1, readWidth)
-    .getValues();
-
-  const displayData = sheet
-    .getRange(2, 1, lastRow - 1, readWidth)
-    .getDisplayValues();
+  const startRow=Number(options.rowNumber)||2;
+  if(startRow<2 || startRow>lastRow)return [];
+  const count=options.rowNumber?1:lastRow-1;
+  const data=sheet.getRange(startRow,1,count,readWidth).getValues();
+  const displayData=sheet.getRange(startRow,1,count,readWidth).getDisplayValues();
 
   const inventory = [];
 
@@ -373,7 +371,7 @@ function getFullInventory(options) {
 
     /* ================= STATUS ================= */
 
-    const status = String(displayRow[INV_IDX.STATUS] || INVENTORY_STATUS.ACTIVE)
+    let status = String(displayRow[INV_IDX.STATUS] || INVENTORY_STATUS.ACTIVE)
       .trim()
       .toUpperCase();
 
@@ -384,6 +382,9 @@ function getFullInventory(options) {
     )
       .trim()
       .toUpperCase();
+
+    if(inventoryRowIsSoldYourFinds_({category:displayRow[INV_IDX.CATEGORY],inventoryType:inventoryType,status:status,
+      stock:Number(row[INV_IDX.STOCK])||0,totalSold:Number(row[INV_IDX.TOTAL_SOLD])||0}))status=INVENTORY_STATUS.INACTIVE;
 
     // Cashier only needs sale choices. Skip delivery/date metadata for every item.
     if (options.cashierOnly) {
@@ -410,7 +411,7 @@ function getFullInventory(options) {
         therefore index 0 = Row 2.
       */
 
-      rowNumber: i + 2,
+      rowNumber: startRow + i,
 
       /* L — Image */
 
@@ -445,6 +446,7 @@ function getFullInventory(options) {
       /* G — Current Stock */
 
       stock: Number(row[INV_IDX.STOCK]) || 0,
+      totalSold: Number(row[INV_IDX.TOTAL_SOLD]) || 0,
 
       stockStatus: String(displayRow[INV_IDX.STOCK_STATUS] || "").trim(),
 
@@ -460,7 +462,9 @@ function getFullInventory(options) {
 
       lowStockAt: inventoryType === INVENTORY_TYPE.UNIQUE ? 0 : Number(productByCode[code] && productByCode[code].lowStockAt) || 0,
 
-      productStatus: productByCode[code] ? productByCode[code].status : PRODUCT_STATUS.ACTIVE,
+      productStatus: inventoryType===INVENTORY_TYPE.UNIQUE || status===INVENTORY_STATUS.INACTIVE
+        ? (status===INVENTORY_STATUS.INACTIVE?PRODUCT_STATUS.DEACTIVATED:PRODUCT_STATUS.ACTIVE)
+        : productByCode[code] ? productByCode[code].status : PRODUCT_STATUS.ACTIVE,
 
       productRowNumber: productByCode[code] ? productByCode[code].rowNumber : 0,
 

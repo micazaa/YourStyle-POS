@@ -105,6 +105,7 @@ function syncProductionToDevelopment_() {
         if (sheet.isSheetHidden()) targets[index].hideSheet(); else targets[index].showSheet();
       });
       SpreadsheetApp.flush();
+      invalidateInventoryRead_(DEVELOPMENT_SPREADSHEET_ID);
       return { success: true, sheetCount: targets.length, backupName: backupName };
     } catch (error) {
       throw new Error("Dev sync stopped. Tab names and IDs were preserved. Backup: " + backupName + ". " + (error.message || error));

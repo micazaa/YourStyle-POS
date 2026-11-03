@@ -160,8 +160,10 @@ function salesAutomationOnEdit(event) {
 function salesAutomationOnEdit_(event) {
   if (!event || !event.range) return;
   const sheet = event.range.getSheet();
+  if([SHEETS.INVENTORY,SHEETS.PRODUCT_MASTER,SHEETS.INVENTORY_MOVEMENT_LOG].includes(sheet.getName()))invalidateInventoryRead_();
   if (sheet.getName() === SHEETS.PRODUCT_MASTER) {
-    productMasterSaleOnEdit_(event);
+    try {productMasterSaleOnEdit_(event);}
+    finally {invalidateInventoryRead_();}
     return;
   }
   if (sheet.getName() !== SHEETS.SALES_LOG || event.range.getRow() < 2) return;
@@ -449,7 +451,8 @@ function processSalesRows_(sheet, rowNumbers) {
       }
     });
   } finally {
-    lock.releaseLock();
+    try {if(processed || errors)invalidateInventoryRead_();}
+    finally {lock.releaseLock();}
   }
 
   SpreadsheetApp.flush();

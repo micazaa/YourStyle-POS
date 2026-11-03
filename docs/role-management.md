@@ -4,7 +4,7 @@ Permissions now come from the Employees **Role** column. Access Level remains pa
 
 ## App controls
 
-The sidebar's **Access Management** button opens approval history for Owners, Managers and OIC. Owners also get Accounts and Permissions tabs. Owners can change an existing employee's role, reset their password, or deactivate/reactivate the account. Employee IDs, names and access numbers stay unchanged. The last active Owner with a valid login cannot be removed or demoted.
+The sidebar's **Access Management** button opens approval history for Owners and Managers. The modal starts closed on reload and opens only when selected. OIC and Cashier accounts cannot open Access Management or read approval history. Owners also get Accounts and Permissions tabs. Owners can change an existing employee's role, reset their password, or deactivate/reactivate the account. Employee IDs, names and access numbers stay unchanged. The last active Owner with a valid login cannot be removed or demoted.
 
 Account forms use an opaque record version. A stale form must reload before saving. Password fields start empty, are cleared after saving, and are never returned by account reads or written to approval history.
 

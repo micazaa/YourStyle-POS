@@ -259,6 +259,10 @@ function completeCustomerExchange(payload) {
     const reservationBefore = reservation ? reservationSheet.getRange(reservation.rowNumber, 1, 1, RESERVATION_HEADERS_.length).getValues() : null;
     const heldItem = reservation ? inventory.get(reservation.code) : null;
     const inventorySheet = ss.getSheetByName(SHEETS.INVENTORY);
+    const statusBefore=Array.from(new Set(lines.filter(line=>line.quantity!==0&&isYourFindsUnique_(inventory.get(line.code))).map(line=>line.code))).map(code=>{
+      const item=inventory.get(code),cell=inventorySheet.getRange(item.rowNumber,INV_COL.STATUS);
+      return {row:item.rowNumber,status:cell.getValue(),note:cell.getNote()};
+    });
     const heldUpdatedAt = heldItem ? inventorySheet.getRange(heldItem.rowNumber, INV_COL.UPDATED_AT).getValue() : null;
     try {
       changeInventoryStockBatch_(lines.filter(line=>line.quantity !== 0).map(line=>({code:line.code,qtyChange:-line.quantity,
@@ -277,6 +281,7 @@ function completeCustomerExchange(payload) {
         replacementValue:replacementValue,amountDue:amountDue,totalDue:roundToTwo(amountDue+feeCharged),
         cashReceived:cashReceived,changeGiven:changeGiven,authorizedBy:auth.managerName};
     } catch (error) {
+      statusBefore.forEach(before=>inventorySheet.getRange(before.row,INV_COL.STATUS).setValue(before.status).setNote(before.note));
       if (reservation) {
         reservationSheet.getRange(reservation.rowNumber, 1, 1, RESERVATION_HEADERS_.length).setValues(reservationBefore);
         setReservationInventoryStatus_(heldItem, 'RESERVED');

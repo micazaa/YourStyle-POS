@@ -51,6 +51,9 @@ function changeInventoryStock(options) {
   const stockCell = inventorySheet.getRange(inventoryRow, INV_COL.STOCK);
   const stockBefore = Number(stockCell.getValue()) || 0;
   const stockAfter = stockBefore + qtyChange;
+  if(source===INVENTORY_MOVEMENT_SOURCE.SALE && qtyChange<0 && category==='YOURFINDS' && inventoryType===INVENTORY_TYPE.UNIQUE &&
+    String(rowValues[INV_IDX.STATUS]).toUpperCase()===INVENTORY_STATUS.INACTIVE)
+    throw new Error('YourFinds item '+code+' is disabled. Reload inventory.');
 
   try {
     logInventoryMovement({
@@ -69,6 +72,8 @@ function changeInventoryStock(options) {
       remainingBundleQty: remainingBundleQty,
       notes: notes
     });
+    syncSoldYourFindsStatus_(inventorySheet,[{rowNumber:inventoryRow,category:category,inventoryType:inventoryType,
+      status:String(rowValues[INV_IDX.STATUS]).toUpperCase(),stockAfter:stockAfter,source:source,qtyChange:qtyChange}]);
     inventorySheet.getRange(inventoryRow, INV_COL.UPDATED_AT).setValue(new Date());
   } catch (movementError) {
     throw new Error("Inventory movement failed. " + (movementError && movementError.message ? movementError.message : String(movementError)));
@@ -104,6 +109,7 @@ function changeInventoryStockBatch_(movements) {
   const rows = [];
   const results = [];
   const touchedRows = {};
+  const soldYourFinds=[];
   movements.forEach(function(options) {
     options = options || {};
     const code = String(options.code || "").trim();
@@ -115,6 +121,10 @@ function changeInventoryStockBatch_(movements) {
     const target = byCode[code];
     if (!target) throw new Error("Inventory Code " + code + " was not found.");
     if (String(target.row[INV_IDX.STATUS]).toUpperCase() === INVENTORY_STATUS.RESERVED) throw new Error("Reserved stock can only be changed by completing or exchanging its reservation.");
+    if(source===INVENTORY_MOVEMENT_SOURCE.SALE && qtyChange<0 && String(target.row[INV_IDX.CATEGORY]).toUpperCase()==='YOURFINDS' &&
+      String(target.row[INV_IDX.INVENTORY_TYPE]).toUpperCase()==='UNIQUE' &&
+      (String(target.row[INV_IDX.STATUS]).toUpperCase()!=='ACTIVE'||Number(target.row[INV_IDX.TOTAL_SOLD])>0&&target.stock<=0))
+      throw new Error('YourFinds item '+code+' is unavailable. Reload inventory.');
     const stockBefore = target.stock;
     const stockAfter = stockBefore + qtyChange;
     target.stock = stockAfter;
@@ -128,14 +138,39 @@ function changeInventoryStockBatch_(movements) {
       String(options.notes || "").trim()
     ]);
     touchedRows[target.rowNumber] = true;
+    soldYourFinds.push({rowNumber:target.rowNumber,category:target.row[INV_IDX.CATEGORY],inventoryType:target.row[INV_IDX.INVENTORY_TYPE],
+      status:target.row[INV_IDX.STATUS],stockAfter:stockAfter,source:source,qtyChange:qtyChange});
     results.push({success:true, code:code, rowNumber:target.rowNumber, qtyChange:qtyChange, stockBefore:stockBefore, stockAfter:stockAfter});
   });
   movementSheet.getRange(movementSheet.getLastRow() + 1, 1, rows.length, MOVEMENT_LOG_COLUMN_COUNT).setValues(rows);
+  syncSoldYourFindsStatus_(inventorySheet,soldYourFinds);
   const addresses = Object.keys(touchedRows).map(function(rowNumber) { return "Q" + rowNumber; });
   if (addresses.length && inventorySheet.getRangeList) inventorySheet.getRangeList(addresses).setValue(now);
   else Object.keys(touchedRows).forEach(function(rowNumber) { inventorySheet.getRange(Number(rowNumber), INV_COL.UPDATED_AT).setValue(now); });
   SpreadsheetApp.flush();
   return results;
+}
+
+const SOLD_YOURFINDS_NOTE_ = 'POS: automatically disabled after sale';
+function syncSoldYourFindsStatus_(sheet, changes) {
+  const latest=new Map();changes.forEach(change=>{latest.set(change.rowNumber,change);});
+  Array.from(latest.values()).forEach(change=>{
+    if(String(change.category).toUpperCase()!=='YOURFINDS'||String(change.inventoryType).toUpperCase()!=='UNIQUE')return;
+    if(['RESERVED','RETURNED','CONVERTED','INCOMPLETE'].includes(String(change.status).toUpperCase()))return;
+    const sale=change.source===INVENTORY_MOVEMENT_SOURCE.SALE||change.source===INVENTORY_MOVEMENT_SOURCE.EXCHANGE;
+    const restored=change.source===INVENTORY_MOVEMENT_SOURCE.VOID||change.source===INVENTORY_MOVEMENT_SOURCE.EXCHANGE;
+    if(sale&&change.qtyChange<0&&change.stockAfter<=0){
+      const cell=sheet.getRange(change.rowNumber,INV_COL.STATUS),note=cell.getNote();
+      cell.setValue(INVENTORY_STATUS.INACTIVE);
+      if(!note.includes(SOLD_YOURFINDS_NOTE_))cell.setNote(note+(note?'\n':'')+SOLD_YOURFINDS_NOTE_);
+    }else if(restored&&change.qtyChange>0&&change.stockAfter>0&&String(change.status).toUpperCase()==='INACTIVE'){
+      const cell=sheet.getRange(change.rowNumber,INV_COL.STATUS),note=cell.getNote();
+      // A manual deactivation must not be undone by returning unrelated stock.
+      if(note.includes(SOLD_YOURFINDS_NOTE_)){
+        cell.setValue(INVENTORY_STATUS.ACTIVE);cell.setNote(note.replace(SOLD_YOURFINDS_NOTE_,'').trim());
+      }
+    }
+  });
 }
 
 function logInventoryMovement(movement) {
@@ -875,7 +910,6 @@ function getInventoryForManagement(managerToken) {
   });
   const auth = verifyInventoryReadSession_(managerToken);
   if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
-  ensureProductMasterInventoryRows_(products);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const stockCosts = {};
   const uniqueCosts = {};
@@ -1167,6 +1201,7 @@ function setInventoryAdministrativeStatus(payload) {
       throw new Error("Only active or inactive items can be changed here. Complete unfinished items first.");
     }
     if (String(item.category).toUpperCase() === "YOURFINDS" && String(item.inventoryType).toUpperCase() === INVENTORY_TYPE.UNIQUE && inventoryStatus === INVENTORY_STATUS.ACTIVE) {
+      if(Number(item.stock)<=0)throw new Error('Sold YourFinds items stay disabled until stock is restored.');
       assertCompletedYourFinds_(item);
     }
     const masterSheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
@@ -1200,7 +1235,9 @@ function setInventoryAdministrativeStatus(payload) {
       masterRange.setValues([masterUpdate]);
     }
     try {
-      sheet.getRange(inventoryRow, INV_COL.STATUS).setValue(inventoryStatus);
+      const statusCell=sheet.getRange(inventoryRow,INV_COL.STATUS);
+      statusCell.setValue(inventoryStatus);
+      if(isYourFindsUnique_(item))statusCell.setNote(statusCell.getNote().replace(SOLD_YOURFINDS_NOTE_,'').trim());
       sheet.getRange(inventoryRow, INV_COL.UPDATED_AT).setValue(new Date());
       if (master) logProductStatusChange_({
         code: code, item: item.name, category: item.category, inventoryType: item.inventoryType,

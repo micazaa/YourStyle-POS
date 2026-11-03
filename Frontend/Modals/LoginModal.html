@@ -733,6 +733,7 @@ function unlockTerminalSession() {
     if(cashierMode&&(!response.shift||!response.shift.success))return failed(new Error(response&&response.shift&&response.shift.message||'Unable to start cashier shift.'));
     loginBusy=false;
     pageReadCache.clear();
+    if(typeof resetInventoryListSession==='function')resetInventoryListSession();
     localStorage.removeItem('ys_pos_inventory_tab');
     currentEmployee=result;currentCashier=result.fullName;currentSessionIsCashier=cashierMode;
     rememberLoginUsername(name);

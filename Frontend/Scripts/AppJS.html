@@ -131,7 +131,17 @@
           if (handlers.failure) handlers.failure(error,handlers.userObject);
           else showNotificationToast(error && error.message || 'Unable to complete this action.',true);
         };
-        const succeed = value=>{releaseApproval();if(!POS_LOGIN_OPERATIONS.has(operation) && (!currentEmployee || currentEmployee.dashboardToken!==sessionToken))return;if (handlers.success) handlers.success(value,handlers.userObject);};
+        const succeed = value=>{
+          releaseApproval();if(!POS_LOGIN_OPERATIONS.has(operation)&&(!currentEmployee||currentEmployee.dashboardToken!==sessionToken))return;
+          let parsed=value;if(typeof value==='string'){try{parsed=JSON.parse(value);}catch(ignored){parsed=null;}}
+          if(parsed&&parsed.success&&['adjustInventoryStock','changeInventoryItem','convertYourFindsDeliveryItem','saveProductMaster',
+            'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','executeCheckoutBackend',
+            'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle',
+            'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(operation)){
+            pageReadCache.delete('inventory');if(typeof invalidateLocalInventoryReads==='function')invalidateLocalInventoryReads();
+          }
+          if(handlers.success)handlers.success(value,handlers.userObject);
+        };
         const run = ()=>google.script.run.withSuccessHandler(succeed).withFailureHandler(fail);
         if (POS_LOGIN_OPERATIONS.has(operation)) {run()[operation](...args);return;}
         if (!sessionToken) {fail(new Error('Please sign in again.'));return;}

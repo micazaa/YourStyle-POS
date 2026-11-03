@@ -25,7 +25,7 @@ const ACCESS_PERMISSION_MODES_ = {
   'shift.end': ['allow','allow','approval','approval'],
   'actions.approve': ['allow','allow','deny','deny'],
   'approvals.verify': ['allow','allow','allow','allow'],
-  'approvals.view': ['allow','allow','allow','deny'],
+  'approvals.view': ['allow','allow','deny','deny'],
   'accounts.manage': ['allow','deny','deny','deny']
 };
 const ACCESS_ROLE_ORDER_ = ['OWNER','MANAGER','OIC','CASHIER'];
@@ -66,6 +66,10 @@ function employeeAuthFingerprint_(row) {
 }
 function accessRegistry_() {
   return {
+  "getInventoryPage": {permission:"inventory.view", handler:getInventoryPage},
+  "getInventorySummaryPage": {permission:"inventory.view", handler:getInventorySummaryPage},
+  "getInventoryItemDetails": {permission:"inventory.view", handler:getInventoryItemDetails},
+  "getInventoryChangeChoices": {permission:"inventory.view", handler:getInventoryChangeChoices},
   "getDeliveryHistoryFast": {permission:"inventory.view", handler:getDeliveryHistoryFast},
   "getInventoryMovementHistoryByCode": {permission:"inventory.view", handler:getInventoryMovementHistoryByCode},
   "adjustInventoryStock": {permission:"inventory.edit", handler:adjustInventoryStock},
@@ -398,7 +402,7 @@ function finishAccessAudit_(record, access, result, error) {
 function callPosApi(request) {
   const access = accessRequest_(request), previous = ACCESS_REQUEST_CONTEXT_;
   ACCESS_REQUEST_CONTEXT_ = access;
-  let audit;
+  let audit, inventoryChanged=false;
   try {
     if (access.mode === 'approval') {
       const lock = LockService.getScriptLock(); lock.waitLock(10000);
@@ -433,6 +437,11 @@ function callPosApi(request) {
       'acceptYourFindsDelivery','saveCashierShiftExit','generateCashierShiftReportPDF','regenerateCashierReport',
       'correctClosedCashReport','generateManagerDailyReportPDF','saveDashboardTask','saveManagedAccount'].includes(access.operation);
     if (mutation) audit = beginAccessAudit_(access, actionSnapshot_(access.operation, access.args));
+    inventoryChanged=['adjustInventoryStock','changeInventoryItem','convertYourFindsDeliveryItem','saveProductMaster',
+      'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','executeCheckoutBackend',
+      'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle',
+      'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(access.operation);
+    if(inventoryChanged)invalidateInventoryRead_();
     const result = access.definition.handler.apply(null, access.args);
     if (audit) {
       // Once the action succeeds, a log-write outage must not invite a duplicate retry.
@@ -443,5 +452,9 @@ function callPosApi(request) {
   } catch (error) {
     if (audit) {try {finishAccessAudit_(audit, access, null, error);} catch (auditError) {console.error('Approval log update failed: ' + audit.id);}}
     throw error;
-  } finally {ACCESS_REQUEST_CONTEXT_ = previous;}
+  } finally {
+    try {if(inventoryChanged)invalidateInventoryRead_();}
+    catch(error){console.error(JSON.stringify({event:'inventory_cache_invalidation_failed',operation:access.operation}));}
+    finally {ACCESS_REQUEST_CONTEXT_ = previous;}
+  }
 }
