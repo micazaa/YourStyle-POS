@@ -273,6 +273,7 @@ function applyProductSalePrices_(product, prices) {
 ========================================================== */
 
 function getActiveProducts() {
+  assertAppRequest_();
   const products = getProductMaster_();
 
   return products.filter(function (product) {
@@ -291,6 +292,7 @@ function isStandardYourFindsSizeLabel_(value) {
 }
 
 function getYourFindsCustomSizes() {
+  assertAppRequest_();
   const found = {};
   getProductMaster_().forEach(function(product) {
     if (String(product.category || "").trim().toUpperCase() !== "YOURFINDS") return;
@@ -321,6 +323,7 @@ function generateYourFindsSizeProductCode_() {
 }
 
 function prepareYourFindsCustomSizes() {
+  assertAppRequest_();
   const sheet = getProductMasterSheet_(SpreadsheetApp.getActiveSpreadsheet());
   if (!sheet) throw new Error("Product Master sheet not found.");
   const lock = LockService.getScriptLock();
@@ -418,6 +421,7 @@ function formatProductMasterDateForClient(value) {
 ========================================================== */
 
 function validateProductMaster() {
+  assertAppRequest_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const sheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
@@ -674,6 +678,7 @@ function validateProductMaster() {
 }
 
 function testValidateProductMaster() {
+  assertAppRequest_();
   const result = validateProductMaster();
 
   Logger.log("===== PRODUCT MASTER VALIDATION =====");
@@ -715,6 +720,7 @@ function testValidateProductMaster() {
 ========================================================== */
 
 function getProductMasterByCode(productCode) {
+  assertAppRequest_();
   productCode = String(productCode || "").trim();
 
   if (!productCode) {
@@ -753,6 +759,7 @@ function getProductMasterByCode(productCode) {
 ========================================================== */
 
 function getActiveProductByCode(productCode) {
+  assertAppRequest_();
   const result = getProductMasterByCode(productCode);
 
   if (!result.success) {
@@ -770,6 +777,7 @@ function getActiveProductByCode(productCode) {
   return result;
 }
 function testInactiveProductLookup() {
+  assertAppRequest_();
 
   const result =
     getActiveProductByCode(
@@ -799,6 +807,7 @@ function testInactiveProductLookup() {
 ========================================================== */
 
 function getProductInventoryStatus(productCode) {
+  assertAppRequest_();
 
   productCode =
     String(
@@ -905,6 +914,7 @@ function getProductInventoryStatus(productCode) {
 ========================================================== */
 
 function getProductMasterInventoryOverview() {
+  assertAppRequest_();
 
   const products =
     getActiveProducts();
@@ -1016,6 +1026,7 @@ function getProductMasterInventoryOverview() {
 function createInventoryFromProductMaster(
   productCode
 ) {
+  assertAppRequest_();
 
   try {
 
@@ -1285,5 +1296,6 @@ function publicProduct_(product) {
   return result;
 }
 function getProductMaster() {
+  assertAppRequest_();
   return getProductMaster_().map(publicProduct_);
 }

@@ -91,6 +91,7 @@ function buildProductCatalogSvg_(description, category) {
 }
 
 function generateProductMasterCatalogImages() {
+  assertAppRequest_();
   // Execution API calls do not have an active container spreadsheet.
   const ss = SpreadsheetApp.openById("1xnHBsGsoMmcBIoRwEjX0paf5R39A-s2Tnc6m1lkoOQU");
   const master = ss.getSheetByName(SHEETS.PRODUCT_MASTER);

@@ -7,6 +7,7 @@ function inventorySummaryLookup_(row, column) {
   return '=IF(A'+row+'="","",IFNA(XLOOKUP(TO_TEXT(A'+row+'),\''+POS_SUMMARY_SHEET+'\'!$A$2:$A,\''+POS_SUMMARY_SHEET+'\'!$'+column+'$2:$'+column+'),0))';
 }
 function prepareSummaryQueries(managerToken) {
+  assertAppRequest_();
   requireManager_('', managerToken);
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);

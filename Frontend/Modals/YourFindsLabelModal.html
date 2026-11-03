@@ -334,7 +334,7 @@ function openYourFindsLabelModal(
 
   /* ================= LOAD ================= */
 
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(
       function(result) {
@@ -1038,7 +1038,7 @@ function printSelectedYourFindsLabels() {
      GENERATE PDF
   ======================================================== */
 
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(
       function(result) {

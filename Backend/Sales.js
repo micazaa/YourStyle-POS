@@ -105,6 +105,7 @@ function executeCheckoutBackend(
   applyCardFee,
   paymentParts
 ) {
+  assertAppRequest_();
   const checkoutLock = LockService.getScriptLock();
   try {
     checkoutLock.waitLock(30000);
@@ -379,6 +380,7 @@ function consumeSaleAllocations_(lines, employee, productSnapshot) {
 }
 
 function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart) {
+  assertAppRequest_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
   if (!sheet) return 0;
@@ -420,6 +422,7 @@ function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart
 }
 
 function getExpectedCashForManager(reportDate) {
+  assertAppRequest_();
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
   const lastRow = sheet && sheet.getLastRow();
   if (!sheet || lastRow < 2) return { expectedCashDrawer: 0 };
@@ -457,6 +460,7 @@ function getExpectedCashForManager(reportDate) {
 }
 
 function testManagerExpectedCash() {
+  assertAppRequest_();
 
   const result =
     getExpectedCashForManager(
@@ -478,6 +482,7 @@ function voidAndRefundTransactionBackend(
   itemRowIndex,
   qtyToVoid
 ) {
+  assertAppRequest_();
 
   try {
 
@@ -905,6 +910,7 @@ function readTransactionHistoryRows_(sheet, fromTime, untilTime) {
 }
 
 function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
+  assertAppRequest_();
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -1131,6 +1137,7 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
 ========================================================== */
 
 function getTransactionDetails(receiptId) {
+  assertAppRequest_();
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 

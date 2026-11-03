@@ -90,6 +90,7 @@ function getLatestPettyHandover() {
 }
 
 function startCashierShift(employee, firstShiftPetty, handoverResolved) {
+  assertAppRequest_();
   try {
     employee = String(employee || '').trim();
 
@@ -329,6 +330,7 @@ function closeCashierShift(
   cashOnHandObj,
   cashDrawerRemark
 ) {
+  assertAppRequest_();
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
 
@@ -557,6 +559,7 @@ function closeCashierShift(
 }
 
 function getCashReportHistory(limit) {
+  assertAppRequest_();
   const sheet = cashReportSheet_();
   if (sheet.getLastRow() < 2) return [];
   const v = sheet
@@ -668,6 +671,7 @@ function generateCashierShiftReportPDF(
   cashOnHandObj,
   cashDrawerRemark
 ) {
+  assertAppRequest_();
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const salesLogSheet = ss.getSheetByName('Sales Log');
@@ -828,6 +832,7 @@ function findReportById_(reportId) {
 }
 
 function getClosedCashReport(reportId) {
+  assertAppRequest_();
   try {
     const found = findReportById_(reportId);
     if (!found) throw new Error('Cash report not found.');
@@ -909,6 +914,7 @@ function dateString_(v) {
 }
 
 function regenerateCashierReport(reportId, managerPin) {
+  assertAppRequest_();
   try {
     const auth = verifyManagerPin(managerPin);
     if (!auth || !auth.success)
@@ -922,6 +928,7 @@ function regenerateCashierReport(reportId, managerPin) {
 }
 
 function correctClosedCashReport(payload) {
+  assertAppRequest_();
   payload = payload || {};
   try {
     const auth = verifyManagerPin(payload.managerPin);
@@ -1070,8 +1077,16 @@ function buildClosedCashierPdf_(report) {
   return out;
 }
 
-function generateManagerDailyReportPDF(managerName, reportDate, cashOnHandObj, cashDrawerRemark) {
+function generateManagerDailyReportPDF(managerName, reportDate, cashOnHandObj, cashDrawerRemark, authContext) {
+  assertAppRequest_();
   try {
+    const account = getEmployees().find(employee => employee.fullName === String(managerName || '').trim());
+    if (!account || !employeeHasManagerView_(account)) throw new Error('Manager or OIC access is required.');
+    if (employeeIsOic_(account)) {
+      const actor = dashboardEmployee_(authContext && authContext.sessionToken);
+      if (actor.name !== account.fullName) throw new Error('Employee session changed. Reopen the report.');
+      requireManager_(authContext && authContext.managerPin, authContext && authContext.managerToken);
+    }
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
     const salesLogSheet = ss.getSheetByName('Sales Log');
@@ -1263,6 +1278,7 @@ function upsertManagerDailyCashReport(
   cashBreakdown,
   cashRemark
 ) {
+  assertAppRequest_();
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
 
@@ -1368,6 +1384,7 @@ function upsertManagerDailyCashReport(
    PHASE 10 — DATE-DRIVEN CASHIER REPORT LOOKUP
 ========================================================== */
 function getCashReportByDate(employee, reportDate) {
+  assertAppRequest_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const sheet = ss.getSheetByName('Cash Report Log');

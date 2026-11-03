@@ -149,6 +149,7 @@ function generateReservationReceiptId_(sales) {
 }
 
 function getReservationForCheckout(receiptId, sessionToken) {
+  assertAppRequest_();
   try {
     dashboardEmployee_(sessionToken);
     const reservation = findReservation_(receiptId);
@@ -160,6 +161,7 @@ function getReservationForCheckout(receiptId, sessionToken) {
 }
 
 function processReservationPayment(payload) {
+  assertAppRequest_();
   payload = payload || {};
   const lock = LockService.getScriptLock();
   try {

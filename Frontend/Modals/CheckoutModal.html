@@ -481,7 +481,7 @@ function handleCheckoutFailure(message) {
         "Processing transaction..."
     );
 
-    google.script.run
+    secureScriptRun
 
         .withSuccessHandler(function(raw){
 

@@ -201,7 +201,7 @@ function toggleVoidModal(show) {
 
 
 function openVoidReceiptModal(receiptId, itemCode, itemRowIndex) {
-  document.getElementById('managerVoidPin').parentElement.style.display=inventoryIsManager()?'none':'block';
+  document.getElementById('managerVoidPin').parentElement.style.display=canAuthorizeManagerActions()?'none':'block';
 
   const modal =
     document.getElementById(
@@ -547,7 +547,7 @@ if (voidReason === "Other") {
 
   /* ================= VERIFY MANAGER ================= */
 
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(function(result) {
 
@@ -580,7 +580,7 @@ if (voidReason === "Other") {
 
       /* ================= VOID TRANSACTION ================= */
 
-      google.script.run
+      secureScriptRun
 
         .withSuccessHandler(function(res) {
 
@@ -673,7 +673,8 @@ if (voidReason === "Other") {
         voidReason,
         itemCode,
         itemRowIndex,
-        1
+        1,
+        {managerPin:pin}
       );
 
     })

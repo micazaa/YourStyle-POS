@@ -1,0 +1,116 @@
+<div id="accessManagementModal" class="generic-overlay-blur" style="z-index:10005">
+  <div class="custom-popup-card" style="max-width:960px;width:96%;max-height:90vh;overflow:auto">
+    <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
+      <h5 class="fw-bold m-0">Access Management</h5>
+      <button type="button" class="btn-close" aria-label="Close access management" onclick="closeAccessManagement()"></button>
+    </div>
+    <div class="d-flex gap-2 mb-3" role="group" aria-label="Access management views">
+      <button id="accessAccountsTab" type="button" class="btn btn-outline-pink" onclick="showAccessManagementTab('accounts')">Accounts</button>
+      <button id="accessHistoryTab" type="button" class="btn btn-outline-pink" onclick="showAccessManagementTab('history')">Approval History</button>
+      <button id="accessPermissionsTab" type="button" class="btn btn-outline-pink" onclick="showAccessManagementTab('permissions')">Permissions</button>
+    </div>
+    <div id="accessManagementStatus" class="small mb-3" role="status" aria-live="polite"></div>
+    <form id="accessAccountsPanel" onsubmit="event.preventDefault();saveAccessAccount()" autocomplete="off">
+      <label for="accessAccountSelect" class="form-label">Employee</label>
+      <select id="accessAccountSelect" class="form-select mb-3" onchange="selectAccessAccount()"></select>
+      <div class="row g-3">
+        <div class="col-md-6"><label for="accessUsername" class="form-label">Username</label><input id="accessUsername" class="form-control bg-light" readonly></div>
+        <div class="col-md-6"><label for="accessRole" class="form-label">Role</label><select id="accessRole" class="form-select"><option>OWNER</option><option>MANAGER</option><option>OIC</option><option>CASHIER</option></select></div>
+        <div class="col-md-6"><label for="accessPassword" class="form-label">Reset Password</label><input id="accessPassword" type="password" class="form-control" autocomplete="new-password" minlength="4" maxlength="128" placeholder="Leave blank to keep current password"></div>
+        <div class="col-md-6 d-flex align-items-center"><div class="form-check form-switch mt-4"><input id="accessActive" class="form-check-input" type="checkbox" role="switch"><label class="form-check-label" for="accessActive">Active account</label></div></div>
+      </div>
+      <p class="small text-muted mt-3">Only Owners can change accounts. Changes end existing sessions. Usernames and past transactions stay linked to the same employee.</p>
+      <div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-outline-secondary" onclick="loadAccessAccounts()">Refresh</button><button id="accessSaveButton" type="submit" class="btn btn-pink" disabled>Save Account</button></div>
+    </form>
+    <div id="accessHistoryPanel" hidden>
+      <div class="d-flex justify-content-between align-items-center mb-2"><span class="small text-muted">Latest 100 actions</span><button type="button" class="btn btn-outline-secondary btn-sm" onclick="loadAccessHistory()">Refresh</button></div>
+      <div class="table-responsive" style="max-height:380px;overflow:auto"><table class="table align-middle"><thead><tr><th>Date</th><th>Employee</th><th>Approved By</th><th>Action</th><th>Status</th><th>Details</th></tr></thead><tbody id="accessHistoryBody"></tbody></table></div>
+      <pre id="accessHistoryDetails" class="small bg-light border rounded p-3 mt-3" style="white-space:pre-wrap;max-height:240px;overflow:auto" hidden></pre>
+    </div>
+    <div id="accessPermissionsPanel" hidden>
+      <p class="small text-muted">OIC has manager views. Changes marked “Approval” require a Manager or Owner PIN for that exact action.</p>
+      <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Permission</th><th>Owner</th><th>Manager</th><th>OIC</th><th>Cashier</th></tr></thead><tbody id="accessPermissionsBody"></tbody></table></div>
+    </div>
+  </div>
+</div>
+<script>
+  let accessAccounts = [], accessHistory = [], accessLoadId = 0, accessSaving = false;
+  function accountIsOwner() {return String(currentEmployee && currentEmployee.role || '').trim().toUpperCase()==='OWNER';}
+  function accessStatus(message, error=false, busy=false) {
+    const status=document.getElementById('accessManagementStatus');
+    if(busy)status.innerHTML=loadingIndicator(message);else status.textContent=message;
+    status.classList.toggle('text-danger',error);
+  }
+  function closeAccessManagement() {
+    if(accessSaving)return;
+    ++accessLoadId;document.getElementById('accessPassword').value='';document.getElementById('accessManagementModal').style.display='none';
+  }
+  function resetAccessManagement() {
+    ++accessLoadId;accessAccounts=[];accessHistory=[];accessSaving=false;
+    document.getElementById('accessAccountSelect').replaceChildren();document.getElementById('accessHistoryBody').replaceChildren();
+    document.getElementById('accessHistoryDetails').textContent='';document.getElementById('accessPassword').value='';
+  }
+  function openAccessManagement() {
+    if(!hasManagerViewAccess())return;
+    document.getElementById('accessAccountsTab').hidden=!accountIsOwner();document.getElementById('accessPermissionsTab').hidden=!accountIsOwner();
+    document.getElementById('accessManagementModal').style.display='flex';
+    showAccessManagementTab(accountIsOwner()?'accounts':'history');
+  }
+  function showAccessManagementTab(tab) {
+    if(accessSaving || tab!=='history'&&!accountIsOwner())return;
+    ++accessLoadId;accessStatus('');
+    ['accounts','history','permissions'].forEach(name=>{
+      document.getElementById('access'+name[0].toUpperCase()+name.slice(1)+'Panel').hidden=name!==tab;
+      document.getElementById('access'+name[0].toUpperCase()+name.slice(1)+'Tab').classList.toggle('active',name===tab);
+    });
+    if(tab==='history')loadAccessHistory();else loadAccessAccounts();
+  }
+  function loadAccessAccounts() {
+    if(accessSaving)return;
+    const request=++accessLoadId;accessStatus('Loading accounts…',false,true);document.getElementById('accessSaveButton').disabled=true;
+    secureScriptRun.withSuccessHandler(result=>{
+      if(request!==accessLoadId)return;
+      accessAccounts=result.accounts||[];const select=document.getElementById('accessAccountSelect');select.replaceChildren();
+      accessAccounts.forEach(account=>{const option=document.createElement('option');option.value=account.employeeId;option.textContent=account.name+' · '+account.role+(account.active?'':' · Inactive');select.appendChild(option);});
+      selectAccessAccount();
+      const body=document.getElementById('accessPermissionsBody');body.replaceChildren();
+      Object.entries(result.permissions||{}).forEach(([name,modes])=>{
+        const row=document.createElement('tr');[name,...modes.map(mode=>({allow:'Allowed',approval:'Approval',deny:'No access'}[mode]))].forEach(text=>{const cell=document.createElement('td');cell.textContent=text;row.appendChild(cell);});body.appendChild(row);
+      });accessStatus('');
+    }).withFailureHandler(error=>{if(request===accessLoadId)accessStatus(error.message||String(error),true);}).getManagedAccounts();
+  }
+  function selectAccessAccount() {
+    const account=accessAccounts.find(item=>item.employeeId===document.getElementById('accessAccountSelect').value);
+    document.getElementById('accessSaveButton').disabled=!account||accessSaving;
+    document.getElementById('accessUsername').value=account?account.username:'';document.getElementById('accessRole').value=account?account.role:'CASHIER';
+    document.getElementById('accessActive').checked=!!(account&&account.active);document.getElementById('accessPassword').value='';
+  }
+  function saveAccessAccount() {
+    if(accessSaving)return;
+    const account=accessAccounts.find(item=>item.employeeId===document.getElementById('accessAccountSelect').value);if(!account)return;
+    const payload={employeeId:account.employeeId,version:account.version,role:document.getElementById('accessRole').value,
+      active:document.getElementById('accessActive').checked,password:document.getElementById('accessPassword').value};
+    const description=account.name+'\nRole: '+account.role+' → '+payload.role+'\nActive: '+account.active+' → '+payload.active+(payload.password?'\nReset password':'')+'\n\nSave and end existing sessions?';
+    if(!window.confirm(description))return;
+    accessSaving=true;document.getElementById('accessAccountsPanel').querySelectorAll('input,select,button').forEach(control=>control.disabled=true);
+    accessStatus('Saving account…',false,true);
+    const finish=()=>{accessSaving=false;document.getElementById('accessAccountsPanel').querySelectorAll('input,select,button').forEach(control=>control.disabled=false);document.getElementById('accessPassword').value='';};
+    secureScriptRun.withSuccessHandler(result=>{
+      finish();if(!result||!result.success)return accessStatus(result&&result.message||'Unable to save account.',true);
+      if(result.sessionChanged){completeCleanLogout();showNotificationToast('Account updated. Please sign in again.');return;}
+      loadAccessAccounts();showNotificationToast(result.message);
+    }).withFailureHandler(error=>{finish();accessStatus(error.message||String(error),true);}).saveManagedAccount(payload);
+  }
+  function loadAccessHistory() {
+    const request=++accessLoadId;accessStatus('Loading approval history…',false,true);document.getElementById('accessHistoryDetails').hidden=true;
+    secureScriptRun.withSuccessHandler(result=>{
+      if(request!==accessLoadId)return;
+      accessHistory=result.entries||[];const body=document.getElementById('accessHistoryBody');body.replaceChildren();
+      accessHistory.forEach(entry=>{const row=document.createElement('tr');[entry.timestamp,entry.employee,entry.approver||'—',entry.action,entry.status].forEach(value=>{const cell=document.createElement('td');cell.textContent=value;row.appendChild(cell);});
+        const cell=document.createElement('td'),button=document.createElement('button');button.type='button';button.className='btn btn-outline-secondary btn-sm';button.textContent='View';button.addEventListener('click',()=>{
+          const details=document.getElementById('accessHistoryDetails');details.textContent=entry.summary+'\n\nBefore: '+entry.before+'\n\nAfter: '+entry.after+(entry.error?'\n\nError: '+entry.error:'');details.hidden=false;
+        });cell.appendChild(button);row.appendChild(cell);body.appendChild(row);
+      });accessStatus(accessHistory.length?'':'No recorded actions yet.');
+    }).withFailureHandler(error=>{if(request===accessLoadId)accessStatus(error.message||String(error),true);}).getApprovalHistory();
+  }
+</script>

@@ -22,7 +22,7 @@ function deliverySummaryData() {
 function loadDeliverySummaryData() {
   const read = beginPageRead('deliverySummary', '', true);
   if (!read.shouldFetch) return;
-  google.script.run.withSuccessHandler(result => {
+  secureScriptRun.withSuccessHandler(result => {
     if (!read.current()) return;
     if (!result || !result.success) { read.fail(); deliverySummaryFailure(); return; }
     read.save(result);

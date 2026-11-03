@@ -60,7 +60,7 @@ function openBulkDistributionModal(deliveryId, sheetRow, employee, bundleNo) {
   document.getElementById("bulkDistributionProductsLoading").style.display = "block";
   document.getElementById("bulkDistributionModal").style.display = "flex";
 
-  google.script.run.withSuccessHandler(function(result) {
+  secureScriptRun.withSuccessHandler(function(result) {
     if (request !== bulkDistributionRequest) return;
     if (!result || !result.success || !result.holder) {
       showBulkDistributionError(result && result.message ? result.message : "Unable to load bulk holder."); return;
@@ -240,7 +240,7 @@ function submitBulkDistribution(complete) {
   function saveNext() {
     if (!bundleNumbers.length) {
       if (complete) {
-        google.script.run.withSuccessHandler(function(result) {
+        secureScriptRun.withSuccessHandler(function(result) {
           if (!result || !result.success) return failed(result && result.message || "Unable to complete distribution.");
           setBulkDistributionSaving(false);
           closeBulkDistributionModal();
@@ -257,7 +257,7 @@ function submitBulkDistribution(complete) {
       return;
     }
     const bundleNo = bundleNumbers.shift();
-    google.script.run.withSuccessHandler(function(result) {
+    secureScriptRun.withSuccessHandler(function(result) {
       if (!result || !result.success) return failed(result && result.message || "Distribution failed.");
       saved++;
       bulkDistributionHolder.actualQuantity = result.actualQuantity;

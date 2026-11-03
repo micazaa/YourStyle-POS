@@ -19,7 +19,7 @@
     if (deliveryCatalogPending && deliveryCatalogPending.owner === owner) return deliveryCatalogPending.promise;
     const request = {owner:owner};
     request.promise = new Promise((resolve, reject) => {
-      google.script.run.withSuccessHandler(result => {
+      secureScriptRun.withSuccessHandler(result => {
         const current = deliveryCatalogPending === request;
         if (current) deliveryCatalogPending = null;
         if (!result || !result.success) return reject(new Error(result && result.message || 'Unable to load products.'));
@@ -88,6 +88,86 @@
   let cart = [];
 
   let currentEmployee = null;
+  function employeeIsOic(employee = currentEmployee) {
+    return ['OIC', 'OFFICER IN CHARGE'].includes(String(employee && employee.role || '').trim().toUpperCase());
+  }
+  function canAuthorizeManagerActions(employee = currentEmployee) {
+    return ['OWNER','MANAGER'].includes(String(employee && employee.role || '').trim().toUpperCase());
+  }
+  function hasManagerViewAccess(employee = currentEmployee) {
+    return employeeIsOic(employee) || canAuthorizeManagerActions(employee);
+  }
+
+
+  const POS_LOGIN_OPERATIONS = new Set(['verifyEmployee','loginAndStartShift','getLoginSetup',
+    'getAccountSessionStatus','revokeDashboardSession','revokeInventoryManagerSession']);
+  function posActionCredential(operation, args) {
+    const first = args[0] && typeof args[0] === 'object' ? args[0] : {};
+    let value = operation === 'saveCashierShiftExit' ? first.managerCredential
+      : operation === 'generateCashierShiftReportPDF' ? args[6]
+      : operation === 'regenerateCashierReport' ? args[1]
+      : operation === 'voidAndRefundTransactionBackend' ? args[6]
+      : operation === 'generateManagerDailyReportPDF' ? args[4] : first;
+    if (typeof value === 'string') return {managerPin:value};
+    value = value || {};
+    if (value.managerPin && typeof value.managerPin === 'object') return value.managerPin;
+    return {managerPin:value.managerPin, managerToken:value.managerToken};
+  }
+  let posApprovalRequest = null;
+  function posScriptRunner(handlers = {}) {
+    return new Proxy({}, {get(target, operation) {
+      if (operation === 'withSuccessHandler') return callback=>posScriptRunner({...handlers, success:callback});
+      if (operation === 'withFailureHandler') return callback=>posScriptRunner({...handlers, failure:callback});
+      if (operation === 'withUserObject') return userObject=>posScriptRunner({...handlers, userObject:userObject});
+      if (operation === 'then' || typeof operation !== 'string') return undefined;
+      return (...args)=>{
+        const owner = currentEmployee, sessionToken = owner && owner.dashboardToken;
+        let approvalRequest = null;
+        const releaseApproval = ()=>{if(approvalRequest && posApprovalRequest===approvalRequest)posApprovalRequest=null;};
+        const fail = error=>{
+          releaseApproval();
+          if(!POS_LOGIN_OPERATIONS.has(operation) && (!currentEmployee || currentEmployee.dashboardToken!==sessionToken))return;
+          if (/Dashboard session expired|Your manager session expired|Authenticated app request required/i.test(error && error.message || '')) logoutEndedAccount(sessionToken);
+          if (handlers.failure) handlers.failure(error,handlers.userObject);
+          else showNotificationToast(error && error.message || 'Unable to complete this action.',true);
+        };
+        const succeed = value=>{releaseApproval();if(!POS_LOGIN_OPERATIONS.has(operation) && (!currentEmployee || currentEmployee.dashboardToken!==sessionToken))return;if (handlers.success) handlers.success(value,handlers.userObject);};
+        const run = ()=>google.script.run.withSuccessHandler(succeed).withFailureHandler(fail);
+        if (POS_LOGIN_OPERATIONS.has(operation)) {run()[operation](...args);return;}
+        if (!sessionToken) {fail(new Error('Please sign in again.'));return;}
+        // Copy before prompting so later form edits cannot change an approved action.
+        const request = {operation:operation,args:JSON.parse(JSON.stringify(args)),sessionToken:sessionToken,
+          shiftReportId:currentSessionIsCashier ? currentShiftReportId : ''};
+        const send = ()=>{
+          if (!currentEmployee || currentEmployee.dashboardToken !== sessionToken) {fail(new Error('Account changed. Please sign in again.'));return;}
+          run().callPosApi(request);
+        };
+        const permission = operation === 'saveCashierShiftExit' && request.args[0].action === 'END' ? 'shift.end' : owner.operationPermissions && owner.operationPermissions[operation];
+        const mode = owner.permissions && owner.permissions[permission];
+        const needsPreview = mode === 'approval' || operation === 'saveYourFindsItemDetails' && !canAuthorizeManagerActions(owner);
+        if (!needsPreview) {send();return;}
+        if(posApprovalRequest){fail(new Error('Finish the current manager approval first.'));return;}
+        approvalRequest={sessionToken:sessionToken};posApprovalRequest=approvalRequest;
+        google.script.run.withSuccessHandler(preview=>{
+          if (!currentEmployee || currentEmployee.dashboardToken !== sessionToken) return fail(new Error('Account changed. Please sign in again.'));
+          request.approvalRequestId=preview.requestId;
+          if (!preview.approvalRequired) {send();return;}
+          const credential=posActionCredential(operation,request.args);
+          const approve=value=>{
+            if (!value) {fail(new Error('Approval cancelled.'));return;}
+            request.credential=typeof value === 'string' ? {managerPin:value} : value;
+            send();
+          };
+          if (credential.managerPin || credential.managerToken) {
+            if (window.confirm(preview.description+'\n\nApprove this exact change using the entered manager authorization?')) approve(credential);
+            else approve(null);
+          } else requestManagerPin(preview.description,approve,true);
+        }).withFailureHandler(fail).previewPosAction(request);
+      };
+    }});
+  }
+  const secureScriptRun = posScriptRunner();
+
   let currentCashier = "";
   let currentSessionIsCashier = false;
 
@@ -136,7 +216,7 @@
     if (watch.expiresAt && Date.now() >= watch.expiresAt) { logoutEndedAccount(watch.token); return; }
     if (watch.busy) return;
     watch.busy = true;
-    google.script.run.withSuccessHandler(result => {
+    secureScriptRun.withSuccessHandler(result => {
       if (accountSessionWatch !== watch || !currentEmployee || currentEmployee.dashboardToken !== watch.token) return;
       watch.busy = false;
       if (!result || !result.success) return;
@@ -221,7 +301,7 @@
     document.getElementById("sidebarEmployeeName").textContent = currentCashier;
 
     document.getElementById("cashierManagerReportBtn").style.display =
-      currentEmployee.accessLevel <= 1 ? "block" : "none";
+      hasManagerViewAccess() ? "block" : "none";
     updateCashierNavigationAvailability();
 
     document.getElementById("loginOverlay").style.display = "none";
@@ -230,9 +310,10 @@
 
     restoreActivePage();
 
-    refreshInventory(function () {
+    if (currentSessionIsCashier) refreshInventory(function () {
       renderCart();
     });
+    else renderCart();
 
     restoreForm("shiftReportModal");
     restoreForm("managerDailyModal");
@@ -240,14 +321,15 @@
 
 
   function clearSession() {
+    posApprovalRequest=null;
     stopAccountSessionMonitor();
     clearDashboardState();
     if (currentEmployee && currentEmployee.dashboardToken) {
-      google.script.run.withFailureHandler(function() {}).revokeDashboardSession(currentEmployee.dashboardToken);
+      secureScriptRun.withFailureHandler(function() {}).revokeDashboardSession(currentEmployee.dashboardToken);
       delete currentEmployee.dashboardToken;
     }
     if (currentEmployee && currentEmployee.inventoryManagerToken) {
-      google.script.run.withFailureHandler(function() {}).revokeInventoryManagerSession(currentEmployee.inventoryManagerToken);
+      secureScriptRun.withFailureHandler(function() {}).revokeInventoryManagerSession(currentEmployee.inventoryManagerToken);
       delete currentEmployee.inventoryManagerToken;
     }
     localStorage.removeItem("ys_pos_session");
@@ -418,7 +500,7 @@
 
 
         if (
-          terminalWorkspace &&
+          currentEmployee && currentSessionIsCashier && terminalWorkspace &&
           terminalWorkspace.style.display === "block" &&
           codeInput
         ) {

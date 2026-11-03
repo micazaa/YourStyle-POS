@@ -637,7 +637,7 @@
       setCashierExitBusy(false);
     }
     if (cached) loaded(cached);
-    else google.script.run.withSuccessHandler(loaded).withFailureHandler(failed).getCashierShiftContext(owner, currentShiftReportId);
+    else secureScriptRun.withSuccessHandler(loaded).withFailureHandler(failed).getCashierShiftContext(owner, currentShiftReportId);
   }
 
   function reauthenticateCashierExit() {
@@ -648,7 +648,7 @@
     if (!password) return cashierExitError('Enter your password.');
     const employee = currentCashier;
     setCashierExitBusy(true);
-    google.script.run.withSuccessHandler(result => {
+    secureScriptRun.withSuccessHandler(result => {
       if (currentCashier !== employee) return;
       setCashierExitBusy(false);
       if (!result || !result.success) return cashierExitError(result && result.message || 'Sign-in failed.');
@@ -659,7 +659,7 @@
       if (currentCashier !== employee) return;
       setCashierExitBusy(false);
       cashierExitError(error.message || String(error));
-    }).verifyEmployee(employee, password);
+    }).verifyEmployee(employee, password, currentShiftReportId);
   }
 
   function submitCashierExitTally() {
@@ -700,7 +700,7 @@
       if (!currentEmployee || currentEmployee.dashboardToken !== owner) return;
       payload.managerCredential = credential;
       clearCashierReportCache();
-      google.script.run.withSuccessHandler(result => {
+      secureScriptRun.withSuccessHandler(result => {
         if (!currentEmployee || currentEmployee.dashboardToken !== owner) return;
         setCashierExitBusy(false);
         if (!result || !result.success) return cashierExitError(result && result.message || 'Unable to save the shift.');
@@ -754,7 +754,7 @@
       message.textContent = 'Your shift is saved. ' + (error.message || 'Could not prepare the PDF. Try again or choose Just sign out.');
       message.hidden = false;
     }
-    google.script.run.withSuccessHandler(result => {
+    secureScriptRun.withSuccessHandler(result => {
       if (cashierSavedExit !== saved || !currentEmployee || currentEmployee.dashboardToken !== saved.token) return;
       if (!result || !result.success || !result.downloadUrl) return failed(result || {});
       window.open(result.downloadUrl);
@@ -932,7 +932,7 @@
           if (cashierReportLoadingActive) return;
           cashierReportWriting = true;
           setCashierReportLoading(true, 'Verifying manager…');
-          google.script.run
+          secureScriptRun
             .withSuccessHandler(function (result) {
               cashierReportWriting = false;
               setCashierReportLoading(false);
@@ -941,7 +941,7 @@
                 return;
               }
 
-              proceedWithShiftReportTally(mgr, downloadKey);
+              proceedWithShiftReportTally(mgr, downloadKey, pin);
             })
             .withFailureHandler(function (err) {
               cashierReportWriting = false;
@@ -956,7 +956,7 @@
     }
   }
 
-  function proceedWithShiftReportTally(mgr, downloadKey) {
+  function proceedWithShiftReportTally(mgr, downloadKey, credential) {
     if (cashierReportLoadingActive) return;
     let pettyReturnBreakdown = {};
     const reportDate = document.getElementById('cashierReportDate').value;
@@ -1006,7 +1006,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
     cashierReportWriting = true;
     setCashierReportLoading(true, 'Generating report…');
 
-    google.script.run
+    secureScriptRun
       .withSuccessHandler(function (res) {
         cashierReportWriting = false;
         setCashierReportLoading(false);
@@ -1030,7 +1030,8 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
         reportDate,
         pettyCashObj,
         cashOnHandObj,
-        cashDrawerReason
+        cashDrawerReason,
+        credential
       );
   }
 
@@ -1202,7 +1203,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
         }
       }
     if (cached) loaded(cached);
-    else google.script.run.withSuccessHandler(loaded).withFailureHandler(function(error) {
+    else secureScriptRun.withSuccessHandler(loaded).withFailureHandler(function(error) {
         if (!isCurrentRequest()) return;
         setCashierReportLoading(false);
 
@@ -1227,7 +1228,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
       cashierReportWriting = true;
       setCashierReportLoading(true, 'Generating report…');
       showNotificationToast('Regenerating recorded report...', false);
-      google.script.run
+      secureScriptRun
         .withSuccessHandler(function (res) {
           cashierReportWriting = false;
           setCashierReportLoading(false);
@@ -1290,7 +1291,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
       clearCashierReportCache();
       cashierReportWriting = true;
       setCashierReportLoading(true, 'Saving report…');
-      google.script.run
+      secureScriptRun
         .withSuccessHandler(function (res) {
           cashierReportWriting = false;
           setCashierReportLoading(false);

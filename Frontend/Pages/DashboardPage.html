@@ -331,7 +331,7 @@
         request.compare = !!dashboardData.comparison;
       } else request.compare = document.getElementById('dashboardCompare').checked;
     }
-    google.script.run
+    secureScriptRun
       .withSuccessHandler(function (data) {
         if (
           generation !== dashboardGeneration ||
@@ -555,13 +555,26 @@
     if (confirm('Delete task “' + t.title + '”?'))
       dashboardMutateTask({ id: t.id, version: t.version }, true);
   }
-  function dashboardMutateTask(task, remove) {
+  function dashboardMutateTask(task, remove, credential) {
     if (dashboardBusy) return;
+    if (employeeIsOic() && !credential) {
+      const owner = currentEmployee;
+      const dialog = document.getElementById('dashboardTaskDialog');
+      const reopen = dialog.open;
+      if (reopen) dialog.close();
+      requestManagerPin('Manager PIN to update the task board:', function(approved) {
+        if (owner !== currentEmployee) return;
+        if (reopen) dialog.showModal();
+        if (approved) dashboardMutateTask(task, remove, approved);
+      });
+      return;
+    }
+    const approval = typeof credential === 'object' ? credential : credential ? {managerPin:credential} : {};
     dashboardBusy = true;
     document.getElementById('dashboardTaskSave').disabled = true;
     const token = currentEmployee && currentEmployee.dashboardToken,
       generation = dashboardGeneration;
-    google.script.run
+    secureScriptRun
       .withSuccessHandler(function () {
         if (
           generation !== dashboardGeneration ||
@@ -592,7 +605,7 @@
         document.getElementById('dashboardStatus').textContent = error.message || String(error);
         renderDashboard();
       })
-      .saveDashboardTask({ token: token, task: task, remove: remove });
+      .saveDashboardTask({ token: token, task: task, remove: remove, ...approval });
   }
   function openDashboardInventory(kind) {
     document.getElementById('inventorySearch').value = '';

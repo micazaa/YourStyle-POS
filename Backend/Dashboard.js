@@ -16,11 +16,11 @@ const DASHBOARD_TASK_HEADERS = [
 ];
 const ACCOUNT_SESSION_SECONDS = 21600;
 const ACCOUNT_SESSION_EXPIRED_MESSAGE = 'Dashboard session expired or account changed. Please sign out and sign in again.';
-function createDashboardSession_(employeeId, fullName) {
+function createDashboardSession_(employeeId, fullName, fingerprint) {
   const token = Utilities.getUuid() + Utilities.getUuid();
   CacheService.getScriptCache().put(
     'dashboard:' + token,
-    JSON.stringify({ id: String(employeeId), name: fullName, expiresAt: new Date().getTime() + ACCOUNT_SESSION_SECONDS * 1000 }),
+    JSON.stringify({ id: String(employeeId), name: fullName, fingerprint:fingerprint, expiresAt: new Date().getTime() + ACCOUNT_SESSION_SECONDS * 1000 }),
     ACCOUNT_SESSION_SECONDS
   );
   return token;
@@ -31,6 +31,9 @@ function revokeDashboardSession(token) {
   return { success: true };
 }
 function dashboardEmployee_(token) {
+  // The gateway has already checked this account against the sheet in this execution.
+  if (ACCESS_REQUEST_CONTEXT_ && ACCESS_REQUEST_CONTEXT_.sessionToken === token && ACCESS_REQUEST_CONTEXT_.actor)
+    return ACCESS_REQUEST_CONTEXT_.actor;
   const error = ACCOUNT_SESSION_EXPIRED_MESSAGE;
   if (!/^[a-f0-9-]{72}$/i.test(String(token || ''))) throw new Error(error);
   const cache = CacheService.getScriptCache(),
@@ -52,7 +55,8 @@ function dashboardEmployee_(token) {
   if (
     !row ||
     String(row[6]).trim().toUpperCase() !== 'TRUE' ||
-    row[1] + ' ' + row[2] !== saved.name
+    row[1] + ' ' + row[2] !== saved.name ||
+    saved.fingerprint !== employeeAuthFingerprint_(row)
   ) {
     cache.remove('dashboard:' + token);
     throw new Error(error);
@@ -61,8 +65,12 @@ function dashboardEmployee_(token) {
     id: saved.id,
     name: saved.name,
     firstName: String(row[1]),
+    cashierReportId: String(saved.cashierReportId || ''),
+    role: employeeRoleKey_({role:row[4]}),
+    accessLevel: row[5],
     expiresAt: Number(saved.expiresAt) || 0,
-    manager: String(row[5]).trim() !== '' && Number.isFinite(Number(row[5])) && Number(row[5]) <= 1,
+    manager: employeeHasManagerView_({role:row[4], accessLevel:row[5]}),
+    requiresManagerPin: employeeIsOic_({role:row[4]}),
   };
 }
 function getAccountSessionStatus(token) {
@@ -228,6 +236,7 @@ function dashboardInventory_() {
   };
 }
 function getDashboard(request) {
+  assertAppRequest_();
   request = request || {};
   const employee = dashboardEmployee_(request.token),
     now = new Date(),
@@ -335,6 +344,7 @@ function dashboardTaskText_(value, max, required) {
   return value.trim();
 }
 function saveDashboardTask(request) {
+  assertAppRequest_();
   request = request || {};
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -342,6 +352,7 @@ function saveDashboardTask(request) {
     const employee = dashboardEmployee_(request.token),
       input = request.task || {},
       id = String(input.id || '');
+    if (employee.requiresManagerPin) requireManager_(request.managerPin, request.managerToken);
     if (!id && !employee.manager) throw new Error('Only managers can create tasks.');
     let sheet = dashboardTaskSheet_(false);
     const rows = sheet ? sheet.getDataRange().getValues() : [];

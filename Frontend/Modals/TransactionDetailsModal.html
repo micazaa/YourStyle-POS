@@ -398,7 +398,7 @@ function openTransactionDetails(
   `;
 
 
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(function(result) {
       if (currentEmployee !== detailsOwner || selectedTransactionReceiptId !== receiptId) return;

@@ -111,6 +111,7 @@ function getLegacySupplierReturnRecords_() {
 }
 
 function getSupplierReturns() {
+  assertAppRequest_();
   const records = getSupplierReturnLogRecords_();
   const lineIds = {};
   records.forEach(function(record) { lineIds[record.lineId] = true; });
@@ -135,6 +136,7 @@ function findSupplierReturnMovement_(lineId) {
 }
 
 function saveSupplierReturn(payload) {
+  assertAppRequest_();
   payload = payload || {};
   const auth = requireManager_(payload.managerPin, payload.managerToken);
   const lock = LockService.getScriptLock();

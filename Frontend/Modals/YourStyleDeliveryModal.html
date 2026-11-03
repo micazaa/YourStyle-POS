@@ -123,7 +123,7 @@ function loadNextYourStyleDeliveryNumber() {
   const field = document.getElementById("yourStyleDeliveryNo");
   if (!date) { field.textContent = "—"; return; }
   field.innerHTML = loadingIndicator();
-  google.script.run.withSuccessHandler(function(result) {
+  secureScriptRun.withSuccessHandler(function(result) {
     if (document.getElementById("yourStyleDeliveryDate").value !== date) return;
     field.textContent = result && result.deliveryId ? result.deliveryId : "—";
   }).withFailureHandler(function() { field.textContent = "—"; }).generateDeliveryIdentifiers("YOURSTYLE", date);
@@ -344,7 +344,7 @@ function submitYourStyleDelivery() {
   const button = document.getElementById("acceptYourStyleDeliveryBtn");
   button.disabled = true;
   button.innerHTML = loadingIndicator("Accepting Delivery...");
-  google.script.run.withSuccessHandler(function(result) {
+  secureScriptRun.withSuccessHandler(function(result) {
     button.disabled = false;
     button.textContent = "Accept Delivery";
     if (!result || !result.success) return showNotificationToast(result && result.message ? result.message : "Unable to accept YourStyle delivery.", true);
