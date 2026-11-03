@@ -12,6 +12,7 @@
     </div>
 
     <div class="mb-3">
+      <div id="checkoutReservationNote" class="small text-muted mb-3" hidden></div>
       <label class="form-label">Payment Method</label>
       <select class="form-select fw-bold" id="paymentMethod" onchange="recalculateModalTotals()">
             <option value="Cash">Cash</option>
@@ -80,7 +81,15 @@
   }
   function triggerCheckoutConsoleModal(context) {
     if (checkoutSubmitting) return;
-    activeCheckoutContext = context && context.kind === 'EXCHANGE' ? context : null;
+    const reserved = !context && cartReservation();
+    if (reserved) context = {kind:'RESERVATION_BALANCE', owner:currentEmployee, originalReceiptId:reserved.reservationReceiptId,
+      requestId:reserved.balanceRequestId, amountDue:reserved.balanceDue};
+    activeCheckoutContext = context && ['EXCHANGE','RESERVATION_DEPOSIT','RESERVATION_BALANCE'].includes(context.kind) ? context : null;
+    const note = document.getElementById('checkoutReservationNote');
+    note.hidden = !activeCheckoutContext || activeCheckoutContext.kind === 'EXCHANGE';
+    note.textContent = activeCheckoutContext && activeCheckoutContext.kind === 'RESERVATION_DEPOSIT'
+      ? '50% down payment · Non-refundable; usable as exchange credit.'
+      : activeCheckoutContext && activeCheckoutContext.kind === 'RESERVATION_BALANCE' ? 'Remaining balance · ' + activeCheckoutContext.originalReceiptId : '';
     if (!activeCheckoutContext && cart.length === 0) {
       showNotificationToast("Shopping basket summary is empty.", true);
       return;
@@ -109,7 +118,7 @@
 
   function toggleCheckoutModal(show) {
     if (!show && checkoutSubmitting) return;
-    const returningToExchange = !show && !!activeCheckoutContext;
+    const returningToExchange = !show && activeCheckoutContext && activeCheckoutContext.kind === 'EXCHANGE';
     document.getElementById("checkoutModal").style.zIndex = show && activeCheckoutContext ? '10020' : '';
     document.getElementById("checkoutModal").style.display = show
       ? "flex"
@@ -463,7 +472,8 @@ function handleCheckoutFailure(message) {
 
     setCheckoutLoading(true);
     if (activeCheckoutContext) {
-      submitCustomerExchangeCheckout(payload, activeCheckoutContext);
+      if (activeCheckoutContext.kind === 'EXCHANGE') submitCustomerExchangeCheckout(payload, activeCheckoutContext);
+      else submitReservationCheckout(payload, activeCheckoutContext);
       return;
     }
 
@@ -535,14 +545,8 @@ function handleCheckoutFailure(message) {
     if (typeof clearTransactionHistoryCache === 'function') clearTransactionHistoryCache();
     else pageReadCache.delete('transactions');
   if (typeof clearManagerExpectedCashCache === 'function') clearManagerExpectedCashCache();
-  masterInventory =
-    Array.isArray(response.updatedInventory)
-      ? response.updatedInventory
-      : [];
-
-  populateManualDropdown(
-    masterInventory
-  );
+  if (Array.isArray(response.updatedInventory)) rememberCashierInventory(response.updatedInventory);
+  else { pageReadCache.delete('cashierInventory'); refreshInventory(); }
 
 
   /* ================= RESET CHECKOUT ================= */

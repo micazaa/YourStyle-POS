@@ -11,7 +11,7 @@ function syncProductionToDevelopmentFromMenu() {
   const ui = SpreadsheetApp.getUi();
   const prompt = ui.prompt(
     "Sync Production to Dev",
-    "This replaces every Dev sheet after a Drive backup. Enter Manager PIN.",
+    "This refreshes Dev data after a Drive backup. Existing tab names and IDs stay unchanged. Enter Manager PIN.",
     ui.ButtonSet.OK_CANCEL
   );
   if (prompt.getSelectedButton() !== ui.Button.OK) return;
@@ -43,28 +43,73 @@ function syncProductionToDevelopment_() {
     if (!sourceSheets.length) throw new Error("Production has no sheets to copy.");
 
     const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd-HHmmss");
-    const copied = sourceSheets.map(function(sourceSheet, index) {
-      const copy = sourceSheet.copyTo(destination);
-      copy.setName("__SYNC_TMP_" + stamp + "_" + index);
-      return { sheet: copy, name: sourceSheet.getName() };
-    });
-
     const backupName = "YourStyle Dev Backup " + stamp;
+    // Back up the actual Dev workbook before adding temporary copies or changing data.
     DriveApp.getFileById(DEVELOPMENT_SPREADSHEET_ID).makeCopy(backupName);
 
-    destination.getSheets().forEach(function(sheet) {
-      if (copied.some(function(copy) { return copy.sheet.getSheetId() === sheet.getSheetId(); })) return;
-      destination.deleteSheet(sheet);
+    // Create missing names first. Existing tabs retain their IDs, formulas, and links.
+    const targets = sourceSheets.map(function(sourceSheet) {
+      return destination.getSheetByName(sourceSheet.getName()) || destination.insertSheet(sourceSheet.getName());
     });
+    const staged = [];
+    try {
+      sourceSheets.forEach(function(sourceSheet, index) {
+        const copy = sourceSheet.copyTo(destination);
+        staged.push(copy);
+        copy.setName("__SYNC_STAGE_" + stamp + "_" + index);
+      });
+      sourceSheets.forEach(function(sourceSheet, index) {
+        const target = targets[index], copy = staged[index];
+        const sourceRange = sourceSheet.getDataRange();
+        const rows = sourceRange.getNumRows(), columns = sourceRange.getNumColumns();
+        if (target.getMaxRows() < sourceSheet.getMaxRows()) target.insertRowsAfter(target.getMaxRows(), sourceSheet.getMaxRows() - target.getMaxRows());
+        if (target.getMaxColumns() < sourceSheet.getMaxColumns()) target.insertColumnsAfter(target.getMaxColumns(), sourceSheet.getMaxColumns() - target.getMaxColumns());
 
-    copied.forEach(function(copy, index) {
-      copy.sheet.setName(copy.name);
-      destination.setActiveSheet(copy.sheet);
-      destination.moveActiveSheet(index + 1);
-    });
-    SpreadsheetApp.flush();
-
-    return { success: true, sheetCount: copied.length, backupName: backupName };
+        // Cross-workbook copy can rebind formula references. Read the original formulas
+        // and re-enter them only after all canonical destination names exist.
+        const formulas = sourceRange.getFormulas();
+        target.getDataRange().breakApart();
+        target.clear();
+        copy.getRange(1, 1, rows, columns).copyTo(target.getRange(1, 1, rows, columns));
+        if (sourceSheet.getName() === SHEETS.INVENTORY && target.getMaxRows() > 1) {
+          setInventoryStatusValidation_(target.getRange(2, INV_COL.STATUS, target.getMaxRows() - 1, 1));
+        }
+        // Restore only entered formulas, never materialize QUERY/ARRAYFORMULA spill cells.
+        // Group vertical formula runs so inventory columns use a handful of writes.
+        for (let column = 0; column < columns; column++) {
+          let start = 0;
+          while (start < rows) {
+            if (!formulas[start][column]) { start++; continue; }
+            let end = start + 1;
+            while (end < rows && formulas[end][column]) end++;
+            target.getRange(start + 1, column + 1, end - start, 1)
+              .setFormulas(formulas.slice(start, end).map(row => [row[column]]));
+            start = end;
+          }
+        }
+        target.setFrozenRows(sourceSheet.getFrozenRows());
+        target.setFrozenColumns(sourceSheet.getFrozenColumns());
+        target.setConditionalFormatRules(copy.getConditionalFormatRules().map(function(rule) {
+          return rule.copy().setRanges(rule.getRanges().map(function(range) {
+            return target.getRange(range.getA1Notation());
+          })).build();
+        }));
+      });
+      // Never delete Dev-only tabs (for example reservation records not yet in Prod).
+      const visible = sourceSheets.findIndex(sheet => !sheet.isSheetHidden());
+      if (visible >= 0) targets[visible].showSheet();
+      sourceSheets.forEach(function(sheet, index) {
+        if (sheet.isSheetHidden()) targets[index].hideSheet(); else targets[index].showSheet();
+      });
+      SpreadsheetApp.flush();
+      return { success: true, sheetCount: targets.length, backupName: backupName };
+    } catch (error) {
+      throw new Error("Dev sync stopped. Tab names and IDs were preserved. Backup: " + backupName + ". " + (error.message || error));
+    } finally {
+      staged.forEach(function(sheet) {
+        try { destination.deleteSheet(sheet); } catch (cleanupError) { console.warn("Sync staging cleanup: " + cleanupError); }
+      });
+    }
   } finally {
     lock.releaseLock();
   }

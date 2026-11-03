@@ -442,7 +442,7 @@ function renderInventoryTable(items) {
         isManager
           ? `
             <td>
-              ${isAllocatedSaleRow ? '<span class="badge bg-danger text-white">On Sale</span>' : isConverted ? '<span class="badge bg-secondary">Converted</span>' : `<select
+              ${state === 'RESERVED' ? '<input class="form-control form-control-sm" value="Reserved" disabled aria-label="Reserved inventory status">' : isAllocatedSaleRow ? '<span class="badge bg-danger text-white">On Sale</span>' : isConverted ? '<span class="badge bg-secondary">Converted</span>' : `<select
                 class="form-select form-select-sm inventory-active"
                 aria-label="Active status for ${escapeInventoryHtml(item.code)}"
                 ${canToggle ? '' : 'disabled'}
@@ -630,6 +630,7 @@ function getInventoryDisplayStatus(
   }
 
 
+  if (status === "RESERVED") return "RESERVED";
   if (status === "RETURNED") return "RETURNED";
 
   if (status === "CONVERTED") return "CONVERTED";
@@ -670,6 +671,7 @@ function getInventoryDisplayStatus(
 ========================================================== */
 
 function buildInventoryStatusBadge(status) {
+  if (status === "RESERVED") return '<span class="badge bg-warning text-dark">Reserved</span>';
   if (status === "RETURNED") return '<span class="badge bg-secondary">Returned</span>';
 
   if (status === "CONVERTED") return '<span class="badge bg-secondary">Converted</span>';

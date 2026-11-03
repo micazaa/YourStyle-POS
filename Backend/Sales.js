@@ -105,7 +105,13 @@ function executeCheckoutBackend(
   applyCardFee,
   paymentParts
 ) {
+  const checkoutLock = LockService.getScriptLock();
   try {
+    checkoutLock.waitLock(30000);
+    (cart || []).forEach(item => {
+      if (item.reservationReceiptId) throw new Error("Complete reserved items through reservation checkout.");
+    });
+    assertInventoryNotReserved_((cart || []).map(item => item.code));
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
     const salesLogSheet = ss.getSheetByName(SHEETS.SALES_LOG);
@@ -122,6 +128,11 @@ function executeCheckoutBackend(
         success: false,
         message: "Cart is empty.",
       });
+    }
+
+    if (salesLogSheet.getLastRow() > 1 && salesLogSheet.getRange(2, SALES_COL.RECEIPT_ID, salesLogSheet.getLastRow() - 1, 1)
+      .createTextFinder(String(receiptId)).matchCase(false).matchEntireCell(true).findNext()) {
+      throw new Error("Receipt number already exists. Reopen checkout before submitting again.");
     }
 
     ensureSalesLogSplitPaymentColumns_(salesLogSheet);
@@ -266,7 +277,7 @@ function executeCheckoutBackend(
     });
   } catch (err) {
     return JSON.stringify({ success: false, message: err.toString() });
-  }
+  } finally { if (checkoutLock.hasLock()) checkoutLock.releaseLock(); }
 }
 
 function validateSalePricing_(lines, productSnapshot) {
@@ -393,7 +404,7 @@ function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart
     if (rowDate === today && rowCashier === cashierName && status === "COMPLETED") {
       const splitCash = splitCashAmountForSalesRow_(row);
       if (splitCash !== null) {
-        const receiptId = String(row[SALES_IDX.RECEIPT_ID] || "").trim();
+        const receiptId = salesPaymentKey_(row);
         if (receiptId && !processedSplitReceipts[receiptId]) {
           processedSplitReceipts[receiptId] = true;
           cashSales += splitCash;
@@ -431,7 +442,7 @@ function getExpectedCashForManager(reportDate) {
     if (String(row[SALES_IDX.STATUS] || "").trim().toUpperCase() !== "COMPLETED") continue;
     const splitCash = typeof splitCashAmountForSalesRow_ === "function" ? splitCashAmountForSalesRow_(row) : null;
     if (splitCash !== null) {
-      const receiptId = String(row[SALES_IDX.RECEIPT_ID] || "").trim();
+      const receiptId = salesPaymentKey_(row);
       if (receiptId && !processedSplitReceipts[receiptId]) {
         processedSplitReceipts[receiptId] = true;
         cashSales += splitCash;
@@ -571,6 +582,8 @@ function voidAndRefundTransactionBackend(
 
     }
 
+
+    if (findReservation_(receiptId)) throw new Error("Reservation payments cannot be voided. Use the reservation actions in Transaction History.");
 
     const salesRange = salesLogSheet.getDataRange();
     const data = salesRange.getValues();
@@ -840,7 +853,7 @@ function voidAndRefundTransactionBackend(
           : matchedRows.length + " line item(s))."),
 
       updatedInventory:
-        getFullInventory()
+        getSellableInventory()
 
     };
 
@@ -1056,6 +1069,7 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
        ARRAY
     ====================================================== */
 
+    const reservations = new Map(readReservations_().map(item => [item.receiptId, item]));
     const transactions = Object.values(receiptMap);
 
     transactions.forEach(function (tx) {
@@ -1065,6 +1079,12 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
         : tx.hasVoided
           ? "VOIDED"
           : "COMPLETED";
+      const reservation = reservations.get(tx.receiptId);
+      if (reservation) {
+        tx.reservation = reservationForClient_(reservation);
+        tx.status = reservation.status;
+        if (reservation.status === "RESERVED") tx.items = 1;
+      }
       delete tx.hasVoided;
       delete tx.hasCompleted;
 
@@ -1226,9 +1246,19 @@ function getTransactionDetails(receiptId) {
           total: 0,
 
           items: [],
+          payments: [],
         };
       }
 
+      const paymentReason = String(row[SALES_IDX.REASON] || '');
+      if (/^RESERVATION (DEPOSIT|BALANCE)$/.test(paymentReason)) {
+        transaction.payments.push({stage:paymentReason === 'RESERVATION DEPOSIT' ? 'Down payment' : 'Balance payment',
+          amount:roundToTwo((Number(row[SALES_IDX.NET_TOTAL]) || 0) + (Number(row[SALES_IDX.FEE_ABSORBED]) || 0)), fee:Number(row[SALES_IDX.FEE_CHARGED]) || 0,
+          method:String(row[SALES_IDX.PAYMENT_METHOD]), cashier:String(row[SALES_IDX.CASHIER]),
+          reference:String(row[SALES_IDX.REFERENCE] || ''), cashReceived:Number(row[SALES_IDX.CASH_RECEIVED]) || 0,
+          change:Number(row[SALES_IDX.CHANGE]) || 0,
+          dateTime:Utilities.formatDate(new Date(row[SALES_IDX.TIMESTAMP]), tz, 'MM/dd/yyyy h:mm a')});
+      }
       /* ================= ITEM ================= */
 
       const itemStatus = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
@@ -1310,6 +1340,15 @@ function getTransactionDetails(receiptId) {
       : transaction.hasVoided
         ? "VOIDED"
         : "COMPLETED";
+    const reservation = findReservation_(receiptId);
+    if (reservation) {
+      transaction.reservation = reservationForClient_(reservation);
+      transaction.status = reservation.status;
+      transaction.paymentMethod = Array.from(new Set(transaction.payments.map(payment => payment.method))).join(' / ');
+      transaction.cashReceived = roundToTwo(transaction.payments.reduce((sum, payment) => sum + payment.cashReceived, 0));
+      transaction.changeGiven = roundToTwo(transaction.payments.reduce((sum, payment) => sum + payment.change, 0));
+      transaction.referenceNumber = transaction.payments.map(payment => payment.reference).filter(value => value && value !== 'N/A').join(' / ');
+    }
     delete transaction.hasVoided;
     delete transaction.hasCompleted;
 

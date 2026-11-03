@@ -4,7 +4,12 @@
   style="display:none;"
 >
 
-  <div
+  <form
+    id="loginForm"
+    autocomplete="on"
+    onsubmit="event.preventDefault();updateLoginReady();unlockTerminalSession();"
+    onfocusin="requestAnimationFrame(updateLoginReady)"
+    onpointerdown="updateLoginReady()"
     class="custom-popup-card login-card"
     style="
       max-width:440px;
@@ -56,6 +61,7 @@
         type="text"
         class="form-control"
         id="cashierSelect"
+        name="username"
         placeholder="name0123@ys.sys"
         list="loginUsernameSuggestions"
         autocomplete="username"
@@ -63,7 +69,7 @@
         autocorrect="off"
         spellcheck="false"
         oninput="updateLoginReady()"
-        onkeydown="if(event.key === 'Enter'){ unlockTerminalSession(); }"
+        onchange="updateLoginReady()"
       >
 
       <datalist id="loginUsernameSuggestions"></datalist>
@@ -86,17 +92,15 @@
           type="password"
           class="form-control"
           id="cashierPin"
+          name="password"
           placeholder="Enter your password"
           autocomplete="current-password"
           oninput="updateLoginReady()"
-          onkeydown="
-            if(event.key === 'Enter'){
-              unlockTerminalSession();
-            }
-          "
+          onchange="updateLoginReady()"
         >
         <button id="loginPasswordToggle" class="login-password-toggle" type="button" aria-label="Show password" aria-controls="cashierPin" aria-pressed="false" onclick="toggleLoginPassword()">Show</button>
       </div>
+      <div class="small text-muted mt-2">Use your browser’s Save password option to remember this login.</div>
 
     </div>
 
@@ -177,9 +181,8 @@
 
     <button
       id="loginShiftButton"
-      type="button"
+      type="submit"
       class="btn btn-pink w-100 py-2 login-submit"
-      onclick="unlockTerminalSession()"
       disabled
     >
       Sign in
@@ -187,7 +190,7 @@
 
     <p id="loginShiftBlockedReason" class="small text-muted mt-2 mb-0" role="status" aria-live="polite" hidden></p>
 
-  </div>
+  </form>
 
 </div>
 

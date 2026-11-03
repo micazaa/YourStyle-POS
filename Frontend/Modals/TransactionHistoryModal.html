@@ -1091,6 +1091,8 @@ function buildTransactionStatusBadge(status) {
       .toUpperCase();
 
 
+  if (value === "RESERVED") return '<span class="badge bg-warning text-dark">Reserved</span>';
+  if (value === "EXCHANGED") return '<span class="badge bg-secondary">Exchanged</span>';
   if (value === "VOIDED") {
 
     return `

@@ -1,3 +1,14 @@
+function setInventoryStatusValidation_(range) {
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(Object.values(INVENTORY_STATUS), true)
+    .setAllowInvalid(false)
+    .build();
+  // Apply explicit cell rules so filtered inventory rows receive the same statuses.
+  range.setDataValidations(Array.from({length:range.getNumRows()}, function() {
+    return Array(range.getNumColumns()).fill(rule);
+  }));
+}
+
 function formatInventoryDateForClient(value) {
   if (!value) {
     return "";
@@ -308,9 +319,9 @@ function getFullInventory(options) {
   products.forEach(function(product) {
     productByCode[String(product.productCode || "").trim()] = product;
   });
-  const storedDeliveryMetadata = inventoryHasStoredDeliveryMetadata_(sheet);
-  const readWidth = storedDeliveryMetadata ? INVENTORY_DELIVERY_COLUMN_COUNT : INVENTORY_COLUMN_COUNT;
-  const deliveryMetadataByCode = storedDeliveryMetadata || options.includeDeliveryMetadata === false ? {} : getInventoryDeliveryMetadataByCode_();
+  const storedDeliveryMetadata = !options.cashierOnly && inventoryHasStoredDeliveryMetadata_(sheet);
+  const readWidth = options.cashierOnly ? INV_COL.IMAGE : storedDeliveryMetadata ? INVENTORY_DELIVERY_COLUMN_COUNT : INVENTORY_COLUMN_COUNT;
+  const deliveryMetadataByCode = options.cashierOnly || storedDeliveryMetadata || options.includeDeliveryMetadata === false ? {} : getInventoryDeliveryMetadataByCode_();
 
   /* ========================================================
      READ INVENTORY, INCLUDING STORED RECEIPT FIELDS WHEN AVAILABLE
@@ -371,6 +382,21 @@ function getFullInventory(options) {
     )
       .trim()
       .toUpperCase();
+
+    // Cashier only needs sale choices. Skip delivery/date metadata for every item.
+    if (options.cashierOnly) {
+      const product = productByCode[code];
+      if (status !== INVENTORY_STATUS.ACTIVE || product && product.status === PRODUCT_STATUS.DEACTIVATED) continue;
+      inventory.push({code:code, name:description,
+        size:String(displayRow[INV_IDX.CATEGORY] || '').trim().toUpperCase() === 'YOURFINDS'
+          ? String(displayRow[INV_IDX.SIZE] || '').trim().replace(/^BULKY$/i, 'BNE') : String(displayRow[INV_IDX.SIZE] || '').trim(),
+        category:String(displayRow[INV_IDX.CATEGORY] || 'Others').trim(), inventoryType:inventoryType,
+        status:status, stock:Number(row[INV_IDX.STOCK]) || 0, price:Number(row[INV_IDX.YS_PRICE]) || 0,
+        regularPrice:Number(row[INV_IDX.YS_PRICE]) || 0, imageUrl:String(row[INV_IDX.IMAGE] || '').trim(),
+        productStatus:product ? product.status : PRODUCT_STATUS.ACTIVE,
+        salePrices:product ? product.salePrices : []});
+      continue;
+    }
 
     /* ================= OBJECT ================= */
 
@@ -1621,9 +1647,9 @@ function generateYourFindsDeliveryCodes(sheet, deliveryDate, size, quantity) {
 }
 
 function getSellableInventory() {
-  const products = getProductMaster_();
+  const products = getProductMaster_({cashierOnly:true});
   expireEndedProductSales_(products);
-  const inventory = getFullInventory({products: products, includeDeliveryMetadata: false});
+  const inventory = getFullInventory({products: products, includeDeliveryMetadata: false, cashierOnly:true});
   const sellable = inventory.filter((item) => {
     const status = String(item.status || "")
       .trim()
@@ -1687,7 +1713,7 @@ function expireEndedProductSales_(products) {
     const itemResult = getInventoryItemByCode(product.productCode);
     if (itemResult && itemResult.success && itemResult.item) {
       const item = itemResult.item;
-      inventorySheet.getRange(item.rowNumber, INV_COL.STATUS).setValue(INVENTORY_STATUS.ACTIVE);
+      if (String(item.status).toUpperCase() !== INVENTORY_STATUS.RESERVED) inventorySheet.getRange(item.rowNumber, INV_COL.STATUS).setValue(INVENTORY_STATUS.ACTIVE);
       inventorySheet.getRange(item.rowNumber, INV_COL.UPDATED_AT).setValue(new Date());
     }
     ended.forEach(function(tier) {
@@ -1714,6 +1740,8 @@ function getInventoryDisplayStatus(item) {
   const status = String(item.status || INVENTORY_STATUS.ACTIVE)
     .trim()
     .toUpperCase();
+
+  if (status === INVENTORY_STATUS.RESERVED) return "RESERVED";
 
   /* ================= RETURNED ================= */
 

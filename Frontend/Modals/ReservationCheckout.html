@@ -1,0 +1,88 @@
+<script>
+function cartReservation() {
+  return cart.length === 1 && cart[0].reservationReceiptId ? cart[0] : null;
+}
+function reservationRequestId() {
+  return window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + '-' + Math.random().toString(36).slice(2);
+}
+function updateReservationCartControls() {
+  const reserved = cartReservation();
+  const button = document.getElementById('downPaymentBtn');
+  if (button) button.hidden = !!reserved || !cart.some(item => String(item.category).toUpperCase() === 'YOURFINDS' && !item.isCustom);
+  ['globalDiscountType','globalDiscountValue'].forEach(id => { const input = document.getElementById(id); if (input) input.disabled = !!reserved; });
+  const paid = document.getElementById('reservationPaidSummary');
+  if (paid) {
+    paid.hidden = !reserved;
+    paid.textContent = reserved ? 'Down payment paid: ₱' + Number(reserved.downPaymentPaid).toFixed(2) + ' · ' + reserved.reservationReceiptId : '';
+  }
+}
+function startYourFindsDownPayment() {
+  if (!currentEmployee) return showNotificationToast('Sign in before reserving an item.', true);
+  if (cart.length !== 1 || cart[0].isCustom || String(cart[0].category).toUpperCase() !== 'YOURFINDS' || Number(cart[0].quantity) !== 1) {
+    return showNotificationToast('Reserve one stocked YourFinds item at a time, with quantity 1.', true);
+  }
+  const item = cart[0];
+  if (Number(item.stock) !== 1) return showNotificationToast('Only an available YourFinds item can be reserved.', true);
+  const cents = value => Math.round((value + Number.EPSILON) * 100) / 100;
+  const afterItemDiscount = cents(Math.max(0, Number(item.price) - calculateLineDiscount(item)));
+  const price = cents(Math.max(0, afterItemDiscount - calculateGlobalDiscount(afterItemDiscount)));
+  const amount = cents(price * .5);
+  if (!Number.isFinite(amount) || amount <= 0 || amount >= price) return showNotificationToast('Down payment must be greater than zero.', true);
+  item.depositRequestId = item.depositRequestId || reservationRequestId();
+  saveSession();
+  triggerCheckoutConsoleModal({kind:'RESERVATION_DEPOSIT', owner:currentEmployee, requestId:item.depositRequestId,
+    item:Object.assign({}, item), amountDue:amount,
+    globalDiscountType:document.getElementById('globalDiscountType').value,
+    globalDiscountValue:Number(document.getElementById('globalDiscountValue').value) || 0});
+}
+function completeReservedTransaction() {
+  if (cart.length) return showNotificationToast('Clear the current cart before completing a reservation.', true);
+  const owner = currentEmployee, receiptId = selectedTransactionReceiptId;
+  const button = document.getElementById('transactionReservationCompleteBtn');
+  if (button.disabled) return;
+  button.disabled = true; button.innerHTML = loadingIndicator('Loading…');
+  function finish() { button.disabled = false; button.textContent = 'Complete Transaction'; }
+  google.script.run.withSuccessHandler(result => {
+    if (currentEmployee !== owner) return;
+    finish();
+    if (!result || !result.success) return showNotificationToast(result && result.message || 'Unable to load reservation.', true);
+    if (cart.length) return showNotificationToast('Cart changed. Clear it before completing the reservation.', true);
+    const reservation = result.reservation;
+    cart = [Object.assign({}, result.item, {quantity:1, isCustom:false, discountType:'amount', discountValue:0,
+      reservationReceiptId:reservation.receiptId, downPaymentPaid:reservation.deposit,
+      balanceDue:reservation.balance, balanceRequestId:reservationRequestId()})];
+    document.getElementById('globalDiscountValue').value = '';
+    closeTransactionDetailsModal();
+    closeTransactionHistoryModal();
+    showPage('posPage'); renderCart(); saveSession();
+    triggerCheckoutConsoleModal();
+  }).withFailureHandler(error => {
+    if (currentEmployee === owner) { finish(); showNotificationToast(error.message || String(error), true); }
+  }).getReservationForCheckout(receiptId, owner && owner.dashboardToken);
+}
+function submitReservationCheckout(payment, context) {
+  const owner = currentEmployee;
+  if (!owner || context.owner !== owner) { setCheckoutLoading(false); return showNotificationToast('Session changed. Reopen checkout.', true); }
+  google.script.run.withSuccessHandler(result => {
+    if (currentEmployee !== owner) return;
+    setCheckoutLoading(false);
+    if (!result || !result.success) return showNotificationToast(result && result.message || 'Reservation payment failed.', true);
+    toggleCheckoutModal(false);
+    cart = cart.filter(item => context.kind === 'RESERVATION_DEPOSIT'
+      ? item.depositRequestId !== context.requestId : item.reservationReceiptId !== context.originalReceiptId);
+    renderCart(); saveSession();
+    pageReadCache.delete('inventory'); pageReadCache.delete('cashierInventory');
+    invalidateDeliveryItemCaches(); clearTransactionHistoryCache();
+    if (typeof clearManagerExpectedCashCache === 'function') clearManagerExpectedCashCache();
+    refreshInventory();
+    const reservation = result.reservation;
+    showNotificationToast(result.receiptId + (reservation.status === 'RESERVED'
+      ? ' · Reserved · Balance ₱' + Number(reservation.balance).toFixed(2) : ' · Transaction completed.'));
+  }).withFailureHandler(error => {
+    if (currentEmployee === owner) { setCheckoutLoading(false); showNotificationToast(error.message || String(error), true); }
+  }).processReservationPayment(Object.assign({}, payment, {kind:context.kind, requestId:context.requestId,
+    originalReceiptId:context.originalReceiptId, item:context.item, expectedAmountDue:context.amountDue,
+    globalDiscountType:context.globalDiscountType, globalDiscountValue:context.globalDiscountValue,
+    sessionToken:owner.dashboardToken}));
+}
+</script>

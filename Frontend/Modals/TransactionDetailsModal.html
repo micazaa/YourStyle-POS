@@ -306,6 +306,8 @@
     </div>
 
 
+    <div id="transactionReservationInfo" class="alert alert-light border small" hidden></div>
+
     <!-- ACTIONS -->
 
     <div class="d-flex gap-2">
@@ -328,6 +330,8 @@
         Void Transaction
       </button>
       
+      <button id="transactionReservationCompleteBtn" type="button" class="btn btn-pink flex-fill" style="display:none;" onclick="completeReservedTransaction()">Complete Transaction</button>
+
       <button
         id="transactionExchangeBtn"
         type="button"
@@ -357,6 +361,11 @@ function openTransactionDetails(
   receiptId
 ) {
 
+  document.getElementById('transactionReservationInfo').hidden = true;
+  document.getElementById('transactionReservationCompleteBtn').style.display = 'none';
+  document.getElementById('transactionExchangeBtn').style.display = 'none';
+  document.getElementById('transactionDetailsVoidBtn').style.display = 'none';
+  const detailsOwner = currentEmployee;
   selectedTransactionReceiptId =
     receiptId;
 
@@ -392,6 +401,7 @@ function openTransactionDetails(
   google.script.run
 
     .withSuccessHandler(function(result) {
+      if (currentEmployee !== detailsOwner || selectedTransactionReceiptId !== receiptId) return;
 
       if (
         !result ||
@@ -420,6 +430,7 @@ function openTransactionDetails(
 
 
     .withFailureHandler(function(err) {
+      if (currentEmployee !== detailsOwner || selectedTransactionReceiptId !== receiptId) return;
 
       showNotificationToast(
         err.message ||
@@ -461,6 +472,27 @@ function closeTransactionDetailsModal() {
 ========================================================== */
 
 function renderTransactionDetails(tx) {
+  const reservation = tx.reservation;
+  const reservationInfo = document.getElementById('transactionReservationInfo');
+  reservationInfo.hidden = !reservation;
+  if (reservation) {
+    reservationInfo.textContent = 'Item price: ₱' + Number(reservation.price).toFixed(2)
+      + ' · Down payment: ₱' + Number(reservation.deposit).toFixed(2)
+      + (reservation.status === 'EXCHANGED' ? ' · Credit used on ' + reservation.exchangeId
+        : ' · Balance: ₱' + Number(reservation.balance).toFixed(2));
+    (tx.payments || []).forEach(payment => {
+      const line = document.createElement('div');
+      line.className = 'mt-1 text-muted';
+      line.textContent = [payment.stage, payment.method, payment.cashier, payment.dateTime,
+        payment.fee ? 'Fee: ₱' + Number(payment.fee).toFixed(2) : '']
+        .filter(Boolean).join(' · ');
+      reservationInfo.appendChild(line);
+    });
+  }
+  const completeButton = document.getElementById('transactionReservationCompleteBtn');
+  completeButton.style.display = reservation && reservation.status === 'RESERVED' ? 'block' : 'none';
+  completeButton.disabled = false;
+  completeButton.textContent = 'Complete Transaction';
 
   document.getElementById(
     "transactionDetailsReceipt"
@@ -521,6 +553,7 @@ function renderTransactionDetails(tx) {
 
         <div class="fw-semibold">
           ${escapeTransactionHtml(item.name)}
+          ${reservation ? `<div class="small text-muted fw-normal">${escapeTransactionHtml(item.reason === "RESERVATION DEPOSIT" ? "Down payment" : item.reason === "RESERVATION BALANCE" ? "Balance payment" : item.reason)}</div>` : ""}
         </div>
 
         <div class="small text-muted font-monospace">
@@ -555,7 +588,7 @@ function renderTransactionDetails(tx) {
     const actionCell = row.lastElementChild;
     if (String(item.status).toUpperCase() === "VOIDED") {
       actionCell.innerHTML = '<span class="badge bg-warning text-dark">Voided</span>';
-    } else if (String(tx.status).toUpperCase() !== "VOIDED") {
+    } else if (!reservation && String(tx.status).toUpperCase() !== "VOIDED") {
       if (String(item.status).toUpperCase() === "PARTIALLY VOIDED") {
         actionCell.innerHTML = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle me-1">Adjusted</span>';
       }
@@ -652,7 +685,7 @@ function renderTransactionDetails(tx) {
 
 
   if (
-    tx.paymentMethod === "Cash"
+    tx.paymentMethod === "Cash" || (reservation && (tx.payments || []).some(payment => payment.method.includes("Cash")))
   ) {
 
     cashBox.style.display =
@@ -724,7 +757,7 @@ function renderTransactionDetails(tx) {
   } else {
     voidBox.style.display = "none";
     voidButton.style.display =
-      isExchange || String(tx.status).toUpperCase() === "VOIDED"
+      reservation || isExchange || String(tx.status).toUpperCase() === "VOIDED"
         ? "none"
         : "block";
   }
@@ -737,11 +770,7 @@ function renderTransactionDetails(tx) {
     );
 
 
-  const canExchange =
-    String(tx.status || "")
-      .trim()
-      .toUpperCase() === "COMPLETED" &&
-    !isExchange;
+  const canExchange = ["COMPLETED", "RESERVED"].includes(String(tx.status || "").trim().toUpperCase()) && !isExchange;
 
 
   if (exchangeButton) {

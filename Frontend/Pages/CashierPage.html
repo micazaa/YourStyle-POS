@@ -161,13 +161,13 @@
                 <div class="row align-items-center mt-2">
                   <div class="col-4 text-end small text-muted">Global Discount:</div>
                   <div class="col-4">
-                    <select class="form-select form-select-sm text-center" id="globalDiscountType" onchange="renderCart()">
+                    <select class="form-select form-select-sm text-center" id="globalDiscountType" onchange="updateCashierCartTotals();scheduleCashierSessionSave()">
                         <option value="percentage">% Percentage</option>
                         <option value="amount">Fixed Amount</option>
                       </select>
                   </div>
                   <div class="col-4">
-                    <input type="number" class="form-control form-control-sm text-end fw-bold" id="globalDiscountValue" placeholder="0" min="0" oninput="renderCart()">
+                    <input type="number" class="form-control form-control-sm text-end fw-bold" id="globalDiscountValue" placeholder="0" min="0" oninput="updateCashierCartTotals();scheduleCashierSessionSave()">
                   </div>
                 </div>
               </div>
@@ -178,6 +178,8 @@
                   <span class="label">Grand Total</span>
                   <h3 class="fw-bold m-0 text-dark">₱<span id="grandTotal">0.00</span></h3>
                 </div>
+                <div id="reservationPaidSummary" class="small text-muted mb-2" hidden></div>
+                <button id="downPaymentBtn" type="button" class="btn btn-outline-pink w-100 mb-2" hidden onclick="startYourFindsDownPayment()">Down Payment (50%)</button>
                 <button type="button" class="btn btn-pink btn-lg w-100 py-3 text-white fw-bold" onclick="triggerCheckoutConsoleModal()">Proceed to Checkout</button>
               </div>
 
@@ -283,7 +285,31 @@
       : name;
   }
 
+  var cashierSessionSaveTimer = null;
+  function scheduleCashierSessionSave() {
+    clearTimeout(cashierSessionSaveTimer);
+    const owner = currentEmployee;
+    cashierSessionSaveTimer = setTimeout(function() {
+      if (owner && owner === currentEmployee) saveSession();
+    }, 180);
+  }
+  function updateCashierCartTotals() {
+    let subtotal = 0, quantity = 0;
+    const rows = document.getElementById('cartRows').rows;
+    cart.forEach(function(item, index) {
+      const net = item.reservationReceiptId ? Number(item.balanceDue) : Math.max(0, item.price * item.quantity - calculateLineDiscount(item));
+      subtotal += net; quantity += Number(item.quantity) || 0;
+      if (rows[index]) rows[index].cells[6].textContent = '₱' + net.toFixed(2);
+    });
+    calculatedBaseTotalDue = Math.max(0, subtotal - (cartReservation() ? 0 : calculateGlobalDiscount(subtotal)));
+    document.getElementById('totalItemsCountOut').textContent = quantity;
+    document.getElementById('subTotalOut').textContent = subtotal.toFixed(2);
+    document.getElementById('vatBreakdownOut').textContent = (calculatedBaseTotalDue - calculatedBaseTotalDue / 1.12).toFixed(2);
+    document.getElementById('grandTotal').textContent = calculatedBaseTotalDue.toFixed(2);
+  }
+
   function renderCart() {
+    updateReservationCartControls();
     let tbody = document.getElementById("cartRows");
     let activeEl = document.activeElement;
     let focusInfo = null;
@@ -327,17 +353,19 @@
     let subtotalAccumulator = 0;
     let itemQuantityAccumulator = 0;
 
+    const fragment = document.createDocumentFragment();
     cart.forEach((item, index) => {
+      itemQuantityAccumulator += Number(item.quantity) || 0;
       let lineRawCost = item.price * item.quantity;
       const isSaleItem = String(item.priceSource || "").toUpperCase() === "SALE";
       const calculatedLineDiscount = calculateLineDiscount(item);
 
-      let lineNetValue = Math.max(0, lineRawCost - calculatedLineDiscount);
+      let lineNetValue = item.reservationReceiptId ? Number(item.balanceDue) : Math.max(0, lineRawCost - calculatedLineDiscount);
       subtotalAccumulator += lineNetValue;
 
       let tr = document.createElement("tr");
       let imgTag = item.imageUrl
-        ? `<button type="button" class="btn p-0 cart-photo" aria-label="View product image" title="View product image"><img src="${escapeInventoryHtml(item.imageUrl)}" alt="${escapeInventoryHtml(item.name || item.code)}" class="cart-img"></button>`
+        ? `<button type="button" class="btn p-0 cart-photo" aria-label="View product image" title="View product image"><img loading="lazy" decoding="async" src="${escapeInventoryHtml(item.imageUrl)}" alt="${escapeInventoryHtml(item.name || item.code)}" class="cart-img"></button>`
         : `<div class="cart-img bg-light border d-flex align-items-center justify-content-center text-muted small" style="font-size:10px;">No Img</div>`;
 
       tr.innerHTML = `
@@ -374,10 +402,11 @@
       if (photo) {
         photo.addEventListener('click', () => openInventoryImageViewer(item));
       }
-      tbody.appendChild(tr);
+      fragment.appendChild(tr);
     });
+    tbody.appendChild(fragment);
 
-    const globalReduction = calculateGlobalDiscount(subtotalAccumulator);
+    const globalReduction = cartReservation() ? 0 : calculateGlobalDiscount(subtotalAccumulator);
 
     calculatedBaseTotalDue = Math.max(0, subtotalAccumulator - globalReduction);
     let includedVatAmount =
@@ -392,6 +421,7 @@
     document.getElementById("grandTotal").textContent =
       calculatedBaseTotalDue.toFixed(2);
 
+    if (cartReservation()) tbody.querySelectorAll('input,select').forEach(input => input.disabled = true);
     restoreCartFocus(
     tbody,
     focusInfo
@@ -416,9 +446,8 @@ document
       return;
     }
 
-    const matchingItems = masterInventory.filter(function(item) {
-      return String(item.code || "").trim() === scannedCode;
-    });
+    if (cashierIndexedInventory !== masterInventory) indexCashierInventory(masterInventory);
+    const matchingItems = cashierBarcodeIndex.get(scannedCode) || [];
     if (matchingItems.length > 1) {
       const search = document.getElementById('manualItemSearch');
       search.value = scannedCode;
@@ -469,18 +498,23 @@ document
         true,
       );
     }
-    renderCart();
+    const quantityInput = document.querySelector('#cartRows [data-idx="' + index + '"][data-field="qty"]');
+    if (quantityInput) quantityInput.value = cart[index].quantity;
+    updateCashierCartTotals();
+    scheduleCashierSessionSave();
   }
 
     function changeDiscountType(index, type) {
     cart[index].discountType = type;
-    renderCart();
+    updateCashierCartTotals();
+    scheduleCashierSessionSave();
   }
 
   function updateDiscountValue(index, val) {
     let cleaned = val.replace(/[^0-9.]/g, "");
     cart[index].discountValue = parseFloat(cleaned) || 0;
-    renderCart();
+    updateCashierCartTotals();
+    scheduleCashierSessionSave();
   }
 
   function removeItem(index) {
@@ -495,35 +529,62 @@ document
     renderCart();
   }
 
+var cashierSearchRows = [];
+var cashierBarcodeIndex = new Map();
+var cashierIndexedInventory = null;
+
+function cashierInventoryCacheKey() { return new Date().toLocaleDateString('en-CA'); }
+function indexCashierInventory(items) {
+  cashierIndexedInventory = items;
+  cashierBarcodeIndex = new Map();
+  cashierSearchRows = items.map(function(item, index) {
+    const code = String(item.code || '').trim();
+    if (!cashierBarcodeIndex.has(code)) cashierBarcodeIndex.set(code, []);
+    cashierBarcodeIndex.get(code).push(item);
+    return {item:item, index:index, searchText:[item.name, item.size, item.category, code].join(' ').toLowerCase()};
+  });
+}
+function rememberCashierInventory(items) {
+  const read = beginPageRead('cashierInventory', cashierInventoryCacheKey());
+  masterInventory = Array.isArray(items) ? items : [];
+  read.save(masterInventory);
+  populateManualDropdown(masterInventory);
+}
 function refreshInventory(callback) {
-  const read = beginPageRead('cashierInventory');
-
-  google.script.run
-    .withSuccessHandler(function(data) {
-      if (!read.current()) return;
-
-      masterInventory = data;
-
-      populateManualDropdown(data);
-
-      if (callback) {
-        callback();
+  const read = beginPageRead('cashierInventory', cashierInventoryCacheKey(), true);
+  if (!read.shouldFetch) {
+    if (read.cached !== undefined) {
+      if (masterInventory !== read.cached) {
+        masterInventory = read.cached;
+        populateManualDropdown(masterInventory);
       }
-
-    })
-    .withFailureHandler(function(err) {
-      if (!read.current()) return;
-
-      showNotificationToast(
-        err.message || "Failed to load inventory.",
-        true
-      );
-
-    })
-    .getSellableInventory();
+      if (callback) callback();
+    } else if (callback) {
+      const pending = pageReadCache.get('cashierInventory');
+      if (pending) (pending.callbacks || (pending.callbacks = [])).push(callback);
+    }
+    return;
+  }
+  const entry = pageReadCache.get('cashierInventory');
+  entry.callbacks = callback ? [callback] : [];
+  google.script.run.withSuccessHandler(function(data) {
+    if (!read.current()) return;
+    masterInventory = Array.isArray(data) ? data : [];
+    read.save(masterInventory);
+    populateManualDropdown(masterInventory);
+    entry.callbacks.forEach(done => done());
+    entry.callbacks = [];
+  }).withFailureHandler(function(error) {
+    if (!read.current()) return;
+    read.fail();
+    pageReadCache.delete('cashierInventory');
+    entry.callbacks = [];
+    showNotificationToast(error.message || 'Failed to load inventory.', true);
+  }).getSellableInventory();
 }
 
   function populateManualDropdown(items) {
+    indexCashierInventory(Array.isArray(items) ? items : masterInventory);
     document.getElementById("manualItemSearch").value = "";
     document.getElementById("manualItemSelect").value = "";
     manualSearchHighlightIndex = -1;
@@ -547,16 +608,12 @@ function refreshInventory(callback) {
       return;
     }
 
-    let matches = masterInventory
-      .map((item, index) => ({ item, index }))
-      .filter(({ item }) => {
-        if (!query) return true;
-      let haystack =
-        `${item.name} ${item.size} ${item.category} ${item.code}`
-          .toLowerCase();
-        return haystack.includes(query);
-      })
-      .slice(0, 50); // cap rendered rows for performance
+    if (cashierIndexedInventory !== masterInventory) indexCashierInventory(masterInventory);
+    const matches = [];
+    for (const entry of cashierSearchRows) {
+      if (!query || entry.searchText.includes(query)) matches.push(entry);
+      if (matches.length === 50) break;
+    }
 
     manualSearchHighlightIndex = -1;
 
@@ -571,8 +628,8 @@ function refreshInventory(callback) {
       .map(
         ({ item, index }, pos) => `
           <button type="button" class="list-group-item list-group-item-action small py-2${item.priceSource === 'SALE' ? ' text-danger' : ''}" data-pos="${pos}" data-inventory-index="${index}" onclick="selectManualItem(${index})">
-            <span class="fw-semibold">[${item.category}] ${item.name}</span>
-            <span class="${item.priceSource === 'SALE' ? 'text-danger' : 'text-muted'}"> (${item.size}) - ₱${item.price.toFixed(
+            <span class="fw-semibold">[${escapeInventoryHtml(item.category)}] ${escapeInventoryHtml(item.name)}</span>
+            <span class="${item.priceSource === 'SALE' ? 'text-danger' : 'text-muted'}"> (${escapeInventoryHtml(item.size)}) - ₱${item.price.toFixed(
           2,
         )}${item.priceSource === 'SALE' ? ' · SALE' : ''}</span>
           </button>
@@ -826,6 +883,8 @@ function addItemToCart(
   product,
   isCustom
 ) {
+
+  if (cartReservation()) return showNotificationToast('Complete or remove the reserved item before adding other items.', true);
 
   const productCode =
     String(product.code || "").trim();

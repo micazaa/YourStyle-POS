@@ -614,17 +614,8 @@ if (voidReason === "Other") {
           invalidateDeliveryItemCaches();
     if (typeof clearTransactionHistoryCache === 'function') clearTransactionHistoryCache();
     else pageReadCache.delete('transactions');
-          masterInventory =
-            Array.isArray(
-              res.updatedInventory
-            )
-              ? res.updatedInventory
-              : [];
-
-
-          populateManualDropdown(
-            masterInventory
-          );
+          if (Array.isArray(res.updatedInventory)) rememberCashierInventory(res.updatedInventory);
+          else refreshInventory();
 
 
           /* CLOSE VOID */

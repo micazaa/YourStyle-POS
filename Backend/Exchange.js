@@ -58,6 +58,14 @@ function getExchangeableReceipt(receiptId) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
     if (!sheet || sheet.getLastRow() < 2) throw new Error("Sales transactions were not found.");
+    const reservation = findReservation_(receiptId);
+    if (reservation && reservation.status === 'EXCHANGED') throw new Error('This deposit was already used on ' + reservation.exchangeId + '.');
+    if (reservation && reservation.status === 'RESERVED') {
+      return {success:true, receipt:{receiptId:receiptId, cashier:reservation.cashier, status:'RESERVED', reservationCredit:true},
+        items:[{code:reservation.code, name:reservation.name, size:reservation.size, category:'YourFinds',
+          purchasedQty:1, exchangeableQty:1, alreadyExchangedQty:0, originalStickerPrice:reservation.price,
+          originalUnitExchangeValue:reservation.deposit}]};
+    }
     const originals = readExchangeReceiptRows_(sheet, SALES_COL.RECEIPT_ID, receiptId)
       .filter(entry=>String(entry.d[SALES_IDX.STATUS]||'').trim().toUpperCase()==='COMPLETED');
     if (!originals.length) throw new Error("Completed original receipt not found: " + receiptId);
@@ -80,7 +88,7 @@ function getExchangeableReceipt(receiptId) {
       map[code].purchasedQty+=qty;
       map[code].originalExchangeTotal+=Math.max(0,net);
     });
-    const items=Object.keys(map).map(function(code){const x=map[code];x.originalUnitExchangeValue=x.originalExchangeTotal/x.purchasedQty;delete x.originalExchangeTotal;x.alreadyExchangedQty=Number(exchanged[code])||0;x.exchangeableQty=Math.max(0,x.purchasedQty-x.alreadyExchangedQty);return x;}).filter(x=>x.exchangeableQty>0);
+    const items=Object.keys(map).map(function(code){const x=map[code];x.originalUnitExchangeValue=reservation && reservation.status === "COMPLETED" ? reservation.price : x.originalExchangeTotal/x.purchasedQty;delete x.originalExchangeTotal;x.alreadyExchangedQty=Number(exchanged[code])||0;x.exchangeableQty=Math.max(0,x.purchasedQty-x.alreadyExchangedQty);return x;}).filter(x=>x.exchangeableQty>0);
     const first=originals[0].d;
     return {success:true,receipt:{receiptId:receiptId,cashier:String(first[SALES_IDX.CASHIER]||"").trim(),timestamp:String(first[SALES_IDX.TIMESTAMP]||"").trim(),status:"COMPLETED"},items:items};
   } catch(err) { return {success:false,message:err.message||String(err),items:[]}; }
@@ -131,6 +139,13 @@ function completeCustomerExchange(payload) {
     const auth = requireManager_(payload.managerPin, payload.managerToken);
     const receipt = getExchangeableReceipt(originalReceiptId);
     if (!receipt.success) throw new Error(receipt.message);
+    const reservation = receipt.receipt.reservationCredit ? findReservation_(originalReceiptId) : null;
+    if (reservation) {
+      const session = dashboardEmployee_(payload.sessionToken);
+      if (session.name !== employee) throw new Error('Employee session changed. Reopen exchange.');
+      const held = reservationInventoryItem_(reservation.code);
+      if (held.status !== 'RESERVED' || held.stock !== 1) throw new Error('Reserved inventory changed. Ask a manager to review it.');
+    }
     const inventory = new Map(getFullInventory({includeDeliveryMetadata:false}).map(item=>[String(item.code), item]));
     const returns = new Map(), replacements = new Map();
     items.forEach(function(item) {
@@ -141,7 +156,8 @@ function completeCustomerExchange(payload) {
       if (!Number.isInteger(returnQty) || returnQty < 1 || !Number.isInteger(replacementQty) || replacementQty < 1) {
         throw new Error("Exchange quantities must be positive whole numbers.");
       }
-      returns.set(returnCode, (returns.get(returnCode) || 0) + returnQty);
+      if (reservation && (returnCode !== reservation.code || returnQty !== 1)) throw new Error('Select the reserved deposit credit.');
+      if (!reservation) returns.set(returnCode, (returns.get(returnCode) || 0) + returnQty);
       replacements.set(replacementCode, (replacements.get(replacementCode) || 0) + replacementQty);
     });
     let returnValue = 0, replacementValue = 0;
@@ -155,6 +171,11 @@ function completeCustomerExchange(payload) {
       returnValue += value;
       returnLines.push({item:item, code:code, quantity:-quantity, price:price, value:-value, reason:EXCHANGE_REASON.RETURN});
     });
+    if (reservation) {
+      returnValue = reservation.deposit;
+      returnLines.push({item:inventory.get(reservation.code), code:reservation.code, quantity:0,
+        price:reservation.deposit, value:-reservation.deposit, reason:'RESERVATION CREDIT'});
+    }
     replacements.forEach(function(quantity, code) {
       const item = inventory.get(code);
       if (!item || String(item.status).toUpperCase() !== "ACTIVE") throw new Error("Replacement item is unavailable: " + code);
@@ -229,17 +250,33 @@ function completeCustomerExchange(payload) {
       return row;
     });
     const salesStart = sales.getLastRow(), movementStart = movement.getLastRow();
+    const reservationSheet = reservation ? reservationSheet_(false) : null;
+    const reservationBefore = reservation ? reservationSheet.getRange(reservation.rowNumber, 1, 1, RESERVATION_HEADERS_.length).getValues() : null;
+    const heldItem = reservation ? inventory.get(reservation.code) : null;
+    const inventorySheet = ss.getSheetByName(SHEETS.INVENTORY);
+    const heldUpdatedAt = heldItem ? inventorySheet.getRange(heldItem.rowNumber, INV_COL.UPDATED_AT).getValue() : null;
     try {
-      changeInventoryStockBatch_(lines.map(line=>({code:line.code,qtyChange:-line.quantity,
+      changeInventoryStockBatch_(lines.filter(line=>line.quantity !== 0).map(line=>({code:line.code,qtyChange:-line.quantity,
         referenceId:exchangeId,sourceLineId:line.salesLineId,employee:employee,item:line.item.name,
         reason:line.reason,source:INVENTORY_MOVEMENT_SOURCE.EXCHANGE,
         notes:"Original receipt: "+originalReceiptId+(notes ? " | "+notes : "")})));
       sales.getRange(salesStart+1,1,rows.length,SALES_LOG_COLUMN_COUNT).setValues(rows);
+      if (reservation) {
+        setReservationInventoryStatus_(heldItem, 'ACTIVE');
+        const updated = reservationBefore[0].slice();
+        updated[6] = 0; updated[7] = 'EXCHANGED'; updated[10] = now; updated[11] = employee; updated[12] = exchangeId;
+        reservationSheet.getRange(reservation.rowNumber, 1, 1, updated.length).setValues([updated]);
+      }
       SpreadsheetApp.flush();
       return {success:true,exchangeId:exchangeId,originalReceiptId:originalReceiptId,returnValue:returnValue,
         replacementValue:replacementValue,amountDue:amountDue,totalDue:roundToTwo(amountDue+feeCharged),
         cashReceived:cashReceived,changeGiven:changeGiven,authorizedBy:auth.managerName};
     } catch (error) {
+      if (reservation) {
+        reservationSheet.getRange(reservation.rowNumber, 1, 1, RESERVATION_HEADERS_.length).setValues(reservationBefore);
+        setReservationInventoryStatus_(heldItem, 'RESERVED');
+        inventorySheet.getRange(heldItem.rowNumber, INV_COL.UPDATED_AT).setValue(heldUpdatedAt);
+      }
       if (movement.getLastRow()>movementStart) movement.deleteRows(movementStart+1,movement.getLastRow()-movementStart);
       if (sales.getLastRow()>salesStart) sales.deleteRows(salesStart+1,sales.getLastRow()-salesStart);
       SpreadsheetApp.flush();throw error;

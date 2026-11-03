@@ -45,7 +45,8 @@ function getProductMasterSheet_(ss) {
   }) || null;
 }
 
-function getProductMaster_() {
+function getProductMaster_(options) {
+  options = options || {};
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const sheet = getProductMasterSheet_(ss);
@@ -207,9 +208,9 @@ function getProductMaster_() {
 
       imageUrl: String(displayRow[PRODUCT_IDX.IMAGE] || "").trim(),
 
-      createdAt: formatProductMasterDateForClient(row[PRODUCT_IDX.CREATED_AT]),
+      createdAt: options.cashierOnly ? "" : formatProductMasterDateForClient(row[PRODUCT_IDX.CREATED_AT]),
 
-      updatedAt: formatProductMasterDateForClient(row[PRODUCT_IDX.UPDATED_AT]),
+      updatedAt: options.cashierOnly ? "" : formatProductMasterDateForClient(row[PRODUCT_IDX.UPDATED_AT]),
     });
   }
 

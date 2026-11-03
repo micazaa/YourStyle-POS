@@ -384,6 +384,7 @@ function processSalesRows_(sheet, rowNumbers) {
         if (!saleStatus) throw new Error("Status is required.");
 
         if (saleStatus === "COMPLETED" && code && !movementIds[salesLineId]) {
+          assertInventoryNotReserved_(code);
           const inventoryResolution = ensureManualSaleInventoryItem_({
             code: code,
             name: itemName,

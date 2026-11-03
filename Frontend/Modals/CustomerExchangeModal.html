@@ -105,13 +105,14 @@ function searchExchangeReceipt() {
     if(catalogRead&&catalogRead.current())catalogRead.save({products:exchangeProducts,time:Date.now()});
     button.disabled=false;button.textContent='Search';
     document.getElementById('exchangeOriginalReceipt').textContent=result.receipt.receiptId;
-    document.getElementById('exchangeReceiptInfo').textContent='Cashier: '+(result.receipt.cashier||'—');
+    document.getElementById('exchangeReceiptInfo').textContent='Cashier: '+(result.receipt.cashier||'—')+(result.receipt.reservationCredit?' · Non-refundable deposit credit':'');
     document.getElementById('exchangeReturnItem').innerHTML=result.items.map(item=>`<option value="${exEsc(item.code)}">${exEsc(item.code)} — ${exEsc(item.name)}</option>`).join('');
     document.getElementById('exchangeBuilder').style.display='block';
     document.getElementById('exchangeReceiptSearch').style.display='none';
-    renderExchangeItems();
+    if (result.receipt.reservationCredit) addExchangeItem(); else renderExchangeItems();
   }).withFailureHandler(fail).getCustomerExchangeData(id,cachedProducts===null);
 }
+function exchangeUsesDepositCredit() { return !!(exchangeReceipt && exchangeReceipt.receipt.reservationCredit); }
 function exchangeOriginal(code) { return exchangeReceipt&&exchangeReceipt.items.find(item=>String(item.code)===String(code)); }
 function exchangeReplacement(code) { return exchangeProducts.find(item=>String(item.code)===String(code)); }
 function exchangeQuantityLimit(index,side) {
@@ -119,6 +120,7 @@ function exchangeQuantityLimit(index,side) {
   const product=returning?exchangeOriginal(row.returnCode):exchangeReplacement(row.replacementCode);
   if(!product)return 0;
   const key=returning?'returnCode':'replacementCode';
+  if (returning && exchangeUsesDepositCredit()) return 1;
   const used=exchangeItems.reduce((sum,item,i)=>sum+(i!==index&&item[key]===row[key]?item[side]:0),0);
   return Math.max(0,Number(returning?product.exchangeableQty:product.stock)-used);
 }
@@ -126,7 +128,7 @@ function addExchangeItem() {
   const code=document.getElementById('exchangeReturnItem').value,product=exchangeOriginal(code);
   if(!product)return;
   const used=exchangeItems.filter(row=>row.returnCode===code).reduce((sum,row)=>sum+row.returnQty,0);
-  if(used>=product.exchangeableQty)return showNotificationToast('Only '+product.exchangeableQty+' purchased pcs of '+product.name+' can be exchanged.',true);
+  if(!exchangeUsesDepositCredit()&&used>=product.exchangeableQty)return showNotificationToast('Only '+product.exchangeableQty+' purchased pcs of '+product.name+' can be exchanged.',true);
   exchangeItems.push({returnCode:code,returnQty:1,replacementCode:'',replacementQty:1});renderExchangeItems();
 }
 function clearExchangeItems() { exchangeItems=[];renderExchangeItems(); }
@@ -145,8 +147,9 @@ function exchangePhoto(item) {
 function renderExchangeItems() {
   const from=document.getElementById('exchangeReturnRows'),to=document.getElementById('exchangeReplacementRows');
   from.innerHTML=exchangeItems.length?exchangeItems.map((row,index)=>{
+    if (exchangeUsesDepositCredit() && index > 0) return '<tr><td colspan="5" class="text-muted">Same deposit credit</td><td><button type="button" class="btn btn-sm btn-outline-danger" title="Remove item" aria-label="Remove item" onclick="removeExchangeItem('+index+')">×</button></td></tr>';
     const item=exchangeOriginal(row.returnCode),photo=exchangeReplacement(row.returnCode)||item;
-    return `<tr><td>${exchangePhoto(photo)}</td><td class="fw-bold">${exEsc(item.name)}<div class="exchange-item-code fw-normal">${exEsc(item.code)}</div></td><td class="text-center">${exEsc(item.size||'—')}</td><td><input type="number" class="form-control form-control-sm exchange-quantity" min="1" max="${exchangeQuantityLimit(index,'returnQty')}" value="${row.returnQty}" aria-label="Return quantity for ${exEsc(item.name)}" data-exchange-index="${index}" data-exchange-side="returnQty" oninput="updateExchangeQuantity(${index},'returnQty',this)"></td><td class="text-end fw-bold text-nowrap">₱${exMoney(item.originalUnitExchangeValue)}</td><td><button type="button" class="btn btn-sm btn-outline-danger" title="Remove item" aria-label="Remove item" onclick="removeExchangeItem(${index})">×</button></td></tr>`;
+    return `<tr><td>${exchangePhoto(photo)}</td><td class="fw-bold">${exEsc(item.name)}<div class="exchange-item-code fw-normal">${exEsc(item.code)}</div></td><td class="text-center">${exEsc(item.size||'—')}</td><td><input type="number" class="form-control form-control-sm exchange-quantity" min="1" max="${exchangeQuantityLimit(index,'returnQty')}" ${exchangeUsesDepositCredit()?'disabled':''} value="${row.returnQty}" aria-label="Return quantity for ${exEsc(item.name)}" data-exchange-index="${index}" data-exchange-side="returnQty" oninput="updateExchangeQuantity(${index},'returnQty',this)"></td><td class="text-end fw-bold text-nowrap">₱${exMoney(item.originalUnitExchangeValue)}</td><td><button type="button" class="btn btn-sm btn-outline-danger" title="Remove item" aria-label="Remove item" onclick="removeExchangeItem(${index})">×</button></td></tr>`;
   }).join(''):'<tr><td colspan="6" class="text-center text-muted py-4">Add an item to exchange.</td></tr>';
   to.innerHTML=exchangeItems.length?exchangeItems.map((row,index)=>{
     const item=exchangeReplacement(row.replacementCode);
@@ -198,6 +201,7 @@ function exchangeProductKey(event,index) {
 function exchangeTotals() {
   let returned=0,replacement=0;
   exchangeItems.forEach(row=>{const a=exchangeOriginal(row.returnCode),b=exchangeReplacement(row.replacementCode);returned+=Number(a&&a.originalUnitExchangeValue||0)*row.returnQty;replacement+=Number(b&&b.price||0)*row.replacementQty;});
+  if (exchangeUsesDepositCredit()) returned = Number(exchangeReceipt.items[0].originalUnitExchangeValue);
   return {returned:Math.round(returned*100)/100,replacement:Math.round(replacement*100)/100,due:Math.round((replacement-returned)*100)/100};
 }
 function exchangeValidation() {
@@ -208,11 +212,12 @@ function exchangeValidation() {
     if(!exchangeReplacement(row.replacementCode))return 'Select a replacement for each item.';
     if(row.returnQty>exchangeQuantityLimit(i,'returnQty')||row.replacementQty>exchangeQuantityLimit(i,'replacementQty'))return 'Quantity exceeds the available amount.';
   }
-  if(exchangeTotals().due<0)return 'Choose replacements worth at least the return value.';
+  if(exchangeTotals().due<0)return exchangeUsesDepositCredit()?'Choose replacements worth at least the deposit credit.':'Choose replacements worth at least the return value.';
   return '';
 }
 function updateExchangeCalculation() {
   const totals=exchangeTotals();
+  document.getElementById('exchangeReturnValue').previousElementSibling.textContent=exchangeUsesDepositCredit()?'Deposit Credit':'Return Value';
   document.getElementById('exchangeReturnValue').textContent='₱'+exMoney(totals.returned);
   document.getElementById('exchangeReplacementValue').textContent='₱'+exMoney(totals.replacement);
   document.getElementById('exchangeAmountDue').textContent='₱'+exMoney(Math.max(0,totals.due));
@@ -223,7 +228,7 @@ function updateExchangeCalculation() {
 function confirmCustomerExchange() {
   const error=exchangeValidation();if(error)return showNotificationToast(error,true);
   triggerCheckoutConsoleModal({kind:'EXCHANGE',owner:currentEmployee,originalReceiptId:exchangeReceipt.receipt.receiptId,
-    items:exchangeItems.map(row=>Object.assign({},row)),notes:document.getElementById('exchangeNotes').value,amountDue:exchangeTotals().due});
+    items:exchangeItems.map(row=>Object.assign({},row)),sessionToken:currentEmployee.dashboardToken,notes:document.getElementById('exchangeNotes').value,amountDue:exchangeTotals().due});
 }
 function submitCustomerExchangeCheckout(payment,context) {
   const owner=currentEmployee;
@@ -248,7 +253,7 @@ function submitCustomerExchangeCheckout(payment,context) {
     }).withFailureHandler(error=>{if(currentEmployee===owner){setCheckoutLoading(false);showNotificationToast(error.message||String(error),true);}})
       .completeCustomerExchange({originalReceiptId:context.originalReceiptId,items:context.items,notes:context.notes,employee:exchangeEmployee(),expectedAmountDue:context.amountDue,
         paymentMethod:payment.paymentMethod,paymentReference:payment.referenceNumber,cashReceived:payment.cashReceived,
-        applyCardFee:payment.applyCardFee,paymentParts:payment.paymentParts,...auth});
+        applyCardFee:payment.applyCardFee,paymentParts:payment.paymentParts,sessionToken:context.sessionToken,...auth});
   });
 }
 function resetCustomerExchangeSession() {

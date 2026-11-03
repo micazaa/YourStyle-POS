@@ -81,111 +81,129 @@
           style="max-height: 200px; overflow-y: auto"
         >
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>1,000</span
+            <span class="denom-label">1,000</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr1000"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>500</span
+            <span class="denom-label">500</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr500"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>200</span
+            <span class="denom-label">200</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr200"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>100</span
+            <span class="denom-label">100</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr100"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>50</span
+            <span class="denom-label">50</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr50"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>20</span
+            <span class="denom-label">20</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr20"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>10</span
+            <span class="denom-label">10</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr10"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>5</span
+            <span class="denom-label">5</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr5"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>1</span
+            <span class="denom-label">1</span
             ><input
-              type="number"
-              min="0"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="pr1"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updatePettyReturnTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updatePettyReturnTotal()"
             />
           </div>
         </div>
@@ -228,102 +246,129 @@
           style="max-height: 240px; overflow-y: auto"
         >
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>1,000</span
+            <span class="denom-label">1,000</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d1000"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>500</span
+            <span class="denom-label">500</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d500"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>200</span
+            <span class="denom-label">200</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d200"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>100</span
+            <span class="denom-label">100</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d100"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>50</span
+            <span class="denom-label">50</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d50"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>20</span
+            <span class="denom-label">20</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d20"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>10</span
+            <span class="denom-label">10</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d10"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>5</span
+            <span class="denom-label">5</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d5"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
           <div class="col-6 d-flex align-items-center justify-content-between mb-2">
-            <span>1</span
+            <span class="denom-label">1</span
             ><input
-              type="number"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="d1"
               class="form-control form-control-sm denom-input"
               placeholder=""
               value=""
-              oninput="updateShiftCashDrawerTotal()"
+              onfocus="this.dataset.validCount = this.value"
+              oninput="sanitizeDenominationCount(this);updateShiftCashDrawerTotal()"
             />
           </div>
         </div>
@@ -1083,6 +1128,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
 
           setReportFieldsReadOnly(false);
           if (submit) submit.style.display = 'block';
+          updateCashierReportReady();
 
           if (date !== today) {
             showNotificationToast(
@@ -1152,6 +1198,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
 
           setReportFieldsReadOnly(false);
           if (submit) submit.style.display = 'block';
+          updateCashierReportReady();
         }
       }
     if (cached) loaded(cached);

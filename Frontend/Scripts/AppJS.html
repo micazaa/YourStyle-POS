@@ -2,7 +2,7 @@
 
   var pageReadCache = new Map();
   function invalidateDeliveryItemCaches() {
-    ['standardDeliveryDetails', 'deliveryItems', 'deliveryDetails', 'deliveryLabels', 'exchangeProducts'].forEach(key => pageReadCache.delete(key));
+    ['standardDeliveryDetails', 'deliveryItems', 'deliveryDetails', 'deliveryLabels', 'exchangeProducts', 'cashierInventory'].forEach(key => pageReadCache.delete(key));
   }
   let deliveryCatalogCache = null;
   let deliveryCatalogPending = null;
@@ -48,6 +48,15 @@
       current: () => pageReadCache.get(view) === entry && !!currentEmployee && JSON.stringify([currentEmployee, typeof currentCashier === 'undefined' ? '' : currentCashier]) === owner,
       save: data => { entry.data = data; entry.pending = false; }
     };
+  }
+
+  function sanitizeDenominationCount(input) {
+    const value = input.value;
+    if (/^\d*$/.test(value) && (value === '' || Number.isSafeInteger(Number(value)))) {
+      input.dataset.validCount = value;
+    } else {
+      input.value = input.dataset.validCount || '';
+    }
   }
 
   function loadingIndicator(label = 'Loading…') {

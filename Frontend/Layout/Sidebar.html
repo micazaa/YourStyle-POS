@@ -53,6 +53,7 @@ function showPage(pageId){
  document.querySelectorAll('[data-inventory-tab]').forEach(function(button){const active=button.dataset.inventoryTab===pageId;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
  activateMenu(document.querySelector('.sidebar-item[data-page="'+(inventoryWorkspace?'inventoryPage':pageId)+'"]'));
  document.getElementById('inventoryWorkspaceNav').hidden=!inventoryWorkspace;
+ if(pageId==='posPage')refreshInventory();
  if(pageId==='dashboardPage')loadDashboardPage();
  if(pageId==='inventoryPage')loadInventoryPage();
  if(pageId==='deliveriesPage')loadDeliveriesPage();

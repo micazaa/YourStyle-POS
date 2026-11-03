@@ -24,6 +24,7 @@ const SHEETS = {
   INVENTORY_MOVEMENT_LOG: "Inventory Movement Log",
   DELIVERY_LOG: "Delivery Log",
   RETURN_LOG: "Return Log",
+  RESERVATIONS: "Reservations",
   CASH_REPORT_LOG: "Cash Report Log",
   EMPLOYEES: "Employees",
   PRODUCT_MASTER: "Product Master"
@@ -415,6 +416,7 @@ const RETURN_LOG_COLUMN_COUNT = 20;
 const INVENTORY_STATUS = {
 
   ACTIVE: "ACTIVE",
+  RESERVED: "RESERVED",
   INACTIVE: "INACTIVE",
   INCOMPLETE: "INCOMPLETE",
   CONVERTED: "CONVERTED",
