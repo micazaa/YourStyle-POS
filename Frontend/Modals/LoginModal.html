@@ -753,6 +753,7 @@ function unlockTerminalSession() {
     button.disabled=false;button.textContent=cashierMode?'Start cashier shift':'Sign in';document.getElementById('cashierPin').value='';
     updateCashierNavigationAvailability();
     showPage(cashierMode||hasManagerViewAccess(result)?'posPage':'dashboardPage');saveSession();
+    if(typeof startInventoryDownload==='function')startInventoryDownload();
     if(cashierMode&&typeof refreshInventory==='function')refreshInventory();
     if (hasManagerViewAccess(result) && typeof warmManagerExpectedCash === 'function') {
       warmManagerExpectedCash(getCashReportToday());

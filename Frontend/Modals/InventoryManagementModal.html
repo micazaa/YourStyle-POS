@@ -168,6 +168,7 @@
 </div>
 <style>
  .inventory-editor-card {max-width:760px;width:95%;max-height:92vh;overflow:auto;}
+ .inventory-editor-pending > :not(:first-child):not([data-inventory-editor-loading]) {display:none!important;}
  .inventory-photo-preview {height:220px;border:1px solid #dee2e6;border-radius:8px;background:#f8f9fa;display:flex;align-items:center;justify-content:center;overflow:hidden;}
  .inventory-photo-preview img {width:100%;height:100%;object-fit:contain;}
  .sale-setup-panel {border:1px solid #efd2da;border-radius:12px;padding:16px;background:linear-gradient(135deg,#fff 0%,#fff7f9 100%);}
@@ -221,36 +222,100 @@ function readProductPhoto(input,onLoad){
 function getCurrentEmployeeName(){ return String((typeof currentCashier!=="undefined"&&currentCashier) ? currentCashier : (typeof currentEmployee!=="undefined"&&currentEmployee ? (currentEmployee.fullName||currentEmployee.name||"") : "")).trim(); }
 function closeModal(id){ const e=document.getElementById(id); if(e)e.style.display="none"; }
 var inventoryItemDetailCache=new Map(), inventoryItemDetailPending=new Map(), inventoryItemOpenRequest=0, inventoryItemDetailEpoch=0;
+var inventoryItemDetailPreload=null,inventoryItemDetailPreloadTimer=null;
 function clearInventoryItemDetailCache() {
+ clearTimeout(inventoryItemDetailPreloadTimer);inventoryItemDetailPreload=null;
  inventoryItemDetailCache.clear();inventoryItemDetailPending.clear();++inventoryItemOpenRequest;++inventoryItemDetailEpoch;
+ ['productEditorModal','yourFindsEditorModal'].forEach(id=>{
+  if(document.querySelector('#'+id+' .inventory-editor-pending')){closeModal(id);setInventoryEditorLoading(id,false);}
+ });
+}
+function preloadInventoryItemDetails() {
+ if(!inventoryDatasetReady()||inventoryDataset.stale)return;
+ const owner=currentEmployee.dashboardToken,version=inventoryDataset.version;
+ if(inventoryItemDetailPreload&&inventoryItemDetailPreload.owner===owner&&inventoryItemDetailPreload.version===version)return;
+ clearTimeout(inventoryItemDetailPreloadTimer);
+ const job={owner:owner,version:version,epoch:inventoryItemDetailEpoch,offset:0,total:0,retries:0,
+  byCode:new Map(inventoryDataset.items.map(item=>[String(item.code),item]))};
+ inventoryItemDetailPreload=job;updateInventoryDatasetStatus();
+ const current=()=>inventoryItemDetailPreload===job&&job.epoch===inventoryItemDetailEpoch&&inventoryDatasetReady()&&
+  currentEmployee.dashboardToken===owner&&inventoryDataset.version===version&&!inventoryDataset.stale;
+ function failed(){
+  if(!current())return;
+  if(++job.retries<=2){inventoryItemDetailPreloadTimer=setTimeout(next,1000);return;}
+  inventoryItemDetailPreload=null;updateInventoryDatasetStatus();console.warn('Inventory detail preload paused; item actions can retry on demand.');
+ }
+ function next(){
+  if(!current())return;
+  secureScriptRun.withSuccessHandler(result=>{
+   if(!current())return;
+   if(!result||!result.success)return failed();
+   if(result.changed){inventoryItemDetailPreload=null;updateInventoryDatasetStatus();observeInventoryVersion(result.version);return;}
+   if(result.version!==version||result.offset!==job.offset||!Array.isArray(result.items)||
+    !Number.isInteger(result.total)||result.total<0||!Number.isInteger(result.nextOffset)||
+    result.nextOffset>result.total||result.nextOffset<job.offset||(!result.done&&result.nextOffset===job.offset)||
+    (result.done&&result.nextOffset!==result.total))return failed();
+   result.items.forEach(item=>{
+    inventoryItemDetailCache.set(String(item.code),{owner:owner,version:version,time:Date.now(),item:item});
+    const base=job.byCode.get(String(item.code));
+    if(base){item.availability=inventoryListStatus_(item);base.searchText=inventoryItemSearchText_(item);}
+   });
+   job.offset=result.nextOffset;job.total=result.total;job.retries=0;
+   if(result.done){
+    inventoryDataset.detailsReady=true;inventoryLocalViews.clear();inventoryListPages.clear();inventorySummaryPages.clear();
+    inventoryItemDetailPreload=null;updateInventoryDatasetStatus();
+    if(document.getElementById('inventoryPage').style.display!=='none'&&inventoryListQuery().search)loadInventoryPage(false,true);
+    if(document.getElementById('inventorySummaryModal').style.display==='flex')renderInventorySummary();
+    return;
+   }
+   updateInventoryDatasetStatus();inventoryItemDetailPreloadTimer=setTimeout(next,150);
+  }).withFailureHandler(failed).getInventoryItemDetailsBatch({version:version,offset:job.offset,limit:200});
+ }
+ inventoryItemDetailPreloadTimer=setTimeout(next,150);
+}
+function setInventoryEditorLoading(id,loading) {
+ const modal=document.getElementById(id),card=modal.querySelector('.custom-popup-card');
+ let status=card.querySelector('[data-inventory-editor-loading]');
+ if(!status){status=document.createElement('div');status.dataset.inventoryEditorLoading='';status.className='text-center py-5';status.setAttribute('role','status');card.appendChild(status);}
+ status.hidden=!loading;status.innerHTML=loading?loadingIndicator('Loading item…'):'';
+ Array.from(card.children).forEach((child,index)=>{if(index>0&&child!==status)child.inert=loading;});
+ card.classList.toggle('inventory-editor-pending',loading);
+ if(loading)modal.style.display='flex';
 }
 function withInventoryItemDetails(code,callback,onFailure) {
  const owner=currentEmployee&&currentEmployee.dashboardToken,version=inventoryListVersion,epoch=inventoryItemDetailEpoch;
  if(!owner)return;
  const cached=inventoryItemDetailCache.get(String(code));
- if(cached&&cached.owner===owner&&cached.version===version&&Date.now()-cached.time<15000){callback(cached.item);return;}
+ if(cached&&cached.owner===owner&&cached.version===version){callback(cached.item);return;}
  let pending=inventoryItemDetailPending.get(String(code));
- if(!pending||pending.owner!==owner){
-  pending={owner:owner};
+ if(!pending||pending.owner!==owner||pending.version!==version||pending.epoch!==epoch){
+  pending={owner:owner,version:version,epoch:epoch};
   pending.promise=new Promise((resolve,reject)=>secureScriptRun.withSuccessHandler(result=>{
    if(!result||!result.success)return reject(new Error(result&&result.message||'Item unavailable.'));
-   if(currentEmployee&&currentEmployee.dashboardToken===owner&&inventoryListVersion===version&&epoch===inventoryItemDetailEpoch)
+   if(currentEmployee&&currentEmployee.dashboardToken===owner&&inventoryListVersion===version&&result.version===version&&epoch===inventoryItemDetailEpoch){
+    const existing=inventoryItemDetailCache.get(String(code));
+    if(existing&&existing.owner===owner&&existing.version===version&&existing.item.deliveryMetadataLoaded&&!result.item.deliveryMetadataLoaded){
+     result.item.deliveryMetadataLoaded=true;result.item.deliveryId=existing.item.deliveryId;result.item.dateDelivered=existing.item.dateDelivered;
+    }
     inventoryItemDetailCache.set(String(code),{owner:owner,version:version,time:Date.now(),item:result.item});
-   if(inventoryItemDetailCache.size>100)inventoryItemDetailCache.delete(inventoryItemDetailCache.keys().next().value);
+   }
    resolve(result.item);
   }).withFailureHandler(reject).getInventoryItemDetails(String(code)));
   inventoryItemDetailPending.set(String(code),pending);
   pending.promise.finally(()=>{if(inventoryItemDetailPending.get(String(code))===pending)inventoryItemDetailPending.delete(String(code));}).catch(()=>{});
  }
  pending.promise.then(item=>{if(currentEmployee&&currentEmployee.dashboardToken===owner&&epoch===inventoryItemDetailEpoch)callback(item);}).catch(error=>{
-  if(!currentEmployee||currentEmployee.dashboardToken!==owner)return;
+  if(!currentEmployee||currentEmployee.dashboardToken!==owner||epoch!==inventoryItemDetailEpoch)return;
   if(onFailure)onFailure(error);else showNotificationToast(error.message||String(error),true);
  });
 }
 function openInventoryDetails(code){
  if(inventoryLoadingActive)return;
  const request=++inventoryItemOpenRequest;
- document.getElementById('invDetailTitle').textContent='Inventory Item';document.getElementById('invDetailCode').textContent=String(code);
+ const preview=inventoryDatasetReady()?inventoryDataset.items.find(item=>String(item.code)===String(code)):inventoryPageData.find(item=>String(item.code)===String(code));
+ phase8SelectedItem=preview||null;
+ document.getElementById('invDetailTitle').textContent=preview&&preview.name||'Inventory Item';document.getElementById('invDetailCode').textContent=String(code);
+ renderInventoryPhoto_(preview&&preview.imageUrl||'');
  document.getElementById('invDetailBody').innerHTML=loadingIndicator('Loading item…');
  ['invHistoryBtn','invAdjustBtn','invChangeBtn','invDetailEditSellingBtn','invYfEditBtn','invLabelBtn'].forEach(id=>document.getElementById(id).disabled=true);
  document.getElementById('inventoryDetailsModal').style.display='flex';
@@ -305,6 +370,7 @@ function loadInventoryItemDeliveryMetadata(item) {
 
 function openYourFindsEditor(){
  if(!phase8SelectedItem||phase8YfSaving)return;
+ setInventoryEditorLoading('yourFindsEditorModal',false);
  const incomplete=String(phase8SelectedItem.status||'').toUpperCase()==='INCOMPLETE';
  phase8YfPhotoDataUrl=''; phase8YfPhotoFileName='';
  document.getElementById('yfEditorTitle').textContent=incomplete?'Add YourFinds Selling Details':'Edit YourFinds Selling Details';
@@ -407,11 +473,15 @@ function openChangeItem(){
  document.getElementById('changeManagerPinWrap').style.display=canAuthorizeManagerActions()?'none':'block';document.getElementById('changeManagerPin').value='';
  updateChangeItemPreview();document.getElementById('changeItemModal').style.display='flex';
  const input=document.getElementById('changeToSearch');setControlLoading(input,true,'Loading products…');input.disabled=true;
- const read=beginPageRead('inventoryChangeChoices',inventoryListVersion+':'+source.code,true);
  const current=()=>phase8SelectedItem===source&&currentEmployee&&currentEmployee.dashboardToken===owner;
  const apply=items=>{if(!current())return;changeItemChoices=items.filter(item=>String(item.code)!==String(source.code));
   const initial=changeItemChoices[0];input.value=initial?initial.name:'';document.getElementById('changeToCode').value=initial?initial.code:'';
   input.disabled=false;setControlLoading(input,false);updateChangeItemPreview();};
+ if(inventoryDatasetReady()){
+  apply(inventoryDataset.items.filter(item=>item.inventoryType==='STOCK'&&item.status==='ACTIVE'&&item.productStatus!=='DEACTIVATED'));
+  return;
+ }
+ const read=beginPageRead('inventoryChangeChoices',inventoryListVersion+':'+source.code,true);
  if(read.cached!==undefined){apply(read.cached);if(!read.shouldFetch)return;}
  if(!read.shouldFetch)return;
  secureScriptRun.withSuccessHandler(result=>{if(!read.current())return;if(!result||!result.success)return failed(result||{});read.save(result.items||[]);apply(result.items||[]);})
@@ -457,6 +527,7 @@ function renderProductMaster(){
 }
 function openProductEditor(){
  if(!inventoryIsManager())return;
+ setInventoryEditorLoading('productEditorModal',false);
  clearProductMasterForm();
  document.getElementById('pmEditorTitle').textContent='Add Product';
  document.getElementById('productEditorModal').style.display='flex';
@@ -502,6 +573,7 @@ function updateProductSalePreview(){
 function toggleProductSaleFields(){const show=document.getElementById('pmStatus').value==='ON SALE';document.getElementById('pmSaleFields').style.display=show?'block':'none';if(show&&!document.getElementById('pmSaleRows').children.length)addProductSaleRow();updateProductSalePreview();}
 function populateProductMasterEditor(p,requestedStatus){
  if(!p)return;
+ setInventoryEditorLoading('productEditorModal',false);
  document.getElementById('pmCode').dataset.editing='true';
  document.getElementById('pmEditorTitle').textContent='Edit Product';
  document.getElementById('pmModeLabel').textContent='Editing '+p.productCode+' — Product Code is locked';

@@ -328,6 +328,8 @@
 
     restoreActivePage();
 
+    if (typeof startInventoryDownload === 'function') startInventoryDownload();
+
     if (currentSessionIsCashier) refreshInventory(function () {
       renderCart();
     });

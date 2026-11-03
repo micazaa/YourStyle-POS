@@ -70,6 +70,7 @@ function accessRegistry_() {
   "getInventoryPage": {permission:"inventory.view", handler:getInventoryPage},
   "getInventorySummaryPage": {permission:"inventory.view", handler:getInventorySummaryPage},
   "getInventoryItemDetails": {permission:"inventory.view", handler:getInventoryItemDetails},
+  "getInventoryItemDetailsBatch": {permission:"inventory.view", handler:getInventoryItemDetailsBatch},
   "getInventoryChangeChoices": {permission:"inventory.view", handler:getInventoryChangeChoices},
   "getDeliveryHistoryFast": {permission:"inventory.view", handler:getDeliveryHistoryFast},
   "getInventoryMovementHistoryByCode": {permission:"inventory.view", handler:getInventoryMovementHistoryByCode},
@@ -152,7 +153,14 @@ function accessSafeValue_(value, key) {
 function actionBinding_(operation, args) {
   // Keep full values for approval binding. Display truncation must never weaken approval matching.
   const bound = JSON.parse(JSON.stringify(args, function(key, value) {
-    return /^(managerPin|managerToken|actorToken|sessionToken|token|password)$/i.test(key) ? undefined : value;
+    if (/^(managerPin|managerToken|actorToken|sessionToken|token|password)$/i.test(key)) return undefined;
+    // Separate Apps Script requests can deserialize object fields in different orders.
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const sorted = Object.create(null);
+      Object.keys(value).sort().forEach(name => { sorted[name] = value[name]; });
+      return sorted;
+    }
+    return value;
   }));
   return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
     JSON.stringify([operation, bound])));

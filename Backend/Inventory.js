@@ -323,7 +323,7 @@ function getFullInventory(options) {
   });
   const storedDeliveryMetadata = !options.cashierOnly && inventoryHasStoredDeliveryMetadata_(sheet);
   const readWidth = options.cashierOnly ? INV_COL.IMAGE : storedDeliveryMetadata ? INVENTORY_DELIVERY_COLUMN_COUNT : INVENTORY_COLUMN_COUNT;
-  const deliveryMetadataByCode = options.cashierOnly || storedDeliveryMetadata || options.includeDeliveryMetadata === false ? {} : getInventoryDeliveryMetadataByCode_();
+  const deliveryMetadataByCode = options.cashierOnly || storedDeliveryMetadata || options.includeDeliveryMetadata === false ? {} : options.deliveryMetadataByCode || getInventoryDeliveryMetadataByCode_();
 
   /* ========================================================
      READ INVENTORY, INCLUDING STORED RECEIPT FIELDS WHEN AVAILABLE
@@ -331,7 +331,7 @@ function getFullInventory(options) {
 
   const startRow=Number(options.rowNumber)||2;
   if(startRow<2 || startRow>lastRow)return [];
-  const count=options.rowNumber?1:lastRow-1;
+  const count=options.rowNumber?Math.min(lastRow-startRow+1,Math.max(1,Math.floor(Number(options.rowCount)||1))):lastRow-1;
   const data=sheet.getRange(startRow,1,count,readWidth).getValues();
   const displayData=sheet.getRange(startRow,1,count,readWidth).getDisplayValues();
 

@@ -86,18 +86,32 @@ function inventoryListRequest_(request) {
   const sortKeys=['code','name','category','size','price','stock','availability','active'];
   return {search:String(request.search||'').trim().toLowerCase().slice(0,200),category:String(request.category||'').toUpperCase(),
     status:String(request.status||'').toUpperCase(),stockStatus:String(request.stockStatus||'').toUpperCase(),
-    exclude:request.exclude===undefined?'DEACTIVATED':String(request.exclude).toUpperCase(),incompleteOnly:request.incompleteOnly===true,
+    exclude:Array.from(new Set((Array.isArray(request.exclude)?request.exclude:[request.exclude===undefined?'DEACTIVATED':request.exclude])
+      .map(value=>String(value||'').trim().toUpperCase()).filter(Boolean))).sort(),incompleteOnly:request.incompleteOnly===true,
     sort:sortKeys.includes(request.sort)?request.sort:'name',direction:Number(request.direction)===-1?-1:1,
     page:Math.max(1,Math.floor(Number(request.page)||1)),pageSize:50};
 }
 function inventoryListExcluded_(item,request) {
   if(!request.exclude)return false;
-  if(request.exclude==='DEACTIVATED')return item.productStatus==='DEACTIVATED'||item.status==='INACTIVE';
-  return request.exclude==='ON SALE'?item.productStatus==='ON SALE':
-    item.availability===request.exclude || request.exclude==='SOLD OUT'&&item.availability==='NEGATIVE STOCK';
+  const exclusions=Array.isArray(request.exclude)?request.exclude:[request.exclude];
+  return exclusions.some(status=>status==='DEACTIVATED'?item.productStatus==='DEACTIVATED'||item.status==='INACTIVE':
+    status==='ON SALE'?item.productStatus==='ON SALE':item.availability===status||status==='SOLD OUT'&&item.availability==='NEGATIVE STOCK');
+}
+function inventoryItemSearchText_(item) {
+  const values=['code','name','size','category','inventoryType','status','productStatus','availability','stockStatus',
+    'stock','price','regularPrice','origPrice','lowStockAt','totalSold','deliveryId','dateDelivered','createdAt','updatedAt','costPrice','costSource']
+    .map(field=>item[field]??'');
+  ['price','regularPrice','origPrice','costPrice'].forEach(field=>{
+    if(item[field]!==undefined&&item[field]!==null&&Number.isFinite(Number(item[field])))values.push(Number(item[field]).toFixed(2));
+  });
+  (item.salePrices||[]).forEach(tier=>values.push(tier.price,Number(tier.price).toFixed(2),tier.end||'',tier.remaining??''));
+  if(item.status==='INACTIVE'||item.productStatus==='DEACTIVATED')values.push('disabled inactive');
+  if(item.availability==='NEGATIVE STOCK'||Number(item.stock)<=0)values.push('sold out');
+  return values.join(' ').toLowerCase();
 }
 function inventoryListMatches_(item,request) {
-  return (!request.search||item.searchText.includes(request.search)) && (!request.category||item.category===request.category) &&
+  if(request.search){const text=item.searchText||inventoryItemSearchText_(item);if(!request.search.split(/\s+/).every(term=>text.includes(term)))return false;}
+  return (!request.category||item.category===request.category) &&
     (!request.status||item.productStatus===request.status) &&
     (!request.stockStatus||item.availability===request.stockStatus||request.stockStatus==='SOLD OUT'&&item.availability==='NEGATIVE STOCK') &&
     (!request.incompleteOnly||item.category==='YOURFINDS'&&item.status==='INCOMPLETE');
@@ -140,8 +154,9 @@ function inventoryPageSlice_(items,page,size) {
   return {items:items.slice((current-1)*size,current*size),total:items.length,page:current,pageCount:pageCount,pageSize:size};
 }
 function inventoryResponseCacheKey_(version,kind,query) {
-  const digest=Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(query)));
-  return 'inventory-response:'+kind+':'+version+':'+digest;
+  const manager=!!(ACCESS_REQUEST_CONTEXT_&&ACCESS_REQUEST_CONTEXT_.actor&&ACCESS_REQUEST_CONTEXT_.actor.manager);
+  const digest=Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify([manager,query])));
+  return 'inventory-response:v3:'+kind+':'+version+':'+digest;
 }
 function readInventoryResponse_(key) {
   try {const raw=CacheService.getScriptCache().get(key);return raw?JSON.parse(raw):null;}
@@ -195,7 +210,7 @@ function getInventoryPage(request) {
       return {...cached,priorityPages:priorityPages};
     }
   }
-  const index=inventoryListIndex_(version),groups=inventoryListGroups_(index,query);
+  const base=inventoryListIndex_(version),index=query.search?inventorySearchIndex_(base,version):base,groups=inventoryListGroups_(index,query);
   const rows=inventoryListSaleRows_(index.filter(item=>!inventoryListExcluded_(item,query)&&inventoryListMatches_(item,query)));
   const compare=inventorySortComparer_();
   rows.sort((a,b)=>{
@@ -244,7 +259,7 @@ function getInventorySummaryPage(request) {
   const query=inventoryListRequest_(request),version=inventoryReadVersion_();
   const cacheKey=inventoryResponseCacheKey_(version,'summary',[query,request&&request.kind,request&&request.summarySort,request&&request.summaryDirection]);
   const cached=readInventoryResponse_(cacheKey);if(cached)return cached;
-  const groups=inventoryListGroups_(inventoryListIndex_(version),query);
+  const base=inventoryListIndex_(version),groups=inventoryListGroups_(query.search?inventorySearchIndex_(base,version):base,query);
   const response=inventorySummaryResponse_(groups,request,version);
   cacheInventoryResponses_({[cacheKey]:response},version);
   return response;
@@ -266,7 +281,7 @@ function getInventorySnapshotBatch(request) {
 }
 function inventoryBrowserQueryFunctions_() {
   // Export only the pure display/query functions. No authentication, sheet access or cost readers.
-  return [inventoryListStatus_,inventoryListRequest_,inventoryListExcluded_,inventoryListMatches_,inventoryGroupKey_,
+  return [inventoryListStatus_,inventoryListRequest_,inventoryListExcluded_,inventoryItemSearchText_,inventoryListMatches_,inventoryGroupKey_,
     inventoryListGroups_,inventoryListSaleRows_,inventoryPageSlice_,inventorySortComparer_,inventoryListResponse_,inventorySummaryResponse_]
     .map(fn=>fn.toString()).join('\n');
 }
@@ -274,6 +289,9 @@ function inventoryBrowserQueryFunctions_() {
 function getInventoryItemDetails(code) {
   assertAppRequest_();
   code=String(code||'').trim();
+  const version=inventoryReadVersion_(),manager=!!ACCESS_REQUEST_CONTEXT_.actor.manager;
+  const cacheKey=inventoryResponseCacheKey_(version,'item-details',[code,manager]);
+  const cached=readInventoryResponse_(cacheKey);if(cached)return cached;
   const ss=SpreadsheetApp.getActiveSpreadsheet(),sheet=ss.getSheetByName(SHEETS.INVENTORY);
   if(!sheet||sheet.getLastRow()<2)throw new Error('Inventory item not found.');
   const matches=sheet.getRange(2,INV_COL.CODE,sheet.getLastRow()-1,1).createTextFinder(code).matchCase(true).matchEntireCell(true).findAll();
@@ -282,16 +300,100 @@ function getInventoryItemDetails(code) {
   const item=getFullInventory({products:products,rowNumber:matches[0].getRow(),includeDeliveryMetadata:false})[0];
   if(!item)throw new Error('Inventory item not found.');
   if(inventoryRowIsSoldYourFinds_(item)){item.status='INACTIVE';item.productStatus='DEACTIVATED';}
-  if(ACCESS_REQUEST_CONTEXT_.actor.manager){
+  if(manager)applyInventoryDetailCosts_([item],products,sheet);
+  const response={success:true,item:item,version:version};
+  cacheInventoryResponses_({[cacheKey]:response},version);
+  return response;
+}
+function applyInventoryDetailCosts_(items,products,sheet) {
+  const byCode=new Map(),bySize=new Map();
+  products.forEach(product=>{
+    if(!byCode.has(product.productCode))byCode.set(product.productCode,product);
+    if(String(product.category).toUpperCase()==='YOURFINDS'){
+      const size=normalizeYourFindsSaleSize_(product.description);
+      if(!bySize.has(size))bySize.set(size,product);
+    }
+  });
+  const custom=items.filter(item=>isYourFindsUnique_(item)&&normalizeYourFindsSaleSize_(item.size)==='CUSTOM');
+  const column=custom.length?customCostColumn_(sheet,false):null;
+  const start=custom.length?Math.min(...custom.map(item=>item.rowNumber)):0;
+  const end=custom.length?Math.max(...custom.map(item=>item.rowNumber)):0;
+  const costs=column?sheet.getRange(start,column,end-start+1,1).getValues():[];
+  items.forEach(item=>{
     const yourFinds=isYourFindsUnique_(item),size=normalizeYourFindsSaleSize_(item.size);
-    const product=products.find(product=>yourFinds&&size!=='CUSTOM'
-      ?String(product.category).toUpperCase()==='YOURFINDS'&&normalizeYourFindsSaleSize_(product.description)===size:product.productCode===code);
     if(yourFinds&&size==='CUSTOM'){
-      const column=customCostColumn_(sheet,false),raw=column?sheet.getRange(item.rowNumber,column).getValue():'';
+      const raw=column?costs[item.rowNumber-start][0]:'';
       item.costPrice=raw===''||raw===null?null:Number(raw)||0;item.costSource='CUSTOM';
-    }else {item.costPrice=product?product.costPrice:null;if(yourFinds)item.costSource='SIZE';}
+    }else{
+      const product=yourFinds?bySize.get(size):byCode.get(item.code);
+      item.costPrice=product?product.costPrice:null;if(yourFinds)item.costSource='SIZE';
+    }
+  });
+}
+function inventoryDetailProducts_(version) {
+  const key=inventoryResponseCacheKey_(version,'detail-products',[]),cached=readInventoryResponse_(key);
+  if(cached)return cached.products;
+  const products=getProductMaster_({compactRead:true});
+  cacheInventoryResponses_({[key]:{products:products}},version);
+  return products;
+}
+function inventorySearchIndex_(index,version) {
+  const keys=Array.from({length:Math.ceil(index.length/100)},(_,offset)=>inventoryResponseCacheKey_(version,'search-details',offset));
+  let cached={};try{cached=CacheService.getScriptCache().getAll(keys);}catch(error){}
+  let rows;
+  if(keys.every(key=>cached[key])){
+    try{rows=keys.flatMap(key=>JSON.parse(cached[key]));}catch(error){}
   }
-  return {success:true,item:item,version:inventoryReadVersion_()};
+  if(!rows){
+    const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY),products=inventoryDetailProducts_(version);
+    const stored=inventoryHasStoredDeliveryMetadata_(sheet),metadata=stored?{}:inventoryDetailDeliveryMetadata_(version);
+    const items=getFullInventory({products:products,deliveryMetadataByCode:metadata});
+    if(ACCESS_REQUEST_CONTEXT_.actor.manager)applyInventoryDetailCosts_(items,products,sheet);
+    const texts=new Map();
+    items.forEach(item=>{item.availability=inventoryListStatus_(item);texts.set(item.code,(texts.get(item.code)||'')+' '+inventoryItemSearchText_(item));});
+    rows=index.map(item=>[item.code,texts.get(item.code)||inventoryItemSearchText_(item)]);
+    const entries={};keys.forEach((key,offset)=>{entries[key]=rows.slice(offset*100,offset*100+100);});
+    cacheInventoryResponses_(entries,version);
+  }
+  return index.map((item,offset)=>({...item,searchText:rows[offset][1]}));
+}
+function inventoryDetailDeliveryMetadata_(version) {
+  const key=inventoryResponseCacheKey_(version,'detail-deliveries',[]),cached=readInventoryResponse_(key);
+  if(cached)return cached.metadata;
+  const metadata=getInventoryDeliveryMetadataByCode_(),dates=new Map();
+  const log=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DELIVERY_LOG);
+  if(log&&log.getLastRow()>1)log.getRange(2,DELIVERY_COL.DELIVERY_ID,log.getLastRow()-1,2).getValues().forEach(row=>{
+    const id=String(row[0]||'').trim();if(!dates.has(id))dates.set(id,row[1]);
+  });
+  Object.values(metadata).forEach(item=>{item.timestamp=formatInventoryDateForClient(dates.get(item.deliveryId)||item.timestamp);});
+  cacheInventoryResponses_({[key]:{metadata:metadata}},version);
+  return metadata;
+}
+function getInventoryItemDetailsBatch(request) {
+  assertAppRequest_();
+  request=request||{};
+  const version=inventoryReadVersion_();
+  if(request.version!==version)return {success:true,changed:true,version:version};
+  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+  const total=sheet?Math.max(0,sheet.getLastRow()-1):0;
+  const offset=Math.min(total,Math.max(0,Math.floor(Number(request.offset)||0)));
+  const count=Math.min(total-offset,Math.max(1,Math.min(200,Math.floor(Number(request.limit)||200))));
+  let items=[];
+  if(count){
+    const products=inventoryDetailProducts_(version);
+    const stored=inventoryHasStoredDeliveryMetadata_(sheet);
+    const metadata=stored?{}:inventoryDetailDeliveryMetadata_(version);
+    items=getFullInventory({products:products,rowNumber:offset+2,rowCount:count,deliveryMetadataByCode:metadata});
+    const counts=new Map();
+    inventoryListIndex_(version).forEach(item=>counts.set(item.code,(counts.get(item.code)||0)+1));
+    // Duplicated barcodes must still fail the authoritative single-item lookup.
+    items=items.filter(item=>item.code&&counts.get(item.code)===1);
+    items.forEach(item=>{item.deliveryMetadataLoaded=true;});
+    if(ACCESS_REQUEST_CONTEXT_.actor.manager)applyInventoryDetailCosts_(items,products,sheet);
+  }
+  const current=inventoryReadVersion_();
+  if(current!==version)return {success:true,changed:true,version:current};
+  return {success:true,version:version,offset:offset,nextOffset:offset+count,total:total,done:offset+count>=total,items:items};
 }
 function getInventoryChangeChoices() {
   assertAppRequest_();
