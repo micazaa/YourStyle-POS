@@ -71,6 +71,7 @@ function accessRegistry_() {
   "getInventorySummaryPage": {permission:"inventory.view", handler:getInventorySummaryPage},
   "getInventoryItemDetails": {permission:"inventory.view", handler:getInventoryItemDetails},
   "getInventoryItemDetailsBatch": {permission:"inventory.view", handler:getInventoryItemDetailsBatch},
+  "getInventoryChanges": {permission:"inventory.view", handler:getInventoryChanges},
   "getInventoryChangeChoices": {permission:"inventory.view", handler:getInventoryChangeChoices},
   "getDeliveryHistoryFast": {permission:"inventory.view", handler:getDeliveryHistoryFast},
   "getInventoryMovementHistoryByCode": {permission:"inventory.view", handler:getInventoryMovementHistoryByCode},
@@ -411,7 +412,7 @@ function finishAccessAudit_(record, access, result, error) {
 function callPosApi(request) {
   const access = accessRequest_(request), previous = ACCESS_REQUEST_CONTEXT_;
   ACCESS_REQUEST_CONTEXT_ = access;
-  let audit, inventoryChanged=false;
+  let audit, inventoryChanged=false,inventoryMutation=null;
   try {
     requireCashierAccess_(access, request);
     if (access.mode === 'approval') {
@@ -426,6 +427,7 @@ function callPosApi(request) {
             approved.binding !== actionBinding_(access.operation, access.args)) throw new Error('Approval does not match this action.');
         const before = actionSnapshot_(access.operation, access.args);
         if (JSON.stringify(before) !== JSON.stringify(approved.before)) throw new Error('The item changed. Review this change again.');
+        access.validatedBefore=before;
         const credential = accessCredential_(request, access.args);
         access.approver = requireManager_(credential.managerPin, credential.managerToken);
         CacheService.getScriptCache().remove(key);
@@ -445,24 +447,41 @@ function callPosApi(request) {
       'completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle','completeBulkHolder','saveSupplierReturn',
       'acceptYourFindsDelivery','saveCashierShiftExit','generateCashierShiftReportPDF','regenerateCashierReport',
       'correctClosedCashReport','generateManagerDailyReportPDF','saveDashboardTask','saveManagedAccount'].includes(access.operation);
-    if (mutation) audit = beginAccessAudit_(access, actionSnapshot_(access.operation, access.args));
+    if (mutation) audit = beginAccessAudit_(access, access.validatedBefore===undefined?actionSnapshot_(access.operation, access.args):access.validatedBefore);
     inventoryChanged=['adjustInventoryStock','changeInventoryItem','convertYourFindsDeliveryItem','saveProductMaster',
       'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','executeCheckoutBackend',
       'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle',
       'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(access.operation);
-    if(inventoryChanged)invalidateInventoryRead_();
+    if(inventoryChanged){inventoryMutation=beginInventoryMutation_();access.inventoryCodes=new Set();}
     const result = access.definition.handler.apply(null, access.args);
     if (audit) {
       // Once the action succeeds, a log-write outage must not invite a duplicate retry.
       try {finishAccessAudit_(audit, access, result);}
       catch (auditError) {console.error(JSON.stringify({event:'approval_log_pending', auditId:audit.id}));}
     }
+    if(inventoryMutation){
+      let parsed=result;const encoded=typeof result==='string';
+      if(encoded){try{parsed=JSON.parse(result);}catch(error){parsed=null;}}
+      actionCodes_(access.operation,access.args).forEach(code=>access.inventoryCodes.add(code));
+      if(parsed&&parsed.productCode)access.inventoryCodes.add(String(parsed.productCode));
+      if(parsed&&parsed.code)access.inventoryCodes.add(String(parsed.code));
+      let patch;
+      try {
+        const change=finishInventoryMutation_(inventoryMutation,Array.from(access.inventoryCodes),!!(parsed&&parsed.success));inventoryMutation=null;
+        if(!change.reset&&['adjustInventoryStock','changeInventoryItem'].includes(access.operation))reuseInventoryReadMetadata_(change.fromVersion,change.version);
+        patch=parsed&&parsed.success?getInventoryChanges({version:request.inventoryVersion}):null;
+      }catch(cacheError){console.warn('Inventory item update unavailable; clients will refresh safely.');}
+      if(parsed&&parsed.success){
+        parsed.inventoryPatch=patch||{success:true,reset:true};
+        return encoded?JSON.stringify(parsed):parsed;
+      }
+    }
     return result;
   } catch (error) {
     if (audit) {try {finishAccessAudit_(audit, access, null, error);} catch (auditError) {console.error('Approval log update failed: ' + audit.id);}}
     throw error;
   } finally {
-    try {if(inventoryChanged)invalidateInventoryRead_();}
+    try {if(inventoryMutation)finishInventoryMutation_(inventoryMutation,[],false);}
     catch(error){console.error(JSON.stringify({event:'inventory_cache_invalidation_failed',operation:access.operation}));}
     finally {ACCESS_REQUEST_CONTEXT_ = previous;}
   }

@@ -143,6 +143,7 @@ function changeInventoryStockBatch_(movements) {
     results.push({success:true, code:code, rowNumber:target.rowNumber, qtyChange:qtyChange, stockBefore:stockBefore, stockAfter:stockAfter});
   });
   movementSheet.getRange(movementSheet.getLastRow() + 1, 1, rows.length, MOVEMENT_LOG_COLUMN_COUNT).setValues(rows);
+  recordInventoryChangedCodes_(results.map(result=>result.code));
   syncSoldYourFindsStatus_(inventorySheet,soldYourFinds);
   const addresses = Object.keys(touchedRows).map(function(rowNumber) { return "Q" + rowNumber; });
   if (addresses.length && inventorySheet.getRangeList) inventorySheet.getRangeList(addresses).setValue(now);
@@ -175,7 +176,7 @@ function syncSoldYourFindsStatus_(sheet, changes) {
 
 function logInventoryMovement(movement) {
   assertAppRequest_();
-  if (!movement) throw new Error("Inventory movement data is required.");
+  const row=inventoryMovementRow_(movement);
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
@@ -188,7 +189,12 @@ function logInventoryMovement(movement) {
       "Remaining Bundle Qty", "Notes"
     ]]);
   }
-
+  sheet.appendRow(row);
+  recordInventoryChangedCodes_([row[MOVE_IDX.CODE]]);
+  return true;
+}
+function inventoryMovementRow_(movement) {
+  if (!movement) throw new Error("Inventory movement data is required.");
   const movementId = String(movement.movementId || generateInventoryMovementId()).trim();
   const code = String(movement.code || "").trim();
   const type = String(movement.type || "").trim().toUpperCase();
@@ -212,8 +218,7 @@ function logInventoryMovement(movement) {
 
   const row = [movementId, new Date(), source, referenceId, sourceLineId, code, item, type, qtyChange, stockBefore, stockAfter, employee, reason, bundleNo, remainingBundleQty, notes];
   if (row.length !== MOVEMENT_LOG_COLUMN_COUNT) throw new Error("Inventory Movement row does not match A:P mapping.");
-  sheet.appendRow(row);
-  return true;
+  return row;
 }
 
 function getInventoryMovementType(category, inventoryType) {
@@ -283,9 +288,7 @@ function adjustInventoryStock(payload) {
   if (!Number.isInteger(qty) || qty < 1) throw new Error("Quantity must be a positive whole number.");
   if (allowedReasons.indexOf(reason) === -1) throw new Error("Select a valid adjustment reason.");
   if (reason === "OTHER" && !notes) throw new Error("Notes are required when reason is OTHER.");
-  const itemResult = getInventoryItemByCode(code);
-  if (!itemResult || !itemResult.success || !itemResult.item) throw new Error("Inventory item not found.");
-  const item = itemResult.item;
+  const item = readInventoryStockTargets_([code])[0];
   if (String(item.inventoryType || "").toUpperCase() === INVENTORY_TYPE.UNIQUE) throw new Error("UNIQUE YourFinds items cannot use quantity stock adjustment.");
   const referenceId = adjustmentId_();
   const result = changeInventoryStock({
@@ -295,6 +298,26 @@ function adjustInventoryStock(payload) {
     notes: "Authorized by: " + auth.managerName + (notes ? " | " + notes : "")
   });
   return { success: true, referenceId: referenceId, manager: auth.managerName, stockAfter: result.stockAfter };
+}
+
+function readInventoryStockTargets_(codes) {
+  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+  if(!sheet||sheet.getLastRow()<2)throw new Error('Inventory is empty.');
+  const requested=new Set(codes),rows=new Map();
+  sheet.getRange(2,INV_COL.CODE,sheet.getLastRow()-1,1).getDisplayValues().forEach((row,index)=>{
+    const code=String(row[0]||'').trim();
+    if(!requested.has(code))return;
+    if(rows.has(code))throw new Error('Inventory barcode '+code+' is duplicated.');
+    rows.set(code,index+2);
+  });
+  return codes.map(code=>{
+    const rowNumber=rows.get(code);
+    if(!rowNumber)throw new Error('Inventory Code '+code+' was not found.');
+    const row=sheet.getRange(rowNumber,1,1,INV_COL.STOCK).getValues()[0];
+    return {code:code,rowNumber:rowNumber,name:String(row[INV_IDX.DESCRIPTION]||'').trim(),
+      category:String(row[INV_IDX.CATEGORY]||'OTHERS').trim(),inventoryType:String(row[INV_IDX.INVENTORY_TYPE]||'STOCK').trim().toUpperCase(),
+      status:String(row[INV_IDX.STATUS]||'ACTIVE').trim().toUpperCase(),stock:Number(row[INV_IDX.STOCK])||0};
+  });
 }
 
 function changeInventoryItem(payload) {
@@ -331,15 +354,7 @@ function changeInventoryItem(payload) {
       This prevents stale row numbers / stock values if another
       stock transaction was running at the same time.
     */
-    const fromResult = getInventoryItemByCode(fromCode);
-    const toResult = getInventoryItemByCode(toCode);
-
-    if (!fromResult.success || !toResult.success) {
-      throw new Error("Source or destination inventory item was not found.");
-    }
-
-    const fromItem = fromResult.item;
-    const toItem = toResult.item;
+    const [fromItem,toItem] = readInventoryStockTargets_([fromCode,toCode]);
 
     if (
       String(fromItem.inventoryType || "").toUpperCase() !== INVENTORY_TYPE.STOCK ||
@@ -364,8 +379,8 @@ function changeInventoryItem(payload) {
 
     movementStart = mov.getLastRow();
 
-    fromBefore = Number(inv.getRange(fromItem.rowNumber, INV_COL.STOCK).getValue()) || 0;
-    toBefore = Number(inv.getRange(toItem.rowNumber, INV_COL.STOCK).getValue()) || 0;
+    fromBefore = fromItem.stock;
+    toBefore = toItem.stock;
 
     if (fromBefore < qty) {
       throw new Error(
@@ -377,7 +392,7 @@ function changeInventoryItem(payload) {
     const toAfter = toBefore + qty;
     const referenceId = adjustmentId_();
 
-    logInventoryMovement({
+    const movementRows=[inventoryMovementRow_({
       code: fromCode,
       type: getInventoryMovementType(fromItem.category, fromItem.inventoryType),
       qtyChange: -qty,
@@ -394,9 +409,7 @@ function changeInventoryItem(payload) {
         " | Authorized by: " +
         auth.managerName +
         (notes ? " | " + notes : "")
-    });
-
-    logInventoryMovement({
+    }),inventoryMovementRow_({
       code: toCode,
       type: getInventoryMovementType(toItem.category, toItem.inventoryType),
       qtyChange: qty,
@@ -413,7 +426,11 @@ function changeInventoryItem(payload) {
         " | Authorized by: " +
         auth.managerName +
         (notes ? " | " + notes : "")
-    });
+    })];
+    const capacity=mov.getMaxRows();
+    if(movementStart+movementRows.length>capacity)mov.insertRowsAfter(capacity,Math.max(100,movementStart+movementRows.length-capacity));
+    mov.getRange(movementStart+1,1,movementRows.length,MOVEMENT_LOG_COLUMN_COUNT).setValues(movementRows);
+    recordInventoryChangedCodes_([fromCode,toCode]);
 
     SpreadsheetApp.flush();
 

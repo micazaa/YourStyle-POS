@@ -209,6 +209,7 @@ var inventorySearchTimer=null, inventoryLoadingActive=false, inventoryHasLoaded=
 var inventoryDataset=null,inventoryDownload=null,inventoryDataEpoch=0,inventoryDownloadTimer=null,inventoryVersionCheckAt=0;
 var inventoryLocalViews=new Map();
 var inventoryScrollPage=null;
+var inventoryChangesRead=null,inventoryChangesTimer=null;
 function inventoryListCacheKey(query) {
   return JSON.stringify({search:String(query.search||'').trim().toLowerCase(),category:query.category||'',status:query.status||'',
     stockStatus:query.stockStatus||'',exclude:inventoryListRequest_(query).exclude,
@@ -308,14 +309,78 @@ function observeInventoryVersion(version) {
   if(inventoryDownload&&(!inventoryDownload.version||inventoryDownload.version===version))return;
   const known=inventoryDatasetReady()?inventoryDataset.version:inventoryListVersion;
   if(known===version&&!inventoryDataset?.stale)return;
+  if(inventoryDatasetReady()&&!inventoryDataset.stale){refreshInventoryChanges();return;}
   invalidateLocalInventoryReads(false);startInventoryDownload(version);
   if(inventoryLoadingActive&&!inventoryDatasetReady())loadInventoryPage(false,true);
+}
+function applyInventoryPatch(patch) {
+  if(!patch||patch.success!==true||!patch.version||patch.reset||patch.pending||!inventoryDatasetReady()||inventoryDataset.stale)return false;
+  if(patch.version===inventoryDataset.version)return true;
+  if(patch.fromVersion!==inventoryDataset.version||!Array.isArray(patch.items)||!Array.isArray(patch.removedCodes))return false;
+  const owner=currentEmployee.dashboardToken,previous=inventoryDataset.version;
+  const changed=new Set(patch.items.map(item=>String(item.code))),removed=new Set(patch.removedCodes.map(String));
+  const updated=new Map(patch.items.map(item=>{
+    const full={...item,availability:inventoryListStatus_(item)};full.searchText=inventoryItemSearchText_(full);
+    return [String(full.code),full];
+  }));
+  inventoryDataset.items=inventoryDataset.items.filter(item=>!removed.has(String(item.code))).map(item=>{
+    const code=String(item.code),next=updated.get(code);if(next){updated.delete(code);return next;}return item;
+  });
+  inventoryDataset.items.push(...updated.values());inventoryDataset.version=patch.version;inventoryListVersion=patch.version;
+  inventoryItemDetailCache.forEach((entry,code)=>{
+    if(removed.has(code)||changed.has(code))inventoryItemDetailCache.delete(code);
+    else if(entry.owner===owner&&entry.version===previous)entry.version=patch.version;
+  });
+  inventoryItemDetailPending.forEach((entry,code)=>{
+    if(removed.has(code)||changed.has(code)){entry.cancelled=true;inventoryItemDetailPending.delete(code);}
+    else if(entry.owner===owner&&entry.version===previous)entry.version=patch.version;
+  });
+  patch.items.forEach(item=>inventoryItemDetailCache.set(String(item.code),{owner:owner,version:patch.version,time:Date.now(),item:item}));
+  ++inventoryListRequest;++inventorySummaryRequest;inventoryListPending=null;
+  inventoryListPages.clear();inventorySummaryPages.clear();inventoryLocalViews.clear();
+  pageReadCache.delete('inventory');pageReadCache.delete('inventoryChangeChoices');
+  ['movements','inventoryDeliveryMetadata'].forEach(view=>{
+    const cached=pageReadCache.get(view);if(cached&&(changed.has(String(cached.key))||removed.has(String(cached.key))))pageReadCache.delete(view);
+  });
+  clearTimeout(inventoryItemDetailPreloadTimer);inventoryItemDetailPreload=null;
+  updateInventoryDatasetStatus();
+  if(document.getElementById('inventoryPage').style.display!=='none')loadInventoryPage(false,true);
+  else if(inventoryLoadingActive)inventoryListBusy(false);
+  if(document.getElementById('inventorySummaryModal').style.display==='flex')renderInventorySummary();
+  if(phase8SelectedItem){
+    const code=String(phase8SelectedItem.code),item=patch.items.find(value=>String(value.code)===code);
+    if(item){phase8SelectedItem=item;if(document.getElementById('inventoryDetailsModal').style.display==='flex')renderInventoryDetails(item);}
+    else if(removed.has(code)){phase8SelectedItem=null;closeModal('inventoryDetailsModal');}
+  }
+  if(!inventoryDataset.detailsReady)preloadInventoryItemDetails();
+  return true;
+}
+function refreshInventoryChanges() {
+  if(!inventoryDatasetReady()||inventoryDataset.stale)return;
+  const owner=currentEmployee.dashboardToken,version=inventoryDataset.version;
+  if(inventoryChangesRead&&inventoryChangesRead.owner===owner&&inventoryChangesRead.version===version)return;
+  clearTimeout(inventoryChangesTimer);
+  const read={owner:owner,version:version};inventoryChangesRead=read;
+  const current=()=>inventoryChangesRead===read&&inventoryDatasetReady()&&currentEmployee.dashboardToken===owner;
+  secureScriptRun.withSuccessHandler(result=>{
+    if(!current())return;inventoryChangesRead=null;
+    if(!result||!result.success)return;
+    if(inventoryDataset.version!==version){if(result.version!==inventoryDataset.version)refreshInventoryChanges();return;}
+    if(result.pending){inventoryChangesTimer=setTimeout(refreshInventoryChanges,1000);return;}
+    if(!applyInventoryPatch(result))invalidateLocalInventoryReads();
+  }).withFailureHandler(()=>{if(current())inventoryChangesRead=null;}).getInventoryChanges({version:version});
+}
+function handleInventoryMutationResult(result) {
+  if(applyInventoryPatch(result.inventoryPatch))return;
+  if(!result.inventoryPatch?.reset&&inventoryDatasetReady()&&!inventoryDataset.stale){refreshInventoryChanges();return;}
+  invalidateLocalInventoryReads();
 }
 function checkInventoryVersionInBackground() {
   if(Date.now()-inventoryVersionCheckAt<30000)return;
   inventoryVersionCheckAt=Date.now();if(typeof checkAccountSession==='function')checkAccountSession();
 }
 function invalidateLocalInventoryReads(refresh=true) {
+  clearTimeout(inventoryChangesTimer);inventoryChangesRead=null;
   const hadPending=!!inventoryListPending,hadDownload=!!inventoryDownload;
   ++inventoryListRequest;++inventorySummaryRequest;++inventoryDataEpoch;
   clearTimeout(inventoryDownloadTimer);inventoryDownload=null;
@@ -330,6 +395,7 @@ function invalidateLocalInventoryReads(refresh=true) {
 }
 
 function resetInventoryListSession() {
+  resetInventoryStockActions();
   inventoryScrollPage=null;
   invalidateLocalInventoryReads(false);inventoryDataset=null;inventoryDownload=null;inventoryListVersion='';inventoryVersionCheckAt=0;updateInventoryDatasetStatus();inventoryHasLoaded=false;inventoryLoadingFocus=null;inventoryListBusy(false);inventoryListPage=1;inventoryListPageCount=1;inventoryPageData=[];
   clearTimeout(inventorySearchTimer);inventorySearchTimer=null;inventoryIncompleteOnly=false;inventoryCards={products:0,low:0,sold:0};updateInventorySummary();
@@ -679,7 +745,7 @@ function changeInventoryActiveInline(item, select) {
     if(!result||!result.success){select.disabled=false;return showNotificationToast(result&&result.message||'Status change failed.',true);}
     pageReadCache.delete('productMaster');pageReadCache.delete('cashierInventory');deliveryCatalogCache=null;deliveryCatalogPending=null;
     showNotificationToast('Item set to '+String(result.productStatus||result.status).toLowerCase()+'.');
-    loadInventoryPage(true,true);if(typeof refreshInventory==='function')refreshInventory();
+    loadInventoryPage(false,true);if(typeof refreshInventory==='function')refreshInventory();
   }).withFailureHandler(error=>{select.disabled=false;showNotificationToast(error.message||String(error),true);})
     .setInventoryAdministrativeStatus({code:item.code,status:status,...auth});
 }
@@ -716,7 +782,7 @@ function deleteInventoryRow(item) {
   if (!auth) return;
   secureScriptRun.withSuccessHandler(function(result) {
     if (!result || !result.success) return showNotificationToast(result && result.message || 'Delete failed.', true);
-    showNotificationToast('Inventory item deleted.'); loadInventoryPage(true);
+    showNotificationToast('Inventory item deleted.'); loadInventoryPage(false,true);
   }).withFailureHandler(error => showNotificationToast(error.message || String(error), true)).deleteUnusedInventoryItem({code:item.code,...auth});
 }
 function getInventoryDisplayStatus(

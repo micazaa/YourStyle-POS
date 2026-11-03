@@ -65,6 +65,7 @@ function reservationInventoryItem_(code) {
 }
 
 function setReservationInventoryStatus_(item, status) {
+  recordInventoryChangedCodes_([item.code]);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
   const cell = sheet.getRange(item.rowNumber, INV_COL.STATUS);
   setInventoryStatusValidation_(cell);

@@ -145,7 +145,8 @@
             'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','executeCheckoutBackend',
             'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle',
             'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(operation)){
-            pageReadCache.delete('inventory');if(typeof invalidateLocalInventoryReads==='function')invalidateLocalInventoryReads();
+            if(typeof handleInventoryMutationResult==='function')handleInventoryMutationResult(parsed);
+            else {pageReadCache.delete('inventory');if(typeof invalidateLocalInventoryReads==='function')invalidateLocalInventoryReads();}
           }
           if(handlers.success)handlers.success(value,handlers.userObject);
         };
@@ -154,7 +155,8 @@
         if (!sessionToken) {fail(new Error('Please sign in again.'));return;}
         // Copy before prompting so later form edits cannot change an approved action.
         const request = {operation:operation,args:JSON.parse(JSON.stringify(args)),sessionToken:sessionToken,
-          shiftReportId:currentSessionIsCashier ? currentShiftReportId : ''};
+          shiftReportId:currentSessionIsCashier ? currentShiftReportId : '',
+          inventoryVersion:typeof inventoryDatasetReady==='function'&&inventoryDatasetReady()?inventoryDataset.version:''};
         const send = ()=>{
           if (!currentEmployee || currentEmployee.dashboardToken !== sessionToken) {fail(new Error('Account changed. Please sign in again.'));return;}
           run().callPosApi(request);
@@ -176,8 +178,7 @@
             send();
           };
           if (credential.managerPin || credential.managerToken) {
-            if (window.confirm(preview.description+'\n\nApprove this exact change using the entered manager authorization?')) approve(credential);
-            else approve(null);
+            approve(credential);
           } else requestManagerPin(preview.description,approve,true);
         }).withFailureHandler(fail).previewPosAction(request);
       };

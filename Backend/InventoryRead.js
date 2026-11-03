@@ -1,6 +1,36 @@
 // The list cache contains display data only. Checkout and edits always re-read authoritative stock.
 const INVENTORY_READ_SECONDS_ = 300;
+const INVENTORY_CHANGE_LIMIT_ = 1000;
 let INVENTORY_EXECUTION_INDEX_ = null;
+function recordInventoryChangedCodes_(codes) {
+  if(!ACCESS_REQUEST_CONTEXT_||!ACCESS_REQUEST_CONTEXT_.inventoryCodes)return;
+  (Array.isArray(codes)?codes:[codes]).forEach(value=>{
+    const code=String(value||'').trim();if(code)ACCESS_REQUEST_CONTEXT_.inventoryCodes.add(code);
+  });
+}
+function beginInventoryMutation_() {
+  const lock=LockService.getScriptLock();lock.waitLock(10000);
+  try {
+    const id=SpreadsheetApp.getActiveSpreadsheet().getId(),fromVersion=inventoryReadVersion_();
+    const revision=Utilities.getUuid(),version=id+':'+revision;
+    try {CacheService.getScriptCache().put('inventory-change:'+version,JSON.stringify({pending:true,fromVersion:fromVersion,startedAt:Date.now()}),3600);}catch(error){}
+    PropertiesService.getScriptProperties().setProperty('inventory-read:'+id,revision);INVENTORY_EXECUTION_INDEX_=null;
+    return {id:id,fromVersion:fromVersion,version:version};
+  }finally{lock.releaseLock();}
+}
+function finishInventoryMutation_(mutation,codes,success) {
+  const lock=LockService.getScriptLock();lock.waitLock(10000);
+  try {
+    const current=inventoryReadVersion_(),revision=Utilities.getUuid(),version=mutation.id+':'+revision;
+    const changed=Array.from(new Set(codes));
+    const full=!success||current!==mutation.version||!changed.length||changed.length>INVENTORY_CHANGE_LIMIT_;
+    const event={fromVersion:current===mutation.version?mutation.fromVersion:current,version:version,
+      reset:full,codes:full?[]:changed};
+    try {CacheService.getScriptCache().put('inventory-change:'+version,JSON.stringify(event),3600);}catch(error){}
+    PropertiesService.getScriptProperties().setProperty('inventory-read:'+mutation.id,revision);INVENTORY_EXECUTION_INDEX_=null;
+    return event;
+  }finally{lock.releaseLock();}
+}
 function invalidateInventoryRead_(spreadsheetId) {
   const id = spreadsheetId || SpreadsheetApp.getActiveSpreadsheet().getId();
   PropertiesService.getScriptProperties().setProperty('inventory-read:'+id,Utilities.getUuid());
@@ -332,10 +362,25 @@ function applyInventoryDetailCosts_(items,products,sheet) {
 }
 function inventoryDetailProducts_(version) {
   const key=inventoryResponseCacheKey_(version,'detail-products',[]),cached=readInventoryResponse_(key);
-  if(cached)return cached.products;
+  if(cached&&Date.now()-Number(cached.storedAt||0)<INVENTORY_READ_SECONDS_*1000)return cached.products;
   const products=getProductMaster_({compactRead:true});
-  cacheInventoryResponses_({[key]:{products:products}},version);
+  cacheInventoryResponses_({[key]:{products:products,storedAt:Date.now()}},version);
   return products;
+}
+function reuseInventoryReadMetadata_(fromVersion,version) {
+  // Quantity adjustments do not change product definitions or delivery metadata.
+  const cache=CacheService.getScriptCache(),kinds=['detail-products','detail-deliveries'];
+  try {
+    const keys=kinds.map(kind=>inventoryResponseCacheKey_(fromVersion,kind,[])),previous=cache.getAll(keys),entries={};
+    let lifetime=INVENTORY_READ_SECONDS_;
+    kinds.forEach((kind,index)=>{
+      const raw=previous[keys[index]];if(!raw)return;
+      const remaining=Math.floor(INVENTORY_READ_SECONDS_-(Date.now()-Number(JSON.parse(raw).storedAt||0))/1000);
+      if(remaining<=0)return;
+      entries[inventoryResponseCacheKey_(version,kind,[])]=raw;lifetime=Math.min(lifetime,remaining);
+    });
+    if(Object.keys(entries).length)cache.putAll(entries,lifetime);
+  }catch(error){console.warn('Inventory metadata reuse missed; authoritative reads remain available.');}
 }
 function inventorySearchIndex_(index,version) {
   const keys=Array.from({length:Math.ceil(index.length/100)},(_,offset)=>inventoryResponseCacheKey_(version,'search-details',offset));
@@ -359,14 +404,14 @@ function inventorySearchIndex_(index,version) {
 }
 function inventoryDetailDeliveryMetadata_(version) {
   const key=inventoryResponseCacheKey_(version,'detail-deliveries',[]),cached=readInventoryResponse_(key);
-  if(cached)return cached.metadata;
+  if(cached&&Date.now()-Number(cached.storedAt||0)<INVENTORY_READ_SECONDS_*1000)return cached.metadata;
   const metadata=getInventoryDeliveryMetadataByCode_(),dates=new Map();
   const log=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DELIVERY_LOG);
   if(log&&log.getLastRow()>1)log.getRange(2,DELIVERY_COL.DELIVERY_ID,log.getLastRow()-1,2).getValues().forEach(row=>{
     const id=String(row[0]||'').trim();if(!dates.has(id))dates.set(id,row[1]);
   });
   Object.values(metadata).forEach(item=>{item.timestamp=formatInventoryDateForClient(dates.get(item.deliveryId)||item.timestamp);});
-  cacheInventoryResponses_({[key]:{metadata:metadata}},version);
+  cacheInventoryResponses_({[key]:{metadata:metadata,storedAt:Date.now()}},version);
   return metadata;
 }
 function getInventoryItemDetailsBatch(request) {
@@ -374,6 +419,13 @@ function getInventoryItemDetailsBatch(request) {
   request=request||{};
   const version=inventoryReadVersion_();
   if(request.version!==version)return {success:true,changed:true,version:version};
+  if(Array.isArray(request.codes)){
+    const codes=Array.from(new Set(request.codes.map(code=>String(code||'').trim()).filter(Boolean)));
+    if(codes.length>200)throw new Error('Request at most 200 item details at a time.');
+    const result=readInventoryChangedItems_(codes,version),current=inventoryReadVersion_();
+    if(current!==version)return {success:true,changed:true,version:current};
+    return {success:true,version:version,codes:codes,...result};
+  }
   const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
   const total=sheet?Math.max(0,sheet.getLastRow()-1):0;
   const offset=Math.min(total,Math.max(0,Math.floor(Number(request.offset)||0)));
@@ -394,6 +446,46 @@ function getInventoryItemDetailsBatch(request) {
   const current=inventoryReadVersion_();
   if(current!==version)return {success:true,changed:true,version:current};
   return {success:true,version:version,offset:offset,nextOffset:offset+count,total:total,done:offset+count>=total,items:items};
+}
+function readInventoryChangedItems_(codes,version) {
+  if(!codes.length)return {items:[],removedCodes:[]};
+  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY),wanted=new Set(codes),found=new Set(),rows=[];
+  if(sheet&&sheet.getLastRow()>1)sheet.getRange(2,INV_COL.CODE,sheet.getLastRow()-1,1).getDisplayValues().forEach((row,index)=>{
+    const code=String(row[0]||'').trim();if(!wanted.has(code))return;
+    if(found.has(code))throw new Error('Inventory barcode '+code+' is duplicated.');
+    found.add(code);rows.push(index+2);
+  });
+  if(!rows.length)return {items:[],removedCodes:codes};
+  const products=inventoryDetailProducts_(version),stored=inventoryHasStoredDeliveryMetadata_(sheet);
+  const metadata=stored?{}:inventoryDetailDeliveryMetadata_(version),ranges=[];
+  rows.forEach(row=>{
+    const last=ranges[ranges.length-1];
+    if(last&&row<=last.end+3&&row-last.start<250)last.end=row;else ranges.push({start:row,end:row});
+  });
+  const items=ranges.flatMap(range=>getFullInventory({products:products,rowNumber:range.start,rowCount:range.end-range.start+1,
+    deliveryMetadataByCode:metadata})).filter(item=>wanted.has(item.code));
+  items.forEach(item=>{item.deliveryMetadataLoaded=true;item.availability=inventoryListStatus_(item);});
+  if(ACCESS_REQUEST_CONTEXT_.actor.manager)applyInventoryDetailCosts_(items,products,sheet);
+  return {items:items,removedCodes:codes.filter(code=>!found.has(code))};
+}
+function getInventoryChanges(request) {
+  assertAppRequest_();
+  const fromVersion=String(request&&request.version||''),version=inventoryReadVersion_();
+  if(fromVersion===version)return {success:true,fromVersion:fromVersion,version:version,items:[],removedCodes:[]};
+  if(!fromVersion)return {success:true,reset:true,version:version};
+  const cache=CacheService.getScriptCache(),codes=new Set();let cursor=version;
+  for(let count=0;cursor!==fromVersion&&count<32;count++){
+    let event;try{const raw=cache.get('inventory-change:'+cursor);event=raw?JSON.parse(raw):null;}catch(error){}
+    if(event&&event.pending)return Date.now()-Number(event.startedAt||0)<120000
+      ?{success:true,pending:true,version:version}:{success:true,reset:true,version:version};
+    if(!event||event.reset||!Array.isArray(event.codes))return {success:true,reset:true,version:version};
+    event.codes.forEach(code=>codes.add(code));cursor=event.fromVersion;
+    if(codes.size>INVENTORY_CHANGE_LIMIT_)return {success:true,reset:true,version:version};
+  }
+  if(cursor!==fromVersion)return {success:true,reset:true,version:version};
+  const result=readInventoryChangedItems_(Array.from(codes),version),current=inventoryReadVersion_();
+  if(current!==version)return {success:true,pending:true,version:current};
+  return {success:true,fromVersion:fromVersion,version:version,...result};
 }
 function getInventoryChangeChoices() {
   assertAppRequest_();
