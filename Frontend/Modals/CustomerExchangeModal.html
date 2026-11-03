@@ -65,6 +65,7 @@ function exMoney(value) { return (Number(value) || 0).toFixed(2); }
 function exEsc(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
 function exchangeCurrent(version, owner) { return version === exchangeLoadVersion && currentEmployee === owner && !!owner; }
 function openCustomerExchangeModal(receiptId) {
+  if(!requireCashierTransactionActions())return;
   if(!currentEmployee)return showNotificationToast('Employee session not found.',true);
   exchangeLoadVersion++;exchangeOwner=currentEmployee;exchangeReceipt=null;exchangeProducts=[];exchangeItems=[];
   document.getElementById('exchangeReceiptId').value=String(receiptId||'').trim();

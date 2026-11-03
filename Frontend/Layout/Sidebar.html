@@ -29,7 +29,8 @@ function updateCashierNavigationAvailability(){
  button.setAttribute('aria-disabled',String(unavailable));
  button.title=unavailable?'Start a cashier shift to use POS':currentSessionIsCashier?'Cashier':'Cashier reports';
  const controls=document.getElementById('cashierWorkspaceControls');
- if(controls)controls.disabled=!currentEmployee||!currentSessionIsCashier;
+ if(controls)controls.querySelectorAll('[data-cashier-controls]').forEach(group=>{group.disabled=!currentEmployee||!currentSessionIsCashier;});
+ const history=document.getElementById('cashierTransactionHistoryBtn');if(history)history.disabled=!currentEmployee;
 }
 function toggleSidebar(show){
  const sidebar=document.getElementById('appSidebar'),overlay=document.getElementById('sidebarOverlay');

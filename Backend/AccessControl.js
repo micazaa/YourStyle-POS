@@ -66,6 +66,7 @@ function employeeAuthFingerprint_(row) {
 }
 function accessRegistry_() {
   return {
+  "getInventorySnapshotBatch": {permission:"inventory.view", handler:getInventorySnapshotBatch},
   "getInventoryPage": {permission:"inventory.view", handler:getInventoryPage},
   "getInventorySummaryPage": {permission:"inventory.view", handler:getInventorySummaryPage},
   "getInventoryItemDetails": {permission:"inventory.view", handler:getInventoryItemDetails},
@@ -304,7 +305,7 @@ function accessCredential_(request, args) {
     managerToken:credential.managerToken || data.managerToken || authContext.managerToken};
 }
 function requireCashierAccess_(access, request) {
-  if (!['sales.create','sales.exchange'].includes(access.permission)) return;
+  if (!['sales.create','sales.exchange','sales.void'].includes(access.permission)) return;
   if (!access.actor.cashierReportId || String(request.shiftReportId || '') !== access.actor.cashierReportId)
     throw new Error('Start or resume a cashier shift before processing a transaction.');
   const target = cashierShiftTarget_(access.actor.name, access.actor.cashierReportId, cashierReportRows_(), pettyHandoverRows_());
@@ -404,6 +405,7 @@ function callPosApi(request) {
   ACCESS_REQUEST_CONTEXT_ = access;
   let audit, inventoryChanged=false;
   try {
+    requireCashierAccess_(access, request);
     if (access.mode === 'approval') {
       const lock = LockService.getScriptLock(); lock.waitLock(10000);
       let approved;
@@ -429,7 +431,6 @@ function callPosApi(request) {
     }
     if (access.mode === 'approval' && access.operation === 'generateCashierShiftReportPDF' && access.approver.managerName !== access.args[0])
       throw new Error('Authorization must match the selected manager.');
-    requireCashierAccess_(access, request);
     bindAccessArguments_(access);
     const mutation = ['adjustInventoryStock','changeInventoryItem','convertYourFindsDeliveryItem','saveProductMaster',
       'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','voidAndRefundTransactionBackend',

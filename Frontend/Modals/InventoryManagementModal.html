@@ -248,6 +248,7 @@ function withInventoryItemDetails(code,callback,onFailure) {
  });
 }
 function openInventoryDetails(code){
+ if(inventoryLoadingActive)return;
  const request=++inventoryItemOpenRequest;
  document.getElementById('invDetailTitle').textContent='Inventory Item';document.getElementById('invDetailCode').textContent=String(code);
  document.getElementById('invDetailBody').innerHTML=loadingIndicator('Loading item…');

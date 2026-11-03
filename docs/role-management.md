@@ -10,7 +10,7 @@ Account forms use an opaque record version. A stale form must reload before savi
 
 OIC retains manager viewing access, including transaction dates and inventory costs. Creating or changing products, adjusting stock, returning stock, distribution, voids, exchanges, dashboard task changes and report changes require Manager or Owner approval. OIC credentials cannot approve these actions or change accounts. Cashiers retain their existing receiving and incomplete-item completion flows; supplier returns, exchanges, voids, corrections and ending shifts require approval. Cashier inventory editing/deleting stays blocked.
 
-Owners and Managers approve their own management actions automatically. A cashier shift explicitly selecting a different verifying manager still checks that manager's credential. Normal sign-in has report access on the cashier page; sales, reservations and exchanges require a server-linked open cashier shift. Browser role flags, supplied cashier names and supplied manager names cannot grant authority.
+Owners and Managers approve their own management actions automatically. A cashier shift explicitly selecting a different verifying manager still checks that manager's credential. Normal sign-in has report and read-only Transaction History access on the cashier page. The History button sits beside Add Items, outside the disabled transaction controls. Transaction details remain readable, while receipt/item voids, exchanges and reservation completion buttons are disabled. Sales, reservations, exchanges and voids require a server-linked open cashier shift; the backend checks this before requesting approval. Browser role flags, supplied cashier names and supplied manager names cannot grant authority.
 
 ## Approval records
 

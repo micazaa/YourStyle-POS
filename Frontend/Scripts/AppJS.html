@@ -94,6 +94,13 @@
   function canAuthorizeManagerActions(employee = currentEmployee) {
     return ['OWNER','MANAGER'].includes(String(employee && employee.role || '').trim().toUpperCase());
   }
+  function cashierTransactionActionsEnabled() {
+    return !!currentEmployee && currentSessionIsCashier === true;
+  }
+  function requireCashierTransactionActions() {
+    if(cashierTransactionActionsEnabled())return true;
+    showNotificationToast('Start a cashier shift to change a transaction.',true);return false;
+  }
   function hasManagerViewAccess(employee = currentEmployee) {
     return employeeIsOic(employee) || canAuthorizeManagerActions(employee);
   }
@@ -231,6 +238,7 @@
       watch.busy = false;
       if (!result || !result.success) return;
       if (result.active === false) { logoutEndedAccount(watch.token); return; }
+      if(typeof observeInventoryVersion==='function')observeInventoryVersion(result.inventoryVersion);
       if (Number(result.expiresAt) > 0) {
         watch.expiresAt = Number(result.expiresAt);
         armAccountSessionExpiry(watch);

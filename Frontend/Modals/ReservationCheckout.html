@@ -36,6 +36,7 @@ function startYourFindsDownPayment() {
     globalDiscountValue:Number(document.getElementById('globalDiscountValue').value) || 0});
 }
 function completeReservedTransaction() {
+  if(!requireCashierTransactionActions())return;
   if (cart.length) return showNotificationToast('Clear the current cart before completing a reservation.', true);
   const owner = currentEmployee, receiptId = selectedTransactionReceiptId;
   const button = document.getElementById('transactionReservationCompleteBtn');

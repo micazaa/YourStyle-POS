@@ -76,7 +76,7 @@ function dashboardEmployee_(token) {
 function getAccountSessionStatus(token) {
   try {
     const employee = dashboardEmployee_(token);
-    return {success: true, active: true, expiresAt: employee.expiresAt};
+    return {success: true, active: true, expiresAt: employee.expiresAt, inventoryVersion:inventoryReadVersion_()};
   } catch (error) {
     if (error.message === ACCOUNT_SESSION_EXPIRED_MESSAGE) return {success: true, active: false};
     throw error;
