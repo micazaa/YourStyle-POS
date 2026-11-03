@@ -84,6 +84,7 @@ function openInventoryWorkspace(){
         if (overlay.id !== 'loginOverlay') overlay.style.display = 'none';
       });
       document.querySelectorAll('dialog[open]').forEach(function(dialog) { dialog.close(); });
+      if (typeof resetCustomerExchangeSession === 'function') resetCustomerExchangeSession();
       clearSession();
       pageReadCache.clear();
       ++loginAttempt;

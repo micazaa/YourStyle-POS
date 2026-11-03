@@ -39,19 +39,43 @@ function ensureSalesLogSplitPaymentColumns_(sheet) {
 }
 
 function normalizeCheckoutPaymentParts_(paymentMethod, paymentParts, baseTotal) {
-  const method = String(paymentMethod || "").trim();
+  const method = String(paymentMethod || "Cash").trim();
+  const splitMethods = {
+    "Cash + GCash": ["Cash", "GCash"],
+    "Cash + Credit Card": ["Cash", "Credit Card"],
+    "GCash + Credit Card": ["GCash", "Credit Card"]
+  };
+  const methods = splitMethods[method] || (["Cash", "GCash", "QR Code", "Credit Card"].includes(method) ? [method] : null);
+  if (!methods) throw new Error("Select a valid payment method.");
   if (!Array.isArray(paymentParts) || !paymentParts.length) {
-    return [{ method: method || "Cash", amount: roundToTwo(baseTotal), reference: "" }];
+    if (methods.length === 2) throw new Error("Enter two valid split payments.");
+    return [{ method: method, amount: roundToTwo(baseTotal), reference: "" }];
   }
-  const parts = paymentParts.slice(0, 2).map(function(part) {
-    return {
+  const parts = paymentParts.map(function(part) {
+    const normalized = {
       method: String(part && part.method || "").trim(),
-      amount: roundToTwo(Number(part && part.amount) || 0),
+      amount: roundToTwo(Number(part && part.amount)),
       reference: String(part && part.reference || "").trim()
     };
+    if (part && part.receivedAmount !== undefined) {
+      const received = Number(part.receivedAmount);
+      if (normalized.method !== "Credit Card" || !Number.isFinite(received) || received < 0) {
+        throw new Error("Enter a valid credit card amount.");
+      }
+      const fee = roundToTwo(received * 0.032);
+      if (Math.round((roundToTwo(received) - fee) * 100) !== Math.round(normalized.amount * 100)) {
+        throw new Error("Credit card amount does not match its fee and sale allocation.");
+      }
+      normalized.receivedAmount = roundToTwo(received);
+    }
+    return normalized;
   });
-  if (parts.length !== 2 || parts.some(function(part) { return !part.method || part.amount < 0; })) throw new Error("Enter two valid split payments.");
-  if (Math.abs(parts[0].amount + parts[1].amount - Number(baseTotal)) > 0.01) throw new Error("Split payment amounts must equal sale total.");
+  if (parts.length !== methods.length || parts.some(function(part, index) {
+    return part.method !== methods[index] || !Number.isFinite(part.amount) || part.amount < 0;
+  })) throw new Error(methods.length === 2 ? "Enter two valid split payments." : "Enter a valid payment.");
+  const total = parts.reduce(function(sum, part) { return sum + part.amount; }, 0);
+  if (Math.abs(total - Number(baseTotal)) > 0.01) throw new Error(methods.length === 2
+    ? "Split payment amounts must equal sale total." : "Payment amount must equal sale total.");
   parts.forEach(function(part) {
     if (part.method.toUpperCase() !== "CASH" && !part.reference) throw new Error("Reference number is required for " + part.method + ".");
   });
@@ -162,12 +186,13 @@ function executeCheckoutBackend(
     let feeRateCharged = 0;
     let feeRateAbsorbed = 0;
     const cardBase = normalizedPaymentParts.filter(function(part) { return part.method.toUpperCase() === "CREDIT CARD"; }).reduce(function(total, part) { return total + part.amount; }, 0);
+    const chargedCardBase = normalizedPaymentParts.filter(function(part) { return part.method.toUpperCase() === "CREDIT CARD"; }).reduce(function(total, part) { return total + (part.receivedAmount === undefined ? part.amount : part.receivedAmount); }, 0);
     const qrBase = normalizedPaymentParts.filter(function(part) { return part.method.toUpperCase() === "QR CODE"; }).reduce(function(total, part) { return total + part.amount; }, 0);
     if (cardBase) {
       if (applyCardFee) feeRateCharged = 0.032;
       else feeRateAbsorbed = 0.032;
     }
-    const totalFeeCharged = roundToTwo(qrBase * 0.01 + cardBase * feeRateCharged);
+    const totalFeeCharged = roundToTwo(qrBase * 0.01 + chargedCardBase * feeRateCharged);
     const totalFeeAbsorbed = roundToTwo(cardBase * feeRateAbsorbed);
 
     const sumLineNet = lines.reduce((s, l) => s + l.lineNet, 0) || 1;
@@ -884,7 +909,8 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
     /* ======================================================
        CASHIER DATE SECURITY
 
-       Cashiers can read their own sales within the latest seven store dates.
+       Cashiers can read their own sales for seven store dates, and everyone's
+       sales for today and yesterday.
     ====================================================== */
 
     const now =
@@ -894,6 +920,9 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
     const cashierStartDate = new Date(today + "T00:00:00Z");
     cashierStartDate.setUTCDate(cashierStartDate.getUTCDate() - 6);
     const cashierFromDate = cashierStartDate.toISOString().split("T")[0];
+    const sharedStartDate = new Date(today + "T00:00:00Z");
+    sharedStartDate.setUTCDate(sharedStartDate.getUTCDate() - 1);
+    const sharedFromTime = Utilities.parseDate(sharedStartDate.toISOString().slice(0, 10), tz, "yyyy-MM-dd").getTime();
 
     const selectedFromDate = String(fromDate || (isManager ? today : cashierFromDate));
     const selectedToDate = String(toDate || (isManager ? selectedFromDate : today));
@@ -950,11 +979,8 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
 
       const rowCashier = String(row[SALES_IDX.CASHIER] || "").trim();
 
-      /*
-        Cashier only sees themselves.
-      */
-
-      if (!isManager && rowCashier !== cashierName) {
+      // Earlier transactions remain visible only to their cashier or a manager.
+      if (!isManager && rowCashier !== cashierName && timestamp.getTime() < sharedFromTime) {
         continue;
       }
 

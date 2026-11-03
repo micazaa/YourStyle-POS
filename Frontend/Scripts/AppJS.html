@@ -2,7 +2,7 @@
 
   var pageReadCache = new Map();
   function invalidateDeliveryItemCaches() {
-    ['standardDeliveryDetails', 'deliveryItems', 'deliveryDetails', 'deliveryLabels'].forEach(key => pageReadCache.delete(key));
+    ['standardDeliveryDetails', 'deliveryItems', 'deliveryDetails', 'deliveryLabels', 'exchangeProducts'].forEach(key => pageReadCache.delete(key));
   }
   let deliveryCatalogCache = null;
   let deliveryCatalogPending = null;
@@ -370,6 +370,7 @@
 
       const overlaysActive =
         !!document.querySelector('dialog[open]') ||
+        document.getElementById('customerExchangeModal')?.style.display === 'flex' ||
         (loginOverlay && loginOverlay.style.display !== "none") ||
         (checkoutModal && checkoutModal.style.display === "flex") ||
         (voidModal && voidModal.style.display === "flex") ||
