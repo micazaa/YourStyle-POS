@@ -5,6 +5,69 @@ function saleDisplayName_(name, priceSource) {
     : value;
 }
 
+const SALES_LOG_SPLIT_PAYMENT_HEADERS_ = [
+  "Payment 1 Method", "Payment 1 Amount", "Payment 1 Reference",
+  "Payment 2 Method", "Payment 2 Amount", "Payment 2 Reference"
+];
+
+function ensureSalesLogSplitPaymentColumns_(sheet) {
+  const firstColumn = SALES_COL.PAYMENT_1_METHOD;
+  const lastColumn = SALES_COL.PAYMENT_2_REFERENCE;
+  if (sheet.getMaxColumns() < lastColumn) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), lastColumn - sheet.getMaxColumns());
+  }
+  const existing = sheet.getRange(1, firstColumn, 1, SALES_LOG_SPLIT_PAYMENT_HEADERS_.length).getDisplayValues()[0];
+  const values = existing.map(function(value, index) {
+    const actual = String(value || "").trim();
+    const expected = SALES_LOG_SPLIT_PAYMENT_HEADERS_[index];
+    if (actual && actual !== expected) throw new Error("Sales Log column " + (firstColumn + index) + " must be \"" + expected + "\".");
+    return expected;
+  });
+  sheet.getRange(1, firstColumn, 1, values.length).setValues([values]);
+  const allowedPaymentMethods = ["Cash", "GCash", "QR Code", "Credit Card", "Cash + GCash", "Cash + Credit Card", "GCash + Credit Card"];
+  const paymentRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(allowedPaymentMethods, true)
+    .setAllowInvalid(false)
+    .build();
+  const dataRows = Math.max(1, sheet.getMaxRows() - 1);
+  sheet.getRange(2, SALES_COL.PAYMENT_METHOD, dataRows, 1).setDataValidation(paymentRule);
+  if (typeof SALES_SYNC_BUTTON_TITLE !== "undefined") {
+    sheet.getImages().forEach(function(image) {
+      if (image.getAltTextTitle() === SALES_SYNC_BUTTON_TITLE) image.setAnchorCell(sheet.getRange("AJ2"));
+    });
+  }
+}
+
+function normalizeCheckoutPaymentParts_(paymentMethod, paymentParts, baseTotal) {
+  const method = String(paymentMethod || "").trim();
+  if (!Array.isArray(paymentParts) || !paymentParts.length) {
+    return [{ method: method || "Cash", amount: roundToTwo(baseTotal), reference: "" }];
+  }
+  const parts = paymentParts.slice(0, 2).map(function(part) {
+    return {
+      method: String(part && part.method || "").trim(),
+      amount: roundToTwo(Number(part && part.amount) || 0),
+      reference: String(part && part.reference || "").trim()
+    };
+  });
+  if (parts.length !== 2 || parts.some(function(part) { return !part.method || part.amount < 0; })) throw new Error("Enter two valid split payments.");
+  if (Math.abs(parts[0].amount + parts[1].amount - Number(baseTotal)) > 0.01) throw new Error("Split payment amounts must equal sale total.");
+  parts.forEach(function(part) {
+    if (part.method.toUpperCase() !== "CASH" && !part.reference) throw new Error("Reference number is required for " + part.method + ".");
+  });
+  return parts;
+}
+
+function splitCashAmountForSalesRow_(row) {
+  const firstMethod = String(row[SALES_IDX.PAYMENT_1_METHOD] || "").trim().toUpperCase();
+  const secondMethod = String(row[SALES_IDX.PAYMENT_2_METHOD] || "").trim().toUpperCase();
+  if (!firstMethod || !secondMethod) return null;
+  let cash = 0;
+  if (firstMethod === "CASH") cash += Number(row[SALES_IDX.PAYMENT_1_AMOUNT]) || 0;
+  if (secondMethod === "CASH") cash += Number(row[SALES_IDX.PAYMENT_2_AMOUNT]) || 0;
+  return roundToTwo(cash);
+}
+
 function executeCheckoutBackend(
   cart,
   paymentMethod,
@@ -15,7 +78,8 @@ function executeCheckoutBackend(
   cashierName,
   cashReceived,
   changeGiven,
-  applyCardFee
+  applyCardFee,
+  paymentParts
 ) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -35,6 +99,8 @@ function executeCheckoutBackend(
         message: "Cart is empty.",
       });
     }
+
+    ensureSalesLogSplitPaymentColumns_(salesLogSheet);
 
     // 1) Per-line raw total and item-level discount
     let lines = cart.map((item) => {
@@ -74,6 +140,7 @@ function executeCheckoutBackend(
     const baseTotalDue = roundToTwo(
       Math.max(0, subtotalAfterItemDiscounts - globalReduction)
     );
+    const normalizedPaymentParts = normalizeCheckoutPaymentParts_(paymentMethod, paymentParts, baseTotalDue);
 
     lines.forEach((l) => {
       const share =
@@ -94,15 +161,14 @@ function executeCheckoutBackend(
     //    Cash / GCash: no fee.
     let feeRateCharged = 0;
     let feeRateAbsorbed = 0;
-    if (paymentMethod === "QR Code") {
-      feeRateCharged = 0.01;
-    } else if (paymentMethod === "Credit Card") {
+    const cardBase = normalizedPaymentParts.filter(function(part) { return part.method.toUpperCase() === "CREDIT CARD"; }).reduce(function(total, part) { return total + part.amount; }, 0);
+    const qrBase = normalizedPaymentParts.filter(function(part) { return part.method.toUpperCase() === "QR CODE"; }).reduce(function(total, part) { return total + part.amount; }, 0);
+    if (cardBase) {
       if (applyCardFee) feeRateCharged = 0.032;
       else feeRateAbsorbed = 0.032;
     }
-
-    const totalFeeCharged = roundToTwo(baseTotalDue * feeRateCharged);
-    const totalFeeAbsorbed = roundToTwo(baseTotalDue * feeRateAbsorbed);
+    const totalFeeCharged = roundToTwo(qrBase * 0.01 + cardBase * feeRateCharged);
+    const totalFeeAbsorbed = roundToTwo(cardBase * feeRateAbsorbed);
 
     const sumLineNet = lines.reduce((s, l) => s + l.lineNet, 0) || 1;
     lines.forEach((l) => {
@@ -148,6 +214,12 @@ function executeCheckoutBackend(
       "", // Z Sync Error
       l.priceSource || (l.isCustom ? "MANUAL" : "REGULAR"), // AA Price Source
       l.saleReferenceId || "", // AB Sale Reference ID
+      normalizedPaymentParts[0].method, // AC Payment 1 Method
+      normalizedPaymentParts[0].amount, // AD Payment 1 Amount
+      normalizedPaymentParts[0].reference, // AE Payment 1 Reference
+      normalizedPaymentParts[1] ? normalizedPaymentParts[1].method : "", // AF Payment 2 Method
+      normalizedPaymentParts[1] ? normalizedPaymentParts[1].amount : "", // AG Payment 2 Amount
+      normalizedPaymentParts[1] ? normalizedPaymentParts[1].reference : "", // AH Payment 2 Reference
     ]);
     salesLogSheet
       .getRange(
@@ -280,6 +352,7 @@ function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart
   const today = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
   const shiftStartDate = shiftStart ? new Date(shiftStart) : null;
   let cashSales = 0;
+  const processedSplitReceipts = {};
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
@@ -292,8 +365,17 @@ function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart
     const paymentMethod = String(row[SALES_IDX.PAYMENT_METHOD] || "").trim().toUpperCase();
     const status = String(row[SALES_IDX.STATUS] || "").trim().toUpperCase();
 
-    if (rowDate === today && rowCashier === cashierName && paymentMethod === "CASH" && status === "COMPLETED") {
-      cashSales += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+    if (rowDate === today && rowCashier === cashierName && status === "COMPLETED") {
+      const splitCash = splitCashAmountForSalesRow_(row);
+      if (splitCash !== null) {
+        const receiptId = String(row[SALES_IDX.RECEIPT_ID] || "").trim();
+        if (receiptId && !processedSplitReceipts[receiptId]) {
+          processedSplitReceipts[receiptId] = true;
+          cashSales += splitCash;
+        }
+      } else if (paymentMethod === "CASH") {
+        cashSales += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+      }
     }
   }
 
@@ -308,11 +390,13 @@ function getExpectedCashForManager(reportDate) {
 
   /* One contiguous read; avoid per-row Utilities.formatDate calls. */
   const rowCount = lastRow - 1;
-  const rows = sheet.getRange(2, SALES_COL.TIMESTAMP, rowCount, SALES_COL.STATUS).getValues();
+  const salesLogWidth = typeof SALES_LOG_COLUMN_COUNT === "number" ? SALES_LOG_COLUMN_COUNT : SALES_COL.STATUS;
+  const rows = sheet.getRange(2, SALES_COL.TIMESTAMP, rowCount, salesLogWidth).getValues();
   const tz = Session.getScriptTimeZone();
   const start = Utilities.parseDate(String(reportDate || '').trim() + " 00:00:00", tz, "yyyy-MM-dd HH:mm:ss");
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
   let cashSales = 0;
+  const processedSplitReceipts = {};
 
   for (let i = 0; i < rowCount; i++) {
     const row = rows[i];
@@ -320,8 +404,16 @@ function getExpectedCashForManager(reportDate) {
     const saleTime = timestamp ? new Date(timestamp) : null;
     if (!saleTime || isNaN(saleTime.getTime()) || saleTime < start || saleTime >= end) continue;
     if (String(row[SALES_IDX.STATUS] || "").trim().toUpperCase() !== "COMPLETED") continue;
-    if (String(row[SALES_IDX.PAYMENT_METHOD] || "").trim().toUpperCase() !== "CASH") continue;
-    cashSales += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+    const splitCash = typeof splitCashAmountForSalesRow_ === "function" ? splitCashAmountForSalesRow_(row) : null;
+    if (splitCash !== null) {
+      const receiptId = String(row[SALES_IDX.RECEIPT_ID] || "").trim();
+      if (receiptId && !processedSplitReceipts[receiptId]) {
+        processedSplitReceipts[receiptId] = true;
+        cashSales += splitCash;
+      }
+    } else if (String(row[SALES_IDX.PAYMENT_METHOD] || "").trim().toUpperCase() === "CASH") {
+      cashSales += Number(row[SALES_IDX.NET_TOTAL]) || 0;
+    }
   }
 
   return { expectedCashDrawer: roundToTwo(cashSales) };

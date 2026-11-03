@@ -227,7 +227,7 @@ function openInventoryDetails(code){
  const status=String(item.status||'').toUpperCase(); const unique=String(item.inventoryType||'').toUpperCase()==='UNIQUE'; const yourFinds=unique&&String(item.category||'').toUpperCase()==='YOURFINDS'; const incomplete=yourFinds&&status==='INCOMPLETE'; const completed=yourFinds&&!incomplete&&status!=='RETURNED'&&Number(item.stock)>0; const editable=incomplete||completed;
  document.getElementById('invDetailTitle').textContent=item.name||(incomplete?'YourFinds Item':'Inventory Item'); document.getElementById('invDetailCode').textContent=item.code;
  const isPins=String(item.category||'').trim().toUpperCase()==='PINS';
- const display=getInventoryDisplayStatus(item); document.getElementById('invDetailBody').innerHTML=`<div class="border rounded p-3 mb-3"><div class="small text-muted">Current Stock</div><div class="fs-3 fw-bold">${Number(item.stock)||0}</div><div>${buildInventoryStatusBadge(display)}</div></div><div class="row g-3"><div class="col-6"><b>Category</b><br>${escapeInventoryHtml(item.category)}</div><div class="col-6"><b>Type</b><br>${escapeInventoryHtml(item.inventoryType)}</div>${isPins?'':`<div class="col-6"><b>Size</b><br>${escapeInventoryHtml(item.size||'—')}</div>`}<div class="col-6"><b>Selling Price</b><br>₱${(Number(item.price)||0).toFixed(2)}</div>${yourFinds?`<div class="col-6"><b>Original Price</b><br>₱${(Number(item.origPrice)||0).toFixed(2)}</div>`:''}${inventoryIsManager()?`<div class="col-6"><b>Cost Price</b><br>${inventoryCostText(item.costPrice)}</div>`:''}${isPins?'':`<div class="col-6"><b>Delivered</b><br>${escapeInventoryHtml(item.dateDelivered||'—')}</div>`}${isPins?'':`<div class="col-12"><b>Delivery ID</b><br>${escapeInventoryHtml(item.deliveryId||'—')}</div>`}</div>`; renderInventoryPhoto_(item.imageUrl);
+ const display=getInventoryDisplayStatus(item); document.getElementById('invDetailBody').innerHTML=`<div class="border rounded p-3 mb-3"><div class="small text-muted">Current Stock</div><div class="fs-3 fw-bold">${Number(item.stock)||0}</div><div>${buildInventoryStatusBadge(display)}</div></div><div class="row g-3"><div class="col-6"><b>Category</b><br>${escapeInventoryHtml(item.category)}</div><div class="col-6"><b>Type</b><br>${escapeInventoryHtml(item.inventoryType)}</div>${isPins?'':`<div class="col-6"><b>Size</b><br>${escapeInventoryHtml(item.size||'—')}</div>`}<div class="col-6"><b>Selling Price</b><br>₱${(Number(item.price)||0).toFixed(2)}</div>${yourFinds?`<div class="col-6"><b>Original Price</b><br>₱${(Number(item.origPrice)||0).toFixed(2)}</div>`:''}${inventoryIsManager()?`<div class="col-6"><b>Cost Price</b><br>${inventoryCostText(item.costPrice)}</div>`:''}${isPins?'':`<div class="col-6"><b>Delivered</b><br><span id="invDetailDateDelivered">${escapeInventoryHtml(item.dateDelivered||(item.deliveryMetadataLoaded?'—':'Loading…'))}</span></div>`}${isPins?'':`<div class="col-12"><b>Delivery ID</b><br><span id="invDetailDeliveryId">${escapeInventoryHtml(item.deliveryId||(item.deliveryMetadataLoaded?'—':'Loading…'))}</span></div>`}</div>`; renderInventoryPhoto_(item.imageUrl);
  document.getElementById('invHistoryBtn').innerHTML=inventoryIcon('history');
  document.getElementById('invAdjustBtn').innerHTML=inventoryIcon('adjust'); document.getElementById('invAdjustBtn').style.display=unique?'none':'inline-block';
  document.getElementById('invChangeBtn').innerHTML=inventoryIcon('change'); document.getElementById('invChangeBtn').style.display=unique?'none':'inline-block';
@@ -235,6 +235,34 @@ function openInventoryDetails(code){
  const editBtn=document.getElementById('invYfEditBtn'); const editLabel=incomplete?'Add Selling Details':'Edit Selling Details'; editBtn.style.display=incomplete?'inline-block':'none'; editBtn.innerHTML=inventoryIcon('edit'); editBtn.title=editLabel; editBtn.setAttribute('aria-label',editLabel);
  const labelBtn=document.getElementById('invLabelBtn'); labelBtn.innerHTML=inventoryIcon('label'); labelBtn.style.display=completed?'inline-block':'none';
  document.getElementById('inventoryDetailsModal').style.display='flex';
+ if(!isPins)loadInventoryItemDeliveryMetadata(item);
+}
+
+function loadInventoryItemDeliveryMetadata(item) {
+ if(item.deliveryMetadataLoaded || (item.deliveryId && item.dateDelivered))return;
+ const read=beginPageRead('inventoryDeliveryMetadata',String(item.code),true);
+ function current(){return phase8SelectedItem===item && document.getElementById('inventoryDetailsModal').style.display==='flex';}
+ function apply(metadata){
+  item.deliveryId=metadata.deliveryId||'';item.dateDelivered=metadata.dateDelivered||'';item.deliveryMetadataLoaded=true;
+  if(!current())return;
+  document.getElementById('invDetailDateDelivered').textContent=item.dateDelivered||'—';
+  document.getElementById('invDetailDeliveryId').textContent=item.deliveryId||'—';
+ }
+ if(read.cached!==undefined && String(read.cached.code)===String(item.code))apply(read.cached);
+ if(!read.shouldFetch)return;
+ function failed(error){
+  if(!read.current())return;
+  read.fail();
+  if(!current())return;
+  document.getElementById('invDetailDateDelivered').textContent='Unable to load';
+  document.getElementById('invDetailDeliveryId').textContent='Unable to load';
+  showNotificationToast(error.message||'Unable to load delivery information.',true);
+ }
+ google.script.run.withSuccessHandler(result=>{
+  if(!read.current())return;
+  if(!result||!result.success)return failed(result||{});
+  read.save(result);apply(result);
+ }).withFailureHandler(failed).getInventoryDeliveryMetadataByCode(String(item.code));
 }
 
 function openYourFindsEditor(){

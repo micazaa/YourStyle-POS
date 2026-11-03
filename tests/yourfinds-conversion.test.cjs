@@ -12,6 +12,7 @@ function harness(sourceOverrides = {}) {
   let released = false;
   let statusValidation = null;
   const calculated = [];
+  const deliveryMetadata = [];
   const sourceItem = Object.assign({
     code: '101363001', rowNumber: 2, name: '', size: 'LNE', category: 'YourFinds',
     inventoryType: 'UNIQUE', status: 'INCOMPLETE', stock: 1, deliveryId: 'YFD-20261013-570'
@@ -76,13 +77,15 @@ function harness(sourceOverrides = {}) {
       return codes.slice(0, quantity);
     },
     setInventoryCalculatedFields_: (sheet, row, count) => calculated.push([sheet, row, count]),
+    ensureInventoryDeliveryMetadataColumns_() {},
+    writeInventoryDeliveryMetadata_: (sheet, rows, id, date) => deliveryMetadata.push({rows:Array.from(rows),id,date}),
     changeInventoryStockBatch_: batch => { movements = batch; return { success: true }; },
     normalizeYourFindsCustomSizeLabel_: value => String(value || '').trim().replace(/\s+/g, ' ').toUpperCase().replace(/^BULKY$/, 'BNE'),
     isStandardYourFindsSizeLabel_: value => ['S','M','L','XL','SNE','MNE','LNE','XLNE','NO SIZE','BNE','BULKY','SE','ME','LE','XLE','CUSTOM'].includes(String(value || '').toUpperCase())
   });
   vm.runInContext(fs.readFileSync('Backend/Constants.js', 'utf8') + '\n' + fs.readFileSync('Backend/InventoryMovement.js', 'utf8'), context);
   context.changeInventoryStockBatch_ = batch => { movements = batch; return { success: true }; };
-  return { context, state: () => ({ targetRows, sourceStatus, sourceUpdatedAt, movements, released, calculated, statusValidation }) };
+  return { context, state: () => ({ targetRows, sourceStatus, sourceUpdatedAt, movements, released, calculated, statusValidation, deliveryMetadata }) };
 }
 
 test('conversion marks one unique source converted and creates incomplete result codes', () => {
@@ -98,6 +101,7 @@ test('conversion marks one unique source converted and creates incomplete result
   assert.deepEqual(Array.from(saved.statusValidation.values), ['ACTIVE','INACTIVE','INCOMPLETE','CONVERTED','RETURNED']);
   assert.equal(saved.statusValidation.allowInvalid, false);
   assert.equal(saved.targetRows.length, 3);
+  assert.deepEqual(saved.deliveryMetadata,[{rows:[3,4,5],id:'YFD-20261013-570',date:'2026-10-13'}]);
   assert.deepEqual(Array.from(saved.targetRows, row => [row[0], row[2], row[3], row[4], row[5]]), [
     ['101361001', 'SNE', 'YourFinds', 'UNIQUE', 'INCOMPLETE'],
     ['101361002', 'SNE', 'YourFinds', 'UNIQUE', 'INCOMPLETE'],
@@ -196,7 +200,7 @@ test('delivery detail UI exposes conversion only for incomplete stock-one items'
   const source = fs.readFileSync('Frontend/Modals/YourFindsDeliveryDetails.html', 'utf8');
   assert.match(source, /id="yourFindsConversionModal"[^>]+z-index:10020/);
   assert.doesNotMatch(source, /deliveryConversionSourceStatus/);
-  assert.match(source, /status === "INCOMPLETE" && Number\(item\.stock\) === 1/);
+  assert.match(source, /String\(item\.status \|\| ''\)\.trim\(\)\.toUpperCase\(\) === "INCOMPLETE" && Number\(item\.stock\) === 1/);
   assert.match(source, /id="deliveryConversionTargets"/);
   assert.match(source, /addYourFindsConversionTargetRow/);
   assert.match(source, /"NO SIZE", "BNE"/);

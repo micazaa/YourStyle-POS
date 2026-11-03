@@ -17,19 +17,69 @@ function formatInventoryDateForClient(value) {
   return String(value).trim();
 }
 
-function getInventoryDeliveryMetadataByCode_() {
+function inventoryHasStoredDeliveryMetadata_(sheet) {
+  if (!sheet || typeof sheet.getMaxColumns !== 'function' || sheet.getMaxColumns() < INVENTORY_DELIVERY_COLUMN_COUNT) return false;
+  const headers = sheet.getRange(1, INV_COL.DELIVERY_ID, 1, 2).getDisplayValues()[0];
+  return String(headers[0] || '').trim() === 'Delivery ID' && String(headers[1] || '').trim() === 'Date Delivered';
+}
+
+function ensureInventoryDeliveryMetadataColumns_(sheet) {
+  if (inventoryHasStoredDeliveryMetadata_(sheet)) return;
+  if (sheet.getMaxColumns() < INVENTORY_DELIVERY_COLUMN_COUNT) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), INVENTORY_DELIVERY_COLUMN_COUNT - sheet.getMaxColumns());
+  }
+  const headers = sheet.getRange(1, INV_COL.DELIVERY_ID, 1, 2).getDisplayValues()[0];
+  ['Delivery ID', 'Date Delivered'].forEach(function(expected, index) {
+    const header = String(headers[index] || '').trim();
+    if (header && header !== expected) throw new Error('Inventory column ' + (index ? 'T' : 'S') + ' is already used. Delivery metadata was not changed.');
+    if (!header && sheet.getLastRow() > 1 && sheet.getRange(2, INV_COL.DELIVERY_ID + index, sheet.getLastRow() - 1, 1).getValues().some(row => row[0] !== '' && row[0] !== null)) {
+      throw new Error('Inventory delivery metadata columns contain unlabelled data. No values were overwritten.');
+    }
+  });
+  sheet.getRange(1, INV_COL.DELIVERY_ID, 1, 2).setValues([['Delivery ID', 'Date Delivered']]);
+  sheet.getRange(2, INV_COL.DELIVERY_ID, Math.max(1, sheet.getMaxRows() - 1), 1).setNumberFormat('@');
+  sheet.getRange(2, INV_COL.DATE_DELIVERED, Math.max(1, sheet.getMaxRows() - 1), 1).setNumberFormat('yyyy-mm-dd');
+}
+
+function writeInventoryDeliveryMetadata_(sheet, rowNumbers, deliveryId, deliveryDate) {
+  deliveryId = String(deliveryId || '').trim();
+  if (!deliveryId || !rowNumbers.length) return;
+  const date = normalizeGeneralDeliveryDate(formatInventoryDateForClient(deliveryDate));
+  ensureInventoryDeliveryMetadataColumns_(sheet);
+  const rows = [...new Set(rowNumbers)].sort((a,b) => a-b);
+  if (rows.some(row => !Number.isInteger(row) || row < 2)) throw new Error('Delivery metadata requires inventory data rows.');
+  const value = new Date(date + 'T00:00:00+08:00');
+  const written = [];
+  try { for (let i = 0; i < rows.length;) {
+    const start = rows[i];
+    let end = start;
+    while (i + 1 < rows.length && rows[i + 1] === end + 1) end = rows[++i];
+    const range = sheet.getRange(start, INV_COL.DELIVERY_ID, end - start + 1, 2);
+    written.push({range: range, values: range.getValues()});
+    range.setValues(Array.from({length: end - start + 1}, () => [deliveryId, value]));
+    i++;
+  }} catch (error) {
+    written.reverse().forEach(function(snapshot) { try { snapshot.range.setValues(snapshot.values); } catch (rollbackError) {} });
+    throw error;
+  }
+}
+
+function getInventoryDeliveryMetadataByCode_(targetCode) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
   const metadata = {};
   if (!sheet || sheet.getLastRow() < 2) return metadata;
 
-  const rows = sheet.getRange(2, MOVE_COL.TIMESTAMP, sheet.getLastRow() - 1, 5).getValues();
+  const rows = targetCode
+    ? readDeliveryDetailRows_(sheet, findDeliveryDetailRows_(sheet, MOVE_COL.CODE, String(targetCode).trim()), MOVE_COL.CODE, false)
+        .map(row => row.slice(MOVE_IDX.TIMESTAMP, MOVE_COL.CODE))
+    : sheet.getRange(2, MOVE_COL.TIMESTAMP, sheet.getLastRow() - 1, 5).getValues();
   rows.forEach(function(row) {
     const source = String(row[1] || "").trim().toUpperCase();
     const referenceId = String(row[2] || "").trim();
     const code = String(row[4] || "").trim();
     const sourceLineId = String(row[3] || "").trim();
-    const deliveryId = source === INVENTORY_MOVEMENT_SOURCE.DELIVERY
+    const deliveryId = [INVENTORY_MOVEMENT_SOURCE.DELIVERY, INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION].includes(source)
       ? referenceId
       : (source === INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT && /^YFD-/i.test(sourceLineId) ? sourceLineId : "");
     if (!deliveryId || !code) return;
@@ -38,6 +88,27 @@ function getInventoryDeliveryMetadataByCode_() {
     }
   });
   return metadata;
+}
+
+// Read stored receipt fields directly; older sheets fall back to delivery history.
+function getInventoryDeliveryMetadataByCode(code) {
+  code = String(code || '').trim();
+  if (!code) throw new Error('Inventory Code is required.');
+  const inventory = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+  if (inventoryHasStoredDeliveryMetadata_(inventory)) {
+    const rows = findDeliveryDetailRows_(inventory, INV_COL.CODE, code);
+    const stored = rows.length ? inventory.getRange(rows[0], INV_COL.DELIVERY_ID, 1, 2).getValues()[0] : [];
+    return {success: true, code: code, deliveryId: String(stored[0] || '').trim(), dateDelivered: formatInventoryDateForClient(stored[1])};
+  }
+  const metadata = getInventoryDeliveryMetadataByCode_(code)[code];
+  if (!metadata) return {success: true, code: code, deliveryId: '', dateDelivered: ''};
+  const log = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DELIVERY_LOG);
+  const rows = findDeliveryDetailRows_(log, DELIVERY_COL.DELIVERY_ID, metadata.deliveryId);
+  const deliveryDate = rows.length
+    ? log.getRange(rows[0], DELIVERY_COL.DELIVERY_DATE, 1, 1).getValues()[0][0]
+    : '';
+  return {success: true, code: code, deliveryId: metadata.deliveryId,
+    dateDelivered: formatInventoryDateForClient(deliveryDate || metadata.timestamp)};
 }
 
 function setInventoryCalculatedFields_(sheet, startRow, rowCount) {
@@ -237,18 +308,20 @@ function getFullInventory(options) {
   products.forEach(function(product) {
     productByCode[String(product.productCode || "").trim()] = product;
   });
-  const deliveryMetadataByCode = options.includeDeliveryMetadata === false ? {} : getInventoryDeliveryMetadataByCode_();
+  const storedDeliveryMetadata = inventoryHasStoredDeliveryMetadata_(sheet);
+  const readWidth = storedDeliveryMetadata ? INVENTORY_DELIVERY_COLUMN_COUNT : INVENTORY_COLUMN_COUNT;
+  const deliveryMetadataByCode = storedDeliveryMetadata || options.includeDeliveryMetadata === false ? {} : getInventoryDeliveryMetadataByCode_();
 
   /* ========================================================
-     READ INVENTORY A:Q
+     READ INVENTORY, INCLUDING STORED RECEIPT FIELDS WHEN AVAILABLE
   ======================================================== */
 
   const data = sheet
-    .getRange(2, 1, lastRow - 1, INVENTORY_COLUMN_COUNT)
+    .getRange(2, 1, lastRow - 1, readWidth)
     .getValues();
 
   const displayData = sheet
-    .getRange(2, 1, lastRow - 1, INVENTORY_COLUMN_COUNT)
+    .getRange(2, 1, lastRow - 1, readWidth)
     .getDisplayValues();
 
   const inventory = [];
@@ -377,15 +450,16 @@ function getFullInventory(options) {
 
       salePrices: productByCode[code] ? productByCode[code].salePrices : [],
 
-      /* Delivery metadata is derived from the movement ledger. */
+      /* Stored S:T values travel with the normal inventory payload. */
+
+      deliveryMetadataLoaded: storedDeliveryMetadata,
 
       dateDelivered: formatInventoryDateForClient(
-        deliveryMetadataByCode[code] ? deliveryMetadataByCode[code].timestamp : ""
+        storedDeliveryMetadata ? row[INV_IDX.DATE_DELIVERED] : (deliveryMetadataByCode[code] ? deliveryMetadataByCode[code].timestamp : "")
       ),
 
-      deliveryId: deliveryMetadataByCode[code]
-        ? deliveryMetadataByCode[code].deliveryId
-        : "",
+      deliveryId: storedDeliveryMetadata ? String(displayRow[INV_IDX.DELIVERY_ID] || '').trim()
+        : (deliveryMetadataByCode[code] ? deliveryMetadataByCode[code].deliveryId : ""),
 
       /* L — Created At */
 
@@ -1230,6 +1304,8 @@ function acceptYourFindsDelivery(
         inventorySheet.getLastRow() +
         1;
 
+      ensureInventoryDeliveryMetadataColumns_(inventorySheet);
+
 
       inventorySheet
         .getRange(
@@ -1241,6 +1317,9 @@ function acceptYourFindsDelivery(
         .setValues(
           inventoryRows
         );
+
+      writeInventoryDeliveryMetadata_(inventorySheet,
+        inventoryRows.map((row,index) => inventoryStartRow + index), deliveryId, deliveryDate);
 
       setInventoryCalculatedFields_(
         inventorySheet,

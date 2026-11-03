@@ -50,6 +50,9 @@ const SHEETS = {
    O  Image
    P  Created At
    Q  Updated At
+   R  Custom Cost Price (optional, reserved)
+   S  Delivery ID
+   T  Date Delivered
 ========================================================== */
 
 const INV_IDX = {
@@ -70,7 +73,9 @@ const INV_IDX = {
   ORIG_PRICE: 13,
   IMAGE: 14,
   CREATED_AT: 15,
-  UPDATED_AT: 16
+  UPDATED_AT: 16,
+  DELIVERY_ID: 18,
+  DATE_DELIVERED: 19
 
 };
 
@@ -92,11 +97,15 @@ const INV_COL = {
   ORIG_PRICE: 14,
   IMAGE: 15,
   CREATED_AT: 16,
-  UPDATED_AT: 17
+  UPDATED_AT: 17,
+  DELIVERY_ID: 19,
+  DATE_DELIVERED: 20
 
 };
 
 const INVENTORY_COLUMN_COUNT = 17;
+// Preserve the A:Q write schema; optional R and the new S:T fields are separate.
+const INVENTORY_DELIVERY_COLUMN_COUNT = 20;
 
 
 /* ==========================================================
@@ -130,6 +139,12 @@ const INVENTORY_COLUMN_COUNT = 17;
    Z  Sync Error
    AA Price Source
    AB Sale Reference ID
+   AC Payment 1 Method
+   AD Payment 1 Amount
+   AE Payment 1 Reference
+   AF Payment 2 Method
+   AG Payment 2 Amount
+   AH Payment 2 Reference
 ========================================================== */
 
 
@@ -164,7 +179,13 @@ const SALES_IDX = {
   PROCESSED_AT: 24,
   SYNC_ERROR: 25,
   PRICE_SOURCE: 26,
-  SALE_REFERENCE_ID: 27
+  SALE_REFERENCE_ID: 27,
+  PAYMENT_1_METHOD: 28,
+  PAYMENT_1_AMOUNT: 29,
+  PAYMENT_1_REFERENCE: 30,
+  PAYMENT_2_METHOD: 31,
+  PAYMENT_2_AMOUNT: 32,
+  PAYMENT_2_REFERENCE: 33
 
 };
 
@@ -200,12 +221,18 @@ const SALES_COL = {
   PROCESSED_AT: 25,
   SYNC_ERROR: 26,
   PRICE_SOURCE: 27,
-  SALE_REFERENCE_ID: 28
+  SALE_REFERENCE_ID: 28,
+  PAYMENT_1_METHOD: 29,
+  PAYMENT_1_AMOUNT: 30,
+  PAYMENT_1_REFERENCE: 31,
+  PAYMENT_2_METHOD: 32,
+  PAYMENT_2_AMOUNT: 33,
+  PAYMENT_2_REFERENCE: 34
 
 };
 
 
-const SALES_LOG_COLUMN_COUNT = 28;
+const SALES_LOG_COLUMN_COUNT = 34;
 
 
 /* ==========================================================

@@ -12,7 +12,7 @@ function accounts(extra=[]) {
   const sheet={getDataRange:()=>({getValues:()=>rows.map(row=>row.slice())}),getMaxColumns:()=>20,
     getRange(r,c,h,w){return {setValues(values){writes.push({r,c,h,w});for(let i=0;i<h;i++)for(let j=0;j<w;j++)rows[r-1+i][c-1+j]=values[i][j];}};}};
   const c=vm.createContext({console,Map,Number,
-    SHEETS:{EMPLOYEES:'Employees'},
+    SHEETS:{EMPLOYEES:'Employees'}, ACCOUNT_SESSION_SECONDS:21600,
     SpreadsheetApp:{getActiveSpreadsheet:()=>({getSheetByName:()=>sheet}),flush(){}},
     Utilities:{getUuid:randomUUID},
     CacheService:{getScriptCache:()=>({put:(k,v)=>cache.set(k,v),get:k=>cache.get(k),remove:k=>cache.delete(k)})},

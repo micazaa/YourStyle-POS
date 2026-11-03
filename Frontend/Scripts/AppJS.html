@@ -1,6 +1,9 @@
 <script>
 
   var pageReadCache = new Map();
+  function invalidateDeliveryItemCaches() {
+    ['standardDeliveryDetails', 'deliveryItems', 'deliveryDetails', 'deliveryLabels'].forEach(key => pageReadCache.delete(key));
+  }
   let deliveryCatalogCache = null;
   let deliveryCatalogPending = null;
   function cachedDeliveryCatalog() {
@@ -96,7 +99,67 @@
      SESSION
   ========================================================== */
 
+  var accountSessionWatch = null;
+
+  function stopAccountSessionMonitor() {
+    if (!accountSessionWatch) return;
+    clearInterval(accountSessionWatch.interval);
+    clearTimeout(accountSessionWatch.timeout);
+    accountSessionWatch = null;
+  }
+
+  function logoutEndedAccount(token) {
+    if (!currentEmployee || String(currentEmployee.dashboardToken || '') !== token) return;
+    stopAccountSessionMonitor();
+    completeCleanLogout();
+    showNotificationToast('Your session has ended. Please sign in again.', true);
+  }
+
+  function armAccountSessionExpiry(watch) {
+    clearTimeout(watch.timeout);
+    if (!watch.expiresAt) return;
+    watch.timeout = setTimeout(() => logoutEndedAccount(watch.token), Math.max(0, watch.expiresAt - Date.now()));
+  }
+
+  function checkAccountSession() {
+    const watch = accountSessionWatch;
+    if (!watch || !currentEmployee || currentEmployee.dashboardToken !== watch.token) return;
+    if (watch.expiresAt && Date.now() >= watch.expiresAt) { logoutEndedAccount(watch.token); return; }
+    if (watch.busy) return;
+    watch.busy = true;
+    google.script.run.withSuccessHandler(result => {
+      if (accountSessionWatch !== watch || !currentEmployee || currentEmployee.dashboardToken !== watch.token) return;
+      watch.busy = false;
+      if (!result || !result.success) return;
+      if (result.active === false) { logoutEndedAccount(watch.token); return; }
+      if (Number(result.expiresAt) > 0) {
+        watch.expiresAt = Number(result.expiresAt);
+        armAccountSessionExpiry(watch);
+      }
+    }).withFailureHandler(() => {
+      // A temporary connection failure does not mean the account session ended.
+      if (accountSessionWatch === watch) watch.busy = false;
+    }).getAccountSessionStatus(watch.token);
+  }
+
+  function startAccountSessionMonitor(verifyNow) {
+    if (!currentEmployee) return false;
+    const token = String(currentEmployee.dashboardToken || '');
+    const expiresAt = Number(currentEmployee.sessionExpiresAt) || 0;
+    if (!token || (expiresAt && Date.now() >= expiresAt)) { logoutEndedAccount(token); return false; }
+    if (!accountSessionWatch || accountSessionWatch.token !== token) {
+      stopAccountSessionMonitor();
+      const watch = {token: token, expiresAt: expiresAt, busy: false};
+      accountSessionWatch = watch;
+      watch.interval = setInterval(checkAccountSession, 60000);
+      armAccountSessionExpiry(watch);
+      if (verifyNow || !expiresAt) checkAccountSession();
+    } else if (verifyNow) checkAccountSession();
+    return true;
+  }
+
   function saveSession() {
+    if (!startAccountSessionMonitor()) return;
     const session = {
       currentEmployee,
       currentCashier,
@@ -126,6 +189,7 @@
 
     currentEmployee = session.currentEmployee;
     currentSessionIsCashier = session.isCashierSession !== false;
+    if (!startAccountSessionMonitor(true)) return;
 
     updateSidebarProfile(currentEmployee);
 
@@ -167,6 +231,7 @@
 
 
   function clearSession() {
+    stopAccountSessionMonitor();
     clearDashboardState();
     if (currentEmployee && currentEmployee.dashboardToken) {
       google.script.run.withFailureHandler(function() {}).revokeDashboardSession(currentEmployee.dashboardToken);
@@ -254,6 +319,16 @@
   ========================================================== */
 
   window.onload = function () {
+
+    window.addEventListener('focus', checkAccountSession);
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) checkAccountSession();
+    });
+    window.addEventListener('storage', function(event) {
+      if (event.key === 'ys_pos_session' && event.newValue === null && !localStorage.getItem('ys_pos_session') && currentEmployee) {
+        logoutEndedAccount(String(currentEmployee.dashboardToken || ''));
+      }
+    });
 
     initializeLogin();
 

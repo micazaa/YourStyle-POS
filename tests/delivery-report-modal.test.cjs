@@ -55,6 +55,36 @@ test('incomplete YourFinds stock-one row shows conversion icon in active deliver
   assert.equal(context.currentDeliveryDetailsId, 'YFD-1');
 });
 
+test('both delivery detail views show sold YourFinds from current stock and preserve converted and returned states', () => {
+  class Element {
+    constructor() { this.children = []; this.style = {}; this.innerHTML = ''; }
+    append(...nodes) { this.children.push(...nodes); }
+    appendChild(node) { this.children.push(node); }
+    replaceChildren() { this.children = []; }
+    setAttribute() {}
+    querySelector() { return null; }
+  }
+  const nodes = {};
+  const context = vm.createContext({document:{createElement:()=>new Element(),getElementById:id=>nodes[id] ||= new Element()},
+    buildInventoryStatusBadge: status=>status});
+  vm.runInContext(script, context);
+  vm.runInContext(fs.readFileSync('Frontend/Modals/YourFindsDeliveryDetails.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1], context);
+  vm.runInContext('deliveryViewData={yourFinds:true}', context);
+  for (const [state, stock, badge] of [['ACTIVE',0,'SOLD'],['ACTIVE',-1,'SOLD'],['INCOMPLETE',0,'INCOMPLETE'],['ACTIVE',1,'IN STOCK'],['INCOMPLETE',1,'INCOMPLETE'],['CONVERTED',0,'CONVERTED'],['RETURNED',0,'RETURNED']]) {
+    const item={name:'Chair',description:'Chair',code:'YF-1',size:'LNE',status:state,stock,quantity:1};
+    const container=new Element();
+    context.renderStandardDeliveryItems({id:'direct',items:[item]},container);
+    const qty=container.children[0].children[0].children[2];
+    assert.equal(qty.textContent,'1 pcs');
+    assert.match(qty.children[0].innerHTML,new RegExp(badge==='SOLD'?'>Sold<':badge));
+    nodes.deliveryDetailsItemsList=new Element();
+    context.renderYourFindsDeliveryDetailItems([item]);
+    const html=nodes.deliveryDetailsItemsList.children[0].innerHTML;
+    assert.match(html,new RegExp(badge==='SOLD'?'>Sold<':badge==='IN STOCK'?'In Stock':badge==='INCOMPLETE'?'Incomplete':badge==='CONVERTED'?'Converted':'RETURNED'));
+    assert.equal(item.status,state);assert.equal(item.quantity,1);
+  }
+});
+
 test('Print Report shows generating state, blocks duplicate clicks, and restores button after failure', () => {
   let success, failure, requests = 0, message;
   const run = {

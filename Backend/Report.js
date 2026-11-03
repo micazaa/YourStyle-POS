@@ -69,14 +69,16 @@ function nextReportId_() {
   return prefix + String(max + 1).padStart(3, '0');
 }
 
-function findOpenShift_(employee) {
+function findOpenShift_(employee, reportDate) {
   const sheet = cashReportSheet_();
   if (sheet.getLastRow() < 2) return null;
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, CASH_REPORT_COLUMN_COUNT).getValues();
   for (let i = values.length - 1; i >= 0; i--) {
     if (
       String(values[i][CASH_REPORT_IDX.EMPLOYEE] || '').trim() === String(employee || '').trim() &&
-      String(values[i][CASH_REPORT_IDX.STATUS] || '').toUpperCase() === 'OPEN'
+      String(values[i][CASH_REPORT_IDX.REPORT_TYPE] || '').trim().toUpperCase() === 'CASHIER SHIFT' &&
+      String(values[i][CASH_REPORT_IDX.STATUS] || '').trim().toUpperCase() === 'OPEN' &&
+      (!reportDate || dateString_(values[i][CASH_REPORT_IDX.REPORT_DATE]) <= dateString_(reportDate))
     )
       return { row: i + 2, values: values[i] };
   }
@@ -363,7 +365,7 @@ function closeCashierShift(
       : [];
 
     const managedReports = typeof pettyHandoverRows_ === 'function'
-      ? new Set(pettyHandoverRows_().map(event => event[2])) : new Set();
+      ? new Set(pettyHandoverRows_().filter(event => event[4] !== 'REPORT_SAVED').map(event => event[2])) : new Set();
     if (rows.some(row => managedReports.has(String(row[0])) &&
         String(row[CASH_REPORT_IDX.EMPLOYEE] || '').trim() === employee &&
         dateString_(row[CASH_REPORT_IDX.REPORT_DATE]) <= dateStr &&
@@ -581,6 +583,83 @@ function getCashReportHistory(limit) {
     }));
 }
 
+// Saves a printable progress snapshot without ending the cashier's shift.
+// Reprinting replaces this same OPEN row with the latest counts.
+function saveOpenCashierShiftPreview_(
+  openShift,
+  managerName,
+  pettyCashObj,
+  cashOnHandObj,
+  expectedCash,
+  cashDrawerRemark
+) {
+  if (!openShift || !openShift.row) {
+    throw new Error('No open cashier shift found.');
+  }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const sheet = cashReportSheet_();
+    const currentRow = sheet.getRange(openShift.row, 1, 1, CASH_REPORT_COLUMN_COUNT).getValues()[0];
+    if (currentRow[CASH_REPORT_IDX.REPORT_ID] !== openShift.values[CASH_REPORT_IDX.REPORT_ID] ||
+        String(currentRow[CASH_REPORT_IDX.STATUS]).toUpperCase() !== 'OPEN') {
+      throw new Error('This shift has changed. Reload the report before saving.');
+    }
+    const event = lastPettyEvent_(pettyHandoverRows_(), currentRow[CASH_REPORT_IDX.REPORT_ID]);
+    if (event && event[4] !== 'RECEIVE') throw new Error('This shift has already been paused or ended.');
+    const denominations = [1000, 500, 200, 100, 50, 20, 10, 5, 1];
+    const readBreakdown = function(source) {
+      const result = {};
+      denominations.forEach(function(denomination) {
+        const value = source && source[denomination];
+        const quantity = value === undefined || value === null || value === '' ? 0 : Number(value);
+        if (!Number.isSafeInteger(quantity) || quantity < 0) {
+          throw new Error('Bill and coin quantities must be non-negative whole numbers.');
+        }
+        result[denomination] = quantity;
+      });
+      return result;
+    };
+
+    const cashBreakdown = readBreakdown(cashOnHandObj && cashOnHandObj.breakdown);
+    const pettyBreakdown = readBreakdown(pettyCashObj && pettyCashObj.returnBreakdown);
+    const row = currentRow.slice();
+    const pettyReceived = Number(event ? event[5] : row[CASH_REPORT_IDX.PETTY_RECEIVED]) || 0;
+    const pettyReturned = sumBreakdown(pettyBreakdown);
+    const pettyVoucher = String((pettyCashObj && pettyCashObj.voucherNo) || '').trim();
+    const pettyRemark = String((pettyCashObj && pettyCashObj.reason) || '').trim();
+
+    if (Math.abs(pettyReturned - pettyReceived) > 0.001 && (!pettyVoucher || !pettyRemark)) {
+      throw new Error('Petty Cash Voucher No. and explanation are required when petty received and returned do not match.');
+    }
+
+    denominations.forEach(function(denomination) {
+      row[CASH_REPORT_IDX['CASH_' + denomination]] = cashBreakdown[denomination];
+      row[CASH_REPORT_IDX['PETTY_' + denomination]] = pettyBreakdown[denomination];
+    });
+    const cashCounted = sumBreakdown(cashBreakdown);
+    row[CASH_REPORT_IDX.MANAGER] = String(managerName || '').trim();
+    row[CASH_REPORT_IDX.EXPECTED_CASH] = roundToTwo(expectedCash);
+    row[CASH_REPORT_IDX.CASH_COUNTED] = cashCounted;
+    row[CASH_REPORT_IDX.CASH_VARIANCE] = roundToTwo(cashCounted - expectedCash);
+    row[CASH_REPORT_IDX.CASH_REMARK] = String(cashDrawerRemark || '').trim();
+    row[CASH_REPORT_IDX.PETTY_RECEIVED] = pettyReceived;
+    row[CASH_REPORT_IDX.PETTY_RETURNED] = pettyReturned;
+    row[CASH_REPORT_IDX.PETTY_VARIANCE] = roundToTwo(pettyReturned - pettyReceived);
+    row[CASH_REPORT_IDX.PETTY_VOUCHER_NO] = pettyVoucher;
+    row[CASH_REPORT_IDX.PETTY_REMARK] = pettyRemark;
+    row[CASH_REPORT_IDX.STATUS] = 'OPEN';
+    row[CASH_REPORT_IDX.UPDATED_AT] = new Date();
+
+    sheet.getRange(openShift.row, 1, 1, CASH_REPORT_COLUMN_COUNT).setValues([row]);
+    SpreadsheetApp.flush();
+    appendPettyHandover_(row[0], row[CASH_REPORT_IDX.EMPLOYEE], 'REPORT_SAVED', pettyReceived, pettyReturned,
+      pettyBreakdown, pettyVoucher, pettyRemark, 'draft_' + Utilities.getUuid(),
+      {row: row, receiveId: event ? String(event[0]) : ''});
+    return { success: true, reportId: String(row[CASH_REPORT_IDX.REPORT_ID] || ''), preview: true };
+  } finally { lock.releaseLock(); }
+}
+
 function generateCashierShiftReportPDF(
   managerName,
   cashierName,
@@ -596,14 +675,25 @@ function generateCashierShiftReportPDF(
 
     const salesData = salesLogSheet.getDataRange().getValues();
     const tz = Session.getScriptTimeZone();
+    reportDate = dateString_(reportDate);
     const todayStr = reportDate;
+    const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    if (!reportDate || reportDate > today) throw new Error('Select a valid report date that is not in the future.');
+    if (!String(managerName || '').trim()) throw new Error('Verifying manager is required.');
 
     const todayDisplay = Utilities.formatDate(new Date(reportDate), tz, 'MM/dd/yyyy');
 
-    const openShift = findOpenShift_(cashierName);
+    const openShift = findOpenShift_(cashierName, reportDate);
     const shiftStart = openShift ? openShift.values[CASH_REPORT_IDX.SHIFT_START] : null;
     const reportEnd = new Date();
-    const metrics = collectSalesMetrics(salesData, reportDate, cashierName, null, null);
+    // A shift may continue past midnight. Printing still saves that same open
+    // shift and uses the same start/end sales boundaries as End Shift.
+    const activeShiftPreview = openShift &&
+      dateString_(openShift.values[CASH_REPORT_IDX.REPORT_DATE]) <= reportDate;
+    const metrics = activeShiftPreview
+      ? collectSalesMetrics(salesData, dateString_(openShift.values[CASH_REPORT_IDX.REPORT_DATE]),
+          cashierName, shiftStart, reportEnd, {endDate: dateString_(reportEnd)})
+      : collectSalesMetrics(salesData, reportDate, cashierName, null, null);
 
     const categoryGroups = metrics.categoryGroups;
 
@@ -642,17 +732,25 @@ function generateCashierShiftReportPDF(
 
     const cashVariance = roundToTwo(cashOnHand - expectedCashDrawer);
 
-    // Persist the blind cashier count and server-side reconciliation.
-    // Expected Cash / Cash Variance are stored for manager reporting but not shown to cashier.
-    const closeResult = closeCashierShift(
-      managerName,
-      cashierName,
-      reportDate,
-      pettyCashObj,
-      cashOnHandObj,
-      cashDrawerRemark
-    );
-    if (!closeResult || !closeResult.success) throw new Error('Unable to close cashier shift.');
+    // Printing an active shift saves its latest snapshot, but must not close it.
+    const closeResult = activeShiftPreview
+      ? saveOpenCashierShiftPreview_(
+          openShift,
+          managerName,
+          pettyCashObj,
+          cashOnHandObj,
+          expectedCashDrawer,
+          cashDrawerRemark
+        )
+      : closeCashierShift(
+          managerName,
+          cashierName,
+          reportDate,
+          pettyCashObj,
+          cashOnHandObj,
+          cashDrawerRemark
+        );
+    if (!closeResult || !closeResult.success) throw new Error('Unable to save cashier shift report.');
 
     const pettyRemarkText = pettyReason
       ? pettyReason + (pettyVoucherNo ? ' (Voucher: ' + pettyVoucherNo + ')' : '')
@@ -700,11 +798,13 @@ function generateCashierShiftReportPDF(
       zoom,
     });
 
-    return createPdfFromHtml(
+    const output = createPdfFromHtml(
       htmlContent,
       `Cashier_Report_${closeResult.reportId}_${cashierName}_${todayStr}`,
       true
     );
+    if (output && output.success) output.preview = Boolean(closeResult.preview);
+    return output;
   } catch (err) {
     return { success: false, message: err.toString() };
   }

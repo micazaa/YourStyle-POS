@@ -189,6 +189,22 @@ test('successful login issues distinct dashboard sessions; forged, revoked, expi
   h.employees[1][6] = false;
   assert.throws(() => c.dashboardEmployee_(h.manager), /expired/);
 });
+test('account session status reports revocation and expiry without treating other failures as an ended session', () => {
+  const h = harness(), {c} = h;
+  const active = c.getAccountSessionStatus(h.ana);
+  assert.equal(active.active, true);
+  assert.ok(active.expiresAt > Date.now());
+  const saved = JSON.parse(h.cache.get('dashboard:' + h.ana));
+  saved.expiresAt = Date.now() - 1;
+  h.cache.set('dashboard:' + h.ana, JSON.stringify(saved));
+  assert.equal(c.getAccountSessionStatus(h.ana).active, false);
+  c.revokeDashboardSession(h.bea);
+  assert.equal(c.getAccountSessionStatus(h.bea).active, false);
+  h.employees[1][6] = false;
+  assert.equal(c.getAccountSessionStatus(h.manager).active, false);
+  c.dashboardEmployee_ = () => { throw new Error('Temporary service failure'); };
+  assert.throws(() => c.getAccountSessionStatus('token'), /Temporary service failure/);
+});
 test('demotion is reread and cannot authorize dates or task creation', () => {
   const h = harness();
   h.employees[1][5] = 2;

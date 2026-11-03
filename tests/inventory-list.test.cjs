@@ -107,6 +107,7 @@ function yourFindsEditor(manager=false) {
     withSuccessHandler(fn){calls.success=fn;return this;},
     withFailureHandler(fn){calls.failure=fn;return this;},
     saveYourFindsItemDetails(payload){calls.saves++;calls.payload=payload;},
+    getInventoryDeliveryMetadataByCode(code){(calls.metadataRequests ||= []).push({code,success:calls.success,failure:calls.failure});},
   }}};
   return {c,calls};
 }
@@ -158,6 +159,34 @@ test('YF view includes original price for both roles and cost only for managers'
     assert.equal(c.document.getElementById('invYfEditBtn').title,'Add Selling Details');
     assert.match(c.document.getElementById('invYfEditBtn').innerHTML,/inventory-icon/);
   }
+});
+test('opening a YourFinds item loads delivery metadata once and keeps incomplete stock-zero status',()=>{
+  for(const manager of [false,true]){
+    const {c,calls}=yourFindsEditor(manager);
+    c.phase8SelectedItem.stock=0;c.inventoryPageData=[c.phase8SelectedItem];c.renderInventoryPhoto_=()=>{};
+    c.openInventoryDetails('YF1');
+    assert.match(c.document.getElementById('invDetailBody').innerHTML,/Incomplete/);
+    assert.match(c.document.getElementById('invDetailBody').innerHTML,/Loading…/);
+    assert.equal(calls.metadataRequests.length,1);assert.equal(calls.metadataRequests[0].code,'YF1');
+    calls.metadataRequests[0].success({success:true,code:'YF1',deliveryId:'YFD-20261026-123',dateDelivered:'2026-10-26'});
+    assert.equal(c.document.getElementById('invDetailDateDelivered').textContent,'2026-10-26');
+    assert.equal(c.document.getElementById('invDetailDeliveryId').textContent,'YFD-20261026-123');
+    c.openInventoryDetails('YF1');assert.equal(calls.metadataRequests.length,1);
+    assert.match(c.document.getElementById('invDetailBody').innerHTML,/YFD-20261026-123/);
+  }
+});
+test('a late delivery metadata response cannot replace the currently selected item',()=>{
+  const {c,calls}=yourFindsEditor(true),first=c.phase8SelectedItem;
+  c.inventoryPageData=[first,{...first,code:'YF2'}];c.renderInventoryPhoto_=()=>{};
+  c.openInventoryDetails('YF1');const older=calls.metadataRequests[0];
+  c.openInventoryDetails('YF2');
+  older.success({success:true,deliveryId:'OLD',dateDelivered:'2026-10-01'});
+  assert.notEqual(c.document.getElementById('invDetailDeliveryId').textContent,'OLD');
+  calls.metadataRequests[1].success({success:true,code:'YF2',deliveryId:'NEW',dateDelivered:'2026-10-26'});
+  assert.equal(c.document.getElementById('invDetailDeliveryId').textContent,'NEW');
+  c.openInventoryDetails('YF1');
+  assert.notEqual(c.phase8SelectedItem.deliveryId,'NEW');
+  assert.equal(calls.metadataRequests.length,3);
 });
 test('category, search and summary cards use the same matching items',()=>{
   const {context:c}=frontend();

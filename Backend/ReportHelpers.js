@@ -453,7 +453,19 @@ function collectSalesMetrics(
   };
 
   const receiptIds = new Set();
+  const splitPaymentReceipts = new Set();
   const replacementAnchors = new Map();
+
+  function addPayment(method, amount, reference) {
+    const paymentMethod = String(method || 'Cash').trim() || 'Cash';
+    const paymentReference = String(reference || 'N/A').trim() || 'N/A';
+    if (!metrics.payments[paymentMethod]) metrics.payments[paymentMethod] = { gross: 0, count: 0 };
+    metrics.payments[paymentMethod].gross += Number(amount) || 0;
+    metrics.payments[paymentMethod].count++;
+    if (!metrics.paymentDetail[paymentMethod]) metrics.paymentDetail[paymentMethod] = {};
+    metrics.paymentDetail[paymentMethod][paymentReference] =
+      (metrics.paymentDetail[paymentMethod][paymentReference] || 0) + (Number(amount) || 0);
+  }
 
   function reasonOf(row) {
     return String(row[19] || '').trim().toUpperCase();
@@ -623,19 +635,18 @@ function collectSalesMetrics(
       name: name, size: size, units: countedQty, sales: netTotal, exchange: exchange
     });
 
-    if (!metrics.payments[paymentMethod]) {
-      metrics.payments[paymentMethod] = { gross: 0, count: 0 };
+    const paymentOneMethod = String(row[28] || '').trim();
+    const paymentTwoMethod = String(row[31] || '').trim();
+    const isSplitPayment = paymentOneMethod && paymentTwoMethod;
+    if (isSplitPayment) {
+      if (!splitPaymentReceipts.has(receiptId)) {
+        splitPaymentReceipts.add(receiptId);
+        addPayment(paymentOneMethod, row[29], row[30]);
+        addPayment(paymentTwoMethod, row[32], row[33]);
+      }
+    } else {
+      addPayment(paymentMethod, netTotal, reference);
     }
-
-    metrics.payments[paymentMethod].gross += netTotal;
-    metrics.payments[paymentMethod].count++;
-
-    if (!metrics.paymentDetail[paymentMethod]) {
-      metrics.paymentDetail[paymentMethod] = {};
-    }
-
-    metrics.paymentDetail[paymentMethod][reference] =
-      (metrics.paymentDetail[paymentMethod][reference] || 0) + netTotal;
 
     if (!metrics.byCashier[reportingCashier]) {
       metrics.byCashier[reportingCashier] = {

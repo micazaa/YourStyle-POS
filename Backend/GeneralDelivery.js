@@ -318,6 +318,7 @@ function acceptYourStyleDelivery(payload) {
   const deliveryStartRow = deliverySheet ? deliverySheet.getLastRow() : 0;
   const movementStartRow = movementSheet ? movementSheet.getLastRow() : 0;
   const createdInventoryRows = [];
+  const receivedInventoryRows = [];
 
   try {
     validateUniversalDeliveryDatabase();
@@ -428,6 +429,7 @@ function acceptYourStyleDelivery(payload) {
     });
 
     if (deliveryRows.some(function(row) { return row.length !== DELIVERY_LOG_COLUMN_COUNT; })) throw new Error("YourStyle Delivery row does not match universal A:T mapping.");
+    ensureInventoryDeliveryMetadataColumns_(inventorySheet);
 
     deliverySheet.getRange(deliverySheet.getLastRow() + 1, 1, deliveryRows.length, DELIVERY_LOG_COLUMN_COUNT).setValues(deliveryRows);
 
@@ -436,6 +438,7 @@ function acceptYourStyleDelivery(payload) {
         /* Create the STOCK Inventory row first when Product Master exists but Inventory does not. */
         const ensured = ensureYourStyleInventoryProduct(line.productCode, deliveryDate, identifiers.deliveryId);
         if (ensured.created) createdInventoryRows.push(ensured.rowNumber);
+        receivedInventoryRows.push(ensured.rowNumber);
 
         changeInventoryStock({
           code: line.productCode,
@@ -470,6 +473,7 @@ function acceptYourStyleDelivery(payload) {
       if (bundleProduct) {
         const ensuredBundle = ensureYourStyleInventoryProduct(bundleProduct.productCode, deliveryDate, identifiers.deliveryId);
         if (ensuredBundle.created) createdInventoryRows.push(ensuredBundle.rowNumber);
+        receivedInventoryRows.push(ensuredBundle.rowNumber);
         changeInventoryStock({
           code: bundleProduct.productCode,
           qtyChange: line.bundleQty,
@@ -483,6 +487,7 @@ function acceptYourStyleDelivery(payload) {
       }
     });
 
+    writeInventoryDeliveryMetadata_(inventorySheet, receivedInventoryRows, identifiers.deliveryId, deliveryDate);
     SpreadsheetApp.flush();
     return {
       success: true,
@@ -732,7 +737,7 @@ function getBulkHolderDetails(deliveryId, sheetRow) {
   return {success:true, holder:{
     sheetRow:sheetRow, deliveryId:storedDeliveryId,
     deliveryNo:String(row[DELIVERY_IDX.DELIVERY_NO]||"").trim(),
-    deliveryDate:String(row[DELIVERY_IDX.DELIVERY_DATE]||"").trim(),
+    deliveryDate:formatInventoryDateForClient(raw[DELIVERY_IDX.DELIVERY_DATE]),
     type:type, category:String(row[DELIVERY_IDX.CATEGORY]||"").trim(),
     description:String(row[DELIVERY_IDX.DESCRIPTION]||"").trim(),
     bundleQty:bundleQty, estimatedQuantity:estimated, actualQuantity:actual,
@@ -864,10 +869,12 @@ function distributeBulkBundle(payload) {
     const newRemaining=Math.max(0,estimated-newActual);
     const currentVariance=newActual-estimated;
 
+    ensureInventoryDeliveryMetadataColumns_(inventorySheet);
     holderRollback=deliverySheet.getRange(sheetRow,DELIVERY_COL.ACTUAL_QTY,1,5).getValues()[0];
-    lines.forEach(function(line){
+    const receivedInventoryRows=lines.map(function(line){
       const ensured=ensureYourStyleInventoryProduct(line.productCode,holder.deliveryDate,deliveryId);
       if (ensured.created) createdInventoryRows.push(ensured.rowNumber);
+      return ensured.rowNumber;
     });
 
     const bulkMovementType=holderType === "PINS" ? INVENTORY_MOVEMENT_TYPE.BULK_PINS : INVENTORY_MOVEMENT_TYPE.BULK_OTHERS;
@@ -898,6 +905,7 @@ function distributeBulkBundle(payload) {
     deliverySheet.getRange(sheetRow,DELIVERY_COL.ACTUAL_QTY,1,5).setValues([[newActual,newRemaining,"","",DELIVERY_STATUS.PARTIAL]]);
     SpreadsheetApp.flush();
     const progress=getBulkBundleProgress_(deliveryId,sheetRow,holderType,Number(holder.bundleQty));
+    writeInventoryDeliveryMetadata_(inventorySheet,receivedInventoryRows,deliveryId,holder.deliveryDate);
     return {success:true,deliveryId:deliveryId,deliveryNo:holder.deliveryNo,bundleNo:bundleNo,distributionActual:distributionActual,bundleActual:(progress.bundles[bundleNo-1]||{}).actualQuantity||0,actualQuantity:newActual,remainingQuantity:newRemaining,currentVariance:currentVariance,status:DELIVERY_STATUS.PARTIAL,bundles:progress.bundles};
   } catch(err) {
     if (holderRollback && deliverySheet && Number(payload.sheetRow)>=2) {try{deliverySheet.getRange(Number(payload.sheetRow),DELIVERY_COL.ACTUAL_QTY,1,5).setValues([holderRollback]);}catch(e){}}

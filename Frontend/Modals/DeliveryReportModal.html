@@ -63,7 +63,7 @@ function renderStandardDeliveryItems(group,container){
   const info=document.createElement('div');info.className='flex-grow-1';info.style.minWidth='0';const name=document.createElement('strong');name.textContent=item.name;const code=document.createElement('div');code.className='small text-muted';code.textContent=item.code;info.append(name,code);
   if(deliveryViewData.yourFinds){const size=document.createElement('div');size.className='small text-muted';size.textContent=item.status==='INCOMPLETE'?'Details not completed':item.size;info.append(size);}row.append(info);
   const qty=document.createElement('div');qty.className='text-end';qty.textContent=item.quantity+' pcs';
-  if(deliveryViewData.yourFinds){const badge=document.createElement('div');badge.innerHTML=buildInventoryStatusBadge(item.status);qty.append(badge);}row.append(qty);list.append(row);
+  if(deliveryViewData.yourFinds){const badge=document.createElement('div');const status=getDeliveryItemDisplayStatus(item);badge.innerHTML=status==='SOLD'?'<span class="badge bg-danger">Sold</span>':buildInventoryStatusBadge(status);qty.append(badge);}row.append(qty);list.append(row);
   if(deliveryViewData.yourFinds&&String(item.status||'').toUpperCase()==='INCOMPLETE'&&Number(item.stock)===1){const convert=document.createElement('button');convert.type='button';convert.className='btn btn-sm btn-outline-secondary';convert.title='Convert item';convert.setAttribute('aria-label','Convert '+item.code);convert.textContent='⇄';convert.onclick=()=>{currentDeliveryDetailsId=selectedDeliveryReportId;openYourFindsConversionModal(item,'STANDARD');};row.append(convert);}
  });
  if(list.children.length>5){
@@ -72,6 +72,12 @@ function renderStandardDeliveryItems(group,container){
   list.setAttribute('role','region');
   list.setAttribute('aria-label','Delivered items');
  }
+}
+function getDeliveryItemDisplayStatus(item) {
+ const status=String(item.status||'ACTIVE').trim().toUpperCase();
+ if(status==='INCOMPLETE'||status==='CONVERTED'||status==='RETURNED')return status;
+ if(item.stock!==undefined&&item.stock!==null&&item.stock!==''&&Number.isFinite(Number(item.stock)))return Number(item.stock)<=0?'SOLD':'IN STOCK';
+ return status;
 }
 function blankA4PdfBytes() {
   // PDF dimensions are points: 210 × 297 mm. The content stream is intentionally empty.

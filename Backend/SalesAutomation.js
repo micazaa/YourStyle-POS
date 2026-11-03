@@ -51,7 +51,7 @@ function processPendingSalesLogRowsFromButton() {
 
 function createSalesSyncButtonFromMenu() {
   createOrRepairSalesSyncButton_();
-  SpreadsheetApp.getUi().alert("The SYNC button is ready on Sales Log at AD2:AF3.");
+  SpreadsheetApp.getUi().alert("The SYNC button is ready on Sales Log at AJ2:AL3.");
 }
 
 function createOrRepairSalesSyncButton_() {
@@ -78,7 +78,7 @@ function createOrRepairSalesSyncButton_() {
   }
 
   buttonImage
-    .setAnchorCell(sheet.getRange("AD2"))
+    .setAnchorCell(sheet.getRange("AJ2"))
     .setWidth(180)
     .setHeight(56)
     .setAltTextTitle(SALES_SYNC_BUTTON_TITLE)
@@ -86,7 +86,7 @@ function createOrRepairSalesSyncButton_() {
     .assignScript("processPendingSalesLogRowsFromButton");
 
   SpreadsheetApp.flush();
-  return { success: true, range: "AD2:AF3" };
+  return { success: true, range: "AJ2:AL3" };
 }
 
 function showSalesAutomationStatus() {

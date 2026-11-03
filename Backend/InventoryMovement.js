@@ -569,6 +569,7 @@ function convertYourFindsDeliveryItem(payload) {
     }, []);
 
     inventoryStartRow = inventorySheet.getLastRow() + 1;
+    ensureInventoryDeliveryMetadataColumns_(inventorySheet);
     const inventoryRows = [];
     targets.forEach(function(target) {
       target.codes.forEach(function(code) {
@@ -579,6 +580,8 @@ function convertYourFindsDeliveryItem(payload) {
       });
     });
     inventorySheet.getRange(inventoryStartRow, 1, inventoryRows.length, INVENTORY_COLUMN_COUNT).setValues(inventoryRows);
+    writeInventoryDeliveryMetadata_(inventorySheet,
+      inventoryRows.map((row,index) => inventoryStartRow + index), deliveryId, sourceItem.dateDelivered || deliveryDate);
     setInventoryCalculatedFields_(inventorySheet, inventoryStartRow, inventoryRows.length);
     SpreadsheetApp.flush();
 

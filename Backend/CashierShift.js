@@ -1,4 +1,4 @@
-// One daily report per cashier; one ledger event per petty-cash custody change.
+// One daily report per cashier; custody events and receipt-linked report drafts.
 // Existing Cash Report Log columns and historical rows remain unchanged.
 const PETTY_HANDOVER_SHEET = 'Petty Cash Handovers';
 const PETTY_HANDOVER_HEADERS = [
@@ -6,6 +6,7 @@ const PETTY_HANDOVER_HEADERS = [
   'Received', 'Returned', 'Variance', 'Breakdown JSON', 'Voucher No.',
   'Explanation', 'Request ID', 'Report Snapshot JSON',
 ];
+const CASHIER_END_ACKNOWLEDGMENT = 'I confirm that all sales and cash counts recorded for this shift are true and complete. I understand that I am responsible for the cash and petty cash I hand over and for explaining any differences.';
 
 function cashierLiteral_(value) {
   const text = String(value || '');
@@ -41,11 +42,11 @@ function appendPettyHandover_(reportId, employee, event, received, returned, bre
 }
 
 function lastPettyEvent_(events, reportId) {
-  return events.slice().reverse().find(row => !reportId || row[2] === reportId) || null;
+  return events.slice().reverse().find(row => row[4] !== 'REPORT_SAVED' && (!reportId || row[2] === reportId)) || null;
 }
 
 function cashierReportHasEvents_(reportId) {
-  return pettyHandoverRows_().some(row => row[2] === reportId);
+  return pettyHandoverRows_().some(row => row[2] === reportId && row[4] !== 'REPORT_SAVED');
 }
 
 function latestPettyHandover_() {
@@ -69,7 +70,7 @@ function latestPettyHandover_() {
   });
   const latest = lastPettyEvent_(events);
   if (latest && (!source || !source.timestamp || new Date(latest[1]) >= new Date(source.timestamp))) {
-    const counted = events.slice().reverse().find(row => row[4] !== 'RECEIVE') || latest;
+    const counted = events.slice().reverse().find(row => ['PAUSE', 'END'].includes(row[4])) || latest;
     source = {
       received: Number(latest[latest[4] === 'RECEIVE' ? 5 : 6]) || 0,
       previousReportId: String(counted[2]), previousEmployee: String(counted[3]), timestamp: counted[1],
@@ -92,7 +93,8 @@ function cashierReportRows_() {
 }
 
 function cashierSnapshotRow_(event) {
-  const row = JSON.parse(event[12]);
+  const snapshot = JSON.parse(event[12]);
+  const row = Array.isArray(snapshot) ? snapshot : snapshot.row;
   [CASH_REPORT_IDX.TIMESTAMP, CASH_REPORT_IDX.SHIFT_START, CASH_REPORT_IDX.SHIFT_END, CASH_REPORT_IDX.UPDATED_AT]
     .forEach(i => { if (row[i]) row[i] = new Date(row[i]); });
   return row;
@@ -109,7 +111,9 @@ function cashierShiftTarget_(employee, reportId, data, events) {
     if (!reportId && (event && event[4] === 'END' || (!event || !['RECEIVE', 'PAUSE'].includes(event[4])) && String(row[CASH_REPORT_IDX.STATUS]).trim().toUpperCase() !== 'OPEN' ||
         dateString_(row[CASH_REPORT_IDX.REPORT_DATE]) !== today && (!event || !['PAUSE', 'RECEIVE'].includes(event[4])))) continue;
     const lastReturn = events.slice().reverse().find(entry => entry[2] === row[0] && ['PAUSE', 'END'].includes(entry[4]));
-    return {row: i + 2, values: row, event: event, lastReturn: lastReturn};
+    const draftEvent = events.slice().reverse().find(entry => entry[2] === row[0] && entry[4] === 'REPORT_SAVED');
+    return {row: i + 2, values: row, event: event, lastReturn: lastReturn,
+      draft: draftEvent && draftEvent[12] ? JSON.parse(draftEvent[12]) : null};
   }
   throw new Error('No active cashier shift found. Sign in using Start cashier shift.');
 }
@@ -118,21 +122,28 @@ function cashierShiftContext_(target) {
   const row = target.values, event = target.event;
   const savedReport = buildCashReportObject([], row);
   const received = event && event[4] === 'RECEIVE' ? Number(event[5]) : Number(row[CASH_REPORT_IDX.PETTY_RECEIVED]) || 0;
-  // Report petty totals include earlier returns. Prefill only a real handover
-  // count matching the current receipt, never an accumulated daily total.
-  const savedPetty = target.lastReturn ? cashierCount_(JSON.parse(target.lastReturn[8])) : savedReport.pettyBreakdown;
-  const pettyBreakdown = sumBreakdown(savedPetty) === received ? savedPetty : null;
   const hasSavedReport = row[CASH_REPORT_IDX.CASH_COUNTED] !== '' && row[CASH_REPORT_IDX.CASH_COUNTED] !== undefined && row[CASH_REPORT_IDX.CASH_COUNTED] !== null;
+  const receiveId = event && event[4] === 'RECEIVE' ? String(event[0]) : '';
+  const draft = target.draft && target.draft.receiveId === receiveId
+    ? buildCashReportObject([], target.draft.row)
+    // Compatibility with snapshots printed before receipt-linked drafts existed.
+    : !target.lastReturn && !(event && event[12]) && hasSavedReport ? savedReport : null;
+  // A current draft may include a documented difference. Older handover counts
+  // can prefill only when they match this receipt, never as a daily total.
+  const savedPetty = target.lastReturn ? cashierCount_(JSON.parse(target.lastReturn[8])) : savedReport.pettyBreakdown;
+  const pettyBreakdown = draft ? draft.pettyBreakdown : sumBreakdown(savedPetty) === received ? savedPetty : null;
   return {
     success: true, reportId: String(row[0]), reportDate: dateString_(row[CASH_REPORT_IDX.REPORT_DATE]),
     shiftStart: rpcDate_(row[CASH_REPORT_IDX.SHIFT_START]),
     status: event && event[4] === 'END' ? 'CLOSED' : event && event[4] === 'PAUSE' ? 'PAUSED' : event && event[4] === 'RECEIVE' ? 'OPEN' : String(row[CASH_REPORT_IDX.STATUS]).trim().toUpperCase(),
     pettyReceived: received,
-    receiveId: event && event[4] === 'RECEIVE' ? String(event[0]) : '',
+    receiveId: receiveId,
     cashBreakdown: savedReport.cashBreakdown,
     cashRemark: String(row[CASH_REPORT_IDX.CASH_REMARK] || ''),
     managerName: String(row[CASH_REPORT_IDX.MANAGER] || ''),
     pettyBreakdown: pettyBreakdown,
+    pettyVoucherNo: draft ? draft.pettyVoucherNo : '',
+    pettyRemark: draft ? draft.pettyRemark : '',
     hasSavedReport: hasSavedReport,
     savedReport: hasSavedReport ? savedReport : null,
   };
@@ -299,12 +310,13 @@ function saveCashierShiftExit(payload) {
         appendPettyHandover_(target.values[0], actor.name, 'PAUSE', context.pettyReceived, returned, breakdown, voucher, reason, requestId);
         result = {success: true, reportId: String(target.values[0]), status: 'PAUSED'};
       } else {
+        if (payload.acknowledged !== true) throw new Error('Confirm the sales and cash handover acknowledgment before ending your shift.');
         const managerName = String(payload.managerName || '').trim();
         if (!managerName) throw new Error('Select a verifying manager.');
         const auth = verifyManagerPin(payload.managerCredential, managerName);
         if (!auth || !auth.success) throw new Error(auth && auth.message || 'Manager verification is required.');
         const cash = cashierCount_(payload.cashBreakdown), row = target.values.slice(), now = new Date();
-        const history = events.filter(event => event[2] === row[0]);
+        const history = events.filter(event => event[2] === row[0] && event[4] !== 'REPORT_SAVED');
         const prior = history.filter(event => ['PAUSE', 'END'].includes(event[4]));
         const receipts = events.filter(event => event[2] === row[0] && event[4] === 'RECEIVE');
         // A legacy closed report may predate the handover ledger. Its first
@@ -331,22 +343,21 @@ function saveCashierShiftExit(payload) {
         row[CASH_REPORT_IDX.PETTY_REMARK] = cashierLiteral_((baseline ? [baseline[CASH_REPORT_IDX.PETTY_REMARK]] : []).concat(prior.map(event => event[10]), reason).filter(Boolean).join('; '));
         row[CASH_REPORT_IDX.STATUS] = 'CLOSED';
         row[CASH_REPORT_IDX.UPDATED_AT] = now;
-        appendPettyHandover_(row[0], actor.name, 'END', context.pettyReceived, returned, breakdown, voucher, reason, requestId, row);
+        appendPettyHandover_(row[0], actor.name, 'END', context.pettyReceived, returned, breakdown, voucher, reason, requestId,
+          {row: row, acknowledgment: {accepted: true, employee: actor.name, acceptedAt: now, statement: CASHIER_END_ACKNOWLEDGMENT}});
         data.sheet.getRange(target.row, 1, 1, CASH_REPORT_COLUMN_COUNT).setValues([row]);
         SpreadsheetApp.flush();
         result = {success: true, reportId: String(row[0]), status: 'CLOSED'};
       }
     }
   } finally { lock.releaseLock(); }
-  // Saving the handover/report is complete even if PDF generation fails.
-  if (result.status === 'CLOSED') {
-    try {
-      const got = getClosedCashReport(result.reportId);
-      if (!got.success) throw new Error(got.message);
-      const pdf = buildClosedCashierPdf_(got.report);
-      if (!pdf || !pdf.success) throw new Error(pdf && pdf.message || 'PDF generation failed.');
-      result.downloadUrl = pdf.downloadUrl;
-    } catch (error) { result.pdfWarning = 'Report saved. PDF unavailable; use Regenerate Report to download it later.'; }
-  }
   return result;
+}
+
+function printEndedCashierShiftReport(token, reportId) {
+  const actor = dashboardEmployee_(token);
+  const got = getClosedCashReport(reportId);
+  if (!got.success) throw new Error(got.message);
+  if (String(got.report.employee || '').trim() !== actor.name) throw new Error('This report belongs to another cashier.');
+  return buildClosedCashierPdf_(got.report);
 }

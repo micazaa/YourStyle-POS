@@ -84,6 +84,7 @@ function verifyEmployee(employeeName, pin) {
       return {
         success: true,
         dashboardToken: createDashboardSession_(employeeId, fullName),
+        sessionExpiresAt: new Date().getTime() + ACCOUNT_SESSION_SECONDS * 1000,
         employeeId: employeeId,
         fullName: fullName,
         username: account.username,

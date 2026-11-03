@@ -962,12 +962,7 @@ function renderYourFindsDeliveryDetailItems(
           .toUpperCase();
 
 
-      const status =
-        String(
-          item.status || ""
-        )
-          .trim()
-          .toUpperCase();
+      const status = getDeliveryItemDisplayStatus(item);
 
 
       const description =
@@ -1034,10 +1029,12 @@ function renderYourFindsDeliveryDetailItems(
         <div>
 
           ${
-            status === "ACTIVE"
+            status === "SOLD"
+              ? '<span class="badge bg-danger">Sold</span>'
+              : status === "IN STOCK" || status === "ACTIVE"
               ? `
                 <span class="badge bg-success">
-                  Active
+                  In Stock
                 </span>
               `
               : status === "INCOMPLETE"
@@ -1064,7 +1061,7 @@ function renderYourFindsDeliveryDetailItems(
         </div>
 
         ${
-          status === "INCOMPLETE" && Number(item.stock) === 1
+          String(item.status || '').trim().toUpperCase() === "INCOMPLETE" && Number(item.stock) === 1
             ? `
               <button
                 type="button"

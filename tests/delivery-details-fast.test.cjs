@@ -33,7 +33,7 @@ function setup() {
       };
     } };
   } }) };
-  return { context, reads };
+  return { context, reads, sheets, delivery, movement, makeRow };
 }
 
 test('delivery details reads matching history and inventory products without full-width scans', () => {
@@ -48,6 +48,23 @@ test('delivery details reads matching history and inventory products without ful
   assert.equal(details.reportLines[0].description, 'Yellow');
   assert.ok(reads.reduce((total, [, height, width]) => total + height * width, 0) < 5100);
   assert.deepEqual(Array.from(reads, ([name]) => name), ['Delivery Log', 'Inventory Movement Log', 'Inventory', 'Inventory']);
+});
+
+test('item delivery metadata reads only matching ledger rows and uses the receipt delivery date', () => {
+  const {context,reads,sheets,delivery,movement,makeRow}=setup();
+  vm.runInContext(fs.readFileSync('Backend/Inventory.js','utf8'),context);
+  const id='YFD-20261026-123';
+  sheets['Delivery Log'][7]=makeRow(delivery,{DELIVERY_ID:id,DELIVERY_DATE:'2026-10-26'},20);
+  sheets['Inventory Movement Log'][105]=makeRow(movement,{TIMESTAMP:'2026-10-27',REFERENCE_ID:id,SOURCE:'DELIVERY',CODE:'1016262009'},16);
+  sheets['Inventory Movement Log'][106]=makeRow(movement,{TIMESTAMP:'2026-10-28',REFERENCE_ID:'YS-1',SOURCE:'SALE',CODE:'1016262009'},16);
+  const metadata=context.getInventoryDeliveryMetadataByCode('1016262009');
+  assert.equal(metadata.deliveryId,id);assert.equal(metadata.dateDelivered,'2026-10-26');
+  assert.ok(reads.filter(([, ,width])=>width>1).reduce((total,[,height,width])=>total+height*width,0)<20);
+  assert.equal(reads.some(([name])=>name==='Inventory'),false);
+  sheets['Inventory Movement Log'][105]=makeRow(movement,{TIMESTAMP:'2026-10-30',REFERENCE_ID:'ADJ-1',SOURCE_LINE_ID:id,SOURCE:'ADJUSTMENT',CODE:'1016262009'},16);
+  assert.equal(context.getInventoryDeliveryMetadataByCode('1016262009').deliveryId,id);
+  assert.equal(context.getInventoryDeliveryMetadataByCode('1016262009').dateDelivered,'2026-10-26');
+  assert.equal(context.getInventoryDeliveryMetadataByCode('NO-DELIVERY').deliveryId,'');
 });
 
 test('YourFinds delivery details retain original quantities and calculate conversion summary once', () => {
