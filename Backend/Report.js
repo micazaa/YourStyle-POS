@@ -1070,8 +1070,15 @@ function buildClosedCashierPdf_(report) {
   return out;
 }
 
-function generateManagerDailyReportPDF(managerName, reportDate, cashOnHandObj, cashDrawerRemark) {
+function generateManagerDailyReportPDF(managerName, reportDate, cashOnHandObj, cashDrawerRemark, authContext) {
   try {
+    const account = getEmployees().find(employee => employee.fullName === String(managerName || '').trim());
+    if (!account || !employeeHasManagerView_(account)) throw new Error('Manager or OIC access is required.');
+    if (employeeIsOic_(account)) {
+      const actor = dashboardEmployee_(authContext && authContext.sessionToken);
+      if (actor.name !== account.fullName) throw new Error('Employee session changed. Reopen the report.');
+      requireManager_(authContext && authContext.managerPin, authContext && authContext.managerToken);
+    }
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
     const salesLogSheet = ss.getSheetByName('Sales Log');

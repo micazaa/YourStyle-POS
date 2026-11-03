@@ -743,19 +743,19 @@ function unlockTerminalSession() {
     if (typeof clearCashierReportCache === 'function') clearCashierReportCache();
     if (cashierMode && typeof rememberCashierReportContext === 'function') {
       rememberCashierReportContext({...response.shift, managers: loginEmployees
-        .filter(employee => Number.isFinite(employee.accessLevel) && employee.accessLevel <= 1)
+        .filter(employee => canAuthorizeManagerActions(employee))
         .map(employee => String(employee.fullName || '').trim())});
     }
     updateSidebarProfile(result);
-    document.getElementById('cashierManagerReportBtn').style.display=Number(result.accessLevel)<=1?'block':'none';
+    document.getElementById('cashierManagerReportBtn').style.display=hasManagerViewAccess(result)?'block':'none';
     document.getElementById('loginOverlay').style.display='none';
     document.getElementById('terminalWorkspace').style.display='block';
     document.getElementById('appSidebar').style.display='flex';
     button.disabled=false;button.textContent=cashierMode?'Start cashier shift':'Sign in';document.getElementById('cashierPin').value='';
     updateCashierNavigationAvailability();
-    showPage(cashierMode?'posPage':'dashboardPage');saveSession();
-    if(typeof refreshInventory==='function')refreshInventory();
-    if (Number(result.accessLevel) <= 1 && typeof warmManagerExpectedCash === 'function') {
+    showPage(cashierMode||hasManagerViewAccess(result)?'posPage':'dashboardPage');saveSession();
+    if(cashierMode&&typeof refreshInventory==='function')refreshInventory();
+    if (hasManagerViewAccess(result) && typeof warmManagerExpectedCash === 'function') {
       warmManagerExpectedCash(getCashReportToday());
     }
     if (typeof warmTransactionHistory === 'function') warmTransactionHistory();

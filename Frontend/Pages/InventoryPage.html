@@ -155,16 +155,12 @@ var inventoryIncompleteOnly = false;
 var inventorySort = { key: 'name', direction: 1 };
 var inventorySummaryKind = 'products';
 var inventorySummarySort = { key: 'category', direction: 1 };
-function inventoryIsManager() {
-  return typeof currentEmployee !== 'undefined' && currentEmployee &&
-    currentEmployee.accessLevel !== null && currentEmployee.accessLevel !== '' &&
-    Number.isFinite(Number(currentEmployee.accessLevel)) && Number(currentEmployee.accessLevel) <= 1;
-}
+function inventoryIsManager() { return hasManagerViewAccess(); }
 function inventoryIsYourFinds(item) {
   return String(item.category).toUpperCase() === 'YOURFINDS' && String(item.inventoryType).toUpperCase() === 'UNIQUE';
 }
 function inventoryColumnCount() { return inventoryIsManager() ? 10 : 9; }
-function inventoryManagerReadToken(){return inventoryIsManager()?(currentEmployee.inventoryManagerToken||'expired'):'';}
+function inventoryManagerReadToken(){return inventoryIsManager()?(canAuthorizeManagerActions()?(currentEmployee.inventoryManagerToken||'expired'):(currentEmployee.dashboardToken||'expired')):'';}
 function inventoryCostText(value){return value===null||value===undefined||value===''?'—':'₱'+Number(value).toFixed(2);}
 function updateInventoryFilterVisibility() {
   const statusFilter = document.getElementById('inventoryStatusFilter');

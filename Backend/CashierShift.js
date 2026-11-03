@@ -181,7 +181,7 @@ function getCashierShiftContext(token, reportId) {
   }
   const context = cashierShiftContext_(target);
   context.managers = getEmployees()
-    .filter(employee => Number.isFinite(employee.accessLevel) && employee.accessLevel <= 1)
+    .filter(employee => employeeCanAuthorizeManager_(employee))
     .map(employee => (String(employee.firstName).trim() + ' ' + String(employee.lastName).trim()).trim());
   return context;
 }

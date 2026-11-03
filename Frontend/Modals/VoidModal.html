@@ -201,7 +201,7 @@ function toggleVoidModal(show) {
 
 
 function openVoidReceiptModal(receiptId, itemCode, itemRowIndex) {
-  document.getElementById('managerVoidPin').parentElement.style.display=inventoryIsManager()?'none':'block';
+  document.getElementById('managerVoidPin').parentElement.style.display=canAuthorizeManagerActions()?'none':'block';
 
   const modal =
     document.getElementById(

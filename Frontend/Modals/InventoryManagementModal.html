@@ -205,14 +205,14 @@ var phase8ProductPhotoFileName = '';
 var changeItemChoices = [];
 var changeItemHighlightedIndex = -1;
 function managerCredentials(message,pin){
- if(inventoryIsManager()){
+ if(canAuthorizeManagerActions()){
    const token=currentEmployee.inventoryManagerToken;
    if(!token){showNotificationToast('Please sign out and sign in again to authorize inventory changes.',true);return null;}
    return {managerToken:token};
  }
  const entered=pin===undefined?window.prompt(message):pin;
  if(!entered)return null;
- return {managerPin:entered};
+ return {managerPin:entered, actorToken:currentEmployee && currentEmployee.dashboardToken};
 }
 function readProductPhoto(input,onLoad){
  const file=input.files&&input.files[0];if(!file)return;
@@ -280,7 +280,7 @@ function openYourFindsEditor(){
  document.getElementById('yfEditorCostWrap').style.display=inventoryIsManager()&&phase8SelectedItem.costSource==='CUSTOM'?'block':'none';
  document.getElementById('yfEditorCostPrice').value=inventoryIsManager()&&phase8SelectedItem.costSource==='CUSTOM'?(phase8SelectedItem.costPrice??''):'';
  document.getElementById('yfEditorManagerPin').value='';
- document.getElementById('yfEditorManagerPinWrap').style.display=incomplete||inventoryIsManager()?'none':'block';
+ document.getElementById('yfEditorManagerPinWrap').style.display=!employeeIsOic()&&(incomplete||canAuthorizeManagerActions())?'none':'block';
  document.getElementById('yfEditorPhoto').value='';
  renderYourFindsEditorPhoto(phase8SelectedItem.imageUrl||'');
  document.getElementById('yfEditorCompletionNote').style.display=incomplete?'block':'none';
@@ -316,11 +316,11 @@ function saveYourFindsDetailsClient(generateLabel){
  if(!description)return showNotificationToast('Description is required.',true);
  if(!Number.isFinite(sellingPrice)||sellingPrice<=0)return showNotificationToast('Selling Price must be greater than zero.',true);
  if(!phase8SelectedItem.imageUrl&&!phase8YfPhotoDataUrl)return showNotificationToast('Choose a product picture.',true);
- if(!incomplete&&!inventoryIsManager()&&!managerPin)return showNotificationToast('Enter a manager PIN to save changes to selling details.',true);
- const auth=inventoryIsManager()?managerCredentials('Manager authorization'):(incomplete?{}:{managerPin:managerPin});
+ if((employeeIsOic()||!incomplete&&!inventoryIsManager())&&!managerPin)return showNotificationToast('Enter a manager PIN to save changes to selling details.',true);
+ const auth=inventoryIsManager()?managerCredentials('Manager authorization',employeeIsOic()?managerPin:undefined):(incomplete?{}:{managerPin:managerPin});
  if(!auth)return;
  const payload={
-   code:phase8SelectedItem.code,description:description,sellingPrice:sellingPrice,...auth,fileName:phase8YfPhotoFileName,dataUrl:phase8YfPhotoDataUrl
+   code:phase8SelectedItem.code,description:description,sellingPrice:sellingPrice,actorToken:currentEmployee && currentEmployee.dashboardToken,...auth,fileName:phase8YfPhotoFileName,dataUrl:phase8YfPhotoDataUrl
  };
  const originalPrice=Number(document.getElementById('yfEditorOriginalPrice').value);
  if(!Number.isFinite(originalPrice)||originalPrice<0)return showNotificationToast('Enter a valid Original Price.',true);
@@ -351,7 +351,7 @@ function printCompletedYourFindsLabel(code,afterCompletion){
 function openStockAdjustment(){
  if(!phase8SelectedItem)return;
  document.getElementById('adjustItemLabel').textContent=`${phase8SelectedItem.name} · ${phase8SelectedItem.code}`;
- document.getElementById('adjustDirection').value='ADD'; document.getElementById('adjustQty').value=1; document.getElementById('adjustManagerPinWrap').style.display=inventoryIsManager()?'none':'block';document.getElementById('adjustManagerPin').value='';
+ document.getElementById('adjustDirection').value='ADD'; document.getElementById('adjustQty').value=1; document.getElementById('adjustManagerPinWrap').style.display=canAuthorizeManagerActions()?'none':'block';document.getElementById('adjustManagerPin').value='';
  updateStockAdjustmentPreview(); document.getElementById('stockAdjustmentModal').style.display='flex';
 }
 function updateStockAdjustmentPreview(){
@@ -363,7 +363,7 @@ function submitStockAdjustment(){const auth=managerCredentials('Manager PIN:',do
 function openChangeItem(){
  if(!phase8SelectedItem)return; changeItemChoices=(inventoryPageData||[]).filter(x=>String(x.inventoryType).toUpperCase()==='STOCK'&&String(x.code)!==String(phase8SelectedItem.code)&&String(x.status).toUpperCase()==='ACTIVE');
  const initial=changeItemChoices[0]||null; document.getElementById('changeToSearch').value=initial?initial.name:''; document.getElementById('changeToCode').value=initial?initial.code:''; hideChangeItemOptions();
- document.getElementById('changeFromName').textContent=phase8SelectedItem.name||'—'; document.getElementById('changeFromCode').textContent=phase8SelectedItem.code||'—'; document.getElementById('changeFromCategory').textContent=phase8SelectedItem.category||'—'; document.getElementById('changeQty').value=1; document.getElementById('changeManagerPinWrap').style.display=inventoryIsManager()?'none':'block';document.getElementById('changeManagerPin').value=''; updateChangeItemPreview(); document.getElementById('changeItemModal').style.display='flex';
+ document.getElementById('changeFromName').textContent=phase8SelectedItem.name||'—'; document.getElementById('changeFromCode').textContent=phase8SelectedItem.code||'—'; document.getElementById('changeFromCategory').textContent=phase8SelectedItem.category||'—'; document.getElementById('changeQty').value=1; document.getElementById('changeManagerPinWrap').style.display=canAuthorizeManagerActions()?'none':'block';document.getElementById('changeManagerPin').value=''; updateChangeItemPreview(); document.getElementById('changeItemModal').style.display='flex';
 }
 function matchingChangeItemOptions(query){const search=String(query||'').trim().toLowerCase();return changeItemChoices.filter(item=>!search||`${item.name||''} ${item.code||''} ${item.category||''} ${item.price||''}`.toLowerCase().includes(search)).slice(0,12);}
 function renderChangeItemOptions(query){const results=document.getElementById('changeToResults');const matches=matchingChangeItemOptions(query);changeItemHighlightedIndex=-1;results.innerHTML=matches.length?matches.map(item=>`<button type="button" class="list-group-item list-group-item-action change-item-option" role="option" data-code="${escapeInventoryHtml(item.code)}" onmousedown="event.preventDefault()" onclick="selectChangeItemDestination(this.dataset.code)"><span><strong>${escapeInventoryHtml(item.name)}</strong><span class="change-item-option-meta">${escapeInventoryHtml(item.code)} · ${escapeInventoryHtml(item.category)}</span></span><span class="change-item-option-price">₱${(Number(item.price)||0).toFixed(2)}</span></button>`).join(''):'<div class="list-group-item text-muted">No matching products.</div>';results.style.display='block';document.getElementById('changeToSearch').setAttribute('aria-expanded','true');}

@@ -219,8 +219,7 @@ function openManagerReportModal() {
   }
 
   if (
-    currentEmployee.role !== "Manager" &&
-    currentEmployee.accessLevel > 1
+    !hasManagerViewAccess()
   ) {
     showNotificationToast(
       "Only managers can access the Manager Daily Report.",
@@ -434,8 +433,7 @@ function generateManagerDailyReport() {
 
   // Preserve the existing role/access check.
   if (
-    currentEmployee.role !== 'Manager' &&
-    currentEmployee.accessLevel > 1
+    !hasManagerViewAccess()
   ) {
     showNotificationToast(
       'Only managers can generate this report.',
@@ -453,7 +451,13 @@ function generateManagerDailyReport() {
     return;
   }
 
-  // Download without requesting another Manager PIN.
+  if (employeeIsOic()) {
+    const owner = currentEmployee;
+    requestManagerPin('Manager PIN to generate the Manager Daily Report:', function(credential) {
+      if (credential && owner === currentEmployee) proceedWithManagerDailyReport(managerName, reportDate, credential);
+    });
+    return;
+  }
   proceedWithManagerDailyReport(managerName, reportDate);
 }
 
@@ -463,10 +467,13 @@ function generateManagerDailyReport() {
 
 function proceedWithManagerDailyReport(
   managerName,
-  reportDate
+  reportDate,
+  credential
 ) {
   if (managerReportLoadingActive || managerReportGenerating || !managerReportExpectedReady) return;
 
+  const authContext = {sessionToken:currentEmployee && currentEmployee.dashboardToken,
+    ...(typeof credential === 'object' ? credential : credential ? {managerPin:credential} : {})};
   const cashBreakdown = {};
 
   PETTY_DENOMS.forEach((d) => {
@@ -575,7 +582,8 @@ function proceedWithManagerDailyReport(
       managerName,
       reportDate,
       cashOnHandObj,
-      cashDrawerReason
+      cashDrawerReason,
+      authContext
     );
 
 }

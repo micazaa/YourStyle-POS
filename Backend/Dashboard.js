@@ -62,7 +62,8 @@ function dashboardEmployee_(token) {
     name: saved.name,
     firstName: String(row[1]),
     expiresAt: Number(saved.expiresAt) || 0,
-    manager: String(row[5]).trim() !== '' && Number.isFinite(Number(row[5])) && Number(row[5]) <= 1,
+    manager: employeeHasManagerView_({role:row[4], accessLevel:row[5]}),
+    requiresManagerPin: employeeIsOic_({role:row[4]}),
   };
 }
 function getAccountSessionStatus(token) {
@@ -342,6 +343,7 @@ function saveDashboardTask(request) {
     const employee = dashboardEmployee_(request.token),
       input = request.task || {},
       id = String(input.id || '');
+    if (employee.requiresManagerPin) requireManager_(request.managerPin, request.managerToken);
     if (!id && !employee.manager) throw new Error('Only managers can create tasks.');
     let sheet = dashboardTaskSheet_(false);
     const rows = sheet ? sheet.getDataRange().getValues() : [];

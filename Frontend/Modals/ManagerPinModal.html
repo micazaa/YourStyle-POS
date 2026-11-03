@@ -39,7 +39,7 @@
   let _managerPinCallback = null;
 
   function getManagerSessionCredential() {
-    return inventoryIsManager() ? {managerToken:currentEmployee.inventoryManagerToken || ''} : null;
+    return canAuthorizeManagerActions() && currentEmployee.inventoryManagerToken ? {managerToken:currentEmployee.inventoryManagerToken} : null;
   }
   function requestManagerPin(message, callback, forcePin = false) {
     const credential = forcePin ? null : getManagerSessionCredential();

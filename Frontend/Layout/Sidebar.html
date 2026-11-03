@@ -14,7 +14,7 @@ function restoreSidebarLayout(){
 function updateSidebarProfile(employee){
  if(!employee)return;
  document.getElementById('sidebarEmployeeName').textContent=employee.fullName;
- document.getElementById('sidebarEmployeeRole').textContent=currentSessionIsCashier?(employee.accessLevel<=1?'Manager · Cashier':'Cashier shift'):'Staff access';
+ document.getElementById('sidebarEmployeeRole').textContent=employeeIsOic(employee)?(currentSessionIsCashier?'OIC · Cashier':'OIC'):currentSessionIsCashier?(canAuthorizeManagerActions(employee)?'Manager · Cashier':'Cashier shift'):'Staff access';
  document.getElementById('sidebarAvatar').textContent=String(employee.fullName||'').split(' ').map(n=>n[0]||'').join('').slice(0,2).toUpperCase();
  updateCashierNavigationAvailability();
  updatePettyCashDisplay();
@@ -23,10 +23,12 @@ function updateSidebarProfile(employee){
 function updateCashierNavigationAvailability(){
  const button=document.querySelector('.sidebar-item[data-page="posPage"]');
  if(!button)return;
- const unavailable=!!currentEmployee&&!currentSessionIsCashier;
+ const unavailable=!cashierPageIsAvailable();
  button.disabled=unavailable;
  button.setAttribute('aria-disabled',String(unavailable));
- button.title=unavailable?'Start a cashier shift to use POS':'Cashier';
+ button.title=unavailable?'Start a cashier shift to use POS':currentSessionIsCashier?'Cashier':'Cashier reports';
+ const controls=document.getElementById('cashierWorkspaceControls');
+ if(controls)controls.disabled=!currentEmployee||!currentSessionIsCashier;
 }
 function toggleSidebar(show){
  const sidebar=document.getElementById('appSidebar'),overlay=document.getElementById('sidebarOverlay');
@@ -42,10 +44,11 @@ function toggleSidebar(show){
 }
 function activateMenu(button){document.querySelectorAll('.sidebar-item[data-page]').forEach(item=>item.classList.toggle('active',item===button));}
 function cashierSessionIsActive(){return typeof currentEmployee==='undefined'||!currentEmployee||typeof currentSessionIsCashier==='undefined'||currentSessionIsCashier;}
+function cashierPageIsAvailable(){return !!currentEmployee&&(currentSessionIsCashier||hasManagerViewAccess());}
 function navigateSidebar(page){showPage(page);toggleSidebar(false);}
 function showPage(pageId){
  const pages=['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'];if(!pages.includes(pageId))return;
- if(pageId==='posPage'&&!cashierSessionIsActive()){showNotificationToast('Start a cashier shift to open the POS.',true);return;}
+ if(pageId==='posPage'&&!cashierPageIsAvailable()){showNotificationToast('Start a cashier shift to open the POS.',true);return;}
  pages.forEach(id=>{const page=document.getElementById(id);if(page)page.style.display=id===pageId?'block':'none';});
  localStorage.setItem('ys_pos_active_page',pageId);
  const inventoryWorkspace=pageId==='inventoryPage'||pageId==='deliveriesPage'||pageId==='supplierReturnsPage';
@@ -53,13 +56,13 @@ function showPage(pageId){
  document.querySelectorAll('[data-inventory-tab]').forEach(function(button){const active=button.dataset.inventoryTab===pageId;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
  activateMenu(document.querySelector('.sidebar-item[data-page="'+(inventoryWorkspace?'inventoryPage':pageId)+'"]'));
  document.getElementById('inventoryWorkspaceNav').hidden=!inventoryWorkspace;
- if(pageId==='posPage')refreshInventory();
+ if(pageId==='posPage'){updateCashierNavigationAvailability();if(currentSessionIsCashier)refreshInventory();}
  if(pageId==='dashboardPage')loadDashboardPage();
  if(pageId==='inventoryPage')loadInventoryPage();
  if(pageId==='deliveriesPage')loadDeliveriesPage();
  if(pageId==='supplierReturnsPage')loadSupplierReturnsPage();
 }
-function restoreActivePage(){restoreSidebarLayout();const saved=localStorage.getItem('ys_pos_active_page');const allowed=['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'].includes(saved)?saved:'posPage';showPage(!cashierSessionIsActive()&&allowed==='posPage'?'dashboardPage':allowed);}
+function restoreActivePage(){restoreSidebarLayout();const saved=localStorage.getItem('ys_pos_active_page');const allowed=['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'].includes(saved)?saved:'posPage';showPage(!cashierPageIsAvailable()&&allowed==='posPage'?'dashboardPage':allowed);}
 function updatePettyCashDisplay(){
  const amount='₱'+(Number(currentShiftPettyCash)||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
  const display=document.getElementById('cashierPettyCash');

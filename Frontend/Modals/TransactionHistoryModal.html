@@ -410,10 +410,7 @@ if (paymentFilter) {
 
   /* ================= ROLE ================= */
 
-  const isManager =
-    Number(
-      currentEmployee.accessLevel
-    ) <= 1;
+  const isManager = hasManagerViewAccess();
 
 
   /* ================= DATE PICKER ================= */
@@ -533,7 +530,7 @@ function warmTransactionHistory() {
   if (!currentEmployee || !currentCashier) return;
 
   const today = getTransactionHistoryToday();
-  const isManager = Number(currentEmployee.accessLevel) <= 1;
+  const isManager = hasManagerViewAccess();
   const key = getTransactionHistoryCacheKey(today, today, isManager);
 
   if (transactionHistoryWarmCache && transactionHistoryWarmCache.key === key) return;
@@ -598,10 +595,7 @@ function loadTransactionHistory(forceRefresh) {
     ).value;
 
 
-  const isManager =
-    Number(
-      currentEmployee.accessLevel
-    ) <= 1;
+  const isManager = hasManagerViewAccess();
 
   const cacheKey = getTransactionHistoryCacheKey(fromDate, toDate, isManager);
   const warm = transactionHistoryWarmCache;

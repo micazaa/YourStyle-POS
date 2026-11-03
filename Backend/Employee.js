@@ -1,3 +1,17 @@
+function employeeIsOic_(employee) {
+  return ['OIC', 'OFFICER IN CHARGE'].includes(String(employee && employee.role || '').trim().toUpperCase());
+}
+
+function employeeCanAuthorizeManager_(employee) {
+  const level = employee && employee.accessLevel;
+  return !!employee && !employeeIsOic_(employee) && level !== null && level !== undefined &&
+    String(level).trim() !== '' && Number.isFinite(Number(level)) && Number(level) >= 0 && Number(level) <= 1;
+}
+
+function employeeHasManagerView_(employee) {
+  return employeeIsOic_(employee) || employeeCanAuthorizeManager_(employee);
+}
+
 function employeeUsernamePart_(value) {
   return String(value === null || value === undefined ? '' : value).normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -90,7 +104,7 @@ function verifyEmployee(employeeName, pin) {
         username: account.username,
         role: role,
         accessLevel: accessLevel,
-        inventoryManagerToken: Number.isFinite(accessLevel) && accessLevel <= 1
+        inventoryManagerToken: employeeCanAuthorizeManager_(account)
           ? createInventoryManagerSession_(employeeId, fullName) : ""
       };
   }
@@ -219,9 +233,7 @@ function verifyManagerPin(pin, expectedManagerName) {
        to be exactly "Manager".
     ====================================================== */
 
-    const hasManagerAccess =
-      Number.isFinite(accessLevel) &&
-      accessLevel <= 1;
+    const hasManagerAccess = employeeCanAuthorizeManager_({role:role, accessLevel:data[i][5]});
 
 
     if (!hasManagerAccess) {
@@ -345,11 +357,20 @@ function verifyInventoryManagerSession_(token) {
     return String(row[0]) === session.employeeId && (row[1] + " " + row[2]) === session.fullName;
   });
   if (!employee || String(employee[6]).toUpperCase() !== "TRUE" ||
-      String(employee[5]).trim() === "" || !Number.isFinite(Number(employee[5])) || Number(employee[5]) > 1) {
+      !employeeCanAuthorizeManager_({role:employee[4], accessLevel:employee[5]})) {
     cache.remove(key);
     throw new Error("An active manager account is required for this change.");
   }
   return { success: true, managerName: session.fullName };
+}
+
+function verifyInventoryReadSession_(token) {
+  if (CacheService.getScriptCache().get('dashboard:' + String(token || ''))) {
+    const employee = dashboardEmployee_(token);
+    if (!employee.manager) throw new Error('Manager or OIC access is required to view this data.');
+    return {success:true, employeeName:employee.name};
+  }
+  return verifyInventoryManagerSession_(token);
 }
 
 function revokeInventoryManagerSession(token) {

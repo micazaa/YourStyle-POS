@@ -716,7 +716,7 @@ function prepareCostColumn_(sheet) {
 }
 function costPayload_(payload) {
   if (!Object.prototype.hasOwnProperty.call(payload, 'costPrice')) return undefined;
-  const auth = verifyInventoryManagerSession_(payload.managerToken);
+  const auth = requireManager_(payload.managerPin, payload.managerToken);
   if (!auth || !auth.success) throw new Error('Sign in as a manager to change Cost Price.');
   if (payload.costPrice === '' || payload.costPrice === null) return '';
   const value = Number(payload.costPrice);
@@ -863,7 +863,7 @@ function getInventoryForManagement(managerToken) {
   if (!managerToken) return getFullInventory({products:products, includeDeliveryMetadata:false}).filter(function(item) {
     return String(item.productStatus || PRODUCT_STATUS.ACTIVE).toUpperCase() !== PRODUCT_STATUS.DEACTIVATED;
   });
-  const auth = verifyInventoryManagerSession_(managerToken);
+  const auth = verifyInventoryReadSession_(managerToken);
   if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
   ensureProductMasterInventoryRows_(products);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -890,7 +890,7 @@ function getInventoryForManagement(managerToken) {
 }
 function getProductMasterForManagement(managerToken) {
   if (!managerToken) return getProductMaster_().map(publicProduct_);
-  const auth = verifyInventoryManagerSession_(managerToken);
+  const auth = verifyInventoryReadSession_(managerToken);
   if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
   return getProductMaster_();
 }
@@ -1346,9 +1346,9 @@ function saveYourFindsItemDetails(payload) {
      * Receiving staff may complete a new item without manager approval.
      * Corrections to an already completed item remain manager-controlled.
      */
-    const auth = currentStatus === INVENTORY_STATUS.INCOMPLETE
-      ? null
-      : requireManager_(payload.managerPin, payload.managerToken);
+    const actor = payload.actorToken ? dashboardEmployee_(payload.actorToken) : null;
+    const needsApproval = currentStatus !== INVENTORY_STATUS.INCOMPLETE || actor && actor.requiresManagerPin;
+    const auth = needsApproval ? requireManager_(payload.managerPin, payload.managerToken) : null;
 
     oldImageUrl = String(item.imageUrl || "").trim();
     const inventorySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);

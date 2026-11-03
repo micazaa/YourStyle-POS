@@ -88,6 +88,18 @@
   let cart = [];
 
   let currentEmployee = null;
+  function employeeIsOic(employee = currentEmployee) {
+    return ['OIC', 'OFFICER IN CHARGE'].includes(String(employee && employee.role || '').trim().toUpperCase());
+  }
+  function canAuthorizeManagerActions(employee = currentEmployee) {
+    const level = employee && employee.accessLevel;
+    return !!employee && !employeeIsOic(employee) && level !== null && level !== undefined &&
+      String(level).trim() !== '' && Number.isFinite(Number(level)) && Number(level) >= 0 && Number(level) <= 1;
+  }
+  function hasManagerViewAccess(employee = currentEmployee) {
+    return employeeIsOic(employee) || canAuthorizeManagerActions(employee);
+  }
+
   let currentCashier = "";
   let currentSessionIsCashier = false;
 
@@ -221,7 +233,7 @@
     document.getElementById("sidebarEmployeeName").textContent = currentCashier;
 
     document.getElementById("cashierManagerReportBtn").style.display =
-      currentEmployee.accessLevel <= 1 ? "block" : "none";
+      hasManagerViewAccess() ? "block" : "none";
     updateCashierNavigationAvailability();
 
     document.getElementById("loginOverlay").style.display = "none";
@@ -230,9 +242,10 @@
 
     restoreActivePage();
 
-    refreshInventory(function () {
+    if (currentSessionIsCashier) refreshInventory(function () {
       renderCart();
     });
+    else renderCart();
 
     restoreForm("shiftReportModal");
     restoreForm("managerDailyModal");
@@ -418,7 +431,7 @@
 
 
         if (
-          terminalWorkspace &&
+          currentEmployee && currentSessionIsCashier && terminalWorkspace &&
           terminalWorkspace.style.display === "block" &&
           codeInput
         ) {
