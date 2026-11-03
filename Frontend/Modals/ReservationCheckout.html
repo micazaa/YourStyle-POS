@@ -42,7 +42,7 @@ function completeReservedTransaction() {
   if (button.disabled) return;
   button.disabled = true; button.innerHTML = loadingIndicator('Loading…');
   function finish() { button.disabled = false; button.textContent = 'Complete Transaction'; }
-  google.script.run.withSuccessHandler(result => {
+  secureScriptRun.withSuccessHandler(result => {
     if (currentEmployee !== owner) return;
     finish();
     if (!result || !result.success) return showNotificationToast(result && result.message || 'Unable to load reservation.', true);
@@ -63,7 +63,7 @@ function completeReservedTransaction() {
 function submitReservationCheckout(payment, context) {
   const owner = currentEmployee;
   if (!owner || context.owner !== owner) { setCheckoutLoading(false); return showNotificationToast('Session changed. Reopen checkout.', true); }
-  google.script.run.withSuccessHandler(result => {
+  secureScriptRun.withSuccessHandler(result => {
     if (currentEmployee !== owner) return;
     setCheckoutLoading(false);
     if (!result || !result.success) return showNotificationToast(result && result.message || 'Reservation payment failed.', true);

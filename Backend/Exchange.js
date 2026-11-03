@@ -10,6 +10,7 @@ const EXCHANGE_REASON = {
 };
 
 function generateExchangeId() {
+  assertAppRequest_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
   const today = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), "MMdd");
@@ -51,6 +52,7 @@ function readExchangeReceiptRows_(sheet, column, receiptId) {
 }
 
 function getExchangeableReceipt(receiptId) {
+  assertAppRequest_();
   try {
     receiptId = String(receiptId || "").trim().toUpperCase();
     if (!receiptId) throw new Error("Receipt ID is required.");
@@ -95,6 +97,7 @@ function getExchangeableReceipt(receiptId) {
 }
 
 function getExchangeReplacementProducts() {
+  assertAppRequest_();
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
     if (!sheet || sheet.getLastRow() < 2) return {success:true,products:[]};
@@ -116,6 +119,7 @@ function getExchangeReplacementProducts() {
 }
 
 function getCustomerExchangeData(receiptId, includeProducts) {
+  assertAppRequest_();
   const result = getExchangeableReceipt(receiptId);
   if (!result.success || !result.items.length || includeProducts === false) return result;
   const catalog = getExchangeReplacementProducts();
@@ -125,6 +129,7 @@ function getCustomerExchangeData(receiptId, includeProducts) {
 }
 
 function completeCustomerExchange(payload) {
+  assertAppRequest_();
   payload = payload || {};
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);

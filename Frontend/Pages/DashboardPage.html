@@ -331,7 +331,7 @@
         request.compare = !!dashboardData.comparison;
       } else request.compare = document.getElementById('dashboardCompare').checked;
     }
-    google.script.run
+    secureScriptRun
       .withSuccessHandler(function (data) {
         if (
           generation !== dashboardGeneration ||
@@ -574,7 +574,7 @@
     document.getElementById('dashboardTaskSave').disabled = true;
     const token = currentEmployee && currentEmployee.dashboardToken,
       generation = dashboardGeneration;
-    google.script.run
+    secureScriptRun
       .withSuccessHandler(function () {
         if (
           generation !== dashboardGeneration ||

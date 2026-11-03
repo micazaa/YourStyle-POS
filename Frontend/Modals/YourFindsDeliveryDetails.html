@@ -494,7 +494,7 @@ function viewYourFindsDeliveryDetails(
 
   const refresh=beginPageRead('deliveryDetails',deliveryId);
   if(refresh.cached!==undefined){renderYourFindsDeliveryDetails(refresh.cached);document.getElementById('deliveryDetailsLoading').style.display='none';}
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(
       function(result) {
@@ -818,7 +818,7 @@ function loadYourFindsDeliveryDetailItems(
 
 
   if(refresh.cached!==undefined){renderYourFindsDeliveryDetailItems(refresh.cached);loading.style.display='none';}
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(
       function(result) {
@@ -1385,7 +1385,7 @@ function saveYourFindsConversion() {
     }
     saveButton.textContent = "Saving...";
 
-    google.script.run
+    secureScriptRun
       .withSuccessHandler(function(result) {
         const returnView = yourFindsConversionReturnView;
         applyYourFindsConversionClient_(result);

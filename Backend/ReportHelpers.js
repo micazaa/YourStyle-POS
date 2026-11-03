@@ -752,6 +752,7 @@ function collectSalesMetrics(
 ========================================================== */
 
 function createPdfFromHtml(html, fileName, overwriteExisting) {
+  assertAppRequest_();
   try {
     const safeFileName = String(fileName || "Report").replace(
       /[\\/:*?"<>|]/g,

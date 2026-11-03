@@ -1,5 +1,6 @@
 // Read each source once; never request delivery details separately for every row.
 function getDeliverySummaryData() {
+  assertAppRequest_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   function read(name, width, display) {
     const sheet = ss.getSheetByName(name);

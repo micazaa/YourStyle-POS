@@ -56,6 +56,7 @@ function formatDeliveryHistoryTimestamp_(value) {
 }
 
 function getDeliveryHistoryFast() {
+  assertAppRequest_();
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const deliverySheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);

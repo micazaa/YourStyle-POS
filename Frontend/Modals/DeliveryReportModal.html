@@ -20,7 +20,7 @@ function requestDeliveryDetails_(deliveryId){
  if(entry)return {cache:cache,entry:entry};
  entry={};cache.entries.set(id,entry);
  entry.promise=new Promise((resolve,reject)=>{
-  google.script.run.withSuccessHandler(data=>{entry.data=data;resolve(data);}).withFailureHandler(error=>{cache.entries.delete(id);reject(error);}).getDeliveryDetails(id);
+  secureScriptRun.withSuccessHandler(data=>{entry.data=data;resolve(data);}).withFailureHandler(error=>{cache.entries.delete(id);reject(error);}).getDeliveryDetails(id);
  });
  return {cache:cache,entry:entry};
 }
@@ -102,7 +102,7 @@ function printDeliveryReport(deliveryId,button) {
   if(button){button.disabled=true;button.setAttribute('aria-busy','true');button.innerHTML=loadingIndicator('Generating report…');}
   const finish=()=>{if(button){button.disabled=false;button.removeAttribute('aria-busy');button.innerHTML=originalButtonHtml;}};
   const fail=error=>{finish();showNotificationToast(error&&error.message||String(error),true);};
-  google.script.run.withSuccessHandler(result=>{
+  secureScriptRun.withSuccessHandler(result=>{
     if(!result||!result.success)return fail(result&&result.message||'Delivery report failed.');
     try {
       const binary=atob(result.base64),bytes=new Uint8Array(binary.length);

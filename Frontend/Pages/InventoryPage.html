@@ -183,7 +183,7 @@ function loadInventoryPage(forceRefresh = false, keepVisible = false) {
     dashboardInventoryReminder='';
   } else if (refresh.shouldFetch && !keepVisible) body.innerHTML = `<tr><td colspan="${inventoryColumnCount()}" class="text-center text-muted py-5">${loadingIndicator('Loading inventory…')}</td></tr>`;
   if (!refresh.shouldFetch) return;
-  google.script.run.withSuccessHandler(function(items) {
+  secureScriptRun.withSuccessHandler(function(items) {
     if(!refresh.current() || readToken!==inventoryManagerReadToken())return;
     inventoryPageData = Array.isArray(items) ? items : [];
     refresh.save(inventoryPageData);
@@ -568,7 +568,7 @@ function changeInventoryActiveInline(item, select) {
     filterInventoryTable();
   }
   applyStatus(status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE', status);
-  google.script.run.withSuccessHandler(function(result) {
+  secureScriptRun.withSuccessHandler(function(result) {
     if (!result || !result.success) { restoreStatus();return showNotificationToast(result && result.message || 'Status change failed.', true); }
     applyStatus(result.inventoryStatus, result.productStatus || result.status);
     pageReadCache.delete('inventory');pageReadCache.delete('productMaster');pageReadCache.delete('cashierInventory');deliveryCatalogCache=null;deliveryCatalogPending=null;
@@ -591,7 +591,7 @@ function deleteInventoryRow(item) {
   if (!window.confirm('Delete ' + (item.name || item.code) + '? Items with transaction or delivery history cannot be deleted.')) return;
   const auth = managerCredentials('Manager PIN to delete this item:');
   if (!auth) return;
-  google.script.run.withSuccessHandler(function(result) {
+  secureScriptRun.withSuccessHandler(function(result) {
     if (!result || !result.success) return showNotificationToast(result && result.message || 'Delete failed.', true);
     showNotificationToast('Inventory item deleted.'); loadInventoryPage(true);
   }).withFailureHandler(error => showNotificationToast(error.message || String(error), true)).deleteUnusedInventoryItem({code:item.code,...auth});

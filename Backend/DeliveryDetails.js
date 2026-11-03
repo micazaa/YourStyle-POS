@@ -37,6 +37,7 @@ function parseYourFindsConversionNote_(value) {
 
 // Read-only view; no active-holder restriction, so completed deliveries remain inspectable.
 function getDeliveryDetails(deliveryId) {
+  assertAppRequest_();
   deliveryId=String(deliveryId||'').trim();
   if(!deliveryId)throw new Error('Delivery ID is required.');
   const ss=SpreadsheetApp.getActiveSpreadsheet();

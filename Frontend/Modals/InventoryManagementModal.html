@@ -210,9 +210,7 @@ function managerCredentials(message,pin){
    if(!token){showNotificationToast('Please sign out and sign in again to authorize inventory changes.',true);return null;}
    return {managerToken:token};
  }
- const entered=pin===undefined?window.prompt(message):pin;
- if(!entered)return null;
- return {managerPin:entered, actorToken:currentEmployee && currentEmployee.dashboardToken};
+ return {managerPin:pin || undefined, actorToken:currentEmployee && currentEmployee.dashboardToken};
 }
 function readProductPhoto(input,onLoad){
  const file=input.files&&input.files[0];if(!file)return;
@@ -258,7 +256,7 @@ function loadInventoryItemDeliveryMetadata(item) {
   document.getElementById('invDetailDeliveryId').textContent='Unable to load';
   showNotificationToast(error.message||'Unable to load delivery information.',true);
  }
- google.script.run.withSuccessHandler(result=>{
+ secureScriptRun.withSuccessHandler(result=>{
   if(!read.current())return;
   if(!result||!result.success)return failed(result||{});
   read.save(result);apply(result);
@@ -316,7 +314,6 @@ function saveYourFindsDetailsClient(generateLabel){
  if(!description)return showNotificationToast('Description is required.',true);
  if(!Number.isFinite(sellingPrice)||sellingPrice<=0)return showNotificationToast('Selling Price must be greater than zero.',true);
  if(!phase8SelectedItem.imageUrl&&!phase8YfPhotoDataUrl)return showNotificationToast('Choose a product picture.',true);
- if((employeeIsOic()||!incomplete&&!inventoryIsManager())&&!managerPin)return showNotificationToast('Enter a manager PIN to save changes to selling details.',true);
  const auth=inventoryIsManager()?managerCredentials('Manager authorization',employeeIsOic()?managerPin:undefined):(incomplete?{}:{managerPin:managerPin});
  if(!auth)return;
  const payload={
@@ -327,7 +324,7 @@ function saveYourFindsDetailsClient(generateLabel){
  payload.originalPrice=originalPrice;
  if(inventoryIsManager()&&phase8SelectedItem.costSource==='CUSTOM')payload.costPrice=document.getElementById('yfEditorCostPrice').value;
  setYourFindsSaving(true,generateLabel);
- google.script.run.withSuccessHandler(function(result){
+ secureScriptRun.withSuccessHandler(function(result){
    setYourFindsSaving(false);
    if(!result||!result.success){showNotificationToast(result&&result.message?result.message:'Unable to save YourFinds details.',true);return;}
    closeModal('yourFindsEditorModal');closeModal('inventoryDetailsModal');loadInventoryPage(true);
@@ -340,7 +337,7 @@ function saveYourFindsDetailsClient(generateLabel){
 
 function printCompletedYourFindsLabel(code,afterCompletion){
  const targetCode=String(code||(phase8SelectedItem&&phase8SelectedItem.code)||'').trim(); if(!targetCode)return;
- google.script.run.withSuccessHandler(function(result){
+ secureScriptRun.withSuccessHandler(function(result){
    if(!result||!result.success){showNotificationToast(result&&result.message?result.message:'Label generation failed.',true);return;}
    showNotificationToast('40 × 30 selling label generated.'); window.open(result.downloadUrl||result.fileUrl,'_blank');
  }).withFailureHandler(function(error){
@@ -359,7 +356,7 @@ function updateStockAdjustmentPreview(){
  document.getElementById('adjustCurrentStock').textContent=current; document.getElementById('adjustAfterStock').textContent=after;
  const invalid=!Number.isInteger(qty)||qty<1||after<0; const msg=document.getElementById('adjustPreviewMessage'); msg.textContent=after<0?`Cannot remove ${qty}; only ${current} available.`:`${dir==='ADD'?'+':'-'}${qty} stock · ${current} → ${after}`; msg.className=invalid?'small text-center mt-2 text-danger':'small text-center mt-2 text-muted'; document.getElementById('adjustConfirmBtn').disabled=invalid;
 }
-function submitStockAdjustment(){const auth=managerCredentials('Manager PIN:',document.getElementById('adjustManagerPin').value);if(!auth)return; google.script.run.withSuccessHandler(r=>{ if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Adjustment failed',true);return;} closeModal('stockAdjustmentModal');closeModal('inventoryDetailsModal');showNotificationToast(`Adjustment saved · ${r.referenceId}`);loadInventoryPage(true); }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).adjustInventoryStock({code:phase8SelectedItem.code,direction:document.getElementById('adjustDirection').value,quantity:Number(document.getElementById('adjustQty').value),reason:document.getElementById('adjustReason').value,notes:document.getElementById('adjustNotes').value,...auth,employee:getCurrentEmployeeName()}); }
+function submitStockAdjustment(){const auth=managerCredentials('Manager PIN:',document.getElementById('adjustManagerPin').value);if(!auth)return; secureScriptRun.withSuccessHandler(r=>{ if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Adjustment failed',true);return;} closeModal('stockAdjustmentModal');closeModal('inventoryDetailsModal');showNotificationToast(`Adjustment saved · ${r.referenceId}`);loadInventoryPage(true); }).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).adjustInventoryStock({code:phase8SelectedItem.code,direction:document.getElementById('adjustDirection').value,quantity:Number(document.getElementById('adjustQty').value),reason:document.getElementById('adjustReason').value,notes:document.getElementById('adjustNotes').value,...auth,employee:getCurrentEmployeeName()}); }
 function openChangeItem(){
  if(!phase8SelectedItem)return; changeItemChoices=(inventoryPageData||[]).filter(x=>String(x.inventoryType).toUpperCase()==='STOCK'&&String(x.code)!==String(phase8SelectedItem.code)&&String(x.status).toUpperCase()==='ACTIVE');
  const initial=changeItemChoices[0]||null; document.getElementById('changeToSearch').value=initial?initial.name:''; document.getElementById('changeToCode').value=initial?initial.code:''; hideChangeItemOptions();
@@ -376,10 +373,10 @@ function updateChangeItemPreview(){
  document.getElementById('changeFromCurrent').textContent=fc; document.getElementById('changeFromAfter').textContent=fa; document.getElementById('changeToMeta').textContent=to?`${to.code} · ${to.category}`:'No destination available'; document.getElementById('changeToCurrent').textContent=tc; document.getElementById('changeToAfter').textContent=ta;
  const invalid=!to||!Number.isInteger(qty)||qty<1||fa<0; const error=document.getElementById('changePreviewError'); error.textContent=fa<0?`Not enough stock. ${phase8SelectedItem.name} has ${fc} available.`:(!to?'Choose a destination product.':(!Number.isInteger(qty)||qty<1?'Enter a positive whole quantity.':'')); error.style.display=invalid?'block':'none'; document.getElementById('changeConfirmBtn').disabled=invalid;
 }
-function submitChangeItem(){const auth=managerCredentials('Manager PIN:',document.getElementById('changeManagerPin').value);if(!auth)return; google.script.run.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Change failed',true);return;} closeModal('changeItemModal');closeModal('inventoryDetailsModal');showNotificationToast(`Item change saved · ${r.referenceId}`);loadInventoryPage(true);}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).changeInventoryItem({fromCode:phase8SelectedItem.code,toCode:document.getElementById('changeToCode').value,quantity:Number(document.getElementById('changeQty').value),reason:document.getElementById('changeReason').value,notes:document.getElementById('changeNotes').value,...auth,employee:getCurrentEmployeeName()}); }
-function openMovementHistory(){ if(!phase8SelectedItem)return; const code=phase8SelectedItem.code;const refresh=beginPageRead('movements',code,true);const body=document.getElementById('movementHistoryBody');if(refresh.cached!==undefined)body.innerHTML=refresh.cached; document.getElementById('movementHistoryLabel').textContent=`${phase8SelectedItem.name} · ${phase8SelectedItem.code}`; if(refresh.cached===undefined)body.innerHTML='<tr><td colspan="7" class="text-center text-muted"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading...</span></td></tr>'; document.getElementById('movementHistoryModal').style.display='flex'; if(!refresh.shouldFetch)return; google.script.run.withSuccessHandler(r=>{if(!refresh.current())return;const a=r&&r.movements?r.movements:[];body.innerHTML=a.length?a.map(m=>`<tr><td>${escapeInventoryHtml(m.timestamp)}</td><td class="text-center fw-bold">${m.qtyChange>0?'+':''}${m.qtyChange}</td><td class="text-center">${m.stockAfter}</td><td>${escapeInventoryHtml(m.source)}</td><td>${escapeInventoryHtml(m.referenceId)}</td><td>${escapeInventoryHtml(m.employee)}</td><td>${escapeInventoryHtml((m.reason||'')+(m.notes?' · '+m.notes:''))}</td></tr>`).join(''):'<tr><td colspan="7" class="text-center text-muted">No movements found.</td></tr>';refresh.save(body.innerHTML);}).withFailureHandler(e=>{if(refresh.current()){refresh.fail();showNotificationToast(e.message||String(e),true);}}).getInventoryMovementHistoryByCode(code); }
+function submitChangeItem(){const auth=managerCredentials('Manager PIN:',document.getElementById('changeManagerPin').value);if(!auth)return; secureScriptRun.withSuccessHandler(r=>{if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Change failed',true);return;} closeModal('changeItemModal');closeModal('inventoryDetailsModal');showNotificationToast(`Item change saved · ${r.referenceId}`);loadInventoryPage(true);}).withFailureHandler(e=>showNotificationToast(e.message||String(e),true)).changeInventoryItem({fromCode:phase8SelectedItem.code,toCode:document.getElementById('changeToCode').value,quantity:Number(document.getElementById('changeQty').value),reason:document.getElementById('changeReason').value,notes:document.getElementById('changeNotes').value,...auth,employee:getCurrentEmployeeName()}); }
+function openMovementHistory(){ if(!phase8SelectedItem)return; const code=phase8SelectedItem.code;const refresh=beginPageRead('movements',code,true);const body=document.getElementById('movementHistoryBody');if(refresh.cached!==undefined)body.innerHTML=refresh.cached; document.getElementById('movementHistoryLabel').textContent=`${phase8SelectedItem.name} · ${phase8SelectedItem.code}`; if(refresh.cached===undefined)body.innerHTML='<tr><td colspan="7" class="text-center text-muted"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading...</span></td></tr>'; document.getElementById('movementHistoryModal').style.display='flex'; if(!refresh.shouldFetch)return; secureScriptRun.withSuccessHandler(r=>{if(!refresh.current())return;const a=r&&r.movements?r.movements:[];body.innerHTML=a.length?a.map(m=>`<tr><td>${escapeInventoryHtml(m.timestamp)}</td><td class="text-center fw-bold">${m.qtyChange>0?'+':''}${m.qtyChange}</td><td class="text-center">${m.stockAfter}</td><td>${escapeInventoryHtml(m.source)}</td><td>${escapeInventoryHtml(m.referenceId)}</td><td>${escapeInventoryHtml(m.employee)}</td><td>${escapeInventoryHtml((m.reason||'')+(m.notes?' · '+m.notes:''))}</td></tr>`).join(''):'<tr><td colspan="7" class="text-center text-muted">No movements found.</td></tr>';refresh.save(body.innerHTML);}).withFailureHandler(e=>{if(refresh.current()){refresh.fail();showNotificationToast(e.message||String(e),true);}}).getInventoryMovementHistoryByCode(code); }
 function openProductMaster(){document.getElementById('productMasterModal').style.display='flex';loadProductMaster();}
-function loadProductMaster(){const refresh=beginPageRead('productMaster','',true);if(refresh.cached!==undefined){window.phase8Products=refresh.cached;renderProductMaster();}else{document.getElementById('productMasterBody').innerHTML='<tr><td colspan="8">'+loadingIndicator('Loading products…')+'</td></tr>';}if(!refresh.shouldFetch)return;const readToken=inventoryManagerReadToken();google.script.run.withSuccessHandler(products=>{if(!refresh.current()||readToken!==inventoryManagerReadToken())return;window.phase8Products=products||[];refresh.save(window.phase8Products);renderProductMaster();}).withFailureHandler(e=>{if(!refresh.current())return;refresh.fail();if(refresh.cached===undefined)document.getElementById('productMasterBody').innerHTML='<tr><td colspan="8">Unable to load products.</td></tr>';showNotificationToast(e.message||String(e),true);}).getProductMasterForManagement(readToken);}
+function loadProductMaster(){const refresh=beginPageRead('productMaster','',true);if(refresh.cached!==undefined){window.phase8Products=refresh.cached;renderProductMaster();}else{document.getElementById('productMasterBody').innerHTML='<tr><td colspan="8">'+loadingIndicator('Loading products…')+'</td></tr>';}if(!refresh.shouldFetch)return;const readToken=inventoryManagerReadToken();secureScriptRun.withSuccessHandler(products=>{if(!refresh.current()||readToken!==inventoryManagerReadToken())return;window.phase8Products=products||[];refresh.save(window.phase8Products);renderProductMaster();}).withFailureHandler(e=>{if(!refresh.current())return;refresh.fail();if(refresh.cached===undefined)document.getElementById('productMasterBody').innerHTML='<tr><td colspan="8">Unable to load products.</td></tr>';showNotificationToast(e.message||String(e),true);}).getProductMasterForManagement(readToken);}
 function renderProductMaster(){
  const products=window.phase8Products||[];
  const search=String(document.getElementById('pmSearch')?.value||'').trim().toLowerCase();
@@ -407,7 +404,7 @@ function openProductEditor(){
  document.getElementById('pmEditorTitle').textContent='Add Product';
  document.getElementById('productEditorModal').style.display='flex';
  setControlLoading(document.getElementById('pmCode'), true, 'Generating product code…');
- google.script.run.withSuccessHandler(function(code){
+ secureScriptRun.withSuccessHandler(function(code){
    setControlLoading(document.getElementById('pmCode'), false);
    document.getElementById('pmCode').value=code;
  }).withFailureHandler(function(error){
@@ -501,7 +498,7 @@ function saveProductMasterClient(){
  }
  const auth=managerCredentials('Manager PIN to save this product:');if(!auth)return;
  const button=document.getElementById('pmSaveButton');button.disabled=true;button.textContent='Saving…';
- google.script.run.withSuccessHandler(r=>{
+ secureScriptRun.withSuccessHandler(r=>{
    button.disabled=false;button.textContent='Save';
    if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Save failed',true);return;}
    deliveryCatalogCache=null;deliveryCatalogPending=null;

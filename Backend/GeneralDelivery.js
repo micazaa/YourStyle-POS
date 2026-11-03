@@ -4,6 +4,7 @@
 ========================================================== */
 
 function getGeneralDeliveryLogSheet() {
+  assertAppRequest_();
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DELIVERY_LOG);
   if (!sheet) throw new Error("Delivery Log sheet not found.");
   return sheet;
@@ -18,6 +19,7 @@ function normalizeGeneralDeliveryDate(deliveryDate) {
 }
 
 function validateSheetHeaders(sheet, expectedHeaders) {
+  assertAppRequest_();
   const actual = sheet.getRange(1, 1, 1, expectedHeaders.length).getDisplayValues()[0];
   expectedHeaders.forEach(function(expected, index) {
     const found = String(actual[index] || "").trim();
@@ -26,6 +28,7 @@ function validateSheetHeaders(sheet, expectedHeaders) {
 }
 
 function validateUniversalDeliveryDatabase() {
+  assertAppRequest_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const deliverySheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
   const movementSheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
@@ -48,6 +51,7 @@ function validateUniversalDeliveryDatabase() {
 }
 
 function generateDeliveryIdentifiers(deliveryType, deliveryDate) {
+  assertAppRequest_();
   deliveryType = String(deliveryType || "").trim().toUpperCase();
   deliveryDate = normalizeGeneralDeliveryDate(deliveryDate);
 
@@ -81,6 +85,7 @@ function generateDeliveryIdentifiers(deliveryType, deliveryDate) {
 }
 
 function getYourStyleDeliveryProducts() {
+  assertAppRequest_();
   const products = getProductMaster_();
   const result = products.filter(function(item) {
     const category = String(item.category || "").trim().toUpperCase();
@@ -146,6 +151,7 @@ function parsePhysicalBundleAllocationNote_(value) {
 ========================================================== */
 
 function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) {
+  assertAppRequest_();
   productCode = String(productCode || "").trim();
 
   if (!productCode) {
@@ -308,6 +314,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
 }
 
 function acceptYourStyleDelivery(payload) {
+  assertAppRequest_();
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
 
@@ -527,6 +534,7 @@ function acceptYourStyleDelivery(payload) {
 ========================================================== */
 
 function getPendingBulkHolders() {
+  assertAppRequest_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
 
@@ -675,6 +683,7 @@ function getPendingBulkHolders() {
 ========================================================== */
 
 function getBulkDistributionData(deliveryId, omitProducts, sheetRow) {
+  assertAppRequest_();
   deliveryId = String(deliveryId || "").trim();
   if (!deliveryId) throw new Error("Delivery ID is required.");
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DELIVERY_LOG);
@@ -703,6 +712,7 @@ function getBulkDistributionData(deliveryId, omitProducts, sheetRow) {
 }
 
 function getBulkHolderDetails(deliveryId, sheetRow) {
+  assertAppRequest_();
   deliveryId = String(deliveryId || "").trim();
   sheetRow = Number(sheetRow);
   if (!deliveryId) throw new Error("Delivery ID is required.");
@@ -812,6 +822,7 @@ function getBulkBundleProgress_(deliveryId, sheetRow, holderType, bundleQty) {
 ========================================================== */
 
 function distributeBulkBundle(payload) {
+  assertAppRequest_();
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -943,6 +954,7 @@ function distributeBulkBundle(payload) {
 ========================================================== */
 
 function completeBulkHolder(payload) {
+  assertAppRequest_();
   const lock =
     LockService.getScriptLock();
 
@@ -1473,6 +1485,7 @@ function completeBulkHolder(payload) {
 ========================================================== */
 
 function getCompletableBulkHoldersForDelivery(deliveryId) {
+  assertAppRequest_();
   deliveryId=String(deliveryId||"").trim();
   if(!deliveryId) throw new Error("Delivery ID is required.");
   const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(SHEETS.DELIVERY_LOG);
@@ -1504,6 +1517,7 @@ function getBulkHolderSequenceForRow(
   sheetRow,
   deliveryId
 ) {
+  assertAppRequest_();
   const data = deliverySheet
     .getRange(
       2,
@@ -1549,6 +1563,7 @@ function getBulkHolderSequenceForRow(
 ========================================================== */
 
 function getBulkHoldersForDelivery(deliveryId) {
+  assertAppRequest_();
   deliveryId = String(deliveryId || "").trim();
 
   if (!deliveryId) {

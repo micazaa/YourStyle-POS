@@ -13,6 +13,7 @@ const SALES_SYNC_BUTTON_IMAGE_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLxVQAAAABJRU5ErkJggg==";
 
 function onOpen() {
+  return withSheetAccess_(function() {
   SpreadsheetApp.getUi()
     .createMenu("POS Automation")
     .addItem("Install / Repair Sales Automation", "installSalesAutomationFromMenu")
@@ -22,36 +23,50 @@ function onOpen() {
     .addItem("Sync Production Data to Dev", "syncProductionToDevelopmentFromMenu")
     .addItem("Refresh Employee Usernames", "refreshEmployeeUsernames_")
     .addToUi();
+
+  });
 }
 
 function installSalesAutomationFromMenu() {
+  return withSheetAccess_(function() {
   const result = installSalesAutomation();
   SpreadsheetApp.getUi().alert(
     result.editTriggerInstalled && result.batchTriggerInstalled
       ? "Sales automation is installed. You can now paste a row into Sales Log."
       : "The automation could not be fully installed."
   );
+
+  });
 }
 
 function processPendingSalesLogRowsFromMenu() {
+  return withSheetAccess_(function() {
   const result = processPendingSalesLogRows();
   SpreadsheetApp.getUi().alert(
     "Sales automation finished. Processed: " + result.processed + "; Errors: " + result.errors + "."
   );
+
+  });
 }
 
 function processPendingSalesLogRowsFromButton() {
+  return withSheetAccess_(function() {
   const result = processPendingSalesLogRows();
   SpreadsheetApp.getActiveSpreadsheet().toast(
     "Processed: " + result.processed + "; Errors: " + result.errors + ".",
     "Sales Sync",
     5
   );
+
+  });
 }
 
 function createSalesSyncButtonFromMenu() {
+  return withSheetAccess_(function() {
   createOrRepairSalesSyncButton_();
   SpreadsheetApp.getUi().alert("The SYNC button is ready on Sales Log at AJ2:AL3.");
+
+  });
 }
 
 function createOrRepairSalesSyncButton_() {
@@ -90,14 +105,18 @@ function createOrRepairSalesSyncButton_() {
 }
 
 function showSalesAutomationStatus() {
+  return withSheetAccess_(function() {
   const status = getSalesAutomationStatus();
   SpreadsheetApp.getUi().alert(
     "Edit trigger: " + (status.editTriggerInstalled ? "INSTALLED" : "NOT INSTALLED") +
     "\nBatch trigger: " + (status.batchTriggerInstalled ? "INSTALLED" : "NOT INSTALLED")
   );
+
+  });
 }
 
 function installSalesAutomation() {
+  assertAppRequest_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   ScriptApp.getProjectTriggers().forEach(function(trigger) {
     const handler = trigger.getHandlerFunction();
@@ -120,6 +139,7 @@ function installSalesAutomation() {
 }
 
 function getSalesAutomationStatus() {
+  assertAppRequest_();
   const handlers = ScriptApp.getProjectTriggers().map(function(trigger) {
     return trigger.getHandlerFunction();
   });
@@ -133,6 +153,11 @@ function getSalesAutomationStatus() {
 }
 
 function salesAutomationOnEdit(event) {
+  if (ACCESS_REQUEST_CONTEXT_) return salesAutomationOnEdit_(event);
+  return withAutomationAccess_(event, "salesAutomationOnEdit", function() {return salesAutomationOnEdit_(event);});
+}
+
+function salesAutomationOnEdit_(event) {
   if (!event || !event.range) return;
   const sheet = event.range.getSheet();
   if (sheet.getName() === SHEETS.PRODUCT_MASTER) {
@@ -319,7 +344,12 @@ function ensureManualSaleInventoryItem_(item) {
   };
 }
 
-function processPendingSalesLogRows() {
+function processPendingSalesLogRows(event) {
+  if (ACCESS_REQUEST_CONTEXT_) return processPendingSalesLogRows_();
+  return withAutomationAccess_(event, "processPendingSalesLogRows", function() {return processPendingSalesLogRows_();});
+}
+
+function processPendingSalesLogRows_() {
   createOrRepairSalesSyncButton_();
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
   if (!sheet || sheet.getLastRow() < 2) return { success: true, processed: 0, errors: 0 };

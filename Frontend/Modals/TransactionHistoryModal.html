@@ -536,7 +536,7 @@ function warmTransactionHistory() {
   if (transactionHistoryWarmCache && transactionHistoryWarmCache.key === key) return;
 
   transactionHistoryWarmCache = {key: key, pending: true, data: null, loadedAt: 0};
-  google.script.run
+  secureScriptRun
     .withSuccessHandler(function(result) {
       if (!result || result.success !== true || !transactionHistoryWarmCache || transactionHistoryWarmCache.key !== key) return;
       transactionHistoryWarmCache.data = prepareTransactionHistoryData(result.transactions);
@@ -639,7 +639,7 @@ function loadTransactionHistory(forceRefresh) {
 
   }
   if (!refresh.shouldFetch) return;
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(function(result) {
       if (!refresh.current()) return;

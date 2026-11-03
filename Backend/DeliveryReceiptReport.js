@@ -58,6 +58,7 @@ function buildDeliveryReceiptHtml_(details) {
 }
 
 function createDeliveryReceiptPdf(deliveryId) {
+  assertAppRequest_();
   try {
     const details=getDeliveryDetails(deliveryId);
     const fileName='Delivery_Receipt_'+String(details.id).replace(/[^A-Za-z0-9_-]/g,'_')+'.pdf';

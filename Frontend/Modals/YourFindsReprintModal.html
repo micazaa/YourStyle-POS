@@ -57,7 +57,7 @@ function openYourFindsReprintModal() {
  setYourFindsReprintBusy(true,'Loading...');
  if(refresh.cached!==undefined){populateYourFindsReprintFilters();renderYourFindsReprintItems();}
  else document.getElementById('yourFindsReprintBody').innerHTML='<tr><td colspan="7" class="text-center text-muted py-5"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading labels...</span></td></tr>';
- google.script.run.withSuccessHandler(function(result){
+ secureScriptRun.withSuccessHandler(function(result){
    if(request!==yourFindsReprintRequest||!refresh.current())return;
    if(result&&result.success){yourFindsReprintItems=Array.isArray(result.items)?result.items:[];refresh.save(yourFindsReprintItems);}
    setYourFindsReprintBusy(false);populateYourFindsReprintFilters();renderYourFindsReprintItems();
@@ -128,7 +128,7 @@ function printSelectedYourFindsReprintLabels(){
  yourFindsReprintItems.forEach(function(item){if(yourFindsReprintSelection[item.code]&&groups[item.labelType])groups[item.labelType].push(String(item.code));});
  if(!groups.COMPLETED.length&&!groups.INCOMPLETE.length)return showNotificationToast('Select at least one label.',true);
  const box=document.getElementById('yourFindsReprintResult');box.style.display='none';setYourFindsReprintBusy(true);
- google.script.run.withSuccessHandler(function(result){
+ secureScriptRun.withSuccessHandler(function(result){
    setYourFindsReprintBusy(false);
    if(!result||!result.success)return showNotificationToast(result&&result.message||'Unable to generate labels.',true);
    box.innerHTML='';

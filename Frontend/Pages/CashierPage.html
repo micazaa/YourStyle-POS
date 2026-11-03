@@ -567,7 +567,7 @@ function refreshInventory(callback) {
   }
   const entry = pageReadCache.get('cashierInventory');
   entry.callbacks = callback ? [callback] : [];
-  google.script.run.withSuccessHandler(function(data) {
+  secureScriptRun.withSuccessHandler(function(data) {
     if (!read.current()) return;
     masterInventory = Array.isArray(data) ? data : [];
     read.save(masterInventory);

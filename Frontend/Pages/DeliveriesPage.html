@@ -212,7 +212,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
   `;
 
 
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(
       function(result) {
@@ -1247,7 +1247,7 @@ function completeDeliveryBulk(
   }
 
 
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(
       function(result) {
@@ -1311,7 +1311,7 @@ function completeDeliveryBulk(
         }
 
 
-        google.script.run
+        secureScriptRun
 
           .withSuccessHandler(
             function(completeResult) {

@@ -163,7 +163,7 @@ function getWarmManagerExpectedCash(reportDate) {
 
 function warmManagerExpectedCash(reportDate) {
   if (!reportDate || getWarmManagerExpectedCash(reportDate)) return;
-  google.script.run
+  secureScriptRun
     .withSuccessHandler(function(data) {
       if (data && data.success !== false) {
         managerExpectedCashWarmCache = { date: reportDate, time: Date.now(), data: data };
@@ -342,7 +342,7 @@ function updateManagerExpectedCash() {
     document.getElementById('managerReportError').textContent = err.message || 'Unable to calculate expected cash.';
     document.getElementById('managerReportRetry').hidden = false;
   }
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(function(expectedCashData) {
       if (!current()) return;
@@ -538,7 +538,7 @@ function proceedWithManagerDailyReport(
   managerReportGenerating = true;
   setManagerReportLoading(true, 'Generating report…');
 
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(function(result) {
       managerReportGenerating = false;

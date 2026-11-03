@@ -118,6 +118,12 @@ function cashierShiftTarget_(employee, reportId, data, events) {
   throw new Error('No active cashier shift found. Sign in using Start cashier shift.');
 }
 
+function cashierShiftStatus_(target) {
+  const event = target.event;
+  return event && event[4] === 'END' ? 'CLOSED' : event && event[4] === 'PAUSE' ? 'PAUSED'
+    : event && event[4] === 'RECEIVE' ? 'OPEN' : String(target.values[CASH_REPORT_IDX.STATUS]).trim().toUpperCase();
+}
+
 function cashierShiftContext_(target) {
   const row = target.values, event = target.event;
   const savedReport = buildCashReportObject([], row);
@@ -135,7 +141,7 @@ function cashierShiftContext_(target) {
   return {
     success: true, reportId: String(row[0]), reportDate: dateString_(row[CASH_REPORT_IDX.REPORT_DATE]),
     shiftStart: rpcDate_(row[CASH_REPORT_IDX.SHIFT_START]),
-    status: event && event[4] === 'END' ? 'CLOSED' : event && event[4] === 'PAUSE' ? 'PAUSED' : event && event[4] === 'RECEIVE' ? 'OPEN' : String(row[CASH_REPORT_IDX.STATUS]).trim().toUpperCase(),
+    status: cashierShiftStatus_(target),
     pettyReceived: received,
     receiveId: receiveId,
     cashBreakdown: savedReport.cashBreakdown,
@@ -161,6 +167,7 @@ function reopenCashierDailyReport_(target, sheet) {
 }
 
 function getCashierShiftContext(token, reportId) {
+  assertAppRequest_();
   const actor = dashboardEmployee_(token);
   let target = cashierShiftTarget_(actor.name, String(reportId || ''), cashierReportRows_(), pettyHandoverRows_());
   if (target.event && (target.event[4] === 'END' && target.values[CASH_REPORT_IDX.STATUS] !== 'CLOSED' ||
@@ -271,6 +278,7 @@ function cashierShiftMetrics_(row) {
 }
 
 function saveCashierShiftExit(payload) {
+  assertAppRequest_();
   payload = payload || {};
   const actor = dashboardEmployee_(payload.token);
   if (!['PAUSE', 'END'].includes(payload.action)) throw new Error('Choose Pause shift or End shift.');
@@ -355,6 +363,7 @@ function saveCashierShiftExit(payload) {
 }
 
 function printEndedCashierShiftReport(token, reportId) {
+  assertAppRequest_();
   const actor = dashboardEmployee_(token);
   const got = getClosedCashReport(reportId);
   if (!got.success) throw new Error(got.message);

@@ -96,7 +96,7 @@ function searchExchangeReceipt() {
   const catalogRead=cachedProducts===null?beginPageRead('exchangeProducts'):null;
   button.disabled=true;button.innerHTML=loadingIndicator('Searching…');
   function fail(error){if(!exchangeCurrent(version,owner))return;if(catalogRead&&catalogRead.current())catalogRead.fail();button.disabled=false;button.textContent='Search';showNotificationToast(error.message||String(error),true);}
-  google.script.run.withSuccessHandler(result=>{
+  secureScriptRun.withSuccessHandler(result=>{
     if(!exchangeCurrent(version,owner))return;
     if(!result||!result.success)return fail(new Error(result&&result.message||'Receipt not found.'));
     if(!result.items||!result.items.length)return fail(new Error('No remaining exchangeable items on this receipt.'));
@@ -237,7 +237,7 @@ function submitCustomerExchangeCheckout(payment,context) {
     if(currentEmployee!==owner)return;
     if(!credential){setCheckoutLoading(false);return;}
     const auth=typeof credential==='object'?credential:{managerPin:credential};
-    google.script.run.withSuccessHandler(result=>{
+    secureScriptRun.withSuccessHandler(result=>{
       if(currentEmployee!==owner)return;
       setCheckoutLoading(false);
       if(!result||!result.success)return showNotificationToast(result&&result.message||'Exchange failed.',true);

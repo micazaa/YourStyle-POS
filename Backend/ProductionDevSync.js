@@ -8,6 +8,7 @@ const PRODUCTION_SPREADSHEET_ID = "1PXY61BjpfR9cuubzPOKCBOSj2DgAfkiXCqbFIrIw_9c"
 const DEVELOPMENT_SPREADSHEET_ID = "1xnHBsGsoMmcBIoRwEjX0paf5R39A-s2Tnc6m1lkoOQU";
 
 function syncProductionToDevelopmentFromMenu() {
+  return withSheetAccess_(function() {
   const ui = SpreadsheetApp.getUi();
   const prompt = ui.prompt(
     "Sync Production to Dev",
@@ -27,6 +28,8 @@ function syncProductionToDevelopmentFromMenu() {
     "Dev synchronized. " + result.sheetCount + " sheets copied.\n" +
     "Backup: " + result.backupName
   );
+
+  });
 }
 
 function syncProductionToDevelopment_() {

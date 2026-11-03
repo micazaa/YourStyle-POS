@@ -647,6 +647,7 @@ function buildYourFindsLabelsHtml(
 function createYourFindsLabelPDFByCodes(
   codes
 ) {
+  assertAppRequest_();
 
   /* ========================================================
      VALIDATE INPUT
@@ -1090,6 +1091,7 @@ function buildCompletedYourFindsLabelHtml(item) {
 }
 
 function getCompletedYourFindsItemsForLabelReprint() {
+  assertAppRequest_();
   const items = getFullInventory().filter(function(item) {
     const status = String(item.status || "").trim().toUpperCase();
     return String(item.category || "").trim().toUpperCase() === "YOURFINDS" &&
@@ -1129,6 +1131,7 @@ function getYourFindsReprintLabelType_(item) {
 }
 
 function getYourFindsItemsForLabelReprint() {
+  assertAppRequest_();
   const items = getFullInventory().filter(function(item) {
     const status = String(item.status || "").trim().toUpperCase();
     const isYourFinds =
@@ -1162,6 +1165,7 @@ function getYourFindsItemsForLabelReprint() {
 }
 
 function createCompletedYourFindsLabelPDFByCodes(codes) {
+  assertAppRequest_();
   if (!Array.isArray(codes) || codes.length === 0) {
     throw new Error("Select at least one completed YourFinds label.");
   }
@@ -1230,10 +1234,12 @@ function createCompletedYourFindsLabelPDFByCodes(codes) {
 }
 
 function createCompletedYourFindsLabelPDF(code) {
+  assertAppRequest_();
   return createCompletedYourFindsLabelPDFByCodes([code]);
 }
 
 function createYourFindsReprintPDFByCodes(codes, labelType) {
+  assertAppRequest_();
   labelType = String(labelType || "").trim().toUpperCase();
   if (labelType !== "INCOMPLETE" && labelType !== "COMPLETED") {
     throw new Error("Choose Incomplete or Completed labels.");
@@ -1265,6 +1271,7 @@ function createYourFindsReprintPDFByCodes(codes, labelType) {
 }
 
 function createYourFindsReprintPDFByGroups(completedCodes, incompleteCodes) {
+  assertAppRequest_();
   const normalize = function(codes) { return Array.from(new Set((Array.isArray(codes) ? codes : []).map(function(code) { return String(code || "").trim(); }).filter(Boolean))); };
   const groups = { COMPLETED: normalize(completedCodes), INCOMPLETE: normalize(incompleteCodes) };
   if (!groups.COMPLETED.length && !groups.INCOMPLETE.length) throw new Error("Select at least one label.");
@@ -1303,6 +1310,7 @@ function createYourFindsReprintPDFByGroups(completedCodes, incompleteCodes) {
 function getYourFindsLabelItemsByDeliveryId(
   deliveryId
 ) {
+  assertAppRequest_();
 
   try {
 
@@ -1563,6 +1571,7 @@ function getYourFindsLabelItemsByDeliveryId(
 ========================================================== */
 
 function buildYourFindsDeliverySummaryFromInventory(deliveryId) {
+  assertAppRequest_();
   const normalizedDeliveryId = String(deliveryId || "").trim().toUpperCase();
   const items = getFullInventory().filter(function(item) {
     return String(item.deliveryId || "").trim().toUpperCase() === normalizedDeliveryId &&
@@ -1583,6 +1592,7 @@ function buildYourFindsDeliverySummaryFromInventory(deliveryId) {
 }
 
 function getGroupedYourFindsDeliveries() {
+  assertAppRequest_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
   if (!sheet) throw new Error("Delivery Log sheet not found.");
@@ -1631,6 +1641,7 @@ function getGroupedYourFindsDeliveries() {
 }
 
 function getYourFindsDeliveriesForLabelReprint() {
+  assertAppRequest_();
   try { return { success: true, deliveries: getGroupedYourFindsDeliveries() }; }
   catch (err) { return { success: false, message: err && err.message ? err.message : String(err), deliveries: [] }; }
 }
@@ -1648,6 +1659,7 @@ function getYourFindsDeliveriesForLabelReprint() {
 ========================================================== */
 
 function getYourFindsDeliveryHistory() {
+  assertAppRequest_();
   try {
     const deliveries = getGroupedYourFindsDeliveries();
     return { success: true, count: deliveries.length, deliveries: deliveries };
@@ -1672,6 +1684,7 @@ function getYourFindsDeliveryHistory() {
 ========================================================== */
 
 function getDeliveryHistory() {
+  assertAppRequest_();
   try {
     const ss =
       SpreadsheetApp.getActiveSpreadsheet();
@@ -2312,6 +2325,7 @@ function getDeliveryHistory() {
 function getYourFindsDeliveryById(
   deliveryId
 ) {
+  assertAppRequest_();
 
   try {
 

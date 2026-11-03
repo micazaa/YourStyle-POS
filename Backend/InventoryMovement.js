@@ -6,6 +6,7 @@
 ========================================================== */
 
 function changeInventoryStock(options) {
+  assertAppRequest_();
   if (!options) throw new Error("Stock movement options are required.");
 
   const code = String(options.code || "").trim();
@@ -138,6 +139,7 @@ function changeInventoryStockBatch_(movements) {
 }
 
 function logInventoryMovement(movement) {
+  assertAppRequest_();
   if (!movement) throw new Error("Inventory movement data is required.");
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -194,6 +196,7 @@ function getInventoryMovementType(category, inventoryType) {
 ========================================================== */
 
 function requireManager_(pin, token) {
+  if (ACCESS_REQUEST_CONTEXT_ && ACCESS_REQUEST_CONTEXT_.approver) return ACCESS_REQUEST_CONTEXT_.approver;
   if (token) return verifyInventoryManagerSession_(token);
   const auth = verifyManagerPin(pin);
   if (!auth || !auth.success) throw new Error(auth && auth.message ? auth.message : "Manager authorization failed.");
@@ -205,6 +208,7 @@ function adjustmentId_() {
 }
 
 function getInventoryMovementHistoryByCode(code) {
+  assertAppRequest_();
   code = String(code || "").trim();
   if (!code) throw new Error("Inventory Code is required.");
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -229,6 +233,7 @@ function getInventoryMovementHistoryByCode(code) {
 }
 
 function adjustInventoryStock(payload) {
+  assertAppRequest_();
   payload = payload || {};
   const auth = requireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
@@ -258,6 +263,7 @@ function adjustInventoryStock(payload) {
 }
 
 function changeInventoryItem(payload) {
+  assertAppRequest_();
   payload = payload || {};
 
   const auth = requireManager_(payload.managerPin, payload.managerToken);
@@ -419,6 +425,7 @@ function setConvertedInventoryStatus_(cell) {
 }
 
 function convertYourFindsDeliveryItem(payload) {
+  assertAppRequest_();
   payload = payload || {};
 
   const sourceCode = String(payload.sourceCode || "").trim();
@@ -697,6 +704,7 @@ function generateProductMasterCode_() {
 }
 
 function generateProductMasterCode() {
+  assertAppRequest_();
   return generateProductMasterCode_();
 }
 
@@ -840,6 +848,7 @@ function ensureProductMasterInventoryRows_(products) {
   }
 }
 function saveYourFindsCustomCost(payload) {
+  assertAppRequest_();
   payload = payload || {};
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -859,6 +868,7 @@ function saveYourFindsCustomCost(payload) {
   } finally { lock.releaseLock(); }
 }
 function getInventoryForManagement(managerToken) {
+  assertAppRequest_();
   const products = getProductMaster_();
   if (!managerToken) return getFullInventory({products:products, includeDeliveryMetadata:false}).filter(function(item) {
     return String(item.productStatus || PRODUCT_STATUS.ACTIVE).toUpperCase() !== PRODUCT_STATUS.DEACTIVATED;
@@ -889,6 +899,7 @@ function getInventoryForManagement(managerToken) {
   });
 }
 function getProductMasterForManagement(managerToken) {
+  assertAppRequest_();
   if (!managerToken) return getProductMaster_().map(publicProduct_);
   const auth = verifyInventoryReadSession_(managerToken);
   if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
@@ -896,6 +907,7 @@ function getProductMasterForManagement(managerToken) {
 }
 
 function saveProductMaster(payload) {
+  assertAppRequest_();
   payload = payload || {};
   requireManager_(payload.managerPin, payload.managerToken);
   const lock = LockService.getScriptLock();
@@ -1085,6 +1097,7 @@ function generateProductSaleReferenceId_() {
 }
 
 function authNameFromPayload_(payload) {
+  if(ACCESS_REQUEST_CONTEXT_ && ACCESS_REQUEST_CONTEXT_.actor)return ACCESS_REQUEST_CONTEXT_.actor.name;
   payload = payload || {};
   const token = String(payload.managerToken || "").trim();
   if (token) {
@@ -1113,6 +1126,7 @@ function logProductStatusChange_(event) {
 }
 
 function setInventoryAdministrativeStatus(payload) {
+  assertAppRequest_();
   payload = payload || {};
   const auth = requireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
@@ -1206,6 +1220,7 @@ function setInventoryAdministrativeStatus(payload) {
 // Delete only unused records. Historical rows remain available to receipts,
 // exchanges, delivery reports and stock movement reconciliation.
 function deleteUnusedInventoryItem(payload) {
+  assertAppRequest_();
   payload = payload || {};
   requireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
@@ -1299,6 +1314,7 @@ function assertCompletedYourFinds_(item) {
  * Code, size, stock, category, type, and delivery metadata stay immutable.
  */
 function saveYourFindsItemDetails(payload) {
+  assertAppRequest_();
   payload = payload || {};
   const costPrice = costPayload_(payload);
   const code = String(payload.code || "").trim();
@@ -1414,6 +1430,7 @@ function saveYourFindsItemDetails(payload) {
 }
 
 function saveInventoryPhoto(payload) {
+  assertAppRequest_();
   payload = payload || {};
   const auth = requireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();
@@ -1448,6 +1465,7 @@ function saveInventoryPhoto(payload) {
 }
 
 function removeInventoryPhoto(payload) {
+  assertAppRequest_();
   payload = payload || {};
   const auth = requireManager_(payload.managerPin, payload.managerToken);
   const code = String(payload.code || "").trim();

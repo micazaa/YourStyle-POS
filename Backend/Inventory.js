@@ -103,6 +103,7 @@ function getInventoryDeliveryMetadataByCode_(targetCode) {
 
 // Read stored receipt fields directly; older sheets fall back to delivery history.
 function getInventoryDeliveryMetadataByCode(code) {
+  assertAppRequest_();
   code = String(code || '').trim();
   if (!code) throw new Error('Inventory Code is required.');
   const inventory = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
@@ -299,6 +300,7 @@ function ensureCustomYourFindsInventoryItem_(item) {
 }
 
 function getFullInventory(options) {
+  assertAppRequest_();
   options = options || {};
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -513,6 +515,7 @@ function getFullInventory(options) {
 function getInventoryItemByCode(
   code
 ) {
+  assertAppRequest_();
 
   try {
 
@@ -608,6 +611,7 @@ function getInventoryItemByCode(
 function getYourFindsItemForCompletion(
   code
 ) {
+  assertAppRequest_();
 
   const result =
     getInventoryItemByCode(
@@ -772,6 +776,7 @@ function acceptYourFindsDelivery(
   remarks,
   preparedBy
 ) {
+  assertAppRequest_();
 
   try {
 
@@ -1573,6 +1578,7 @@ function acceptYourFindsDelivery(
 ========================================================== */
 
 function generateYourFindsDeliveryCodes(sheet, deliveryDate, size, quantity) {
+  assertAppRequest_();
   const dateCode = getYourFindsDateCode(deliveryDate);
 
   const sizeCode = getYourFindsSizeCode(size);
@@ -1647,6 +1653,7 @@ function generateYourFindsDeliveryCodes(sheet, deliveryDate, size, quantity) {
 }
 
 function getSellableInventory() {
+  assertAppRequest_();
   const products = getProductMaster_({cashierOnly:true});
   expireEndedProductSales_(products);
   const inventory = getFullInventory({products: products, includeDeliveryMetadata: false, cashierOnly:true});
@@ -1873,6 +1880,7 @@ function buildPhysicalBundleSaleQueue_(category) {
 }
 
 function deductInventoryStock(soldItems, receiptId, employeeName) {
+  assertAppRequest_();
   /* ========================================================
      VALIDATE
   ======================================================== */
@@ -1987,6 +1995,7 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
 ========================================================== */
 
 function generateYourFindsDeliveryId(deliveryDate) {
+  assertAppRequest_();
   return generateDeliveryIdentifiers(DELIVERY_TYPE.YOURFINDS, deliveryDate).deliveryId;
 }
 
@@ -2007,6 +2016,7 @@ function generateMultiSizeYourFindsCodes(
   deliveryDate,
   quantities
 ) {
+  assertAppRequest_();
   const sizeOrder = YOURFINDS_SIZE_ORDER.slice();
 
   const result = {
@@ -2052,6 +2062,7 @@ function generateMultiSizeYourFindsCodes(
 function getNextYourFindsDeliveryNumber(
   deliveryDate
 ) {
+  assertAppRequest_();
 
   try {
 
@@ -2142,6 +2153,7 @@ function buildYourFindsDeliveryNo(
   deliveryDate,
   sequence
 ) {
+  assertAppRequest_();
 
   deliveryDate =
     String(
@@ -2212,6 +2224,7 @@ function buildYourFindsDeliveryNo(
 }
 
 function testNextDeliveryNumber() {
+  assertAppRequest_();
 
   const result =
     getNextYourFindsDeliveryNumber(
@@ -2229,6 +2242,7 @@ function testNextDeliveryNumber() {
 }
 
 function testYourFindsCompletionLookup() {
+  assertAppRequest_();
 
   const result =
     getYourFindsItemForCompletion(

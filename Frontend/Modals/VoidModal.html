@@ -547,7 +547,7 @@ if (voidReason === "Other") {
 
   /* ================= VERIFY MANAGER ================= */
 
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(function(result) {
 
@@ -580,7 +580,7 @@ if (voidReason === "Other") {
 
       /* ================= VOID TRANSACTION ================= */
 
-      google.script.run
+      secureScriptRun
 
         .withSuccessHandler(function(res) {
 
@@ -673,7 +673,8 @@ if (voidReason === "Other") {
         voidReason,
         itemCode,
         itemRowIndex,
-        1
+        1,
+        {managerPin:pin}
       );
 
     })

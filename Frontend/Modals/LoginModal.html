@@ -299,7 +299,7 @@ function initializeLogin() {
   document.getElementById("loginPasswordToggle").setAttribute("aria-label", "Show password");
   document.getElementById("loginPasswordToggle").setAttribute("aria-pressed", "false");
   changeLoginMode("STAFF");
-  loginSetupRequest = new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getLoginSetup());
+  loginSetupRequest = new Promise((resolve,reject)=>secureScriptRun.withSuccessHandler(resolve).withFailureHandler(reject).getLoginSetup());
 
   phase10EmployeesLoaded =
     false;
@@ -704,7 +704,7 @@ function reloadLoginPettyHandover() {
   document.getElementById('confirmPettyHandover').checked = false;
   phase10PettyLoaded = false;
   loginPettyError = false;
-  loginSetupRequest = new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getLoginSetup());
+  loginSetupRequest = new Promise((resolve,reject)=>secureScriptRun.withSuccessHandler(resolve).withFailureHandler(reject).getLoginSetup());
   loadEmployees();
   loadPettyHandover();
   updateLoginReady();
@@ -758,7 +758,7 @@ function unlockTerminalSession() {
     }
     if (typeof warmTransactionHistory === 'function') warmTransactionHistory();
   };
-  const runner=google.script.run.withSuccessHandler(onLoginSuccess).withFailureHandler(failed);
+  const runner=secureScriptRun.withSuccessHandler(onLoginSuccess).withFailureHandler(failed);
   if(cashierMode)runner.loginAndStartShift(name,pin,petty,loginPettyHandover&&loginPettyHandover.version);
   else runner.verifyEmployee(name,pin);
 }

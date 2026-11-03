@@ -3,9 +3,7 @@ function employeeIsOic_(employee) {
 }
 
 function employeeCanAuthorizeManager_(employee) {
-  const level = employee && employee.accessLevel;
-  return !!employee && !employeeIsOic_(employee) && level !== null && level !== undefined &&
-    String(level).trim() !== '' && Number.isFinite(Number(level)) && Number(level) >= 0 && Number(level) <= 1;
+  return permissionMode_(employee,'actions.approve') === 'allow';
 }
 
 function employeeHasManagerView_(employee) {
@@ -56,7 +54,7 @@ function employeeLoginAccounts_(data) {
   return accounts;
 }
 
-function verifyEmployee(employeeName, pin) {
+function verifyEmployee(employeeName, pin, cashierReportId) {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("Employees");
@@ -95,9 +93,11 @@ function verifyEmployee(employeeName, pin) {
         };
       }
 
-      return {
+      const verified = {
         success: true,
-        dashboardToken: createDashboardSession_(employeeId, fullName),
+        dashboardToken: createDashboardSession_(employeeId, fullName, employeeAuthFingerprint_(account.row)),
+        permissions: accountPermissions_(account),
+        operationPermissions: accessOperationPermissions_(),
         sessionExpiresAt: new Date().getTime() + ACCOUNT_SESSION_SECONDS * 1000,
         employeeId: employeeId,
         fullName: fullName,
@@ -105,8 +105,17 @@ function verifyEmployee(employeeName, pin) {
         role: role,
         accessLevel: accessLevel,
         inventoryManagerToken: employeeCanAuthorizeManager_(account)
-          ? createInventoryManagerSession_(employeeId, fullName) : ""
+          ? createInventoryManagerSession_(employeeId, fullName, employeeAuthFingerprint_(account.row)) : ""
       };
+      if (cashierReportId) {
+        try {attachCashierSession_(verified.dashboardToken, String(cashierReportId), fullName);}
+        catch (error) {
+          revokeDashboardSession(verified.dashboardToken);
+          if (verified.inventoryManagerToken) revokeInventoryManagerSession(verified.inventoryManagerToken);
+          return {success:false,message:error.message || 'Cashier shift is no longer open.'};
+        }
+      }
+      return verified;
   }
 
   return {
@@ -116,6 +125,10 @@ function verifyEmployee(employeeName, pin) {
 }
 
 function verifyManagerPin(pin, expectedManagerName) {
+  assertAppRequest_();
+  const approved = ACCESS_REQUEST_CONTEXT_ && ACCESS_REQUEST_CONTEXT_.approver;
+  if (approved) return !expectedManagerName || approved.managerName === expectedManagerName
+    ? approved : {success:false, message:'Authorization must match the selected manager.'};
   if (pin && typeof pin === "object") {
     try {
       const auth = verifyInventoryManagerSession_(pin.managerToken);
@@ -223,16 +236,7 @@ function verifyManagerPin(pin, expectedManagerName) {
     }
 
 
-    /* ================= MANAGER AUTHORITY =================
-
-       Current POS rule:
-
-       Access Level 0 / 1 = manager-authorized
-
-       This is better than requiring the Role text
-       to be exactly "Manager".
-    ====================================================== */
-
+    // Approval authority comes from the account role, never the username access number.
     const hasManagerAccess = employeeCanAuthorizeManager_({role:role, accessLevel:data[i][5]});
 
 
@@ -260,6 +264,7 @@ function verifyManagerPin(pin, expectedManagerName) {
     return {
 
       success: true,
+      employeeId: String(data[i][0]),
 
       managerName:
         (
@@ -335,10 +340,10 @@ function refreshEmployeeUsernames_() {
 }
 // Inventory authorization is issued only after a successful employee login.
 // Cache expiry requires signing in again; client role flags are never trusted.
-function createInventoryManagerSession_(employeeId, fullName) {
+function createInventoryManagerSession_(employeeId, fullName, fingerprint) {
   const token = Utilities.getUuid() + Utilities.getUuid();
   CacheService.getScriptCache().put("inventory-manager:" + token, JSON.stringify({
-    employeeId: String(employeeId), fullName: fullName
+    employeeId: String(employeeId), fullName: fullName, fingerprint:fingerprint
   }), 21600);
   return token;
 }
@@ -356,12 +361,12 @@ function verifyInventoryManagerSession_(token) {
   const employee = sheet.getDataRange().getValues().slice(1).find(function(row) {
     return String(row[0]) === session.employeeId && (row[1] + " " + row[2]) === session.fullName;
   });
-  if (!employee || String(employee[6]).toUpperCase() !== "TRUE" ||
+  if (!employee || session.fingerprint !== employeeAuthFingerprint_(employee) || String(employee[6]).toUpperCase() !== "TRUE" ||
       !employeeCanAuthorizeManager_({role:employee[4], accessLevel:employee[5]})) {
     cache.remove(key);
     throw new Error("An active manager account is required for this change.");
   }
-  return { success: true, managerName: session.fullName };
+  return { success: true, managerName: session.fullName, employeeId:session.employeeId };
 }
 
 function verifyInventoryReadSession_(token) {
@@ -383,13 +388,17 @@ function loginAndStartShift(name, pin, petty, handoverVersion) {
   const employee = verifyEmployee(name, pin);
   if (!employee || !employee.success) return employee;
   let shift;
+  const previous = ACCESS_REQUEST_CONTEXT_;
+  ACCESS_REQUEST_CONTEXT_ = {actor:dashboardEmployee_(employee.dashboardToken), login:true};
   try { shift = startManagedCashierShift_(employee.fullName, petty, handoverVersion); }
   catch (error) { shift = {success: false, message: error.message || String(error)}; }
+  finally { ACCESS_REQUEST_CONTEXT_ = previous; }
   if (!shift || !shift.success) {
     revokeDashboardSession(employee.dashboardToken);
     if (employee.inventoryManagerToken) revokeInventoryManagerSession(employee.inventoryManagerToken);
     return {success:false,message:shift && shift.message || 'Unable to start shift.'};
   }
+  attachCashierSession_(employee.dashboardToken, shift.reportId, employee.fullName, shift);
   return {success:true,employee:employee,shift:shift};
 }
 
@@ -399,4 +408,16 @@ function getLoginSetup() {
   try { petty = getLatestPettyHandover(); }
   catch (error) { petty = {success:false,message:error.message || String(error)}; }
   return {employees:employees, petty:petty};
+}
+
+function attachCashierSession_(token, reportId, name, validatedShift) {
+  if (!validatedShift || validatedShift.reportId !== reportId || validatedShift.status !== 'OPEN') {
+    const target = cashierShiftTarget_(name,String(reportId || ''),cashierReportRows_(),pettyHandoverRows_());
+    if (cashierShiftStatus_(target) !== 'OPEN') throw new Error('Cashier shift is no longer open.');
+  }
+  const cache = CacheService.getScriptCache(), key='dashboard:'+token, raw=cache.get(key);
+  if (!raw) throw new Error(ACCOUNT_SESSION_EXPIRED_MESSAGE);
+  const saved=JSON.parse(raw);
+  saved.cashierReportId=String(reportId);
+  cache.put(key,JSON.stringify(saved),Math.max(1,Math.min(21600,Math.floor((saved.expiresAt-Date.now())/1000))));
 }

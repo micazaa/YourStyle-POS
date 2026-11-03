@@ -481,7 +481,7 @@ function loadYourFindsCustomSizes() {
     });
   };
   if (yourFindsCustomSizeCache && Date.now() - yourFindsCustomSizeCache.time < 60000) {render(yourFindsCustomSizeCache.sizes);return;}
-  google.script.run.withSuccessHandler(function(sizes) {yourFindsCustomSizeCache={time:Date.now(),sizes:sizes};render(sizes);}).withFailureHandler(function() {list.innerHTML="";}).prepareYourFindsCustomSizes();
+  secureScriptRun.withSuccessHandler(function(sizes) {yourFindsCustomSizeCache={time:Date.now(),sizes:sizes};render(sizes);}).withFailureHandler(function() {list.innerHTML="";}).prepareYourFindsCustomSizes();
 }
 
 function getYourFindsDeliveryLinesFromForm() {
@@ -648,7 +648,7 @@ function submitYourFindsDelivery() {
   button.innerHTML = loadingIndicator("Accepting Delivery...");
 
 
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(
       function(result) {
@@ -809,7 +809,7 @@ function loadNextYourFindsDeliveryNumber() {
   display.innerHTML = loadingIndicator();
 
 
-  google.script.run
+  secureScriptRun
 
     .withSuccessHandler(
       function(result) {
