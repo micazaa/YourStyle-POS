@@ -57,7 +57,7 @@ function getDeliveryDetails(deliveryId) {
         const id=type+':'+n;
         const existing=groups.find(g=>g.id===id);
         if(existing){existing.code='Multiple holders · '+type;continue;}
-        groups.push({id:id,label:'Bundle #'+n,type:type,code:String(r[DELIVERY_IDX.DESCRIPTION]||''),bundleNo:n,items:[]});
+        groups.push({id:id,label:bundleDisplayName_(deliveryId,n),type:type,code:String(r[DELIVERY_IDX.DESCRIPTION]||''),bundleNo:n,items:[]});
       }
     }
   });

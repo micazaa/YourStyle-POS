@@ -57,27 +57,28 @@ function openBulkDistributionModal(deliveryId, sheetRow, employee, bundleNo) {
   updateBulkDistributionSummary();
   document.getElementById("bulkDistributionRemarks").value = "";
   document.getElementById("bulkDistributionProductsError").style.display = "none";
+  document.getElementById("bulkDistributionProductsLoading").innerHTML = loadingIndicator(catalog ? 'Loading bundle details…' : 'Loading products and bundle details…');
   document.getElementById("bulkDistributionProductsLoading").style.display = "block";
   document.getElementById("bulkDistributionModal").style.display = "flex";
 
-  secureScriptRun.withSuccessHandler(function(result) {
+  const holderRead = new Promise((resolve,reject) => secureScriptRun.withSuccessHandler(resolve).withFailureHandler(reject)
+    .getBulkDistributionData(deliveryId,true,sheetRow));
+  Promise.all([getDeliveryCatalog(),holderRead]).then(function([products,result]) {
     if (request !== bulkDistributionRequest) return;
     if (!result || !result.success || !result.holder) {
-      showBulkDistributionError(result && result.message ? result.message : "Unable to load bulk holder."); return;
+      showBulkDistributionError(result && result.message ? result.message : "Unable to load BUNDLE holder."); return;
     }
     bulkDistributionHolder = result.holder;
     document.getElementById("bulkDistributionRemarks").value = result.holder.remarks || "";
     const requested = (result.holder.bundles || []).find(b => b.bundleNo === Number(bundleNo) && !b.disabled);
     const firstAvailable = (result.holder.bundles || []).find(b => !b.disabled);
     bulkDistributionSelectedBundleNo = requested ? requested.bundleNo : firstAvailable ? firstAvailable.bundleNo : 1;
-    if (!catalog) rememberDeliveryCatalog(result.products || []);
-    bulkDistributionProducts = (catalog || result.products || []).filter(p => p.category === result.holder.type);
+    bulkDistributionProducts = (products.products || []).filter(p => p.category === result.holder.type);
     populateBulkDistributionProductList();
     document.getElementById("bulkDistributionProductsLoading").style.display = "none";
     renderBulkDistributionHolder();
     restoreBulkDistributionLines();
-  }).withFailureHandler(function(err){if(request === bulkDistributionRequest)showBulkDistributionError(err && err.message ? err.message : String(err));})
-    .getBulkDistributionData(deliveryId, !!catalog, sheetRow);
+  }).catch(function(err){if(request === bulkDistributionRequest)showBulkDistributionError(err && err.message ? err.message : String(err));});
 }
 
 function closeBulkDistributionModal() {
@@ -106,7 +107,7 @@ function renderBulkDistributionTabs() {
     bundles.forEach(function(bundle) {
       const option = document.createElement("option");
       option.value = bundle.bundleNo;
-      option.textContent = "Bundle #" + bundle.bundleNo + (bundle.disabled ? " — " + (bundle.shortStatus || "Unavailable") : "");
+      option.textContent = bundleDisplayName_(bulkDistributionHolder.deliveryId, bundle.bundleNo) + (bundle.disabled ? " — " + (bundle.shortStatus || "Unavailable") : "");
       option.disabled = !!bundle.disabled;
       option.selected = Number(bundle.bundleNo) === bulkDistributionSelectedBundleNo;
       option.title = bundle.tooltip || "";
@@ -121,7 +122,7 @@ function renderBulkDistributionTabs() {
     button.type = "button";
     button.className = "btn btn-sm btn-outline-pink";
     button.setAttribute("aria-pressed", String(Number(bundle.bundleNo) === bulkDistributionSelectedBundleNo));
-    button.textContent = "Bundle #" + bundle.bundleNo + (bundle.disabled ? " · " + (bundle.shortStatus || "Unavailable") : "");
+    button.textContent = bundleDisplayName_(bulkDistributionHolder.deliveryId, bundle.bundleNo) + (bundle.disabled ? " · " + (bundle.shortStatus || "Unavailable") : "");
     button.disabled = !!bundle.disabled;
     button.title = bundle.tooltip || "";
     button.onclick = function() { selectBulkDistributionBundle(bundle.bundleNo); };
@@ -215,7 +216,7 @@ function setBulkDistributionSaving(saving) {
 
 function submitBulkDistribution(complete) {
   if (bulkDistributionSaving) return;
-  if (!bulkDistributionHolder) return showNotificationToast("Bulk holder is not loaded.", true);
+  if (!bulkDistributionHolder) return showNotificationToast("BUNDLE holder is not loaded.", true);
   const employee = bulkDistributionEmployee;
   if (!employee) return showNotificationToast("Unable to identify the logged-in employee.", true);
   const lines = getBulkDistributionLines();
@@ -223,7 +224,7 @@ function submitBulkDistribution(complete) {
   for (const line of lines) {
     if (!line.productCode || !Number.isInteger(line.quantity) || line.quantity < 1) {
       selectBulkDistributionBundle(line.bundleNo);
-      return showNotificationToast("Select a valid product and quantity for every item in Bundle #" + line.bundleNo + ".", true);
+      return showNotificationToast("Select a valid product and quantity for every item in BUNDLE " + bundleDisplayName_(bulkDistributionHolder.deliveryId, line.bundleNo) + ".", true);
     }
   }
   const bundleNumbers = [...new Set(lines.map(line => line.bundleNo))];
@@ -251,7 +252,7 @@ function submitBulkDistribution(complete) {
       } else {
         setBulkDistributionSaving(false);
         closeBulkDistributionModal();
-        showNotificationToast("Distribution saved. Open Bulk to continue.");
+        showNotificationToast("Distribution saved. Open BUNDLE to continue.");
         refreshDeliveriesPage();
       }
       return;

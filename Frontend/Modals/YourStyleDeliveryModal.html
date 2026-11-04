@@ -107,15 +107,18 @@ function loadYourStyleDeliveryProducts() {
   const loading = document.getElementById("yourStyleProductsLoading");
   const error = document.getElementById("yourStyleProductsError");
   const read = beginPageRead('deliveryProducts');
-  loading.style.display = cachedDeliveryCatalog() ? 'none' : 'block';
+  const cached = cachedDeliveryCatalog();
+  loading.style.display = cached ? 'none' : 'block';
   error.style.display = 'none';
-  getDeliveryCatalog().then(function(result) {
+  function loaded(result) {
     if (!read.current()) return;
     loading.style.display = 'none';
     yourStyleDeliveryProducts = result.products || [];
     if (!yourStyleDeliveryProducts.length) {error.textContent='No active YourStyle products found.';error.style.display='block';return;}
     if (!document.getElementById('yourStyleDeliveryLines').children.length) addYourStyleDeliveryLine();
-  }).catch(function(err) {if(!read.current())return;loading.style.display='none';error.textContent=err.message||String(err);error.style.display='block';});
+  }
+  if (cached) {loaded({products:cached});return;}
+  getDeliveryCatalog().then(loaded).catch(function(err) {if(!read.current())return;loading.style.display='none';error.textContent=err.message||String(err);error.style.display='block';});
 }
 
 function loadNextYourStyleDeliveryNumber() {

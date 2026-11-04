@@ -2020,8 +2020,8 @@ function getDeliveryHistory() {
 
           const bulkKey =
             type
-              ? "BULK " + type
-              : "BULK";
+              ? "BUNDLE " + type
+              : "BUNDLE";
 
 
           /*

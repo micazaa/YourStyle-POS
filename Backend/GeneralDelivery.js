@@ -3,6 +3,19 @@
    UNIVERSAL DELIVERY / YOURSTYLE RECEIVING
 ========================================================== */
 
+// Display names only; numeric bundle references remain unchanged in the logs.
+function bundleDisplayName_(deliveryId, bundleNo) {
+  let number = Math.floor(Number(bundleNo));
+  if (!Number.isFinite(number) || number < 1) return '—';
+  let letters = '';
+  while (number > 0) {
+    number--;
+    letters = String.fromCharCode(65 + number % 26) + letters;
+    number = Math.floor(number / 26);
+  }
+  return String(deliveryId || '').trim().slice(-3).toUpperCase() + '-' + letters;
+}
+
 function getGeneralDeliveryLogSheet() {
   assertAppRequest_();
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DELIVERY_LOG);
@@ -723,7 +736,7 @@ function getBulkHolderDetails(deliveryId, sheetRow) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
   if (!sheet) throw new Error("Delivery Log sheet not found.");
-  if (sheetRow > sheet.getLastRow()) throw new Error("Bulk holder row no longer exists.");
+  if (sheetRow > sheet.getLastRow()) throw new Error("BUNDLE holder row no longer exists.");
 
   const raw = sheet.getRange(sheetRow, 1, 1, DELIVERY_LOG_COLUMN_COUNT).getValues()[0];
   const row = sheet.getRange(sheetRow, 1, 1, DELIVERY_LOG_COLUMN_COUNT).getDisplayValues()[0];
@@ -733,12 +746,12 @@ function getBulkHolderDetails(deliveryId, sheetRow) {
   const type = String(row[DELIVERY_IDX.TYPE] || "").trim().toUpperCase();
   const status = String(row[DELIVERY_IDX.STATUS] || "").trim().toUpperCase();
 
-  if (storedDeliveryId !== deliveryId) throw new Error("Bulk holder Delivery ID no longer matches.");
+  if (storedDeliveryId !== deliveryId) throw new Error("BUNDLE holder Delivery ID no longer matches.");
   if (deliveryType !== DELIVERY_TYPE.YOURSTYLE) throw new Error("This is not a YourStyle delivery.");
-  if (receiveMode !== DELIVERY_RECEIVE_MODE.BULK) throw new Error("This delivery row is not BULK.");
-  if (type !== "PINS" && type !== "OTHERS") throw new Error("Invalid bulk holder Type.");
+  if (receiveMode !== DELIVERY_RECEIVE_MODE.BULK) throw new Error("This delivery row is not BUNDLE.");
+  if (type !== "PINS" && type !== "OTHERS") throw new Error("Invalid BUNDLE holder Type.");
   if (status !== DELIVERY_STATUS.PENDING && status !== DELIVERY_STATUS.PARTIAL) {
-    throw new Error("This bulk holder is no longer available for distribution.");
+    throw new Error("This BUNDLE holder is no longer available for distribution.");
   }
 
   const bundleQty = Math.max(1, Number(raw[DELIVERY_IDX.BUNDLE_QTY]) || 1);
@@ -866,7 +879,7 @@ function distributeBulkBundle(payload) {
     submittedLines.forEach(function(line,index){
       const code=String(line.productCode||"").trim(); const qty=Number(line.quantity); const product=productMap[code];
       if (!product) throw new Error("Item " + (index+1) + ": select a valid active Product Master item.");
-      if (String(product.category||"").trim().toUpperCase() !== holderType) throw new Error("Item " + (index+1) + ": product does not match bulk holder Type.");
+      if (String(product.category||"").trim().toUpperCase() !== holderType) throw new Error("Item " + (index+1) + ": product does not match BUNDLE holder Type.");
       if (!Number.isInteger(qty) || qty < 1 || qty > 99999) throw new Error("Item " + (index+1) + ": quantity must be a whole number from 1 to 99999.");
       if (!combined[code]) combined[code]={productCode:code,description:String(product.description||"").trim(),quantity:0};
       combined[code].quantity += qty;
@@ -1055,7 +1068,7 @@ function completeBulkHolder(payload) {
       deliverySheet.getLastRow()
     ) {
       throw new Error(
-        "Bulk holder row no longer exists."
+        "BUNDLE holder row no longer exists."
       );
     }
 
@@ -1179,7 +1192,7 @@ function completeBulkHolder(payload) {
       deliveryId
     ) {
       throw new Error(
-        "Bulk holder Delivery ID no longer matches."
+        "BUNDLE holder Delivery ID no longer matches."
       );
     }
 
@@ -1199,7 +1212,7 @@ function completeBulkHolder(payload) {
       DELIVERY_RECEIVE_MODE.BULK
     ) {
       throw new Error(
-        "This delivery row is not BULK."
+        "This delivery row is not BUNDLE."
       );
     }
 
@@ -1209,7 +1222,7 @@ function completeBulkHolder(payload) {
       holderType !== "OTHERS"
     ) {
       throw new Error(
-        "Invalid bulk holder Type."
+        "Invalid BUNDLE holder Type."
       );
     }
 
@@ -1219,7 +1232,7 @@ function completeBulkHolder(payload) {
       DELIVERY_STATUS.PARTIAL
     ) {
       throw new Error(
-        "Only a PARTIAL bulk holder can be completed."
+        "Only a PARTIAL BUNDLE holder can be completed."
       );
     }
 
@@ -1339,11 +1352,11 @@ function completeBulkHolder(payload) {
 
           reason:
             variance < 0
-              ? "BULK SHORTAGE VARIANCE"
+              ? "BUNDLE SHORTAGE VARIANCE"
               : (
                   variance > 0
-                    ? "BULK EXCESS VARIANCE"
-                    : "BULK COMPLETION"
+                    ? "BUNDLE EXCESS VARIANCE"
+                    : "BUNDLE COMPLETION"
                 ),
 
           source:
@@ -1552,7 +1565,7 @@ function getBulkHolderSequenceForRow(
 
   if (sequence < 1) {
     throw new Error(
-      "Unable to resolve bulk holder sequence."
+      "Unable to resolve BUNDLE holder sequence."
     );
   }
 

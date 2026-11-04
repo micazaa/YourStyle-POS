@@ -642,7 +642,7 @@ function renderDeliveriesTable(
                       '${escapeDeliveriesHtml(deliveryId)}'
                     )"
                   >
-                    Open Bulk
+                    Open BUNDLE
                   </button>
                 `
                 : ""
@@ -719,7 +719,7 @@ function buildDeliveryCategoryDisplay(
 
           return (
             escapeDeliveriesHtml(
-              key
+              key.replace(/\bbulk\b/gi, "BUNDLE")
             ) +
             " " +
             (
@@ -767,7 +767,7 @@ function buildDeliveryCategoryDisplay(
     const typeText =
       bulkTypes.length
         ? bulkTypes.join(" / ")
-        : "BULK";
+        : "BUNDLE";
 
 
     const actual =
@@ -798,7 +798,7 @@ function buildDeliveryCategoryDisplay(
             escapeDeliveriesHtml(
               typeText
             )
-          } BULK
+          }${bulkTypes.length ? ' BUNDLE' : ''}
 
         </div>
 
@@ -1297,7 +1297,7 @@ function completeDeliveryBulk(
         ) {
 
           showNotificationToast(
-            "No bulk holder is ready for completion.",
+            "No BUNDLE holder is ready for completion.",
             true
           );
 
@@ -1319,7 +1319,7 @@ function completeDeliveryBulk(
 
 
         const message =
-          "COMPLETE BULK DELIVERY\n\nAll declared physical bundles are finished and locked.\n\n" +
+          "COMPLETE BUNDLE DELIVERY\n\nAll declared physical bundles are finished and locked.\n\n" +
           "Estimated Quantity: " +
           holder.estimatedQuantity +
           "\n" +
@@ -1362,7 +1362,7 @@ function completeDeliveryBulk(
                   completeResult &&
                   completeResult.message
                     ? completeResult.message
-                    : "Unable to complete bulk holder.",
+                    : "Unable to complete BUNDLE holder.",
                   true
                 );
 
@@ -1372,7 +1372,7 @@ function completeDeliveryBulk(
 
 
               showNotificationToast(
-                "Bulk completed. Variance: " +
+                "BUNDLE completed. Variance: " +
                 (
                   Number(
                     completeResult.variance
@@ -1416,7 +1416,7 @@ function completeDeliveryBulk(
               employee,
 
             remarks:
-              "Bulk completion"
+              "BUNDLE completion"
           });
 
       }

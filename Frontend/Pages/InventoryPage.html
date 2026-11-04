@@ -288,6 +288,7 @@ function finishInventoryDownload(job) {
   else if(inventoryLoadingActive)inventoryListBusy(false);
   if(document.getElementById('inventorySummaryModal').style.display==='flex')renderInventorySummary();
   preloadInventoryItemDetails();
+  warmDeliveryCatalog();
 }
 function startInventoryDownload(version='',restarts=0) {
   const owner=currentEmployee&&currentEmployee.dashboardToken;if(!owner)return;
@@ -352,6 +353,7 @@ function applyInventoryPatch(patch) {
   if(!patch||patch.success!==true||!patch.version||patch.reset||patch.pending||!inventoryDatasetReady()||inventoryDataset.stale)return false;
   if(patch.version===inventoryDataset.version)return true;
   if(patch.fromVersion!==inventoryDataset.version||!Array.isArray(patch.items)||!Array.isArray(patch.removedCodes))return false;
+  const catalogChanged=deliveryCatalogAffectedByPatch(patch);
   const owner=currentEmployee.dashboardToken,previous=inventoryDataset.version;
   const changed=new Set(patch.items.map(item=>String(item.code))),removed=new Set(patch.removedCodes.map(String));
   const updated=new Map(patch.items.map(item=>{
@@ -390,6 +392,7 @@ function applyInventoryPatch(patch) {
   }
   if(!inventoryDataset.detailsReady)preloadInventoryItemDetails();
   refreshOpenYourFindsReprint();
+  if(catalogChanged){invalidateDeliveryCatalog();warmDeliveryCatalog();}
   return true;
 }
 function refreshInventoryChanges() {
@@ -417,6 +420,7 @@ function checkInventoryVersionInBackground() {
   inventoryVersionCheckAt=Date.now();if(typeof checkAccountSession==='function')checkAccountSession();
 }
 function invalidateLocalInventoryReads(refresh=true) {
+  invalidateDeliveryCatalog();
   clearTimeout(inventoryChangesTimer);inventoryChangesRead=null;
   const hadPending=!!inventoryListPending,hadDownload=!!inventoryDownload;
   ++inventoryListRequest;++inventorySummaryRequest;++inventoryDataEpoch;
@@ -828,7 +832,7 @@ function changeInventoryActiveInline(item, select) {
   select.disabled=true;
   secureScriptRun.withSuccessHandler(result=>{
     if(!result||!result.success){select.disabled=false;return showNotificationToast(result&&result.message||'Status change failed.',true);}
-    pageReadCache.delete('productMaster');pageReadCache.delete('cashierInventory');deliveryCatalogCache=null;deliveryCatalogPending=null;
+    pageReadCache.delete('productMaster');pageReadCache.delete('cashierInventory');
     showNotificationToast('Item set to '+String(result.productStatus||result.status).toLowerCase()+'.');
     loadInventoryPage(false,true);if(typeof refreshInventory==='function')refreshInventory();
   }).withFailureHandler(error=>{select.disabled=false;showNotificationToast(error.message||String(error),true);})

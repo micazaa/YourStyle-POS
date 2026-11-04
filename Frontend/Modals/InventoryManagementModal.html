@@ -700,7 +700,6 @@ function saveProductMasterClient(){
  secureScriptRun.withSuccessHandler(r=>{
    button.disabled=false;button.textContent='Save';
    if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Save failed',true);return;}
-   deliveryCatalogCache=null;deliveryCatalogPending=null;
    pageReadCache.delete('productMaster');pageReadCache.delete('inventory');pageReadCache.delete('cashierInventory');
    applySavedProductToInventory_(r);showNotificationToast(`Product ${r.productCode} saved`);
    closeModal('productEditorModal');clearProductMasterForm();
