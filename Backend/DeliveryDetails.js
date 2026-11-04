@@ -81,6 +81,8 @@ function getDeliveryDetails(deliveryId) {
     const originalItem=String(r[MOVE_IDX.REFERENCE_ID]).trim()===deliveryId&&qty>0&&['DELIVERY','DISTRIBUTION'].includes(source);
     const conversionItem=yourFinds&&source===INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT&&String(r[MOVE_IDX.SOURCE_LINE_ID]).trim().toUpperCase()===deliveryId.toUpperCase()&&qty>0&&parseYourFindsConversionNote_(r[MOVE_IDX.NOTES]);
     if(!originalItem&&!conversionItem)return;
+    // Bundle stock receipts track unopened bundles, not directly received product pieces.
+    if(source==='DELIVERY'&&(String(r[MOVE_IDX.TYPE]||'').trim().toUpperCase().startsWith('BULK')||String(r[MOVE_IDX.NOTES]||'').trim()==='PHYSICAL_BUNDLE_RECEIPT'))return;
     const code=String(r[MOVE_IDX.CODE]).trim(),product=inventory.get(code);
     // Negative holder movements are excluded; product inventory supplies the image and current status.
     if(!product)return;

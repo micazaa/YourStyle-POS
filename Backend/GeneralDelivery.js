@@ -108,6 +108,7 @@ function getYourStyleDeliveryProducts() {
     return {
       productCode: String(item.productCode || item.code || "").trim(),
       description: String(item.description || item.name || "").trim(),
+      directReceivable: !['BUNDLE','HALF BUNDLE'].includes(normalizePhysicalBundleName_(item.description || item.name)),
       category: String(item.category || "").trim().toUpperCase(),
       defaultPrice: Number(item.defaultPrice || item.price) || 0,
       inventoryType: String(item.inventoryType || "").trim().toUpperCase()
@@ -376,6 +377,7 @@ function acceptYourStyleDelivery(payload) {
         const quantity = Number(line.quantity);
         const product = productMap[productCode];
         if (!product) throw new Error("Item " + (index + 1) + ": select a valid active Product Master item.");
+        if (product.directReceivable === false) throw new Error("Item " + (index + 1) + ": BUNDLE and HALF BUNDLE cannot be received through Direct delivery. Use Bundle mode.");
         if (product.category !== type) throw new Error("Item " + (index + 1) + ": Product Type does not match Product Master.");
         if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99999) throw new Error("Item " + (index + 1) + ": Direct quantity must be a whole number from 1 to 99999.");
         return { type: type, receiveMode: mode, productCode: productCode, description: product.description, quantity: quantity };

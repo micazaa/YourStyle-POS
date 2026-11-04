@@ -34,7 +34,7 @@ function buildDeliverySummaryData_(deliveries, inventory, movements) {
     const type = upper(row[MOVE_IDX.TYPE]);
     if (!dates.has(id) || quantity <= 0 || !['DELIVERY', 'DISTRIBUTION'].includes(source)) return;
     // Holder receipts are estimates, not received product pieces.
-    if (type.startsWith('BULK')) return;
+    if (type.startsWith('BULK') || (source === 'DELIVERY' && text(row[MOVE_IDX.NOTES]) === 'PHYSICAL_BUNDLE_RECEIPT')) return;
     const code = text(row[MOVE_IDX.CODE]), product = products.get(code);
     const category = deliveryTypes.get(id) === 'YOURFINDS' ? 'YOURFINDS' : upper(product && product[INV_IDX.CATEGORY]) || type;
     const name = category === 'YOURFINDS' ? text(product && product[INV_IDX.SIZE]) || 'Unknown size' : text(row[MOVE_IDX.ITEM]) || text(product && product[INV_IDX.DESCRIPTION]) || code;

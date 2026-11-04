@@ -215,6 +215,7 @@ function populateYourStyleLineProducts(line, type) {
   function render(query) {
     const search = String(query || "").trim().toLowerCase();
     const matches = yourStyleDeliveryProducts.filter(product =>
+      product.directReceivable !== false &&
       String(product.category).toUpperCase() === type &&
       (!search || yourStyleProductSearchLabel(product).toLowerCase().includes(search))
     ).slice(0, 12);
@@ -294,7 +295,7 @@ function getYourStyleDeliveryLinesFromForm() {
     if (receiveMode === "DIRECT") {
       const code = row.querySelector(".yourstyle-line-product").dataset.productCode;
       const product = yourStyleDeliveryProducts.find(function(item) {
-        return String(item.category || "").trim().toUpperCase() === type &&
+        return item.directReceivable !== false && String(item.category || "").trim().toUpperCase() === type &&
           String(item.productCode) === code;
       });
       return { type: type, receiveMode: receiveMode, productCode: product ? String(product.productCode) : "", quantity: Number(row.querySelector(".yourstyle-line-qty").value) || 0 };
