@@ -57,7 +57,8 @@ function readInventoryListIndex_() {
   const products=getProductMaster_({cashierOnly:true,compactRead:true});
   const byCode=new Map(products.map(product=>[product.productCode,product]));
   const count=sheet.getLastRow()-1;
-  const values=sheet.getRange(2,1,count,INV_COL.IMAGE).getValues();
+  const storedDelivery=inventoryHasStoredDeliveryMetadata_(sheet);
+  const values=sheet.getRange(2,1,count,storedDelivery?INV_COL.DATE_DELIVERED:INV_COL.IMAGE).getValues();
   // Only identifiers need displayed values, so formatted leading zeros survive.
   const codes=sheet.getRange(2,INV_COL.CODE,count,1).getDisplayValues();
   return values.map((row,index)=>{
@@ -70,6 +71,8 @@ function readInventoryListIndex_() {
       status:String(row[INV_IDX.STATUS]||'ACTIVE').trim().toUpperCase(),
       stock:Number(row[INV_IDX.STOCK])||0,totalSold:Number(row[INV_IDX.TOTAL_SOLD])||0,
       price:Number(row[INV_IDX.YS_PRICE])||0,imageUrl:String(row[INV_IDX.IMAGE]||'').trim(),
+      deliveryId:storedDelivery?String(row[INV_IDX.DELIVERY_ID]||'').trim():'',
+      dateDelivered:storedDelivery?formatInventoryDateForClient(row[INV_IDX.DATE_DELIVERED]):'',
       lowStockAt:product ? Number(product.lowStockAt)||0 : 0,
       productStatus:product ? product.status : 'ACTIVE',salePrices:product ? product.salePrices : []};
     if(inventoryRowIsSoldYourFinds_(item))item.status='INACTIVE';
@@ -82,7 +85,7 @@ function readInventoryListIndex_() {
 }
 function inventoryListIndex_(version) {
   if(INVENTORY_EXECUTION_INDEX_&&INVENTORY_EXECUTION_INDEX_.version===version)return INVENTORY_EXECUTION_INDEX_.items;
-  const cache=CacheService.getScriptCache(), prefix='inventory-list:v2:'+version;
+  const cache=CacheService.getScriptCache(), prefix='inventory-list:v3:'+version;
   let raw;try{raw=cache.get(prefix);}catch(error){console.warn('Inventory list cache unavailable.');}
   if(raw){
     try {
@@ -160,8 +163,9 @@ function inventoryListGroups_(items,request) {
     if(inventoryListExcluded_(item,request)||!inventoryListMatches_(item,request))return;
     const key=inventoryGroupKey_(item);
     if(!groups.has(key))groups.set(key,{key:key,category:item.category,
-      name:item.category==='YOURFINDS'?(item.size||'Unspecified size'):(item.name||'Unnamed item'),stock:0,positiveStock:0,lowStockAt:0,states:new Set()});
+      name:item.category==='YOURFINDS'?(item.size||'Unspecified size'):(item.name||'Unnamed item'),itemCount:0,stock:0,positiveStock:0,lowStockAt:0,states:new Set()});
     const group=groups.get(key);
+    group.itemCount++;
     group.states.add(item.status);
     if(!['RETURNED','CONVERTED'].includes(item.status)){group.stock+=item.stock;group.positiveStock+=Math.max(0,item.stock);}
     group.lowStockAt=Math.max(group.lowStockAt,item.lowStockAt);
@@ -192,7 +196,7 @@ function inventoryPageSlice_(items,page,size) {
 function inventoryResponseCacheKey_(version,kind,query) {
   const manager=!!(ACCESS_REQUEST_CONTEXT_&&ACCESS_REQUEST_CONTEXT_.actor&&ACCESS_REQUEST_CONTEXT_.actor.manager);
   const digest=Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify([manager,query])));
-  return 'inventory-response:v5:'+kind+':'+version+':'+digest;
+  return 'inventory-response:v7:'+kind+':'+version+':'+digest;
 }
 function readInventoryResponse_(key) {
   try {const raw=CacheService.getScriptCache().get(key);return raw?JSON.parse(raw):null;}
@@ -246,7 +250,9 @@ function getInventoryPage(request) {
     console.log(JSON.stringify({event:'inventory_page',cacheHit:true,rowsReturned:cached.items.length,priorityPages:priorityPages.length,elapsedMs:Date.now()-started}));
     return {...cached,priorityPages:priorityPages};
   }
-  const base=inventoryListIndex_(version),index=query.search?inventorySearchIndex_(base,version):base,groups=inventoryListGroups_(index,query);
+  const base=inventoryListIndex_(version),index=query.search?
+    (inventoryIsDeliverySearch_(query.search)?inventoryDeliverySearchIndex_(base,version):inventorySearchIndex_(base,version)):base;
+  const groups=inventoryListGroups_(index,query);
   const rows=inventoryListSaleRows_(index.filter(item=>!inventoryListExcluded_(item,query)&&inventoryListMatches_(item,query)));
   const compare=inventorySortComparer_();
   rows.sort((a,b)=>{
@@ -256,7 +262,8 @@ function getInventoryPage(request) {
     const comparison=typeof left==='number'?left-right:compare(left,right);
     return comparison*query.direction||compare(a.code,b.code)||(a.saleTierIndex||0)-(b.saleTierIndex||0);
   });
-  const cards={products:groups.length,low:groups.filter(group=>group.status==='LOW STOCK').length,sold:groups.filter(group=>group.status==='SOLD OUT').length};
+  const cards={products:groups.reduce((sum,group)=>sum+group.itemCount,0),groups:groups.length,
+    low:groups.filter(group=>group.status==='LOW STOCK').length,sold:groups.filter(group=>group.status==='SOLD OUT').length};
   const response=inventoryListResponse_(rows,query,version,cards),entries={[key]:response};
   response.summaryPreviews=['products','low','sold'].map(kind=>{
     const summaryQuery={...query,page:1,kind:kind,summarySort:'category',summaryDirection:1};
@@ -280,14 +287,15 @@ function getInventoryPage(request) {
 function inventorySummaryResponse_(groups,request,version) {
   const query=inventoryListRequest_(request),kind=String(request&&request.kind||'products');
   const matching=groups.filter(group=>kind==='low'?group.status==='LOW STOCK':kind==='sold'?group.status==='SOLD OUT':kind==='stock'?group.stock>0:true);
-  const key=['category','name','stock','status'].includes(request&&request.summarySort)?request.summarySort:'category';
+  const key=['category','name','itemCount','stock','status'].includes(request&&request.summarySort)?request.summarySort:'category';
   const direction=Number(request&&request.summaryDirection)===-1?-1:1,compare=inventorySortComparer_();
-  matching.sort((a,b)=>(key==='stock'?a.stock-b.stock:compare(a[key],b[key]))*direction||compare(a.key,b.key));
+  matching.sort((a,b)=>(['stock','itemCount'].includes(key)?a[key]-b[key]:compare(a[key],b[key]))*direction||compare(a.key,b.key));
   const categories=['PINS','OTHERS','WHOLESALE','YOURFINDS'].map(category=>{
     const rows=matching.filter(group=>group.category===category);
-    return {category:category,groups:rows.length,units:rows.reduce((sum,group)=>sum+group.positiveStock,0)};
+    return {category:category,groups:rows.length,itemCount:rows.reduce((sum,group)=>sum+group.itemCount,0),units:rows.reduce((sum,group)=>sum+group.positiveStock,0)};
   });
   return {success:true,...inventoryPageSlice_(matching,query.page,query.pageSize),version:version,categories:categories,
+    itemCount:matching.reduce((sum,group)=>sum+group.itemCount,0),
     positiveUnits:matching.reduce((sum,group)=>sum+group.positiveStock,0)};
 }
 function getInventorySummaryPage(request) {
@@ -295,12 +303,26 @@ function getInventorySummaryPage(request) {
   const query=inventoryListRequest_(request),version=inventoryReadVersion_();
   const cacheKey=inventoryResponseCacheKey_(version,'summary',[query,request&&request.kind,request&&request.summarySort,request&&request.summaryDirection]);
   const cached=readInventoryResponse_(cacheKey);if(cached)return cached;
-  const base=inventoryListIndex_(version),groups=inventoryListGroups_(query.search?inventorySearchIndex_(base,version):base,query);
+  const base=inventoryListIndex_(version),index=query.search?
+    (inventoryIsDeliverySearch_(query.search)?inventoryDeliverySearchIndex_(base,version):inventorySearchIndex_(base,version)):base;
+  const groups=inventoryListGroups_(index,query);
   const response=inventorySummaryResponse_(groups,request,version);
   cacheInventoryResponses_({[cacheKey]:response},version);
   return response;
 }
-const INVENTORY_SNAPSHOT_FIELDS_ = ['code','name','size','category','inventoryType','status','stock','price','imageUrl','lowStockAt','productStatus','salePrices'];
+function inventoryIsDeliverySearch_(search) {
+  return /^(?:YFD|YSD)-\d{8}-[A-Z0-9]+$/i.test(String(search||'').trim());
+}
+function inventoryDeliverySearchIndex_(items,version) {
+  const legacy=items.some(item=>!item.deliveryId)?inventoryDetailDeliveryMetadata_(version):{};
+  return items.map(item=>{
+    const metadata=legacy[item.code]||{};
+    const full={...item,deliveryId:item.deliveryId||metadata.deliveryId||'',dateDelivered:item.dateDelivered||metadata.timestamp||''};
+    full.searchText=inventoryItemSearchText_(full);
+    return full;
+  });
+}
+const INVENTORY_SNAPSHOT_FIELDS_ = ['code','name','size','category','inventoryType','status','stock','price','imageUrl','lowStockAt','productStatus','salePrices','deliveryId','dateDelivered'];
 function getInventorySnapshotBatch(request) {
   assertAppRequest_();
   request=request||{};
@@ -315,10 +337,10 @@ function getInventorySnapshotBatch(request) {
     const inactive=item.productStatus==='DEACTIVATED'||item.status==='INACTIVE';
     return segment==='INACTIVE'?inactive:!inactive;
   });
-  const items=matching.slice(offset,offset+limit);
+  const items=inventoryDeliverySearchIndex_(matching.slice(offset,offset+limit),version);
   const current=inventoryReadVersion_();
   if(current!==version)return {success:true,changed:true,version:current};
-  return {success:true,version:version,segment:segment,inventoryTotal:index.length,offset:offset,total:matching.length,nextOffset:offset+items.length,
+  return {success:true,version:version,deliveryMetadataReady:true,segment:segment,inventoryTotal:index.length,offset:offset,total:matching.length,nextOffset:offset+items.length,
     done:offset+items.length>=matching.length,fields:INVENTORY_SNAPSHOT_FIELDS_,
     items:items.map(item=>INVENTORY_SNAPSHOT_FIELDS_.map(field=>item[field]))};
 }
@@ -326,7 +348,7 @@ function inventoryBrowserQueryFunctions_() {
   // Export only the pure display/query functions. No authentication, sheet access or cost readers.
   return [inventoryListStatus_,inventoryListRequest_,inventoryListExcluded_,inventoryItemSearchText_,inventoryListMatches_,inventoryGroupKey_,
     inventoryListGroups_,inventoryListSaleRows_,inventoryPageSlice_,inventorySortComparer_,inventoryListResponse_,inventorySummaryResponse_,
-    getYourFindsReprintLabelType_,yourFindsReprintItem_]
+    getYourFindsReprintLabelType_,yourFindsReprintItem_,inventoryIsDeliverySearch_]
     .map(fn=>fn.toString()).join('\n');
 }
 
@@ -476,8 +498,8 @@ function readInventoryChangedItems_(codes,version) {
     const last=ranges[ranges.length-1];
     if(last&&row<=last.end+3&&row-last.start<250)last.end=row;else ranges.push({start:row,end:row});
   });
-  const items=ranges.flatMap(range=>getFullInventory({products:products,rowNumber:range.start,rowCount:range.end-range.start+1,
-    deliveryMetadataByCode:metadata})).filter(item=>wanted.has(item.code));
+  const items=inventoryDeliverySearchIndex_(ranges.flatMap(range=>getFullInventory({products:products,rowNumber:range.start,rowCount:range.end-range.start+1,
+    deliveryMetadataByCode:metadata})).filter(item=>wanted.has(item.code)),version);
   items.forEach(item=>{item.deliveryMetadataLoaded=true;item.availability=inventoryListStatus_(item);});
   if(ACCESS_REQUEST_CONTEXT_.actor.manager)applyInventoryDetailCosts_(items,products,sheet);
   return {items:items,removedCodes:codes.filter(code=>!found.has(code))};

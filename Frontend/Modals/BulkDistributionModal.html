@@ -1,13 +1,37 @@
+<div id="inventoryBundleDeliveryModal" class="generic-overlay-blur" style="display:none;">
+  <div class="custom-popup-card" style="max-width:620px;width:95%;max-height:85vh;overflow:auto;">
+    <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3"><div><h5 class="fw-bold mb-1">Choose Delivery</h5><div id="inventoryBundleDeliveryName" class="small text-muted"></div></div><button type="button" class="btn-close" aria-label="Close delivery picker" onclick="closeModal('inventoryBundleDeliveryModal')"></button></div>
+    <div id="inventoryBundleDeliveryChoices" class="d-grid gap-2"></div>
+    <button type="button" class="btn btn-outline-secondary w-100 mt-3" onclick="closeModal('inventoryBundleDeliveryModal')">Cancel</button>
+  </div>
+</div>
 <div id="bulkDistributionModal" class="generic-overlay-blur" style="display:none;">
   <div class="custom-popup-card delivery-modal-card">
     <div class="d-flex justify-content-between align-items-start mb-4 pb-3 border-bottom">
       <div><h5 class="fw-bold mb-1">Distribute Bundles</h5><div id="bulkDistributionSubtitle" class="small text-muted"></div></div>
       <button type="button" class="btn-close" aria-label="Close" onclick="closeBulkDistributionModal()"></button>
     </div>
-    <div class="delivery-items-toolbar mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
       <div class="fw-semibold">Items Received</div>
-      <div id="bulkDistributionBundleTabs" class="delivery-mode-toggle btn-group flex-wrap" role="group" aria-label="Select bundle"></div>
       <button type="button" id="bulkDistributionAddItemBtn" class="btn btn-sm btn-outline-dark delivery-add-item" onclick="addBulkDistributionLine()">+ Add Item</button>
+    </div>
+    <div id="bulkDistributionBundleTabs" class="delivery-bundle-selector mb-3" role="group" aria-label="Bundle navigation"></div>
+    <div id="bulkDistributionSelectedSummary" class="bg-light rounded p-3 mb-3" hidden><div class="d-flex justify-content-between align-items-start gap-3 mb-1"><strong id="bulkDistributionSelectedName"></strong><span id="bulkDistributionSelectedStatus" class="badge"></span></div><div id="bulkDistributionBundleSummary" class="small text-muted"></div></div>
+    <div id="bulkDistributionSplitControls" class="bundle-split-toolbar mb-3" hidden>
+      <div class="bundle-split-choice">
+        <div id="bulkDistributionSplitLabel" class="small text-muted mb-1">Split into</div>
+        <input id="bulkDistributionSplitParts" type="hidden" value="">
+        <div class="delivery-mode-toggle bundle-split-fractions" role="group" aria-labelledby="bulkDistributionSplitLabel">
+          <button type="button" class="btn btn-outline-pink" data-bundle-split-parts="2" aria-label="Split into halves" aria-pressed="false" onclick="selectBundleSplitFraction(2)">½</button>
+          <button type="button" class="btn btn-outline-pink" data-bundle-split-parts="3" aria-label="Split into thirds" aria-pressed="false" onclick="selectBundleSplitFraction(3)">⅓</button>
+          <button type="button" class="btn btn-outline-pink" data-bundle-split-parts="4" aria-label="Split into quarters" aria-pressed="false" onclick="selectBundleSplitFraction(4)">¼</button>
+        </div>
+      </div>
+      <div class="bundle-split-result" aria-live="polite" aria-atomic="true">
+        <div id="bulkDistributionSplitPreview" class="fw-semibold">Choose a fraction</div>
+        <div id="bulkDistributionSplitSource" class="small text-muted"></div>
+      </div>
+      <button id="bulkDistributionSplitBtn" type="button" class="btn btn-pink bundle-split-submit" onclick="submitBundleSplit()" disabled>Split Bundle</button>
     </div>
     <div id="bulkDistributionProductsLoading" class="text-center text-muted py-3" style="display:none;"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading Product Master...</span></div>
     <div id="bulkDistributionProductsError" class="alert alert-danger" style="display:none;" role="alert"></div>
@@ -16,7 +40,7 @@
       <div class="delivery-line-head direct"><span>#</span><span>Type</span><span>Product</span><span>Actual Qty</span><span></span></div>
       <div id="bulkDistributionLines"></div>
     </div>
-    <div class="delivery-summary mb-4" aria-live="polite"><span id="bulkDistributionBundleSummary"></span><span id="bulkDistributionProductSummary"></span></div>
+    <div class="delivery-summary mb-4" aria-live="polite"><span id="bulkDistributionProductSummary"></span></div>
     <div class="fw-semibold mb-2">Delivery Summary</div>
     <div class="row g-2 text-center mb-4" aria-live="polite">
       <div class="col-4"><div class="bg-light rounded p-3"><div class="small text-muted">Delivery Estimate</div><div id="bulkDistributionEstimatedQty" class="fw-bold fs-4">0</div></div></div>
@@ -28,12 +52,97 @@
     <div class="d-flex gap-2">
       <button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeBulkDistributionModal()">Cancel</button>
       <button type="button" id="confirmBulkDistributionBtn" class="btn btn-outline-secondary flex-fill fw-bold" onclick="submitBulkDistribution(false)">Save</button>
-      <button type="button" id="completeBulkDistributionBtn" class="btn btn-pink flex-fill fw-bold" onclick="submitBulkDistribution(true)">Done Distribution</button>
+      <button type="button" id="completeBulkDistributionBtn" hidden class="btn btn-pink flex-fill fw-bold" onclick="submitBulkDistribution(true)">Done Distribution</button>
     </div>
   </div>
 </div>
 
 <script>
+let inventoryBundleSummaryFailed = false;
+let inventoryBundlePickerItem = null;
+let inventoryBundlePickerOwner = '';
+
+function inventoryBundleActionState(item) {
+  const data = deliverySummaryData();
+  const ready = !!data && Array.isArray(data.bundleProducts);
+  const linked = ready && data.bundleProducts.includes(String(item.code));
+  const name = String(item.baseName || item.name || '');
+  const candidate = linked || (String(item.category).toUpperCase() === 'WHOLESALE' && / · \([1-9]\d*\) pcs(?:\s*[·-]\s*SALE)?$/i.test(name));
+  return {ready:ready, linked:linked, candidate:candidate,
+    available:linked ? data.bundles.filter(bundle => bundle.productCode === String(item.code) && bundle.available) : []};
+}
+function inventoryCanDistribute() {
+  return !!currentEmployee && ['allow','approval'].includes(currentEmployee.permissions && currentEmployee.permissions['deliveries.create']);
+}
+function updateInventoryBundleAction(button) {
+  const item = button.inventoryItem, state = inventoryBundleActionState(item);
+  const distribute = state.linked || !state.ready;
+  button.hidden = distribute ? !inventoryCanDistribute() : !button.inventoryCanDelete;
+  button.classList.toggle('btn-warning',distribute);button.classList.toggle('btn-outline-danger',!distribute);
+  button.innerHTML = inventoryIcon(distribute ? 'openBundle' : 'delete');
+  const failed = currentEmployee && inventoryBundleSummaryFailed === currentEmployee.dashboardToken;
+  button.disabled = distribute && (state.ready ? !state.available.length || Number(item.stock) <= 0 : !failed);
+  button.title = !distribute ? 'Delete item' : !state.ready ? failed ? 'Retry loading bundles' : 'Checking available bundles…' : button.disabled ? 'No unopened bundles available' : 'Distribute';
+  button.setAttribute('aria-label',button.title + ' · ' + (item.name || item.code));
+}
+function refreshInventoryBundleActions() {
+  document.querySelectorAll('.inventory-bundle-action').forEach(updateInventoryBundleAction);
+  const picker = document.getElementById('inventoryBundleDeliveryModal');
+  if (picker.style.display === 'flex' && inventoryBundlePickerItem && currentEmployee && inventoryBundlePickerOwner === currentEmployee.dashboardToken) renderInventoryBundleDeliveries(inventoryBundlePickerItem);
+}
+function prepareInventoryBundleActions() {
+  if (!document.querySelector('.inventory-bundle-action') || !currentEmployee) return;
+  const data = deliverySummaryData();
+  if (data && Array.isArray(data.bundleProducts)) return;
+  if (data) pageReadCache.delete('deliverySummary');
+  if (inventoryBundleSummaryFailed === currentEmployee.dashboardToken || pageReadCache.get('deliveries')?.pending) return;
+  loadDeliverySummaryData();
+}
+function handleInventoryBundleAction(button) {
+  const item = button.inventoryItem, state = inventoryBundleActionState(item);
+  if (!state.ready) { inventoryBundleSummaryFailed = false;loadDeliverySummaryData();refreshInventoryBundleActions();return; }
+  if (!state.linked) { if(button.inventoryCanDelete)deleteInventoryRow(item);return; }
+  if (!inventoryCanDistribute() || !state.available.length || Number(item.stock) <= 0) return;
+  const choices = inventoryBundleDeliveries(item);
+  if (choices.length === 1) { openInventoryBundleDelivery(item,choices[0]);return; }
+  inventoryBundlePickerItem = item;
+  const picker = document.getElementById('inventoryBundleDeliveryModal');
+  inventoryBundlePickerOwner = currentEmployee.dashboardToken;picker.style.display = 'flex';
+  document.getElementById('inventoryBundleDeliveryName').textContent = item.baseName || item.name;
+  renderInventoryBundleDeliveries(item);
+}
+function inventoryBundleDeliveries(item) {
+  const choices = new Map();
+  inventoryBundleActionState(item).available.forEach(bundle => {
+    const key = JSON.stringify([bundle.deliveryId,bundle.sheetRow]);
+    if (!choices.has(key)) choices.set(key,{...bundle,count:0});
+    choices.get(key).count++;
+  });
+  return Array.from(choices.values());
+}
+function renderInventoryBundleDeliveries(item) {
+  const box = document.getElementById('inventoryBundleDeliveryChoices');box.replaceChildren();
+  const choices = inventoryBundleDeliveries(item), owner = currentEmployee && currentEmployee.dashboardToken;
+  choices.forEach(choice => {
+    const button = document.createElement('button');button.type = 'button';
+    button.className = 'btn btn-outline-pink text-start p-3';
+    const title = document.createElement('strong');title.className = 'd-block';title.textContent = choice.deliveryId;
+    const detail = document.createElement('span');detail.className = 'small';
+    detail.textContent = choice.date + ' · ' + choice.category + ' · ' + choice.count + ' available bundle(s)';
+    button.append(title,detail);
+    button.onclick = () => {if(currentEmployee && currentEmployee.dashboardToken === owner)openInventoryBundleDelivery(item,choice);};
+    box.appendChild(button);
+  });
+  if (!choices.length) box.textContent = 'No unopened bundles available.';
+}
+function openInventoryBundleDelivery(item, choice) {
+  if (!inventoryCanDistribute()) return;
+  const current = inventoryBundleDeliveries(item).find(bundle => bundle.deliveryId === choice.deliveryId && bundle.sheetRow === choice.sheetRow);
+  if (!current) {refreshInventoryBundleActions();showNotificationToast('This delivery has no unopened bundles available.',true);return;}
+  closeModal('inventoryBundleDeliveryModal');
+  openBulkDistributionModal(current.deliveryId,current.sheetRow,getCurrentDeliveryEmployeeName(),current.bundleNo);
+}
+
 let bulkDistributionSaving = false;
 let bulkDistributionRequest = 0;
 let bulkDistributionHolder = null;
@@ -41,11 +150,65 @@ let bulkDistributionProducts = [];
 let bulkDistributionLineCounter = 0;
 let bulkDistributionEmployee = "";
 let bulkDistributionSelectedBundleNo = 1;
+let bundleDistributionPreloadTimer = null;
+
+function bundleDistributionCache_(){
+ const owner=JSON.stringify(currentEmployee);
+ let cache=pageReadCache.get('bundleDistributionDetails');
+ if(!cache||cache.owner!==owner){cache={owner:owner,entries:new Map()};pageReadCache.set('bundleDistributionDetails',cache);}
+ return cache;
+}
+function bundleDistributionKey_(deliveryId,sheetRow){
+ const id=String(deliveryId||'').trim();
+ const row=Number(sheetRow)||Number(deliverySummaryData()?.bundles.find(bundle=>bundle.deliveryId===id)?.sheetRow)||0;
+ return JSON.stringify([id,row]);
+}
+function cachedBundleDistributionDetails_(deliveryId,sheetRow){
+ const cache=pageReadCache.get('bundleDistributionDetails');
+ return cache&&currentEmployee&&cache.owner===JSON.stringify(currentEmployee)?cache.entries.get(bundleDistributionKey_(deliveryId,sheetRow)):null;
+}
+function requestBundleDistributionDetails_(deliveryId,sheetRow){
+ const cache=bundleDistributionCache_(),key=bundleDistributionKey_(deliveryId,sheetRow),[id,row]=JSON.parse(key);
+ if(cache.entries.has(key))return cache.entries.get(key);
+ const entry={};cache.entries.set(key,entry);
+ entry.promise=new Promise((resolve,reject)=>{
+  secureScriptRun.withSuccessHandler(result=>{
+   if(!currentEmployee||cache.owner!==JSON.stringify(currentEmployee)||pageReadCache.get('bundleDistributionDetails')!==cache)return reject(new Error('Bundle data changed. Reopen distribution.'));
+   if(!result||!result.success||!result.holder){cache.entries.delete(key);return reject(new Error(result&&result.message||'Unable to load bundle details.'));}
+   entry.data=result;cache.entries.set(JSON.stringify([id,Number(result.holder.sheetRow)]),entry);resolve(result);
+  }).withFailureHandler(error=>{cache.entries.delete(key);reject(error);}).getBulkDistributionData(id,true,row||null);
+ });
+ return entry;
+}
+function invalidateBundleDistributionDetails(){
+ clearTimeout(bundleDistributionPreloadTimer);
+ pageReadCache.delete('bundleDistributionDetails');
+ const queue=pageReadCache.get('standardDeliveryDetails')?.preload;
+ if(queue){queue.bundles=[];queue.attempted.forEach(key=>{if(key.startsWith('bundle:'))queue.attempted.delete(key);});}
+ const owner=currentEmployee&&currentEmployee.dashboardToken;
+ if(owner)bundleDistributionPreloadTimer=setTimeout(()=>{
+  if(currentEmployee&&currentEmployee.dashboardToken===owner)preloadBundleDistributionDetails(deliverySummaryData());
+ },150);
+}
+function preloadBundleDistributionDetails(data){
+ if(!currentEmployee||!data||!Array.isArray(data.bundles))return;
+ const cache=deliveryDetailsCache_(),queue=deliveryDetailsPreloadQueue_(cache);
+ data.bundles.forEach(bundle=>{
+  const key='bundle:'+JSON.stringify([bundle.deliveryId,bundle.sheetRow]);
+  if(!queue.attempted.has(key)&&!cachedBundleDistributionDetails_(bundle.deliveryId,bundle.sheetRow)){
+   queue.attempted.add(key);queue.bundles.push({deliveryId:bundle.deliveryId,sheetRow:bundle.sheetRow});
+  }
+ });
+ const order=new Map(deliverySummaryVisible.map((delivery,index)=>[delivery.deliveryId,index]));
+ queue.bundles.sort((a,b)=>(order.get(a.deliveryId)??Number.MAX_SAFE_INTEGER)-(order.get(b.deliveryId)??Number.MAX_SAFE_INTEGER)||b.sheetRow-a.sheetRow);
+ scheduleDeliveryDetailsPreload_(cache);
+}
 
 function openBulkDistributionModal(deliveryId, sheetRow, employee, bundleNo) {
   if (bulkDistributionSaving) return;
   const request = ++bulkDistributionRequest;
   const catalog = cachedDeliveryCatalog();
+  const cachedHolder = cachedBundleDistributionDetails_(deliveryId,sheetRow)?.data;
   bulkDistributionHolder = null;
   bulkDistributionProducts = [];
   bulkDistributionLineCounter = 0;
@@ -53,31 +216,38 @@ function openBulkDistributionModal(deliveryId, sheetRow, employee, bundleNo) {
   bulkDistributionSelectedBundleNo = 1;
   document.getElementById("bulkDistributionEmployee").value = bulkDistributionEmployee;
   document.getElementById("bulkDistributionBundleTabs").replaceChildren();
+  document.getElementById("bulkDistributionSubtitle").textContent = deliveryId;
   document.getElementById("bulkDistributionLines").innerHTML = "";
+  document.getElementById('bulkDistributionSplitParts').value='';
   updateBulkDistributionSummary();
   document.getElementById("bulkDistributionRemarks").value = "";
   document.getElementById("bulkDistributionProductsError").style.display = "none";
-  document.getElementById("bulkDistributionProductsLoading").style.display = "block";
+  document.getElementById("bulkDistributionProductsLoading").innerHTML = loadingIndicator(catalog ? 'Loading bundle details…' : 'Loading products and bundle details…');
+  document.getElementById("bulkDistributionProductsLoading").style.display = cachedHolder&&catalog?'none':'block';
+  ['bulkDistributionAddItemBtn','confirmBulkDistributionBtn','completeBulkDistributionBtn'].forEach(id=>document.getElementById(id).disabled=true);
   document.getElementById("bulkDistributionModal").style.display = "flex";
 
-  secureScriptRun.withSuccessHandler(function(result) {
+  function loaded(products,result) {
     if (request !== bulkDistributionRequest) return;
     if (!result || !result.success || !result.holder) {
-      showBulkDistributionError(result && result.message ? result.message : "Unable to load bulk holder."); return;
+      showBulkDistributionError(result && result.message ? result.message : "Unable to load BUNDLE holder."); return;
     }
-    bulkDistributionHolder = result.holder;
+    bulkDistributionHolder = JSON.parse(JSON.stringify(result.holder));
     document.getElementById("bulkDistributionRemarks").value = result.holder.remarks || "";
-    const requested = (result.holder.bundles || []).find(b => b.bundleNo === Number(bundleNo) && !b.disabled);
+    const requested = (result.holder.bundles || []).find(b => b.bundleNo === Number(bundleNo));
     const firstAvailable = (result.holder.bundles || []).find(b => !b.disabled);
     bulkDistributionSelectedBundleNo = requested ? requested.bundleNo : firstAvailable ? firstAvailable.bundleNo : 1;
-    if (!catalog) rememberDeliveryCatalog(result.products || []);
-    bulkDistributionProducts = (catalog || result.products || []).filter(p => p.category === result.holder.type);
+    bulkDistributionProducts = (products.products || []).filter(p => p.category === result.holder.type);
     populateBulkDistributionProductList();
     document.getElementById("bulkDistributionProductsLoading").style.display = "none";
+    ['confirmBulkDistributionBtn','completeBulkDistributionBtn'].forEach(id=>document.getElementById(id).disabled=false);
     renderBulkDistributionHolder();
     restoreBulkDistributionLines();
-  }).withFailureHandler(function(err){if(request === bulkDistributionRequest)showBulkDistributionError(err && err.message ? err.message : String(err));})
-    .getBulkDistributionData(deliveryId, !!catalog, sheetRow);
+  }
+  if(cachedHolder&&catalog){loaded({products:catalog},cachedHolder);return;}
+  const holderRead=requestBundleDistributionDetails_(deliveryId,sheetRow);
+  Promise.all([getDeliveryCatalog(),holderRead.promise]).then(([products,result])=>loaded(products,result))
+    .catch(function(err){if(request === bulkDistributionRequest)showBulkDistributionError(err && err.message ? err.message : String(err));});
 }
 
 function closeBulkDistributionModal() {
@@ -99,41 +269,33 @@ function renderBulkDistributionTabs() {
   const box = document.getElementById("bulkDistributionBundleTabs");
   box.replaceChildren();
   const bundles = bulkDistributionHolder.bundles || [];
-  if (bundles.length > 3) {
-    const select = document.createElement("select");
-    select.className = "form-select form-select-sm";
-    select.setAttribute("aria-label", "Select bundle");
-    bundles.forEach(function(bundle) {
-      const option = document.createElement("option");
-      option.value = bundle.bundleNo;
-      option.textContent = "Bundle #" + bundle.bundleNo + (bundle.disabled ? " — " + (bundle.shortStatus || "Unavailable") : "");
-      option.disabled = !!bundle.disabled;
-      option.selected = Number(bundle.bundleNo) === bulkDistributionSelectedBundleNo;
-      option.title = bundle.tooltip || "";
-      select.appendChild(option);
-    });
-    select.onchange = function() { selectBulkDistributionBundle(select.value); };
-    box.appendChild(select);
-    return;
-  }
+  const label=document.createElement('label');label.htmlFor='bulkDistributionBundleSelect';label.className='small text-muted';label.textContent='Bundle';
+  const select=document.createElement('select');select.id='bulkDistributionBundleSelect';select.className='form-select';select.disabled=bulkDistributionSaving;
   bundles.forEach(function(bundle) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "btn btn-sm btn-outline-pink";
-    button.setAttribute("aria-pressed", String(Number(bundle.bundleNo) === bulkDistributionSelectedBundleNo));
-    button.textContent = "Bundle #" + bundle.bundleNo + (bundle.disabled ? " · " + (bundle.shortStatus || "Unavailable") : "");
-    button.disabled = !!bundle.disabled;
-    button.title = bundle.tooltip || "";
-    button.onclick = function() { selectBulkDistributionBundle(bundle.bundleNo); };
-    box.appendChild(button);
+    const option=document.createElement('option');option.value=bundle.bundleNo;
+    option.textContent=(bundle.label||bundleDisplayName_(bulkDistributionHolder.deliveryId,bundle.bundleNo))+' · '+bulkDistributionBundleStatus_(bundle)+(bundle.actualQuantity?' · '+bundle.actualQuantity+' pcs':'');
+    option.selected=Number(bundle.bundleNo)===bulkDistributionSelectedBundleNo;select.append(option);
   });
+  select.onchange=()=>selectBulkDistributionBundle(select.value,'select');
+  const nav=document.createElement('div');nav.className='delivery-bundle-nav d-flex gap-1';
+  const index=bundles.findIndex(bundle=>Number(bundle.bundleNo)===bulkDistributionSelectedBundleNo);
+  [[-1,'previous','Previous bundle','‹'],[1,'next','Next bundle','›']].forEach(([offset,key,title,icon])=>{
+    const button=document.createElement('button');button.type='button';button.className='btn btn-outline-secondary';
+    button.dataset.distributionNavigation=key;button.title=title;button.setAttribute('aria-label',title);button.textContent=icon;
+    button.disabled=bulkDistributionSaving||!bundles[index+offset];button.onclick=()=>selectBulkDistributionBundle(bundles[index+offset].bundleNo,key);nav.append(button);
+  });
+  box.append(label,select,nav);
 }
 
-function selectBulkDistributionBundle(bundleNo) {
+function bulkDistributionBundleStatus_(bundle){
+  return bundle.split?'Split':Number(bundle.actualQuantity)>0?'Distributed':bundle.fullSold||Number(bundle.soldHalves)>=2?'Sold':Number(bundle.soldHalves)>0?'Partially sold':'Unopened';
+}
+function selectBulkDistributionBundle(bundleNo,focus) {
   if (bulkDistributionSaving) return;
   const requested = (bulkDistributionHolder && bulkDistributionHolder.bundles || []).find(b => Number(b.bundleNo) === Number(bundleNo));
-  if (!requested || requested.disabled) return;
+  if (!requested) return;
   bulkDistributionSelectedBundleNo = Number(bundleNo) || 1;
+  document.getElementById('bulkDistributionSplitParts').value='';
   renderBulkDistributionTabs();
   let index = 0;
   document.querySelectorAll("#bulkDistributionLines .bulk-distribution-line").forEach(function(row) {
@@ -144,24 +306,26 @@ function selectBulkDistributionBundle(bundleNo) {
   const addButton = document.getElementById("bulkDistributionAddItemBtn");
   if (addButton) addButton.disabled = !!(getSelectedBulkBundle() || {}).disabled;
   updateBulkDistributionSummary();
+  if(focus){const control=focus==='select'?document.getElementById('bulkDistributionBundleSelect'):document.querySelector('#bulkDistributionBundleTabs [data-distribution-navigation="'+focus+'"]');
+    if(control&&!control.disabled)control.focus();else document.getElementById('bulkDistributionBundleSelect')?.focus();}
 }
 function getSelectedBulkBundle(){return (bulkDistributionHolder&&bulkDistributionHolder.bundles||[]).find(function(b){return Number(b.bundleNo)===Number(bulkDistributionSelectedBundleNo);})||null;}
 
 function restoreBulkDistributionLines() {
+  const selectedBundleNo=bulkDistributionSelectedBundleNo;
   (bulkDistributionHolder.bundles || []).forEach(function(bundle) {
     (bundle.lines || []).forEach(function(saved) {
       bulkDistributionSelectedBundleNo = Number(bundle.bundleNo);
       addBulkDistributionLine(saved);
     });
   });
-  const firstAvailable = (bulkDistributionHolder.bundles || []).find(b => !b.disabled);
-  if (firstAvailable) selectBulkDistributionBundle(firstAvailable.bundleNo);
-  if (!document.getElementById("bulkDistributionLines").children.length && bulkDistributionProducts.length) addBulkDistributionLine();
+  selectBulkDistributionBundle(selectedBundleNo);
+  if (!(getSelectedBulkBundle()||{}).disabled && !getBulkDistributionLines(selectedBundleNo,true).length && bulkDistributionProducts.length) addBulkDistributionLine();
 }
 
 function addBulkDistributionLine(saved) {
   if(bulkDistributionSaving)return;
-  if((getSelectedBulkBundle()||{}).disabled){showNotificationToast("This bundle is unavailable.",true);return;}
+  if(!saved&&(getSelectedBulkBundle()||{}).disabled){showNotificationToast("This bundle is unavailable.",true);return;}
   if(!saved && !bulkDistributionProducts.length){showNotificationToast("Product Master is still loading.",true);return;}
   bulkDistributionLineCounter++; const id=bulkDistributionLineCounter; const c=document.getElementById("bulkDistributionLines"); const line=document.createElement("div");
   line.className="bulk-distribution-line delivery-line direct";
@@ -194,28 +358,100 @@ function updateBulkDistributionSummary() {
   const bundleActual = (Number(selected && selected.actualQuantity) || 0) + total(selectedLines);
   const estimate = Number(h && h.estimatedQuantity) || 0;
   const actual = (Number(h && h.actualQuantity) || 0) + total(getBulkDistributionLines());
-  const bundleEstimate = h ? estimate / (Number(h.bundleQty) || 1) : 0;
-  document.getElementById("bulkDistributionBundleSummary").textContent = "Bundle est. " + bundleEstimate + " pcs · Actual " + bundleActual + " pcs";
+  const bundleEstimate = Number(selected && selected.estimatedQuantity) || (h ? estimate / (Number(h.bundleQty) || 1) : 0);
+  document.getElementById('bulkDistributionSelectedSummary').hidden=!h;
+  document.getElementById('bulkDistributionSelectedName').textContent=selected&&selected.description||h&&h.description||'';
+  const status=selected?bulkDistributionBundleStatus_(selected):'',badge=document.getElementById('bulkDistributionSelectedStatus');
+  badge.textContent=status;badge.className='badge '+({Unopened:'bg-warning text-dark',Distributed:'bg-success',Sold:'bg-danger','Partially sold':'bg-info text-dark'}[status]||'bg-secondary');
+  document.getElementById("bulkDistributionBundleSummary").textContent = "Estimated: " + Number(bundleEstimate.toFixed(2)) + " pcs · Counted: " + bundleActual + " pcs";
   const products = new Map();
   getBulkDistributionLines(bulkDistributionSelectedBundleNo, true).forEach(function(line) {
     const product = bulkDistributionProducts.find(p => String(p.productCode) === line.productCode);
     if (product) products.set(product.description, (products.get(product.description) || 0) + line.quantity);
   });
   document.getElementById("bulkDistributionProductSummary").textContent = Array.from(products, ([name, qty]) => name + " " + qty).join(" · ");
+  document.getElementById('bulkDistributionProductSummary').parentElement.hidden=!products.size;
   document.getElementById("bulkDistributionEstimatedQty").textContent = estimate;
   document.getElementById("bulkDistributionActualQty").textContent = actual;
   document.getElementById("bulkDistributionCurrentVariance").textContent = (actual > estimate ? "+" : "") + (actual - estimate);
+  document.getElementById('completeBulkDistributionBtn').hidden=!bulkDistributionAllAccountedFor();
+  updateBulkDistributionSplit();
+}
+
+function bulkDistributionAllAccountedFor() {
+  const bundles=bulkDistributionHolder&&bulkDistributionHolder.bundles||[];
+  return bundles.length>0&&bundles.every(bundle=>bundle.split||bundle.fullSold||Number(bundle.soldHalves)>=2||Number(bundle.actualQuantity)>0);
+}
+function selectBundleSplitFraction(parts) {
+  if(bulkDistributionSaving)return;
+  const button=document.querySelector('[data-bundle-split-parts="'+parts+'"]');
+  if(!button||button.disabled)return;
+  document.getElementById('bulkDistributionSplitParts').value=String(parts);
+  updateBulkDistributionSplit();
+}
+function updateBulkDistributionSplit() {
+  const holder=bulkDistributionHolder,bundle=getSelectedBulkBundle();
+  const controls=document.getElementById('bulkDistributionSplitControls');
+  const pieces=Number(bundle&&bundle.estimatedQuantity)||Number(holder&&holder.estimatedQuantity)/Number(holder&&holder.bundleQty);
+  const linked=!!(bundle&&bundle.productCode)||!!(holder&&Object.keys(holder.physicalProducts||{}).length);
+  controls.hidden=!holder||!bundle||bundle.disabled||Number(bundle.soldHalves)>0||!linked;
+  const parts=Number(document.getElementById('bulkDistributionSplitParts').value);
+  document.querySelectorAll('[data-bundle-split-parts]').forEach(button=>{
+    const fraction=Number(button.dataset.bundleSplitParts);
+    const wholePieces=Number.isSafeInteger(pieces/fraction)&&pieces/fraction>=1;
+    button.disabled=bulkDistributionSaving||!wholePieces;
+    button.setAttribute('aria-pressed',String(fraction===parts));
+    button.title=wholePieces?'Create '+fraction+' bundles of '+(pieces/fraction)+' pcs':'Requires whole pieces per bundle';
+  });
+  const draft=Array.from(document.querySelectorAll('#bulkDistributionLines .bulk-distribution-line')).some(row=>Number(row.dataset.bundleNo)===bulkDistributionSelectedBundleNo&&row.dataset.saved!=='true'&&row.querySelector('.bulk-distribution-product-search').value.trim());
+  const valid=[2,3,4].includes(parts)&&Number.isSafeInteger(pieces/parts)&&pieces/parts>0;
+  document.getElementById('bulkDistributionSplitBtn').disabled=bulkDistributionSaving||controls.hidden||!valid||draft;
+  document.getElementById('bulkDistributionSplitPreview').textContent=draft?'Save or remove selected item rows first.':valid?parts+' bundles × '+(pieces/parts)+' pcs':'Choose a fraction';
+  document.getElementById('bulkDistributionSplitSource').textContent=Number.isFinite(pieces)?'From 1 bundle · '+pieces+' pcs':'';
+}
+function submitBundleSplit() {
+  if(bulkDistributionSaving||!bulkDistributionHolder)return;
+  updateBulkDistributionSplit();
+  const button=document.getElementById('bulkDistributionSplitBtn');if(button.disabled)return;
+  const bundleNo=bulkDistributionSelectedBundleNo,parts=Number(document.getElementById('bulkDistributionSplitParts').value);
+  const request=bulkDistributionRequest;
+  document.getElementById('bulkDistributionProductsError').style.display='none';
+  setBulkDistributionSaving(true);button.innerHTML=loadingIndicator('Splitting…');
+  const failed=error=>{
+    if(request!==bulkDistributionRequest)return;
+    button.textContent='Split Bundle';setBulkDistributionSaving(false);
+    showBulkDistributionError(error.message||String(error));
+  };
+  secureScriptRun.withSuccessHandler(result=>{
+    if(request!==bulkDistributionRequest)return;
+    if(!result||!result.success){failed(new Error(result&&result.message||'Unable to split bundle.'));return;}
+    document.querySelectorAll('#bulkDistributionLines .bulk-distribution-line').forEach(row=>{if(Number(row.dataset.bundleNo)===bundleNo)row.remove();});
+    bulkDistributionHolder=result.holder;
+    button.textContent='Split Bundle';setBulkDistributionSaving(false);
+    const child=result.holder.bundles.find(bundle=>bundle.parentBundleNo===bundleNo);
+    selectBulkDistributionBundle(child?child.bundleNo:bundleNo);
+    if(child&&!getBulkDistributionLines(child.bundleNo,true).length)addBulkDistributionLine();
+    invalidateDeliveryItemCaches();
+    if(result.createdBundleProducts){pageReadCache.delete('productMaster');invalidateDeliveryCatalog();warmDeliveryCatalog();}
+    refreshDeliveriesPage(true);
+    showNotificationToast('Created '+result.parts+' bundles of '+result.pieces+' pcs.');
+  }).withFailureHandler(failed).splitPhysicalBundle({deliveryId:bulkDistributionHolder.deliveryId,sheetRow:bulkDistributionHolder.sheetRow,
+    bundleNo:bundleNo,parts:parts,employee:bulkDistributionEmployee});
 }
 
 function setBulkDistributionSaving(saving) {
   bulkDistributionSaving = saving;
-  document.querySelectorAll("#bulkDistributionModal button, #bulkDistributionModal input, #bulkDistributionModal textarea").forEach(control => { control.disabled = saving || (control.tagName === "BUTTON" && !!control.closest('[data-saved="true"]')); });
+  document.querySelectorAll("#bulkDistributionModal button, #bulkDistributionModal input, #bulkDistributionModal textarea, #bulkDistributionModal select").forEach(control => { control.disabled = saving || (control.tagName === "BUTTON" && !!control.closest('[data-saved="true"]')); });
   document.getElementById("confirmBulkDistributionBtn").innerHTML = saving ? loadingIndicator("Saving...") : "Save";
+  renderBulkDistributionTabs();
+  document.getElementById('bulkDistributionAddItemBtn').disabled=saving||!!(getSelectedBulkBundle()||{}).disabled;
+  updateBulkDistributionSummary();
 }
 
 function submitBulkDistribution(complete) {
   if (bulkDistributionSaving) return;
-  if (!bulkDistributionHolder) return showNotificationToast("Bulk holder is not loaded.", true);
+  if (!bulkDistributionHolder) return showNotificationToast("BUNDLE holder is not loaded.", true);
+  if (complete && !bulkDistributionAllAccountedFor()) return showNotificationToast('Distribute or sell every remaining bundle before finishing.',true);
   const employee = bulkDistributionEmployee;
   if (!employee) return showNotificationToast("Unable to identify the logged-in employee.", true);
   const lines = getBulkDistributionLines();
@@ -223,7 +459,7 @@ function submitBulkDistribution(complete) {
   for (const line of lines) {
     if (!line.productCode || !Number.isInteger(line.quantity) || line.quantity < 1) {
       selectBulkDistributionBundle(line.bundleNo);
-      return showNotificationToast("Select a valid product and quantity for every item in Bundle #" + line.bundleNo + ".", true);
+      return showNotificationToast("Select a valid product and quantity for every item in BUNDLE " + bundleDisplayName_(bulkDistributionHolder.deliveryId, line.bundleNo) + ".", true);
     }
   }
   const bundleNumbers = [...new Set(lines.map(line => line.bundleNo))];
@@ -250,8 +486,9 @@ function submitBulkDistribution(complete) {
           .completeBulkHolder({deliveryId:bulkDistributionHolder.deliveryId, sheetRow:bulkDistributionHolder.sheetRow, employee:employee, remarks:remarks});
       } else {
         setBulkDistributionSaving(false);
-        closeBulkDistributionModal();
-        showNotificationToast("Distribution saved. Open Bulk to continue.");
+        const allAccountedFor=bulkDistributionAllAccountedFor();
+        if(!allAccountedFor)closeBulkDistributionModal();
+        showNotificationToast(allAccountedFor?"All bundles accounted for. Select Done Distribution to finish.":"Distribution saved. Open BUNDLE to continue.");
         refreshDeliveriesPage();
       }
       return;

@@ -69,7 +69,7 @@
           </div>
           <div id="yfEditorCostWrap" class="col-md-6" style="display:none;">
             <label class="form-label" for="yfEditorCostPrice">Custom Cost Price</label>
-            <div class="input-group"><span class="input-group-text">₱</span><input id="yfEditorCostPrice" type="number" min="0" step="0.01" class="form-control"></div>
+            <div class="input-group"><span class="input-group-text">₱</span><input id="yfEditorCostPrice" type="number" min="0" step="0.01" class="form-control" oninput="updateYourFindsApprovalFields()"></div>
             <small class="text-muted">This item only. Leave blank if unknown; zero is a valid cost.</small>
           </div>
           <div id="yfEditorManagerPinWrap" class="col-12">
@@ -149,7 +149,8 @@
  <div class="form-text">JPG, PNG, or WEBP · maximum 5 MB</div></div>
    <div class="col-md-8"><div class="row g-3">
    <div class="col-md-7"><label class="form-label">Product Code</label><input id="pmCode" class="form-control font-monospace" placeholder="Auto-generated" readonly></div>
-    <div class="col-md-5"><label class="form-label">Category</label><select id="pmCategory" class="form-select"><option>PINS</option><option>OTHERS</option><option value="WHOLESALE">Wholesale</option></select></div>
+    <div class="col-md-5"><label class="form-label">Category</label><select id="pmCategory" class="form-select" onchange="toggleWholesaleProductFields()"><option>PINS</option><option>OTHERS</option><option value="WHOLESALE">Wholesale</option></select></div>
+    <div id="pmWholesaleFields" class="col-12" hidden><div class="row g-3"><div class="col-md-8"><label for="pmWholesaleName" class="form-label">Bundle Name <span class="text-danger">*</span></label><input id="pmWholesaleName" class="form-control" placeholder="PURE TOPS (BOX)" oninput="updateWholesaleProductName()"></div><div class="col-md-4"><label for="pmWholesalePieces" class="form-label">Pieces <span class="text-danger">*</span></label><input id="pmWholesalePieces" type="number" min="1" step="1" class="form-control" placeholder="50" oninput="updateWholesaleProductName()"></div></div></div>
     <div class="col-12"><label class="form-label">Description <span class="text-danger">*</span></label><textarea id="pmDescription" class="form-control" rows="3"></textarea></div>
     <div id="pmCostWrap" class="col-md-6" style="display:none;"><label class="form-label">Cost Price</label><div class="input-group"><span class="input-group-text">₱</span><input id="pmCost" type="number" min="0" step="0.01" class="form-control"></div></div>
     <div class="col-md-6"><label class="form-label">Selling Price <span class="text-danger">*</span></label><div class="input-group"><span class="input-group-text">₱</span><input id="pmPrice" type="number" min="0" step="0.01" class="form-control" oninput="updateProductSalePreview()"></div></div>
@@ -292,10 +293,14 @@ function preloadInventoryItemDetails() {
    if(result.changed){inventoryItemDetailPreload=null;updateInventoryDatasetStatus();observeInventoryVersion(result.version);return;}
    if(result.version!==version||!Array.isArray(result.items)||JSON.stringify(result.codes)!==JSON.stringify(batch))return failed();
    result.items.forEach(item=>{
-    inventoryItemDetailCache.set(String(item.code),{owner:owner,version:version,time:Date.now(),item:item});
     const base=job.byCode.get(String(item.code));
-    if(base){item.availability=inventoryListStatus_(item);base.searchText=inventoryItemSearchText_(item);}
+    if(base){
+      if(!item.deliveryId&&base.deliveryId){item.deliveryId=base.deliveryId;item.dateDelivered=base.dateDelivered;item.deliveryMetadataLoaded=true;}
+      item.availability=inventoryListStatus_(item);base.searchText=inventoryItemSearchText_(item);
+    }
+    inventoryItemDetailCache.set(String(item.code),{owner:owner,version:version,time:Date.now(),item:item});
    });
+   inventoryLocalViews.clear();
    job.offset+=batch.length;job.retries=0;
    if(job.offset>=job.total){finish();return;}
    updateInventoryDatasetStatus();inventoryItemDetailPreloadTimer=setTimeout(next,150);
@@ -428,7 +433,7 @@ function openYourFindsEditor(){
  document.getElementById('yfEditorCostWrap').style.display=inventoryIsManager()&&phase8SelectedItem.costSource==='CUSTOM'?'block':'none';
  document.getElementById('yfEditorCostPrice').value=inventoryIsManager()&&phase8SelectedItem.costSource==='CUSTOM'?(phase8SelectedItem.costPrice??''):'';
  document.getElementById('yfEditorManagerPin').value='';
- document.getElementById('yfEditorManagerPinWrap').style.display=!employeeIsOic()&&(incomplete||canAuthorizeManagerActions())?'none':'block';
+ updateYourFindsApprovalFields();
  document.getElementById('yfEditorPhoto').value='';
  renderYourFindsEditorPhoto(phase8SelectedItem.imageUrl||'');
  document.getElementById('yfEditorCompletionNote').style.display=incomplete?'block':'none';
@@ -436,6 +441,17 @@ function openYourFindsEditor(){
  document.getElementById('yourFindsEditorModal').style.display='flex';
 }
 
+function yourFindsCustomCostChanged(){
+ if(!phase8SelectedItem||!inventoryIsManager()||phase8SelectedItem.costSource!=='CUSTOM')return false;
+ const value=document.getElementById('yfEditorCostPrice').value.trim(),previous=phase8SelectedItem.costPrice;
+ const wasBlank=previous===null||previous===undefined||previous==='';
+ return value===''?!wasBlank:wasBlank||Number(value)!==Number(previous);
+}
+function updateYourFindsApprovalFields(){
+ const incomplete=phase8SelectedItem&&String(phase8SelectedItem.status).toUpperCase()==='INCOMPLETE';
+ const required=!canAuthorizeManagerActions()&&(!incomplete||yourFindsCustomCostChanged());
+ document.getElementById('yfEditorManagerPinWrap').style.display=required?'block':'none';
+}
 function renderYourFindsEditorPhoto(url){
  const preview=document.getElementById('yfEditorPhotoPreview'); const empty=document.getElementById('yfEditorPhotoEmpty');
  if(url){preview.src=url;preview.style.display='block';empty.style.display='none';}
@@ -472,7 +488,7 @@ function saveYourFindsDetailsClient(generateLabel){
  const originalPrice=Number(document.getElementById('yfEditorOriginalPrice').value);
  if(!Number.isFinite(originalPrice)||originalPrice<0)return showNotificationToast('Enter a valid Original Price.',true);
  payload.originalPrice=originalPrice;
- if(inventoryIsManager()&&phase8SelectedItem.costSource==='CUSTOM')payload.costPrice=document.getElementById('yfEditorCostPrice').value;
+ if(yourFindsCustomCostChanged())payload.costPrice=document.getElementById('yfEditorCostPrice').value;
  setYourFindsSaving(true,generateLabel);
  secureScriptRun.withSuccessHandler(function(result){
    setYourFindsSaving(false);
@@ -607,6 +623,18 @@ function openProductEditor(){
  try{document.getElementById('pmCode').value=generateLocalProductCode();}
  catch(error){document.getElementById('pmSaveButton').disabled=true;showNotificationToast(error.message,true);}
 }
+function toggleWholesaleProductFields(){
+ const wholesale=document.getElementById('pmCategory').value==='WHOLESALE'&&document.getElementById('pmCode').dataset.editing!=='true';
+ document.getElementById('pmWholesaleFields').hidden=!wholesale;
+ const description=document.getElementById('pmDescription');
+ description.readOnly=wholesale;description.classList.toggle('bg-light',wholesale);description.rows=wholesale?1:3;
+ if(wholesale)updateWholesaleProductName();
+}
+function updateWholesaleProductName(){
+ if(document.getElementById('pmWholesaleFields').hidden)return;
+ const name=document.getElementById('pmWholesaleName').value.trim(),pieces=document.getElementById('pmWholesalePieces').value;
+ document.getElementById('pmDescription').value=name?name+' · ('+(pieces===''?'':Number(pieces))+') pcs':'';
+}
 function previewProductPhoto(input){
  readProductPhoto(input,function(url,name){phase8ProductPhotoDataUrl=url;phase8ProductPhotoFileName=name;document.getElementById('pmPhotoPreview').src=url;document.getElementById('pmPhotoPreview').style.display='block';document.getElementById('pmPhotoEmpty').style.display='none';});
 }
@@ -645,6 +673,7 @@ function populateProductMasterEditor(p,requestedStatus){
  document.getElementById('pmModeLabel').textContent='Editing '+p.productCode+' — Product Code is locked';
  document.getElementById('pmCode').value=p.productCode;document.getElementById('pmCode').readOnly=true;
  document.getElementById('pmDescription').value=p.description;document.getElementById('pmCategory').value=p.category;
+ toggleWholesaleProductFields();
  document.getElementById('pmPrice').value=p.defaultPrice;
  document.getElementById('pmCost').value=inventoryIsManager()?(p.costPrice??''):'';
  document.getElementById('pmCostWrap').style.display=inventoryIsManager()?'block':'none';
@@ -660,7 +689,7 @@ function populateProductMasterEditor(p,requestedStatus){
 }
 function editProductMaster(code,requestedStatus){const p=(window.phase8Products||[]).find(x=>String(x.productCode)===String(code));populateProductMasterEditor(p,requestedStatus);}
 function editInventoryProduct(item,requestedStatus){const p={productCode:item.code,description:item.baseName||item.name,category:item.category,defaultPrice:item.regularPrice??item.price,costPrice:item.costPrice,lowStockAt:item.lowStockAt,status:item.productStatus,salePrice:item.salePrice,saleQuantity:item.saleQuantity,saleRemaining:item.saleRemaining,saleEnd:item.saleEnd,saleReferenceId:item.saleReferenceId,salePrices:item.salePrices,imageUrl:item.imageUrl,active:item.productStatus!=='DEACTIVATED'};populateProductMasterEditor(p,requestedStatus);}
-function clearProductMasterForm(){document.getElementById('pmCostWrap').style.display=inventoryIsManager()?'block':'none';document.getElementById('pmCode').dataset.editing='false';document.getElementById('pmModeLabel').textContent='Create a stock product';['pmCode','pmDescription','pmPrice','pmCost','pmLow'].forEach(id=>document.getElementById(id).value='');document.getElementById('pmSaleRows').replaceChildren();document.getElementById('pmStatus').value='ACTIVE';toggleProductSaleFields();document.getElementById('pmPhotoEmpty').style.display='block';document.getElementById('pmPhoto').value='';document.getElementById('pmPhotoPreview').removeAttribute('src');document.getElementById('pmPhotoPreview').style.display='none';phase8ProductPhotoDataUrl='';phase8ProductPhotoFileName='';document.getElementById('pmCode').readOnly=true;document.getElementById('pmCategory').value='PINS';document.getElementById('pmSaveButton').disabled=false;document.getElementById('pmSaveButton').textContent='Save';}
+function clearProductMasterForm(){document.getElementById('pmCostWrap').style.display=inventoryIsManager()?'block':'none';document.getElementById('pmCode').dataset.editing='false';document.getElementById('pmModeLabel').textContent='Create a stock product';['pmCode','pmDescription','pmPrice','pmCost','pmLow'].forEach(id=>document.getElementById(id).value='');document.getElementById('pmSaleRows').replaceChildren();document.getElementById('pmStatus').value='ACTIVE';toggleProductSaleFields();document.getElementById('pmPhotoEmpty').style.display='block';document.getElementById('pmPhoto').value='';document.getElementById('pmPhotoPreview').removeAttribute('src');document.getElementById('pmPhotoPreview').style.display='none';phase8ProductPhotoDataUrl='';phase8ProductPhotoFileName='';document.getElementById('pmCode').readOnly=true;document.getElementById('pmCategory').value='PINS';document.getElementById('pmWholesaleName').value='';document.getElementById('pmWholesalePieces').value='';toggleWholesaleProductFields();document.getElementById('pmSaveButton').disabled=false;document.getElementById('pmSaveButton').textContent='Save';}
 function applySavedProductToInventory_(result){
  if(typeof window!=='undefined'&&Array.isArray(window.phase8Products)){
    let product=window.phase8Products.find(p=>String(p.productCode)===String(result.productCode));
@@ -679,6 +708,11 @@ function applySavedProductToInventory_(result){
 }
 function saveProductMasterClient(){
  if(!inventoryIsManager()&&document.getElementById('pmCode').dataset.editing!=='true')return;
+ if(!document.getElementById('pmWholesaleFields').hidden){
+   const name=document.getElementById('pmWholesaleName').value.trim(),pieces=Number(document.getElementById('pmWholesalePieces').value);
+   if(!name||!Number.isSafeInteger(pieces)||pieces<1)return showNotificationToast('Enter a bundle name and a positive whole number of pieces.',true);
+   updateWholesaleProductName();
+ }
  const status=document.getElementById('pmStatus').value;
  const salePrices=status==='ON SALE'?productSaleRows():[];
  if(status==='ON SALE'){
@@ -696,7 +730,6 @@ function saveProductMasterClient(){
  secureScriptRun.withSuccessHandler(r=>{
    button.disabled=false;button.textContent='Save';
    if(!r||!r.success){showNotificationToast(r&&r.message?r.message:'Save failed',true);return;}
-   deliveryCatalogCache=null;deliveryCatalogPending=null;
    pageReadCache.delete('productMaster');pageReadCache.delete('inventory');pageReadCache.delete('cashierInventory');
    applySavedProductToInventory_(r);showNotificationToast(`Product ${r.productCode} saved`);
    closeModal('productEditorModal');clearProductMasterForm();

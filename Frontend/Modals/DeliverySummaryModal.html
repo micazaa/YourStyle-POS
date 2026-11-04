@@ -26,11 +26,13 @@ function loadDeliverySummaryData() {
     if (!read.current()) return;
     if (!result || !result.success) { read.fail(); deliverySummaryFailure(); return; }
     read.save(result);
+    inventoryBundleSummaryFailed = false;
     renderDeliverySummaryCards();
     if (document.getElementById('deliverySummaryModal').style.display === 'flex') renderDeliverySummary();
   }).withFailureHandler(() => { if (read.current()) { read.fail(); deliverySummaryFailure(); } }).getDeliverySummaryData();
 }
 function deliverySummaryFailure() {
+  inventoryBundleSummaryFailed = currentEmployee && currentEmployee.dashboardToken;refreshInventoryBundleActions();
   document.getElementById('deliveryBundlesHint').textContent = 'Unable to load · Click to retry';
   document.getElementById('deliverySummaryMessage').textContent = 'Unable to load received items. Reopen this summary to retry.';
 }
@@ -49,6 +51,8 @@ function groupDeliveryReceipts(receipts) {
   return Array.from(groups.values());
 }
 function renderDeliverySummaryCards() {
+  refreshInventoryBundleActions();
+  preloadBundleDistributionDetails(deliverySummaryData());
   const style = deliverySummaryVisible.filter(d => d.deliveryType === 'YOURSTYLE').length;
   const finds = deliverySummaryVisible.filter(d => d.deliveryType === 'YOURFINDS').length;
   document.getElementById('deliveryCountValue').textContent = deliverySummaryVisible.length + ' deliveries';
@@ -109,7 +113,7 @@ function deliverySummaryTable(table,columns,rows,action) {
     const selected = sort && sort.key === key;
     return `<th class="${key === 'quantity' ? 'text-center' : ''}" aria-sort="${selected ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'}"><button type="button" class="btn btn-sm p-0 fw-semibold" data-summary-table="${table}" data-summary-key="${key}">${label} ${selected ? sort.direction === 1 ? '↑' : '↓' : '↕'}</button></th>`;
   }).join('');
-  const body = sortDeliveryRows(rows,table).map(row => '<tr>'+columns.map(([key]) => `<td class="${key === 'quantity' ? 'text-center' : ['totalQty','bundleNo'].includes(key) ? 'text-end' : ''}">${escapeDeliveriesHtml(row[key] ?? '')}</td>`).join('')+(action?'<td class="text-start">'+action(row)+'</td>':'')+'</tr>').join('');
+  const body = sortDeliveryRows(rows,table).map(row => '<tr>'+columns.map(([key]) => `<td class="${key === 'quantity' ? 'text-center' : key === 'totalQty' ? 'text-end' : ''}">${escapeDeliveriesHtml(key === 'bundleNo' ? row.label || bundleDisplayName_(row.deliveryId, row.bundleNo) : row[key] ?? '')}</td>`).join('')+(action?'<td class="text-start">'+action(row)+'</td>':'')+'</tr>').join('');
   return `<table class="table table-hover align-middle"><thead class="table-light"><tr>${heads}${action?'<th class="text-start">Actions</th>':''}</tr></thead><tbody>${body || `<tr><td colspan="${columns.length+(action?1:0)}" class="text-muted text-center py-4">No matching records.</td></tr>`}</tbody></table>`;
 }
 function renderDeliverySummary() {
@@ -128,7 +132,7 @@ function renderDeliverySummary() {
   if (kind === 'bundles') {
     deliverySummaryBundles = data.bundles;
     breakdown.innerHTML=deliverySummaryStats(['Unopened','In progress'].map(status=>[status,data.bundles.filter(b=>b.status===status).length+' bundles']));
-    table.innerHTML=deliverySummaryTable('bundles',[['deliveryId','Delivery'],['code','Bundle code'],['category','Type'],['bundleNo','Bundle #'],['status','Status']],data.bundles,row=>deliverySummaryAction('data-summary-bundle',data.bundles.indexOf(row),row.status==='Unopened'?'Open distribution':'Continue distribution','jump'));
+    table.innerHTML=deliverySummaryTable('bundles',[['deliveryId','Delivery'],['code','Bundle code'],['category','Type'],['bundleNo','Bundle'],['status','Status']],data.bundles,row=>deliverySummaryAction('data-summary-bundle',data.bundles.indexOf(row),row.status==='Unopened'?'Open distribution':'Continue distribution','jump'));
     return;
   }
   breakdown.innerHTML=deliverySummaryStats(['PINS','OTHERS','WHOLESALE','YOURFINDS'].map(category=>[category==='YOURFINDS'?'YourFinds':category==='OTHERS'?'Others':category==='WHOLESALE'?'Wholesale':'PINS',data.receipts.filter(r=>r.category===category).reduce((n,r)=>n+r.quantity,0)+' pcs']));

@@ -3,6 +3,19 @@
    UNIVERSAL DELIVERY / YOURSTYLE RECEIVING
 ========================================================== */
 
+// Display names only; numeric bundle references remain unchanged in the logs.
+function bundleDisplayName_(deliveryId, bundleNo) {
+  let number = Math.floor(Number(bundleNo));
+  if (!Number.isFinite(number) || number < 1) return '—';
+  let letters = '';
+  while (number > 0) {
+    number--;
+    letters = String.fromCharCode(65 + number % 26) + letters;
+    number = Math.floor(number / 26);
+  }
+  return String(deliveryId || '').trim().slice(-3).toUpperCase() + '-' + letters;
+}
+
 function getGeneralDeliveryLogSheet() {
   assertAppRequest_();
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DELIVERY_LOG);
@@ -95,6 +108,7 @@ function getYourStyleDeliveryProducts() {
     return {
       productCode: String(item.productCode || item.code || "").trim(),
       description: String(item.description || item.name || "").trim(),
+      directReceivable: !['BUNDLE','HALF BUNDLE'].includes(normalizePhysicalBundleName_(item.description || item.name)),
       category: String(item.category || "").trim().toUpperCase(),
       defaultPrice: Number(item.defaultPrice || item.price) || 0,
       inventoryType: String(item.inventoryType || "").trim().toUpperCase()
@@ -114,6 +128,45 @@ function getYourStyleDeliveryProducts() {
 
 function normalizePhysicalBundleName_(value) {
   return String(value || "").trim().toUpperCase().replace(/\s+/g, " ").replace(/\s*[·-]\s*SALE$/, "");
+}
+
+function wholesaleBundleName_(description, estimatedQuantity, bundleQty) {
+  const pieces = Number(estimatedQuantity) / Number(bundleQty);
+  const name = String(description || '').trim().replace(/\s+/g, ' ');
+  if (!name || !Number.isSafeInteger(pieces) || pieces < 1) throw new Error('Enter a bundle name and a positive whole estimate per bundle.');
+  return name + ' · (' + pieces + ') pcs';
+}
+
+function findWholesaleBundleProduct_(products, description, estimatedQuantity, bundleQty) {
+  const pieces = Number(estimatedQuantity) / Number(bundleQty);
+  if (!Number.isSafeInteger(pieces) || pieces < 1) return null;
+  const name = wholesaleBundleName_(description, estimatedQuantity, bundleQty).toUpperCase();
+  const matches = products.filter(product => String(product.category).toUpperCase().replace(/^WHOLE\s+SALE$/,'WHOLESALE') === 'WHOLESALE' &&
+    String(product.description || '').trim().replace(/\s+/g, ' ').toUpperCase() === name);
+  if (matches.length > 1) throw new Error('Duplicate Wholesale bundle definitions: ' + name);
+  if (matches[0] && String(matches[0].inventoryType).toUpperCase() !== INVENTORY_TYPE.STOCK) throw new Error('Wholesale bundles must use STOCK inventory.');
+  return matches[0] || null;
+}
+
+// Called while the delivery script lock is held; the caller rolls back new definitions on failure.
+function ensureWholesaleBundleProduct_(line, products, createdRows) {
+  const existing = findWholesaleBundleProduct_(products, line.description, line.estimatedQuantity, line.bundleQty);
+  if (existing) return existing;
+  const sheet = getProductMasterSheet_(SpreadsheetApp.getActiveSpreadsheet());
+  const code = generateProductMasterCode_(), now = new Date();
+  const description = wholesaleBundleName_(line.description, line.estimatedQuantity, line.bundleQty);
+  const rowNumber = sheet.getLastRow() + 1;
+  if (rowNumber > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), 1);
+  allowWholesaleCategoryAtRow_(sheet, rowNumber, PRODUCT_COL.CATEGORY);
+  sheet.getRange(rowNumber, 1, 1, PRODUCT_MASTER_COLUMN_COUNT).setValues([[
+    code, description, 'WHOLESALE', INVENTORY_TYPE.STOCK, 0, '', 0, true, '', now, now,
+    PRODUCT_STATUS.ACTIVE, '', '', '', '', ''
+  ]]);
+  createdRows.push(rowNumber);
+  const product = {productCode:code, description:description, category:'WHOLESALE', inventoryType:INVENTORY_TYPE.STOCK,
+    defaultPrice:0, active:true, status:PRODUCT_STATUS.ACTIVE, rowNumber:rowNumber};
+  products.push(product);
+  return product;
 }
 
 function findPhysicalBundleProduct_(products, type, kind) {
@@ -327,6 +380,7 @@ function acceptYourStyleDelivery(payload) {
   const movementStartRow = movementSheet ? movementSheet.getLastRow() : 0;
   const createdInventoryRows = [];
   const receivedInventoryRows = [];
+  const createdProductRows = [];
 
   try {
     validateUniversalDeliveryDatabase();
@@ -363,6 +417,7 @@ function acceptYourStyleDelivery(payload) {
         const quantity = Number(line.quantity);
         const product = productMap[productCode];
         if (!product) throw new Error("Item " + (index + 1) + ": select a valid active Product Master item.");
+        if (product.directReceivable === false) throw new Error("Item " + (index + 1) + ": BUNDLE and HALF BUNDLE cannot be received through Direct delivery. Use Bundle mode.");
         if (product.category !== type) throw new Error("Item " + (index + 1) + ": Product Type does not match Product Master.");
         if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99999) throw new Error("Item " + (index + 1) + ": Direct quantity must be a whole number from 1 to 99999.");
         return { type: type, receiveMode: mode, productCode: productCode, description: product.description, quantity: quantity };
@@ -374,6 +429,7 @@ function acceptYourStyleDelivery(payload) {
       if (!Number.isInteger(bundleQty) || bundleQty < 1 || bundleQty > 9999) throw new Error("Item " + (index + 1) + ": Bundle Qty must be a whole number from 1 to 9999.");
       if (!Number.isInteger(estimatedQuantity) || estimatedQuantity < 1 || estimatedQuantity > 999999) throw new Error("Item " + (index + 1) + ": Estimated Quantity must be a whole number.");
       if (estimatedQuantity < bundleQty) throw new Error("Item " + (index + 1) + ": Estimated Quantity cannot be less than Bundle Qty.");
+      wholesaleBundleName_(description, estimatedQuantity, bundleQty);
       return { type: type, receiveMode: mode, description: description, bundleQty: bundleQty, estimatedQuantity: estimatedQuantity };
     });
 
@@ -388,7 +444,7 @@ function acceptYourStyleDelivery(payload) {
 
       const type = String(line.type || "").trim().toUpperCase();
       const description = String(line.description || "").trim();
-      const key = type + "\u0000" + description.toUpperCase();
+      const key = type + "\u0000" + wholesaleBundleName_(description, line.estimatedQuantity, line.bundleQty).toUpperCase();
 
       if (!bulkByReference[key]) {
         bulkByReference[key] = {
@@ -406,6 +462,7 @@ function acceptYourStyleDelivery(payload) {
     });
 
     lines = normalizedLines;
+    const bundleProducts = lines.some(line => line.receiveMode === DELIVERY_RECEIVE_MODE.BULK) ? getProductMaster_() : [];
 
     const identifiers = generateDeliveryIdentifiers(DELIVERY_TYPE.YOURSTYLE, deliveryDate);
     const now = new Date();
@@ -478,15 +535,20 @@ function acceptYourStyleDelivery(payload) {
         remainingBundleQty: line.bundleQty,
         notes: "Delivery ID: " + identifiers.deliveryId
       });
-      const bundleProduct = findPhysicalBundleProduct_(productResult.products, line.type, "FULL");
-      if (bundleProduct) {
+      const bundleProduct = ensureWholesaleBundleProduct_(line, bundleProducts, createdProductRows);
+      {
         const ensuredBundle = ensureYourStyleInventoryProduct(bundleProduct.productCode, deliveryDate, identifiers.deliveryId);
         if (ensuredBundle.created) createdInventoryRows.push(ensuredBundle.rowNumber);
         receivedInventoryRows.push(ensuredBundle.rowNumber);
+        if (ensuredBundle.created && !(Number(bundleProduct.defaultPrice) > 0)) {
+          setInventoryStatusValidation_(inventorySheet.getRange(ensuredBundle.rowNumber, INV_COL.STATUS));
+          inventorySheet.getRange(ensuredBundle.rowNumber, INV_COL.STATUS).setValue(INVENTORY_STATUS.INCOMPLETE);
+        }
         changeInventoryStock({
           code: bundleProduct.productCode,
           qtyChange: line.bundleQty,
           referenceId: identifiers.deliveryId,
+          sourceLineId: line.holderCode,
           employee: acceptedBy,
           item: bundleProduct.description,
           reason: "BUNDLE RECEIVED",
@@ -505,6 +567,7 @@ function acceptYourStyleDelivery(payload) {
       directUnits: directUnits,
       bulkEstimated: bulkEstimated,
       bulkBundles: bulkBundles,
+      createdBundleProducts: createdProductRows.length,
       lineCount: lines.length
     };
   } catch (err) {
@@ -522,6 +585,9 @@ function acceptYourStyleDelivery(payload) {
         if (rowNumber >= 2 && rowNumber <= inventorySheet.getLastRow()) inventorySheet.deleteRow(rowNumber);
       } catch (e) {}
     });
+
+    const productSheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
+    createdProductRows.sort((a,b) => b-a).forEach(row => {if (productSheet && row <= productSheet.getLastRow()) productSheet.deleteRow(row);});
 
     SpreadsheetApp.flush();
     return { success: false, message: err && err.message ? err.message : String(err) };
@@ -723,7 +789,7 @@ function getBulkHolderDetails(deliveryId, sheetRow) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
   if (!sheet) throw new Error("Delivery Log sheet not found.");
-  if (sheetRow > sheet.getLastRow()) throw new Error("Bulk holder row no longer exists.");
+  if (sheetRow > sheet.getLastRow()) throw new Error("BUNDLE holder row no longer exists.");
 
   const raw = sheet.getRange(sheetRow, 1, 1, DELIVERY_LOG_COLUMN_COUNT).getValues()[0];
   const row = sheet.getRange(sheetRow, 1, 1, DELIVERY_LOG_COLUMN_COUNT).getDisplayValues()[0];
@@ -733,12 +799,12 @@ function getBulkHolderDetails(deliveryId, sheetRow) {
   const type = String(row[DELIVERY_IDX.TYPE] || "").trim().toUpperCase();
   const status = String(row[DELIVERY_IDX.STATUS] || "").trim().toUpperCase();
 
-  if (storedDeliveryId !== deliveryId) throw new Error("Bulk holder Delivery ID no longer matches.");
+  if (storedDeliveryId !== deliveryId) throw new Error("BUNDLE holder Delivery ID no longer matches.");
   if (deliveryType !== DELIVERY_TYPE.YOURSTYLE) throw new Error("This is not a YourStyle delivery.");
-  if (receiveMode !== DELIVERY_RECEIVE_MODE.BULK) throw new Error("This delivery row is not BULK.");
-  if (type !== "PINS" && type !== "OTHERS") throw new Error("Invalid bulk holder Type.");
+  if (receiveMode !== DELIVERY_RECEIVE_MODE.BULK) throw new Error("This delivery row is not BUNDLE.");
+  if (type !== "PINS" && type !== "OTHERS") throw new Error("Invalid BUNDLE holder Type.");
   if (status !== DELIVERY_STATUS.PENDING && status !== DELIVERY_STATUS.PARTIAL) {
-    throw new Error("This bulk holder is no longer available for distribution.");
+    throw new Error("This BUNDLE holder is no longer available for distribution.");
   }
 
   const bundleQty = Math.max(1, Number(raw[DELIVERY_IDX.BUNDLE_QTY]) || 1);
@@ -756,6 +822,7 @@ function getBulkHolderDetails(deliveryId, sheetRow) {
     remainingQuantity:Math.max(0, estimated-actual),
     currentVariance:actual-estimated,
     bundles:progress.bundles,
+    physicalProducts:progress.physicalProducts,
     remarks:progress.remarks,
     bundlesWithActivity:progress.bundlesWithActivity,
     status:status
@@ -764,58 +831,145 @@ function getBulkHolderDetails(deliveryId, sheetRow) {
 
 /* ==========================================================
    BUNDLE PROGRESS
-   Physical bundles are identifiers only. No per-bundle estimate.
+   Original bundle identifiers stay stable; split children retain their own piece estimate.
 ========================================================== */
+// Split records extend a holder without adding duplicate delivery receipts or estimates.
+function parseBundleSplitNote_(value) {
+  if (String(value || '').indexOf('{') !== 0) return null;
+  try {
+    const split = JSON.parse(value);
+    return split.kind === 'BUNDLE_SPLIT' && split.deliveryId && Number.isInteger(split.sheetRow) &&
+      Number.isInteger(split.bundleNo) && [2,3,4].includes(split.parts) &&
+      Array.isArray(split.children) && split.children.length === split.parts &&
+      split.children.every(n => Number.isSafeInteger(n) && n > split.bundleNo) &&
+      new Set(split.children).size === split.parts && Number.isSafeInteger(split.pieces) && split.pieces > 0 &&
+      split.productCode ? split : null;
+  } catch (error) { return null; }
+}
+
+function physicalBundleDefinitions_(deliveryId, sheetRow, bundleQty, rows) {
+  const bundles = new Map();
+  for (let n = 1; n <= bundleQty; n++) bundles.set(n, {bundleNo:n,label:bundleDisplayName_(deliveryId,n)});
+  rows.forEach(row => {
+    if (String(row[MOVE_IDX.SOURCE]) !== INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT || Number(row[MOVE_IDX.QTY_CHANGE]) !== -1) return;
+    const split = parseBundleSplitNote_(row[MOVE_IDX.NOTES]);
+    if (!split || split.deliveryId !== deliveryId || split.sheetRow !== Number(sheetRow)) return;
+    const parent = bundles.get(split.bundleNo);
+    if (!parent || parent.split || split.children.some(n => bundles.has(n))) return;
+    parent.split = true;
+    split.children.forEach((number,index) => bundles.set(number, {bundleNo:number,label:parent.label+'-'+(index+1),
+      productCode:String(split.productCode),estimatedQuantity:split.pieces,description:split.description,parentBundleNo:parent.bundleNo}));
+  });
+  return Array.from(bundles.values());
+}
+
+function movementMatchesBundleHolder_(row, sheetRow) {
+  const line = String(row[MOVE_IDX.SOURCE_LINE_ID] || '');
+  return !line.startsWith('BUNDLE_ROW:') || line === 'BUNDLE_ROW:' + sheetRow;
+}
+
+function bundleAccountedFor_(bundle) {
+  return !!bundle.split || !!bundle.fullSold || Number(bundle.soldHalves) >= 2 || Number(bundle.actualQuantity) > 0;
+}
+
 function getBulkBundleProgress_(deliveryId, sheetRow, holderType, bundleQty) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
-  const totals = {};
-  const savedLines = {};
-  const sold = {};
-  let remarks = "";
-  for (let n = 1; n <= bundleQty; n++) totals[n] = 0;
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
+  const rows = sheet && sheet.getLastRow() >= 2 ? sheet.getRange(2,1,sheet.getLastRow()-1,MOVEMENT_LOG_COLUMN_COUNT).getValues() : [];
+  const definitions = physicalBundleDefinitions_(deliveryId,sheetRow,bundleQty,rows);
+  const totals = {}, savedLines = {}, sold = {}, physicalProducts = {};
+  const numbers = new Set(definitions.map(bundle => bundle.bundleNo));
+  let remarks = '';
+  rows.forEach(row => {
+    const ref = String(row[MOVE_IDX.REFERENCE_ID] || '').trim();
+    const source = String(row[MOVE_IDX.SOURCE] || '').trim().toUpperCase();
+    const type = String(row[MOVE_IDX.TYPE] || '').trim().toUpperCase();
+    const bundleNo = Number(row[MOVE_IDX.BUNDLE_NO]), qty = Number(row[MOVE_IDX.QTY_CHANGE]) || 0;
+    if (ref === deliveryId && source === INVENTORY_MOVEMENT_SOURCE.DELIVERY && String(row[MOVE_IDX.NOTES]).trim() === 'PHYSICAL_BUNDLE_RECEIPT')
+      physicalProducts[String(row[MOVE_IDX.SOURCE_LINE_ID] || '').trim()] = String(row[MOVE_IDX.CODE] || '').trim();
+    if (!numbers.has(bundleNo)) return;
+    if (source === INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION && ref === deliveryId && type === holderType && qty > 0 && movementMatchesBundleHolder_(row,sheetRow)) {
+      totals[bundleNo] = (totals[bundleNo] || 0) + qty;
+      remarks = String(row[MOVE_IDX.NOTES] || '');
+      const code = String(row[MOVE_IDX.CODE] || '').trim(), key = JSON.stringify([bundleNo,code]);
+      if (!savedLines[key]) savedLines[key] = {bundleNo:bundleNo,productCode:code,description:String(row[MOVE_IDX.ITEM] || ''),quantity:0};
+      savedLines[key].quantity += qty;
+    }
+    if (source !== INVENTORY_MOVEMENT_SOURCE.SALE) return;
+    const allocation = parsePhysicalBundleAllocationNote_(row[MOVE_IDX.NOTES]);
+    if (!allocation || allocation.deliveryId !== deliveryId || (allocation.sheetRow && allocation.sheetRow !== Number(sheetRow))) return;
+    if (!sold[bundleNo]) sold[bundleNo] = {full:false,halves:0};
+    if (allocation.kind === 'FULL') sold[bundleNo].full = true;
+    if (allocation.kind === 'HALF') sold[bundleNo].halves = Math.min(2,sold[bundleNo].halves+1);
+  });
+  const bundles = definitions.map(definition => {
+    const n = definition.bundleNo, actual = Number(totals[n]) || 0, sale = sold[n] || {full:false,halves:0};
+    const status = definition.split ? 'SPLIT' : actual > 0 ? 'DISTRIBUTION_SAVED' : sale.full ? 'FULL_BUNDLE_SOLD' : sale.halves >= 2 ? 'TWO_HALVES_SOLD' : sale.halves ? 'ONE_HALF_SOLD' : 'AVAILABLE';
+    const shortStatus = definition.split ? 'Split' : actual > 0 ? 'Saved' : sale.full ? 'Sold' : sale.halves >= 2 ? '2 halves sold' : sale.halves ? '1 half sold' : '';
+    return {...definition,actualQuantity:actual,hasActivity:actual>0,disabled:!!definition.split||actual>0||sale.full,
+      status:status,shortStatus:shortStatus,tooltip:definition.split?'Bundle already split':actual>0?'Distribution already saved':sale.full?'Full bundle sold at cashier':'Available for distribution',
+      soldHalves:sale.halves,fullSold:sale.full,lines:Object.values(savedLines).filter(line => line.bundleNo === n)};
+  });
+  return {bundles:bundles,bundlesWithActivity:bundles.filter(bundle => bundle.actualQuantity>0).length,remarks:remarks,physicalProducts:physicalProducts};
+}
 
-  if (sheet && sheet.getLastRow() >= 2) {
-    const rows = sheet.getRange(2, 1, sheet.getLastRow()-1, MOVEMENT_LOG_COLUMN_COUNT).getValues();
-    rows.forEach(function(row) {
-      const ref = String(row[MOVE_IDX.REFERENCE_ID] || "").trim();
-      const source = String(row[MOVE_IDX.SOURCE] || "").trim().toUpperCase();
-      const type = String(row[MOVE_IDX.TYPE] || "").trim().toUpperCase();
-      const bundleNo = Number(row[MOVE_IDX.BUNDLE_NO]);
-      const qty = Number(row[MOVE_IDX.QTY_CHANGE]) || 0;
-      if (source === INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION && ref === deliveryId && type === holderType && qty > 0) {
-        if (!Number.isInteger(bundleNo) || bundleNo < 1 || bundleNo > bundleQty) return;
-        totals[bundleNo] = (totals[bundleNo] || 0) + qty;
-        remarks = String(row[MOVE_IDX.NOTES] || "");
-        const code = String(row[MOVE_IDX.CODE] || "").trim();
-        const key = JSON.stringify([bundleNo, code]);
-        if (!savedLines[key]) savedLines[key] = {bundleNo:bundleNo, productCode:code, description:String(row[MOVE_IDX.ITEM] || ""), quantity:0};
-        savedLines[key].quantity += qty;
-        return;
+function splitPhysicalBundle(payload) {
+  assertAppRequest_();
+  const lock = LockService.getScriptLock();lock.waitLock(30000);
+  const ss = SpreadsheetApp.getActiveSpreadsheet(), inventory = ss.getSheetByName(SHEETS.INVENTORY);
+  const movements = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
+  const createdProducts = [], createdInventory = [];
+  let movementStart = 0;
+  try {
+    if (!inventory || !movements) throw new Error('Required inventory sheets are missing.');
+    movementStart = movements.getLastRow();
+    payload = payload || {};
+    const parts = Number(payload.parts), bundleNo = Number(payload.bundleNo), sheetRow = Number(payload.sheetRow);
+    if (![2,3,4].includes(parts)) throw new Error('Choose ½, ⅓, or ¼.');
+    const deliveryId = String(payload.deliveryId || '').trim(), employee = String(payload.employee || '').trim();
+    if (!employee) throw new Error('Employee is required.');
+    const holder = getBulkHolderDetails(deliveryId,sheetRow).holder;
+    const bundle = holder.bundles.find(item => item.bundleNo === bundleNo);
+    if (!bundle || bundleAccountedFor_(bundle) || Number(bundle.soldHalves)>0) throw new Error('Only an unopened, unsold bundle can be split.');
+    const pieces = Number(bundle.estimatedQuantity || holder.estimatedQuantity / holder.bundleQty) / parts;
+    if (!Number.isSafeInteger(pieces) || pieces < 1) throw new Error('This fraction does not produce a whole number of pieces.');
+    const deliverySheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
+    const holderCode = deliveryId+'-B'+String(getBulkHolderSequenceForRow(deliverySheet,sheetRow,deliveryId)).padStart(2,'0');
+    const sourceCode = bundle.productCode || holder.physicalProducts[holderCode];
+    const products = getProductMaster_(), source = products.find(product => String(product.productCode) === sourceCode);
+    if (!source || String(source.category).toUpperCase() !== 'WHOLESALE') throw new Error('This bundle needs a linked Wholesale product before splitting.');
+    const match = inventory.getRange(2,INV_COL.CODE,inventory.getLastRow()-1,1).createTextFinder(sourceCode).matchEntireCell(true).findNext();
+    if (!match || Number(inventory.getRange(match.getRow(),INV_COL.STOCK).getValue()) < 1) throw new Error('No bundle stock available to split.');
+    const description = bundle.description || holder.description;
+    const product = ensureWholesaleBundleProduct_({description:description,estimatedQuantity:pieces,bundleQty:1},products,createdProducts);
+    const ensured = ensureYourStyleInventoryProduct(product.productCode,holder.deliveryDate,deliveryId);
+    if (ensured.created) {
+      createdInventory.push(ensured.rowNumber);
+      if (!(Number(product.defaultPrice)>0)) {
+        setInventoryStatusValidation_(inventory.getRange(ensured.rowNumber,INV_COL.STATUS));
+        inventory.getRange(ensured.rowNumber,INV_COL.STATUS).setValue(INVENTORY_STATUS.INCOMPLETE);
       }
-      if (source !== INVENTORY_MOVEMENT_SOURCE.SALE || !Number.isInteger(bundleNo) || bundleNo < 1 || bundleNo > bundleQty) return;
-      const allocation = parsePhysicalBundleAllocationNote_(row[MOVE_IDX.NOTES]);
-      if (!allocation || allocation.deliveryId !== deliveryId || (allocation.sheetRow && allocation.sheetRow !== Number(sheetRow))) return;
-      if (!sold[bundleNo]) sold[bundleNo] = {full:false, halves:0};
-      if (allocation.kind === "FULL") sold[bundleNo].full = true;
-      if (allocation.kind === "HALF") sold[bundleNo].halves = Math.min(2, sold[bundleNo].halves + 1);
-    });
-  }
-
-  const bundles = [];
-  let bundlesWithActivity = 0;
-  for (let n = 1; n <= bundleQty; n++) {
-    const actual = Number(totals[n]) || 0;
-    const sale = sold[n] || {full:false, halves:0};
-    if (actual > 0) bundlesWithActivity++;
-    let status = "AVAILABLE", shortStatus = "", tooltip = "Available for distribution", disabled = false;
-    if (actual > 0) { status = "DISTRIBUTION_SAVED"; shortStatus = "Saved"; tooltip = "Distribution already saved"; disabled = true; }
-    else if (sale.full) { status = "FULL_BUNDLE_SOLD"; shortStatus = "Sold"; tooltip = "Full bundle sold at cashier"; disabled = true; }
-    else if (sale.halves >= 2) { status = "TWO_HALVES_SOLD"; shortStatus = "2 halves sold"; tooltip = "Both estimated halves sold; actual overage may still be distributed"; }
-    else if (sale.halves === 1) { status = "ONE_HALF_SOLD"; shortStatus = "1 half sold"; tooltip = "One estimated half sold; remaining contents may be distributed"; }
-    bundles.push({bundleNo:n, actualQuantity:actual, hasActivity:actual>0, disabled:disabled, status:status, shortStatus:shortStatus, tooltip:tooltip, soldHalves:sale.halves, fullSold:sale.full, lines:Object.values(savedLines).filter(line => line.bundleNo === n)});
-  }
-  return {bundles:bundles, bundlesWithActivity:bundlesWithActivity, remarks:remarks};
+    }
+    const lastNumber = Math.max(...holder.bundles.map(item => item.bundleNo));
+    const children = Array.from({length:parts},(_,index)=>lastNumber+index+1);
+    const note = JSON.stringify({kind:'BUNDLE_SPLIT',deliveryId:deliveryId,sheetRow:sheetRow,bundleNo:bundleNo,
+      parts:parts,pieces:pieces,productCode:String(product.productCode),description:description,children:children});
+    changeInventoryStockBatch_([
+      {code:sourceCode,qtyChange:-1,referenceId:deliveryId,employee:employee,item:source.description,reason:'BUNDLE SPLIT',source:INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,bundleNo:bundleNo,notes:note},
+      {code:product.productCode,qtyChange:parts,referenceId:deliveryId,employee:employee,item:product.description,reason:'BUNDLE SPLIT',source:INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,notes:'Split from '+bundle.label}
+    ]);
+    writeInventoryDeliveryMetadata_(inventory,[ensured.rowNumber],deliveryId,holder.deliveryDate);
+    const updated = getBulkHolderDetails(deliveryId,sheetRow).holder;
+    return {success:true,holder:updated,productCode:product.productCode,createdBundleProducts:createdProducts.length,parts:parts,pieces:pieces};
+  } catch (error) {
+    if (movementStart && movements.getLastRow()>movementStart) movements.deleteRows(movementStart+1,movements.getLastRow()-movementStart);
+    createdInventory.sort((a,b)=>b-a).forEach(row=>inventory.deleteRow(row));
+    if (createdProducts.length) {
+      const master = getProductMasterSheet_(ss);
+      createdProducts.sort((a,b)=>b-a).forEach(row=>master.deleteRow(row));
+    }
+    SpreadsheetApp.flush();
+    return {success:false,message:error.message || String(error)};
+  } finally { lock.releaseLock(); }
 }
 
 /* ==========================================================
@@ -851,8 +1005,8 @@ function distributeBulkBundle(payload) {
 
     const holder = getBulkHolderDetails(deliveryId, sheetRow).holder;
     const holderType = String(holder.type || "").trim().toUpperCase();
-    if (!Number.isInteger(bundleNo) || bundleNo < 1 || bundleNo > Number(holder.bundleQty)) {
-      throw new Error("Select a valid physical bundle from 1 to " + holder.bundleQty + ".");
+    if (!Number.isInteger(bundleNo) || bundleNo < 1 || !holder.bundles.some(bundle => bundle.bundleNo === bundleNo)) {
+      throw new Error('Select an available bundle from this delivery.');
     }
     const selectedBundle = (holder.bundles || []).find(function(bundle) { return Number(bundle.bundleNo) === bundleNo; });
     if (!selectedBundle || selectedBundle.disabled) {
@@ -866,7 +1020,7 @@ function distributeBulkBundle(payload) {
     submittedLines.forEach(function(line,index){
       const code=String(line.productCode||"").trim(); const qty=Number(line.quantity); const product=productMap[code];
       if (!product) throw new Error("Item " + (index+1) + ": select a valid active Product Master item.");
-      if (String(product.category||"").trim().toUpperCase() !== holderType) throw new Error("Item " + (index+1) + ": product does not match bulk holder Type.");
+      if (String(product.category||"").trim().toUpperCase() !== holderType) throw new Error("Item " + (index+1) + ": product does not match BUNDLE holder Type.");
       if (!Number.isInteger(qty) || qty < 1 || qty > 99999) throw new Error("Item " + (index+1) + ": quantity must be a whole number from 1 to 99999.");
       if (!combined[code]) combined[code]={productCode:code,description:String(product.description||"").trim(),quantity:0};
       combined[code].quantity += qty;
@@ -893,7 +1047,12 @@ function distributeBulkBundle(payload) {
     const bulkMovementType=holderType === "PINS" ? INVENTORY_MOVEMENT_TYPE.BULK_PINS : INVENTORY_MOVEMENT_TYPE.BULK_OTHERS;
     const holderCode=deliveryId+"-B"+String(getBulkHolderSequenceForRow(deliverySheet,sheetRow,deliveryId)).padStart(2,"0");
     const physicalKind = Number(selectedBundle.soldHalves) === 1 ? "HALF" : (Number(selectedBundle.soldHalves) >= 2 ? "" : "FULL");
-    const physicalProduct = physicalKind ? findPhysicalBundleProduct_(productResult.products, holderType, physicalKind) : null;
+    const linkedCode = selectedBundle.productCode || (holder.physicalProducts || {})[holderCode];
+    const namedBundle = linkedCode ? getProductMaster_().find(product => String(product.productCode) === linkedCode) : null;
+    if (linkedCode && !namedBundle) throw new Error('The received Wholesale bundle product is missing from Product Master.');
+    const physicalProduct = namedBundle
+      ? (physicalKind === 'FULL' ? namedBundle : null)
+      : physicalKind ? findPhysicalBundleProduct_(productResult.products, holderType, physicalKind) : null;
     if (physicalProduct) {
       changeInventoryStock({
         code: physicalProduct.productCode,
@@ -912,7 +1071,7 @@ function distributeBulkBundle(payload) {
       logInventoryMovement({code:holderCode,type:bulkMovementType,qtyChange:-estimatedConsumption,stockBefore:oldRemaining,stockAfter:newRemaining,referenceId:deliveryId,employee:employee,item:holder.description,reason:"",source:INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION,bundleNo:bundleNo,remainingBundleQty:"",notes:remarks});
     }
     lines.forEach(function(line){
-      changeInventoryStock({code:line.productCode,qtyChange:line.quantity,referenceId:deliveryId,employee:employee,item:line.description,reason:"",source:INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION,bundleNo:bundleNo,remainingBundleQty:"",notes:remarks});
+      changeInventoryStock({code:line.productCode,qtyChange:line.quantity,referenceId:deliveryId,sourceLineId:"BUNDLE_ROW:"+sheetRow,employee:employee,item:line.description,reason:"",source:INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION,bundleNo:bundleNo,remainingBundleQty:"",notes:remarks});
     });
 
     deliverySheet.getRange(sheetRow,DELIVERY_COL.ACTUAL_QTY,1,5).setValues([[newActual,newRemaining,"","",DELIVERY_STATUS.PARTIAL]]);
@@ -942,7 +1101,8 @@ function distributeBulkBundle(payload) {
    Requirements:
    - YOURSTYLE
    - BULK
-   - Status = PARTIAL
+   - Status = PENDING or PARTIAL
+   - Every original bundle and split child is distributed, sold, or split
 
    Completion is always an explicit employee decision.
    It is allowed for shortage, exact count, or excess.
@@ -1055,7 +1215,7 @@ function completeBulkHolder(payload) {
       deliverySheet.getLastRow()
     ) {
       throw new Error(
-        "Bulk holder row no longer exists."
+        "BUNDLE holder row no longer exists."
       );
     }
 
@@ -1179,7 +1339,7 @@ function completeBulkHolder(payload) {
       deliveryId
     ) {
       throw new Error(
-        "Bulk holder Delivery ID no longer matches."
+        "BUNDLE holder Delivery ID no longer matches."
       );
     }
 
@@ -1199,7 +1359,7 @@ function completeBulkHolder(payload) {
       DELIVERY_RECEIVE_MODE.BULK
     ) {
       throw new Error(
-        "This delivery row is not BULK."
+        "This delivery row is not BUNDLE."
       );
     }
 
@@ -1209,17 +1369,21 @@ function completeBulkHolder(payload) {
       holderType !== "OTHERS"
     ) {
       throw new Error(
-        "Invalid bulk holder Type."
+        "Invalid BUNDLE holder Type."
       );
     }
 
 
+    const progress = getBulkBundleProgress_(deliveryId,sheetRow,holderType,Number(row[DELIVERY_IDX.BUNDLE_QTY]) || 0);
+    if (!progress.bundles.length || !progress.bundles.every(bundleAccountedFor_)) {
+      throw new Error('Distribute or sell every remaining bundle before finishing.');
+    }
+
     if (
-      status !==
-      DELIVERY_STATUS.PARTIAL
+      ![DELIVERY_STATUS.PARTIAL,DELIVERY_STATUS.PENDING].includes(status)
     ) {
       throw new Error(
-        "Only a PARTIAL bulk holder can be completed."
+        "Only a pending or partial BUNDLE holder can be completed."
       );
     }
 
@@ -1339,11 +1503,11 @@ function completeBulkHolder(payload) {
 
           reason:
             variance < 0
-              ? "BULK SHORTAGE VARIANCE"
+              ? "BUNDLE SHORTAGE VARIANCE"
               : (
                   variance > 0
-                    ? "BULK EXCESS VARIANCE"
-                    : "BULK COMPLETION"
+                    ? "BUNDLE EXCESS VARIANCE"
+                    : "BUNDLE COMPLETION"
                 ),
 
           source:
@@ -1552,7 +1716,7 @@ function getBulkHolderSequenceForRow(
 
   if (sequence < 1) {
     throw new Error(
-      "Unable to resolve bulk holder sequence."
+      "Unable to resolve BUNDLE holder sequence."
     );
   }
 

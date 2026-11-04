@@ -42,7 +42,8 @@ function getDeliveryDetails(deliveryId) {
   if(!deliveryId)throw new Error('Delivery ID is required.');
   const ss=SpreadsheetApp.getActiveSpreadsheet();
   const log=ss.getSheetByName(SHEETS.DELIVERY_LOG);
-  const rows=log?readDeliveryDetailRows_(log,findDeliveryDetailRows_(log,DELIVERY_COL.DELIVERY_ID,deliveryId),DELIVERY_LOG_COLUMN_COUNT,false).filter(r=>String(r[DELIVERY_IDX.DELIVERY_ID]).trim()===deliveryId):[];
+  const deliveryRows=log?findDeliveryDetailRows_(log,DELIVERY_COL.DELIVERY_ID,deliveryId).sort((a,b)=>a-b):[];
+  const rows=log?readDeliveryDetailRows_(log,deliveryRows,DELIVERY_LOG_COLUMN_COUNT,false).filter(r=>String(r[DELIVERY_IDX.DELIVERY_ID]).trim()===deliveryId):[];
   if(!rows.length)throw new Error('Delivery not found.');
   const first=rows[0], inventory=new Map();
   const yourFinds=String(first[DELIVERY_IDX.DELIVERY_TYPE]).toUpperCase()==='YOURFINDS';
@@ -50,23 +51,32 @@ function getDeliveryDetails(deliveryId) {
   let estimated=0,bundleCount=0;
   const counts={};
   rows.forEach(r=>{
-    const type=String(r[DELIVERY_IDX.TYPE]||'').trim();
     if(String(r[DELIVERY_IDX.RECEIVE_MODE]).toUpperCase()==='BULK'){
-      const quantity=Number(r[DELIVERY_IDX.BUNDLE_QTY])||0;bundleCount+=quantity;estimated+=Number(r[DELIVERY_IDX.ESTIMATED_QTY])||0;
-      for(let n=1;n<=quantity;n++){
-        const id=type+':'+n;
-        const existing=groups.find(g=>g.id===id);
-        if(existing){existing.code='Multiple holders · '+type;continue;}
-        groups.push({id:id,label:'Bundle #'+n,type:type,code:String(r[DELIVERY_IDX.DESCRIPTION]||''),bundleNo:n,items:[]});
-      }
+      bundleCount+=Number(r[DELIVERY_IDX.BUNDLE_QTY])||0;estimated+=Number(r[DELIVERY_IDX.ESTIMATED_QTY])||0;
     }
   });
   const movement=ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
+  const soldRows=movement&&bundleCount&&movement.getLastRow()>1
+    ? movement.getRange(2,MOVE_COL.NOTES,movement.getLastRow()-1,1)
+        .createTextFinder('PHYSICAL_BUNDLE|deliveryId='+deliveryId+'|').matchEntireCell(false).findAll().map(cell=>cell.getRow())
+    : [];
   const movementRows=movement
     ? findDeliveryDetailRows_(movement,MOVE_COL.REFERENCE_ID,deliveryId)
         .concat(findDeliveryDetailRows_(movement,MOVE_COL.SOURCE_LINE_ID,deliveryId))
+        .concat(soldRows)
     : [];
   const moves=movement?readDeliveryDetailRows_(movement,movementRows,MOVEMENT_LOG_COLUMN_COUNT,false):[];
+  const splitRows=moves.filter(row=>parseBundleSplitNote_(row[MOVE_IDX.NOTES]));
+  rows.forEach((r,rowIndex)=>{
+    if(String(r[DELIVERY_IDX.RECEIVE_MODE]).toUpperCase()!=='BULK')return;
+    const type=String(r[DELIVERY_IDX.TYPE]||'').trim(),sheetRow=deliveryRows[rowIndex];
+    const quantity=Number(r[DELIVERY_IDX.BUNDLE_QTY])||0;
+    physicalBundleDefinitions_(deliveryId,sheetRow,quantity,splitRows).forEach(bundle=>{
+      groups.push({id:sheetRow+':'+bundle.bundleNo,label:bundle.label,type:type,code:bundle.description||String(r[DELIVERY_IDX.DESCRIPTION]||''),
+        bundleNo:bundle.bundleNo,split:!!bundle.split,estimated:bundle.estimatedQuantity||(Number(r[DELIVERY_IDX.ESTIMATED_QTY])||0)/quantity,
+        sheetRows:[sheetRow],closed:String(r[DELIVERY_IDX.STATUS]).toUpperCase()==='COMPLETED',soldHalves:0,fullSold:false,items:[]});
+    });
+  });
   const codes=new Set(moves.map(r=>String(r[MOVE_IDX.CODE]).trim()).filter(Boolean));
   const sheet=ss.getSheetByName(SHEETS.INVENTORY);
   if(sheet&&sheet.getLastRow()>1&&codes.size){
@@ -81,10 +91,12 @@ function getDeliveryDetails(deliveryId) {
     const originalItem=String(r[MOVE_IDX.REFERENCE_ID]).trim()===deliveryId&&qty>0&&['DELIVERY','DISTRIBUTION'].includes(source);
     const conversionItem=yourFinds&&source===INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT&&String(r[MOVE_IDX.SOURCE_LINE_ID]).trim().toUpperCase()===deliveryId.toUpperCase()&&qty>0&&parseYourFindsConversionNote_(r[MOVE_IDX.NOTES]);
     if(!originalItem&&!conversionItem)return;
+    // Bundle stock receipts track unopened bundles, not directly received product pieces.
+    if(source==='DELIVERY'&&(String(r[MOVE_IDX.TYPE]||'').trim().toUpperCase().startsWith('BULK')||String(r[MOVE_IDX.NOTES]||'').trim()==='PHYSICAL_BUNDLE_RECEIPT'))return;
     const code=String(r[MOVE_IDX.CODE]).trim(),product=inventory.get(code);
     // Negative holder movements are excluded; product inventory supplies the image and current status.
     if(!product)return;
-    const group=source==='DISTRIBUTION'?groups.find(g=>g.type===String(r[MOVE_IDX.TYPE])&&g.bundleNo===Number(r[MOVE_IDX.BUNDLE_NO])):direct;
+    const group=source==='DISTRIBUTION'?groups.find(g=>g.type===String(r[MOVE_IDX.TYPE])&&g.bundleNo===Number(r[MOVE_IDX.BUNDLE_NO])&&movementMatchesBundleHolder_(r,g.sheetRows[0])):direct;
     if(!group)return;
     const key=group.id+'|'+code;
     if(!items.has(key))items.set(key,{...product,code:code,name:product.name||String(r[MOVE_IDX.ITEM])||product.size||code,quantity:0,group:group.id});
@@ -96,6 +108,20 @@ function getDeliveryDetails(deliveryId) {
       const label=yourFinds?item.size||'Unspecified size':item.name;
       counts[label]=(counts[label]||0)+item.quantity;
     }
+  });
+  moves.forEach(row=>{
+    if(String(row[MOVE_IDX.SOURCE]).toUpperCase()!=='SALE'||Number(row[MOVE_IDX.QTY_CHANGE])>=0)return;
+    const allocation=parsePhysicalBundleAllocationNote_(row[MOVE_IDX.NOTES]);
+    if(!allocation||allocation.deliveryId!==deliveryId)return;
+    const group=groups.find(g=>g.bundleNo===Number(row[MOVE_IDX.BUNDLE_NO])&&
+      (allocation.sheetRow?g.sheetRows.includes(allocation.sheetRow):g.type===String(row[MOVE_IDX.TYPE])));
+    if(!group)return;
+    if(allocation.kind==='FULL')group.fullSold=true;
+    if(allocation.kind==='HALF')group.soldHalves++;
+  });
+  groups.forEach(group=>{
+    const actual=group.items.reduce((sum,item)=>sum+item.quantity,0);
+    group.status=group.split?'Split':actual>0?'Distributed':group.fullSold||group.soldHalves>=2?'Sold':group.soldHalves?'Partially sold':group.closed?'Closed':'Unopened';
   });
   if(direct.items.length||!groups.length)groups.unshift(direct);
   const actual=groups.reduce((sum,g)=>sum+g.items.reduce((total,i)=>total+(String(i.status||'').trim().toUpperCase()===INVENTORY_STATUS.CONVERTED?0:i.quantity),0),0);

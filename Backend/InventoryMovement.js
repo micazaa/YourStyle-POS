@@ -970,7 +970,7 @@ function saveProductMaster(payload) {
 function saveProductMasterLocked_(payload) {
   payload = payload || {};
   let code = String(payload.productCode || "").trim();
-  const description = String(payload.description || "").trim();
+  let description = String(payload.description || "").trim();
   const category = String(payload.category || "").trim().toUpperCase().replace(/^WHOLE\s+SALE$/,'WHOLESALE');
   const defaultPrice = Number(payload.defaultPrice), lowStockAt = Number(payload.lowStockAt);
   const costPrice = costPayload_(payload);
@@ -985,6 +985,13 @@ function saveProductMasterLocked_(payload) {
   const existing = code
     ? products.find(function(p){ return String(p.productCode) === code; })
     : null;
+  if (!existing && category === 'WHOLESALE') {
+    const name = description.match(/^(.+?)\s*·\s*\(([1-9]\d*)\)\s*pcs$/i);
+    if (!name || !Number.isSafeInteger(Number(name[2]))) {
+      throw new Error('Wholesale name must use Bundle Name · (50) pcs, with a positive whole number of pieces.');
+    }
+    description = name[1].trim() + ' · (' + Number(name[2]) + ') pcs';
+  }
   const storedCostPrice = existing && existing.costPrice !== null ? Number(existing.costPrice) || 0 : "";
   if (costPrice !== undefined) prepareCostColumn_(sheet);
 
@@ -1422,8 +1429,7 @@ function saveYourFindsItemDetails(payload) {
      * Receiving staff may complete a new item without manager approval.
      * Corrections to an already completed item remain manager-controlled.
      */
-    const actor = payload.actorToken ? dashboardEmployee_(payload.actorToken) : null;
-    const needsApproval = currentStatus !== INVENTORY_STATUS.INCOMPLETE || actor && actor.requiresManagerPin;
+    const needsApproval = currentStatus !== INVENTORY_STATUS.INCOMPLETE;
     const auth = needsApproval ? requireManager_(payload.managerPin, payload.managerToken) : null;
 
     oldImageUrl = String(item.imageUrl || "").trim();

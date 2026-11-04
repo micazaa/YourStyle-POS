@@ -1868,6 +1868,8 @@ function getDeliveryHistory() {
 
             hasBulk: false,
 
+            bundleNames: [],
+
             bulkBundleQty: 0,
 
             bulkEstimatedQuantity: 0,
@@ -2017,11 +2019,14 @@ function getDeliveryHistory() {
           group.hasBulk =
             true;
 
+          const bundleName = String(d[DELIVERY_IDX.DESCRIPTION] || '').trim();
+          if (bundleName && !group.bundleNames.includes(bundleName)) group.bundleNames.push(bundleName);
+
 
           const bulkKey =
             type
-              ? "BULK " + type
-              : "BULK";
+              ? "BUNDLE " + type
+              : "BUNDLE";
 
 
           /*

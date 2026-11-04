@@ -2,28 +2,52 @@
 
   var pageReadCache = new Map();
   function invalidateDeliveryItemCaches() {
+    invalidateBundleDistributionDetails();
     ['standardDeliveryDetails', 'deliveryItems', 'deliveryDetails', 'deliveryLabels', 'exchangeProducts', 'cashierInventory'].forEach(key => pageReadCache.delete(key));
+    if(currentEmployee&&typeof deliveriesPageData!=='undefined')preloadDeliveryDetails(deliveriesPageData);
   }
   let deliveryCatalogCache = null;
   let deliveryCatalogPending = null;
   function cachedDeliveryCatalog() {
-    return deliveryCatalogCache && deliveryCatalogCache.owner === JSON.stringify(currentEmployee) && Date.now() - deliveryCatalogCache.time < 60000 ? deliveryCatalogCache.products : null;
+    return currentEmployee && deliveryCatalogCache && deliveryCatalogCache.owner === currentEmployee.dashboardToken ? deliveryCatalogCache.products : null;
   }
   function rememberDeliveryCatalog(products) {
-    deliveryCatalogCache = {owner:JSON.stringify(currentEmployee), time:Date.now(), products:products};
+    deliveryCatalogCache = {owner:currentEmployee.dashboardToken, products:products};
+  }
+  function invalidateDeliveryCatalog() {
+    deliveryCatalogCache = null;deliveryCatalogPending = null;
+  }
+  function warmDeliveryCatalog() {
+    if (currentEmployee) getDeliveryCatalog().catch(function() {});
+  }
+  function deliveryCatalogAffectedByPatch(patch) {
+    const products = cachedDeliveryCatalog();
+    if (!products && !deliveryCatalogPending) return false;
+    const codes = new Set((products || []).map(product => String(product.productCode)));
+    if (patch.removedCodes.some(code => !products || codes.has(String(code)))) return true;
+    const previous = new Map(inventoryDataset.items.map(item => [String(item.code), item]));
+    return patch.items.some(item => {
+      const old = previous.get(String(item.code));
+      if (String(item.inventoryType).toUpperCase() !== 'STOCK' && String(old && old.inventoryType).toUpperCase() !== 'STOCK') return false;
+      return !old || old.name !== item.name || String(old.category).toUpperCase() !== String(item.category).toUpperCase() ||
+        old.productStatus !== item.productStatus || Number(old.regularPrice ?? old.price) !== Number(item.regularPrice ?? item.price);
+    });
   }
   function getDeliveryCatalog() {
     const cached = cachedDeliveryCatalog();
     if (cached) return Promise.resolve({success:true, products:cached});
-    const owner = JSON.stringify(currentEmployee);
+    if (!currentEmployee) return Promise.reject(new Error('Please sign in to load products.'));
+    const owner = currentEmployee.dashboardToken;
     if (deliveryCatalogPending && deliveryCatalogPending.owner === owner) return deliveryCatalogPending.promise;
     const request = {owner:owner};
     request.promise = new Promise((resolve, reject) => {
       secureScriptRun.withSuccessHandler(result => {
+        if (!currentEmployee || currentEmployee.dashboardToken !== owner) return reject(new Error('Account changed. Reopen the delivery.'));
+        if (deliveryCatalogPending !== request) {getDeliveryCatalog().then(resolve, reject);return;}
         const current = deliveryCatalogPending === request;
         if (current) deliveryCatalogPending = null;
         if (!result || !result.success) return reject(new Error(result && result.message || 'Unable to load products.'));
-        if (current && owner === JSON.stringify(currentEmployee)) rememberDeliveryCatalog(result.products || []);
+        if (current) rememberDeliveryCatalog(result.products || []);
         resolve(result);
       }).withFailureHandler(error => {if(deliveryCatalogPending===request)deliveryCatalogPending=null;reject(error);}).getYourStyleDeliveryProducts();
     });
@@ -51,10 +75,42 @@
   }
 
   var workspacePreloadState = null;
+  var workspaceTableStates = new Map();
+
+  function setWorkspaceTableLoading(pageId, busy, error = '') {
+    const page = document.getElementById(pageId), owner = currentEmployee && currentEmployee.dashboardToken;
+    let state = workspaceTableStates.get(pageId);
+    if (!state || state.owner !== owner) {
+      if (state) state.buttons.forEach((disabled, button) => {button.disabled = disabled;});
+      state = {owner: owner, loaded: false, buttons: new Map()};
+      workspaceTableStates.set(pageId, state);
+    }
+    if (!busy && !error) state.loaded = true;
+    const initial = !state.loaded, content = page.querySelector('[data-page-content]');
+    const loading = page.querySelector('[data-page-loading]'), failure = page.querySelector('[data-page-error]');
+    content.hidden = initial && (busy || !!error);
+    content.inert = content.hidden;
+    content.setAttribute('aria-busy', String(busy));
+    content.querySelectorAll('table').forEach(table => {table.inert = busy;});
+    loading.hidden = !initial || !busy;
+    loading.innerHTML = initial && busy ? loadingIndicator(loading.dataset.pageLoading) : '';
+    failure.hidden = !initial || !error;
+    failure.querySelector('[data-page-error-message]').textContent = error;
+    page.querySelectorAll('[data-page-header-actions] button').forEach(button => {
+      if (initial && busy) {
+        if (!state.buttons.has(button)) state.buttons.set(button, button.disabled);
+        button.disabled = true;
+      } else if (state.buttons.has(button)) {
+        button.disabled = state.buttons.get(button);state.buttons.delete(button);
+      }
+    });
+  }
 
   function resetWorkspacePreload() {
     clearTimeout(workspacePreloadState && workspacePreloadState.timer);
     workspacePreloadState = null;
+    workspaceTableStates.forEach(state => state.buttons.forEach((disabled, button) => {button.disabled = disabled;}));
+    workspaceTableStates.clear();
   }
 
   function prioritizeWorkspacePage(pageId) {
@@ -78,6 +134,7 @@
     const state = workspacePreloadState;
     if (!state || !currentEmployee || state.owner !== currentEmployee.dashboardToken || state.page !== pageId) return;
     state.waiting = false;
+    warmDeliveryCatalog();
     if (state.started) {preloadHistoryAndReports();return;}
     scheduleWorkspacePreload();
   }
@@ -96,6 +153,7 @@
         supplierReturnsPage: () => loadSupplierReturnsPage()
       };
       Object.keys(pages).forEach(page => {if (page !== state.page) pages[page]();});
+      warmDeliveryCatalog();
     }, 75);
   }
 
@@ -201,7 +259,7 @@
           let parsed=value;if(typeof value==='string'){try{parsed=JSON.parse(value);}catch(ignored){parsed=null;}}
           if(parsed&&parsed.success&&['adjustInventoryStock','changeInventoryItem','convertYourFindsDeliveryItem','saveProductMaster',
             'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','executeCheckoutBackend',
-            'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle',
+            'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle','splitPhysicalBundle',
             'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(operation)){
             if(typeof handleInventoryMutationResult==='function')handleInventoryMutationResult(parsed);
             else {pageReadCache.delete('inventory');if(typeof invalidateLocalInventoryReads==='function')invalidateLocalInventoryReads();}
@@ -530,7 +588,6 @@
       const acceptDeliveryModal = document.getElementById("acceptDeliveryModal");
       const acceptDeliveryTypeModal = document.getElementById("acceptDeliveryTypeModal");
 
-      const yourFindsLabelModal = document.getElementById("yourFindsLabelModal");
       const yourFindsReprintModal = document.getElementById("yourFindsReprintModal");
 
       const yourFindsDeliveryDetailsModal =
@@ -547,7 +604,6 @@
         (managerDailyModal && managerDailyModal.style.display === "flex") ||
         (acceptDeliveryModal && acceptDeliveryModal.style.display === "flex") ||
         (acceptDeliveryTypeModal && acceptDeliveryTypeModal.style.display === "flex") ||
-        (yourFindsLabelModal && yourFindsLabelModal.style.display === "flex") ||
         (yourFindsReprintModal && yourFindsReprintModal.style.display === "flex") ||
         (
           yourFindsDeliveryDetailsModal &&

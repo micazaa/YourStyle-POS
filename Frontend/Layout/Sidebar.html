@@ -101,7 +101,7 @@ function openInventoryWorkspace(){
       clearTransactionHistoryCache();
       clearManagerExpectedCashCache();
       ++loginAttempt;
-      deliveryCatalogCache = null; deliveryCatalogPending = null;
+      invalidateDeliveryCatalog();
       yourFindsCustomSizeCache = null;
       ++bulkDistributionRequest; bulkDistributionHolder = null; bulkDistributionProducts = [];
       ++supplierReturnLoad; supplierReturns = []; supplierReturnInventory = [];

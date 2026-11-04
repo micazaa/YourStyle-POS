@@ -65,17 +65,22 @@ function currentYourFindsReprintRead(request,refresh) {
  if(request!==yourFindsReprintRequest)return false;
  if(refresh.current())return true;
  setYourFindsReprintBusy(false);
- if(document.getElementById('yourFindsReprintModal').style.display==='flex')openYourFindsReprintModal();
+ if(document.getElementById('yourFindsReprintModal').style.display==='flex')
+  openYourFindsReprintModal(document.getElementById('yourFindsReprintDeliveryFilter').value,Object.keys(yourFindsReprintSelection));
  return false;
 }
-function openYourFindsReprintModal() {
+function openYourFindsReprintModal(deliveryId,selectedCodes) {
  document.getElementById('yourFindsReprintModal').style.display='flex';
  if(yourFindsReprintBusy)return;
  const request=++yourFindsReprintRequest;
  yourFindsReprintSelection={};
+ if(Array.isArray(selectedCodes))selectedCodes.forEach(code=>{const value=String(code||'').trim();if(value)yourFindsReprintSelection[value]=true;});
  document.getElementById('yourFindsReprintSearch').value='';
  document.getElementById('yourFindsReprintType').value='ALL';
- document.getElementById('yourFindsReprintDeliveryFilter').innerHTML='<option value="">All Deliveries</option>';
+ const deliveryFilter=document.getElementById('yourFindsReprintDeliveryFilter');
+ const delivery=String(deliveryId||'').trim().toUpperCase();
+ deliveryFilter.replaceChildren(new Option('All Deliveries',''));
+ if(delivery){deliveryFilter.add(new Option(delivery,delivery));deliveryFilter.value=delivery;}
  document.getElementById('yourFindsReprintResult').style.display='none';
  const local=localYourFindsReprintItems();
  if(local!==null){yourFindsReprintItems=local;setYourFindsReprintBusy(false);populateYourFindsReprintFilters();renderYourFindsReprintItems();return;}
@@ -117,7 +122,7 @@ function getVisibleYourFindsReprintItems(){
 }
 function populateYourFindsReprintFilters(){
  const previous=document.getElementById('yourFindsReprintDeliveryFilter').value;
- const deliveries=Array.from(new Set(yourFindsReprintItems.map(item=>String(item.deliveryId||'').trim()).filter(Boolean))).sort().reverse();
+ const deliveries=Array.from(new Set(yourFindsReprintItems.map(item=>String(item.deliveryId||'').trim()).concat(previous).filter(Boolean))).sort().reverse();
  document.getElementById('yourFindsReprintDeliveryFilter').innerHTML='<option value="">All Deliveries</option>'+deliveries.map(value=>'<option value="'+escapeYourFindsReprintHtml(value)+'">'+escapeYourFindsReprintHtml(value)+'</option>').join('');
  if(deliveries.includes(previous))document.getElementById('yourFindsReprintDeliveryFilter').value=previous;
 }

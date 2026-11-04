@@ -16,7 +16,9 @@
         </div>
       </div>
     </div>
-    <script><?!= inventoryBrowserQueryFunctions_(); ?></script>
+    <script><?!= inventoryBrowserQueryFunctions_(); ?>
+      <?!= bundleDisplayName_.toString(); ?>
+    </script>
 
     <!-- Shared application state FIRST -->
     <?!= include("Frontend/Scripts/AppJS"); ?>
