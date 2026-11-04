@@ -227,7 +227,7 @@ function getInventoryMovementType(category, inventoryType) {
 
   if (normalizedCategory === "YOURFINDS" || normalizedInventoryType === INVENTORY_TYPE.UNIQUE) return INVENTORY_MOVEMENT_TYPE.YOURFINDS;
   if (normalizedCategory === "PINS") return INVENTORY_MOVEMENT_TYPE.PINS;
-  if (normalizedCategory === "OTHERS" || normalizedCategory === "WHOLE SALE") return INVENTORY_MOVEMENT_TYPE.OTHERS;
+  if (['OTHERS','WHOLE SALE','WHOLESALE'].includes(normalizedCategory)) return INVENTORY_MOVEMENT_TYPE.OTHERS;
   throw new Error("Unable to determine Inventory Movement Type for category: " + normalizedCategory);
 }
 
@@ -741,15 +741,14 @@ function convertYourFindsDeliveryItem(payload) {
 }
 
 function generateProductMasterCode_() {
-  const usedCodes = {};
-  getProductMaster_().forEach(function(product) {
-    const code = String(product.productCode || "").trim();
-    if (code) usedCodes[code] = true;
+  const usedCodes = new Set(),ss=SpreadsheetApp.getActiveSpreadsheet();
+  [getProductMasterSheet_(ss),ss.getSheetByName(SHEETS.INVENTORY)].forEach(sheet=>{
+    if(sheet&&sheet.getLastRow()>1)sheet.getRange(2,1,sheet.getLastRow()-1,1).getDisplayValues().forEach(row=>usedCodes.add(String(row[0]||'').trim()));
   });
 
   for (let attempt = 0; attempt < 1000; attempt++) {
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    if (!usedCodes[code]) return code;
+    if (!usedCodes.has(code)) return code;
   }
 
   throw new Error("Unable to generate a unique Product Code.");
@@ -844,7 +843,7 @@ function readCustomCosts_(sheet) {
 function ensureProductMasterInventoryRows_(products) {
   const stockProducts = (products || []).filter(function(product) {
     const category = String(product.category || '').trim().toUpperCase();
-    return (category === 'PINS' || category === 'OTHERS') && String(product.productCode || '').trim();
+    return ['PINS','OTHERS','WHOLESALE','WHOLE SALE'].includes(category) && String(product.productCode || '').trim();
   });
   if (!stockProducts.length) return 0;
 
@@ -891,6 +890,7 @@ function ensureProductMasterInventoryRows_(products) {
         String(product.imageUrl || '').trim(), now, now
       ];
     });
+    rows.forEach((row,index)=>{if(row[INV_IDX.CATEGORY]==='WHOLESALE')allowWholesaleCategoryAtRow_(sheet,startRow+index,INV_COL.CATEGORY);});
     sheet.getRange(startRow, 1, rows.length, INVENTORY_COLUMN_COUNT).setValues(rows);
     setInventoryCalculatedFields_(sheet, startRow, rows.length);
     SpreadsheetApp.flush();
@@ -971,12 +971,12 @@ function saveProductMasterLocked_(payload) {
   payload = payload || {};
   let code = String(payload.productCode || "").trim();
   const description = String(payload.description || "").trim();
-  const category = String(payload.category || "").trim().toUpperCase();
+  const category = String(payload.category || "").trim().toUpperCase().replace(/^WHOLE\s+SALE$/,'WHOLESALE');
   const defaultPrice = Number(payload.defaultPrice), lowStockAt = Number(payload.lowStockAt);
   const costPrice = costPayload_(payload);
   const requestedStatus = String(payload.status || "").trim().toUpperCase();
   if (!description) throw new Error("Description is required.");
-  if (category !== "PINS" && category !== "OTHERS") throw new Error("Category must be PINS or OTHERS.");
+  if (!['PINS','OTHERS','WHOLESALE'].includes(category)) throw new Error("Category must be PINS, OTHERS or WHOLESALE.");
   if (!Number.isFinite(defaultPrice) || defaultPrice < 0) throw new Error("Prices must be valid non-negative numbers.");
   if (!Number.isInteger(lowStockAt) || lowStockAt < 0) throw new Error("Low Stock At must be a non-negative whole number.");
   const ss = SpreadsheetApp.getActiveSpreadsheet(); const sheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
@@ -993,7 +993,9 @@ function saveProductMasterLocked_(payload) {
   }
   if (payload.isNew === true && existing) throw new Error("This barcode is already in use. Reopen Add Product to generate another.");
   if (payload.isNew === false && !existing) throw new Error("Product Master entry no longer exists. Reload inventory.");
-  if (!existing && getFullInventory().some(function(item) { return String(item.code) === code; })) {
+  const existingInventory=ss.getSheetByName(SHEETS.INVENTORY);
+  if (!existing && existingInventory && existingInventory.getLastRow()>1 &&
+    existingInventory.getRange(2,INV_COL.CODE,existingInventory.getLastRow()-1,1).createTextFinder(code).matchEntireCell(true).findNext()) {
     throw new Error("This barcode already exists in Inventory. Reopen Add Product.");
   }
   const active = existing
@@ -1067,6 +1069,10 @@ function saveProductMasterLocked_(payload) {
     : null;
   const imageUrl = createdImage ? createdImage.imageUrl : (existing ? String(existing.imageUrl || "") : "");
   const now = new Date();
+  if(category==='WHOLESALE'){
+    allowWholesaleCategoryAtRow_(sheet,existing?existing.rowNumber:sheet.getLastRow()+1,PRODUCT_COL.CATEGORY);
+    if(inv)allowWholesaleCategoryAtRow_(inv,inventoryRow||inv.getLastRow()+1,INV_COL.CATEGORY);
+  }
   if (existing) {
     sheet.getRange(existing.rowNumber, PRODUCT_COL.DESCRIPTION, 1, 7).setValues([[
       description, category, INVENTORY_TYPE.STOCK, defaultPrice,

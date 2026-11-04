@@ -63,7 +63,7 @@
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-body d-flex flex-wrap gap-2">
         <select id="inventoryCategoryFilter" class="form-select" style="width:180px;" aria-label="Inventory category" onchange="filterInventoryTable()">
-          <option value="">All Category</option><option value="YOURFINDS">YOURFINDS </option><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option>
+          <option value="">All Category</option><option value="YOURFINDS">YOURFINDS </option><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option><option value="WHOLESALE">Wholesale</option>
         </select>
         <div class="dropdown" style="width:200px;">
           <button id="inventoryFiltersButton" type="button" class="form-select text-start" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Inventory filters">Filters (2)</button>
@@ -326,7 +326,8 @@ function applyInventoryPatch(patch) {
   const owner=currentEmployee.dashboardToken,previous=inventoryDataset.version;
   const changed=new Set(patch.items.map(item=>String(item.code))),removed=new Set(patch.removedCodes.map(String));
   const updated=new Map(patch.items.map(item=>{
-    const full={...item,availability:inventoryListStatus_(item)};full.searchText=inventoryItemSearchText_(full);
+    const full={...item,category:String(item.category||'OTHERS').trim().toUpperCase().replace(/^WHOLE\s+SALE$/,'WHOLESALE'),availability:inventoryListStatus_(item)};
+    full.searchText=inventoryItemSearchText_(full);
     return [String(full.code),full];
   }));
   inventoryDataset.items=inventoryDataset.items.filter(item=>!removed.has(String(item.code))).map(item=>{
@@ -565,8 +566,8 @@ function applyInventorySummaryPage(result) {
     inventorySummaryResult=result;inventorySummaryPage=result.page;inventorySummaryPageCount=result.pageCount;
     document.getElementById('inventorySummaryCount').textContent=`${result.total} product / size group(s) · ${result.positiveUnits} units`;
     document.getElementById('inventorySummaryCategoryCounts').innerHTML=result.categories.map(category=>{
-      const label=category.category==='YOURFINDS'?'YourFinds':category.category==='OTHERS'?'Others':'PINS';
-      return `<div class="col-sm-4"><div class="border rounded p-3 h-100"><div class="small text-muted">${label}</div><strong class="fs-5">${category.units} units</strong><div class="small text-muted">${category.groups} ${category.category==='YOURFINDS'?'sizes':'products'}</div></div></div>`;
+      const label=category.category==='YOURFINDS'?'YourFinds':category.category==='OTHERS'?'Others':category.category==='WHOLESALE'?'Wholesale':'PINS';
+      return `<div class="col-sm-6 col-lg-3"><div class="border rounded p-3 h-100"><div class="small text-muted">${label}</div><strong class="fs-5">${category.units} units</strong><div class="small text-muted">${category.groups} ${category.category==='YOURFINDS'?'sizes':'products'}</div></div></div>`;
     }).join('');
     document.querySelectorAll('[data-summary-sort]').forEach(header=>{
       const selected=header.dataset.summarySort===inventorySummarySort.key;header.setAttribute('aria-sort',selected?(inventorySummarySort.direction===1?'ascending':'descending'):'none');

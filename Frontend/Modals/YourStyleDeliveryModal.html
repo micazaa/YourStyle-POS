@@ -143,7 +143,7 @@ function addYourStyleDeliveryLine() {
     ? '<input type="number" class="form-control form-control-sm yourstyle-line-qty" min="1" max="99999" step="1" value="1" aria-label="Actual quantity" oninput="updateYourStyleDeliverySummary()">'
     : '<input type="number" class="form-control form-control-sm yourstyle-line-estimated-per-bundle" min="1" step="1" value="80" aria-label="Estimated units per bundle" oninput="updateYourStyleDeliverySummary()"><input type="number" class="form-control form-control-sm yourstyle-line-bundle-qty" min="1" step="1" value="1" aria-label="Bundle quantity" oninput="updateYourStyleDeliverySummary()"><div class="delivery-line-total yourstyle-line-total"></div>';
   line.innerHTML = '<div class="delivery-line-number yourstyle-line-title">' + lineId + '</div>' +
-    '<select class="form-select form-select-sm yourstyle-line-type" aria-label="Type" onchange="handleYourStyleLineTypeChange(this)"><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option></select>' +
+    '<select class="form-select form-select-sm yourstyle-line-type" aria-label="Type" onchange="handleYourStyleLineTypeChange(this)"><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option>'+(yourStyleDeliveryMode==='DIRECT'?'<option value="WHOLESALE">Wholesale</option>':'')+'</select>' +
     referenceField + quantityFields +
     '<button type="button" class="btn btn-sm btn-outline-danger" title="Remove item" aria-label="Remove item" onclick="removeYourStyleDeliveryLine(this)">×</button>';
   document.getElementById("yourStyleDeliveryLines").appendChild(line);

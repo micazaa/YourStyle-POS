@@ -176,7 +176,7 @@ function getProductMaster_(options) {
 
       description: description,
 
-      category: String(displayRow[PRODUCT_IDX.CATEGORY] || "").trim(),
+      category: String(displayRow[PRODUCT_IDX.CATEGORY] || "").trim().replace(/^WHOLE\s*SALE$/i,'WHOLESALE'),
 
       sellingPrice: Number(row[PRODUCT_IDX.SELLING_PRICE]) || 0,
 

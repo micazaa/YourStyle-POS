@@ -393,7 +393,7 @@ function getFullInventory(options) {
       inventory.push({code:code, name:description,
         size:String(displayRow[INV_IDX.CATEGORY] || '').trim().toUpperCase() === 'YOURFINDS'
           ? String(displayRow[INV_IDX.SIZE] || '').trim().replace(/^BULKY$/i, 'BNE') : String(displayRow[INV_IDX.SIZE] || '').trim(),
-        category:String(displayRow[INV_IDX.CATEGORY] || 'Others').trim(), inventoryType:inventoryType,
+        category:String(displayRow[INV_IDX.CATEGORY] || 'Others').trim().replace(/^WHOLE\s*SALE$/i,'WHOLESALE'), inventoryType:inventoryType,
         status:status, stock:Number(row[INV_IDX.STOCK]) || 0, price:Number(row[INV_IDX.YS_PRICE]) || 0,
         regularPrice:Number(row[INV_IDX.YS_PRICE]) || 0, imageUrl:String(row[INV_IDX.IMAGE] || '').trim(),
         productStatus:product ? product.status : PRODUCT_STATUS.ACTIVE,
@@ -452,7 +452,7 @@ function getFullInventory(options) {
 
       /* D — Category */
 
-      category: String(displayRow[INV_IDX.CATEGORY] || "Others").trim(),
+      category: String(displayRow[INV_IDX.CATEGORY] || "Others").trim().replace(/^WHOLE\s*SALE$/i,'WHOLESALE'),
 
       /* E — Inventory Type */
 

@@ -65,7 +65,7 @@ function readInventoryListIndex_() {
     if(!code && !row[INV_IDX.DESCRIPTION])return null;
     const item={code:code,name:String(row[INV_IDX.DESCRIPTION]||'').trim(),
       size:String(row[INV_IDX.SIZE]||'').trim().replace(/^BULKY$/i,'BNE'),
-      category:String(row[INV_IDX.CATEGORY]||'OTHERS').trim().toUpperCase(),
+      category:String(row[INV_IDX.CATEGORY]||'OTHERS').trim().toUpperCase().replace(/^WHOLE\s+SALE$/,'WHOLESALE'),
       inventoryType:String(row[INV_IDX.INVENTORY_TYPE]||'STOCK').trim().toUpperCase(),
       status:String(row[INV_IDX.STATUS]||'ACTIVE').trim().toUpperCase(),
       stock:Number(row[INV_IDX.STOCK])||0,totalSold:Number(row[INV_IDX.TOTAL_SOLD])||0,
@@ -82,7 +82,7 @@ function readInventoryListIndex_() {
 }
 function inventoryListIndex_(version) {
   if(INVENTORY_EXECUTION_INDEX_&&INVENTORY_EXECUTION_INDEX_.version===version)return INVENTORY_EXECUTION_INDEX_.items;
-  const cache=CacheService.getScriptCache(), prefix='inventory-list:'+version;
+  const cache=CacheService.getScriptCache(), prefix='inventory-list:v2:'+version;
   let raw;try{raw=cache.get(prefix);}catch(error){console.warn('Inventory list cache unavailable.');}
   if(raw){
     try {
@@ -192,7 +192,7 @@ function inventoryPageSlice_(items,page,size) {
 function inventoryResponseCacheKey_(version,kind,query) {
   const manager=!!(ACCESS_REQUEST_CONTEXT_&&ACCESS_REQUEST_CONTEXT_.actor&&ACCESS_REQUEST_CONTEXT_.actor.manager);
   const digest=Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify([manager,query])));
-  return 'inventory-response:v4:'+kind+':'+version+':'+digest;
+  return 'inventory-response:v5:'+kind+':'+version+':'+digest;
 }
 function readInventoryResponse_(key) {
   try {const raw=CacheService.getScriptCache().get(key);return raw?JSON.parse(raw):null;}
@@ -283,7 +283,7 @@ function inventorySummaryResponse_(groups,request,version) {
   const key=['category','name','stock','status'].includes(request&&request.summarySort)?request.summarySort:'category';
   const direction=Number(request&&request.summaryDirection)===-1?-1:1,compare=inventorySortComparer_();
   matching.sort((a,b)=>(key==='stock'?a.stock-b.stock:compare(a[key],b[key]))*direction||compare(a.key,b.key));
-  const categories=['PINS','OTHERS','YOURFINDS'].map(category=>{
+  const categories=['PINS','OTHERS','WHOLESALE','YOURFINDS'].map(category=>{
     const rows=matching.filter(group=>group.category===category);
     return {category:category,groups:rows.length,units:rows.reduce((sum,group)=>sum+group.positiveStock,0)};
   });

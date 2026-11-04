@@ -160,7 +160,7 @@ function renderExchangeItems() {
 }
 function matchingExchangeProducts(query) {
   const search=String(query||'').trim().toLowerCase();
-  const order={PINS:0,OTHERS:1,YOURFINDS:2};
+  const order={PINS:0,OTHERS:1,WHOLESALE:2,'WHOLE SALE':2,YOURFINDS:3};
   const rank=item=>order[String(item.category||'').trim().toUpperCase()]??3;
   return exchangeProducts.filter(item=>!search||[item.name,item.code,item.category,item.size,item.price].join(' ').toLowerCase().includes(search))
     .sort((a,b)=>rank(a)-rank(b)||String(a.name||'').localeCompare(String(b.name||''))||String(a.code).localeCompare(String(b.code)))

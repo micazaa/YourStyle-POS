@@ -10,6 +10,8 @@ A cached first page returns immediately with whichever priority pages remain cac
 
 The completed dataset is retained in memory for the current login/tab session. It has no timed browser expiry. Category/status/exclusion filters, sorting, pagination and summary dialogs use this dataset, rendering at most 50 rows at once. After details preload, text search also uses this dataset. Only four recent filtered/sorted views are retained alongside the dataset to avoid accumulating every possible query. Hard browser reload starts a fresh download; logout clears the dataset and in-flight work before another account signs in.
 
+After inventory detail preparation finishes, the browser preloads the Delivery page and its bundled summary into the existing account-scoped session cache without navigating away. Delivery requests already pending or cached are reused. Opening Delivery uses the prepared data; existing mutation invalidation and failed-read retry behavior remain unchanged.
+
 The previous filter-choice and next-page preloading queues were replaced by this single full-dataset download. Browser and server use the same explicitly exported pure query/display functions. No authentication, supplier-cost readers or sheet-access functions are exported to the browser.
 
 ## Refresh and consistency
@@ -27,6 +29,10 @@ The app and installed edit automation must invalidate the revision for writes. A
 Display caches never authorize stock changes, payments or manager permissions. Checkout and edits still validate authoritative sheet data; all item, change and cost reads validate the current authenticated account and filter costs by role. Until detected changes arrive, the existing snapshot may briefly display older values. Change records contain barcodes and revision links, not credentials or cost values.
 
 ## Inventory actions
+
+Add Product generates a six-digit candidate code immediately in the browser, checking cached inventory, loaded Product Master entries and codes already issued in the tab. The save still runs under the server lock and rejects conflicts in Product Master or Inventory before creating records. A rare cross-account collision requires reopening Add Product for another code; an existing product is never silently overwritten. The compatibility server generator reads only the two barcode columns, and new-product save no longer loads full inventory just to detect an existing code.
+
+Wholesale is a STOCK product category available in Add/Edit Product, inventory and Product Master filters, summary cards, dashboard category breakdown and YourStyle Direct receiving. Category values use `WHOLESALE`; legacy `WHOLE SALE` values normalize on reads without rewriting historical rows. Stock movements retain the existing OTHERS movement type. When a target category cell has an existing list/range validation, Wholesale is appended to its permitted choices. Wholesale receiving uses Direct mode; existing PINS/OTHERS bundle processing is unchanged. Incremental cache updates normalize category keys consistently with the initial inventory dataset.
 
 Edit opens its modal immediately with a loading indicator. Fields stay hidden and inert until complete item details arrive, so missing costs or original prices cannot be saved as blanks. Closing the modal or opening another item prevents a late response from reopening it. View immediately shows the selected name and photo while loading remaining details.
 

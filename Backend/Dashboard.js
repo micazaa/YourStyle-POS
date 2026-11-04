@@ -115,7 +115,7 @@ function dashboardAnalytics_(rows, period, employee) {
   if (hourly) for (let h = 0; h < 24; h++) activity.set(String(h).padStart(2, '0') + ':00', 0);
   else
     for (let d = period.start; d <= period.end; d = dashboardDayOffset_(d, 1)) activity.set(d, 0);
-  const categories = ['PINS', 'OTHERS', 'YOURFINDS'].map((name) => ({
+  const categories = ['PINS', 'OTHERS', 'WHOLESALE', 'YOURFINDS'].map((name) => ({
     name: name,
     sales: 0,
     units: 0,
@@ -124,7 +124,7 @@ function dashboardAnalytics_(rows, period, employee) {
   const metrics = collectSalesMetrics(rows, period.start, null, null, null, {
     endDate: period.end,
     onIncludedRow: function (row) {
-      const category = String(row.category).trim().toUpperCase();
+      const category = String(normalizeInventoryCategoryValue_(row.category)).trim().toUpperCase();
       const cat = categories.find((c) => c.name === category) || categories[1];
       cat.sales += row.sales;
       cat.units += row.units;

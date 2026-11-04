@@ -129,8 +129,8 @@
 
 <div id="productMasterModal" class="generic-overlay-blur" style="display:none;">
  <div class="custom-popup-card p-0" style="max-width:1180px;width:97%;height:88vh;overflow:hidden;">
-  <div class="d-flex justify-content-between align-items-center border-bottom px-4 py-3"><div><h5 class="fw-bold mb-1">Product Master</h5><div class="small text-muted">Manage PINS and OTHERS definitions</div></div><div class="d-flex gap-2"><button class="btn btn-pink" onclick="openProductEditor()">+ Add Product</button><button class="btn-close align-self-center" onclick="closeModal('productMasterModal')"></button></div></div>
-  <div class="px-4 py-3 border-bottom bg-light"><div class="row g-2"><div class="col-md-6"><input id="pmSearch" class="form-control" placeholder="Search code or product..." oninput="renderProductMaster()"></div><div class="col-md-3"><select id="pmListCategory" class="form-select" onchange="renderProductMaster()"><option value="">All Categories</option><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option><option value="YOURFINDS">YOURFINDS</option></select></div><div class="col-md-3"><select id="pmListStatus" class="form-select" onchange="renderProductMaster()"><option value="">All Status</option><option value="ACTIVE">Active</option><option value="DEACTIVATED">Deactivated</option><option value="ON SALE">On Sale</option></select></div></div></div>
+  <div class="d-flex justify-content-between align-items-center border-bottom px-4 py-3"><div><h5 class="fw-bold mb-1">Product Master</h5><div class="small text-muted">Manage product definitions</div></div><div class="d-flex gap-2"><button class="btn btn-pink" onclick="openProductEditor()">+ Add Product</button><button class="btn-close align-self-center" onclick="closeModal('productMasterModal')"></button></div></div>
+  <div class="px-4 py-3 border-bottom bg-light"><div class="row g-2"><div class="col-md-6"><input id="pmSearch" class="form-control" placeholder="Search code or product..." oninput="renderProductMaster()"></div><div class="col-md-3"><select id="pmListCategory" class="form-select" onchange="renderProductMaster()"><option value="">All Categories</option><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option><option value="WHOLESALE">WHOLESALE</option><option value="YOURFINDS">YOURFINDS</option></select></div><div class="col-md-3"><select id="pmListStatus" class="form-select" onchange="renderProductMaster()"><option value="">All Status</option><option value="ACTIVE">Active</option><option value="DEACTIVATED">Deactivated</option><option value="ON SALE">On Sale</option></select></div></div></div>
   <div class="table-responsive" style="height:calc(88vh - 145px);overflow:auto;"><table class="table table-hover align-middle mb-0"><thead class="table-light" style="position:sticky;top:0;z-index:2;"><tr><th class="ps-4">Code</th><th>Description</th><th>Category</th><th class="text-end">Selling</th><th class="text-end">Cost</th><th class="text-center">Low At</th><th class="text-center">Status</th><th class="text-end pe-4">Action</th></tr></thead><tbody id="productMasterBody"></tbody></table></div>
  </div>
 </div>
@@ -148,8 +148,8 @@
  <button type="button" class="btn btn-outline-secondary w-100 mt-2" onclick="document.getElementById('pmPhoto').click()">Choose / Change Photo</button>
  <div class="form-text">JPG, PNG, or WEBP · maximum 5 MB</div></div>
    <div class="col-md-8"><div class="row g-3">
-    <div class="col-md-7"><label class="form-label">Product Code</label><input id="pmCode" class="form-control font-monospace" placeholder="Generating..." readonly></div>
-    <div class="col-md-5"><label class="form-label">Category</label><select id="pmCategory" class="form-select"><option>PINS</option><option>OTHERS</option></select></div>
+   <div class="col-md-7"><label class="form-label">Product Code</label><input id="pmCode" class="form-control font-monospace" placeholder="Auto-generated" readonly></div>
+    <div class="col-md-5"><label class="form-label">Category</label><select id="pmCategory" class="form-select"><option>PINS</option><option>OTHERS</option><option value="WHOLESALE">Wholesale</option></select></div>
     <div class="col-12"><label class="form-label">Description <span class="text-danger">*</span></label><textarea id="pmDescription" class="form-control" rows="3"></textarea></div>
     <div id="pmCostWrap" class="col-md-6" style="display:none;"><label class="form-label">Cost Price</label><div class="input-group"><span class="input-group-text">₱</span><input id="pmCost" type="number" min="0" step="0.01" class="form-control"></div></div>
     <div class="col-md-6"><label class="form-label">Selling Price <span class="text-danger">*</span></label><div class="input-group"><span class="input-group-text">₱</span><input id="pmPrice" type="number" min="0" step="0.01" class="form-control" oninput="updateProductSalePreview()"></div></div>
@@ -206,6 +206,20 @@ var phase8ProductPhotoFileName = '';
 var changeItemChoices = [];
 var changeItemHighlightedIndex = -1;
 var inventoryStockActionsPending=new Map();
+var generatedProductCodes=new Set();
+function generateLocalProductCode() {
+ const used=new Set(generatedProductCodes);
+ const items=inventoryDatasetReady()?inventoryDataset.items:inventoryPageData;
+ items.concat(masterInventory,window.phase8Products||[]).forEach(item=>used.add(String(item.code||item.productCode||'').trim()));
+ const random=new Uint32Array(1);
+ for(let attempt=0;attempt<1000;attempt++){
+  const value=globalThis.crypto&&typeof globalThis.crypto.getRandomValues==='function'
+   ?globalThis.crypto.getRandomValues(random)[0]%900000:Math.floor(Math.random()*900000);
+  const code=String(100000+value);
+  if(!used.has(code)){generatedProductCodes.add(code);return code;}
+ }
+ throw new Error('Unable to generate a product code. Reopen Add Product.');
+}
 function setInventoryStockActionBusy(id,busy) {
  const modal=document.getElementById(id),button=document.getElementById(id==='stockAdjustmentModal'?'adjustConfirmBtn':'changeConfirmBtn');
  if(busy){
@@ -292,6 +306,7 @@ function preloadInventoryItemDetails() {
     if(document.getElementById('inventoryPage').style.display!=='none'&&inventoryListQuery().search)loadInventoryPage(false,true);
     if(document.getElementById('inventorySummaryModal').style.display==='flex')renderInventorySummary();
     refreshOpenYourFindsReprint();
+    loadDeliveriesPage(false,true);
  }
  inventoryItemDetailPreloadTimer=setTimeout(next,150);
 }
@@ -587,15 +602,9 @@ function openProductEditor(){
  clearProductMasterForm();
  document.getElementById('pmEditorTitle').textContent='Add Product';
  document.getElementById('productEditorModal').style.display='flex';
- setControlLoading(document.getElementById('pmCode'), true, 'Generating product code…');
- secureScriptRun.withSuccessHandler(function(code){
-   setControlLoading(document.getElementById('pmCode'), false);
-   document.getElementById('pmCode').value=code;
- }).withFailureHandler(function(error){
-   setControlLoading(document.getElementById('pmCode'), false);
-   showNotificationToast(error&&error.message?error.message:'Unable to generate barcode.',true);
-   closeModal('productEditorModal');
- }).generateProductMasterCode();
+ setControlLoading(document.getElementById('pmCode'),false);
+ try{document.getElementById('pmCode').value=generateLocalProductCode();}
+ catch(error){document.getElementById('pmSaveButton').disabled=true;showNotificationToast(error.message,true);}
 }
 function previewProductPhoto(input){
  readProductPhoto(input,function(url,name){phase8ProductPhotoDataUrl=url;phase8ProductPhotoFileName=name;document.getElementById('pmPhotoPreview').src=url;document.getElementById('pmPhotoPreview').style.display='block';document.getElementById('pmPhotoEmpty').style.display='none';});
@@ -650,7 +659,7 @@ function populateProductMasterEditor(p,requestedStatus){
 }
 function editProductMaster(code,requestedStatus){const p=(window.phase8Products||[]).find(x=>String(x.productCode)===String(code));populateProductMasterEditor(p,requestedStatus);}
 function editInventoryProduct(item,requestedStatus){const p={productCode:item.code,description:item.baseName||item.name,category:item.category,defaultPrice:item.regularPrice??item.price,costPrice:item.costPrice,lowStockAt:item.lowStockAt,status:item.productStatus,salePrice:item.salePrice,saleQuantity:item.saleQuantity,saleRemaining:item.saleRemaining,saleEnd:item.saleEnd,saleReferenceId:item.saleReferenceId,salePrices:item.salePrices,imageUrl:item.imageUrl,active:item.productStatus!=='DEACTIVATED'};populateProductMasterEditor(p,requestedStatus);}
-function clearProductMasterForm(){document.getElementById('pmCostWrap').style.display=inventoryIsManager()?'block':'none';document.getElementById('pmCode').dataset.editing='false';document.getElementById('pmModeLabel').textContent='Create a PINS or OTHERS product';['pmCode','pmDescription','pmPrice','pmCost','pmLow'].forEach(id=>document.getElementById(id).value='');document.getElementById('pmSaleRows').replaceChildren();document.getElementById('pmStatus').value='ACTIVE';toggleProductSaleFields();document.getElementById('pmPhotoEmpty').style.display='block';document.getElementById('pmPhoto').value='';document.getElementById('pmPhotoPreview').removeAttribute('src');document.getElementById('pmPhotoPreview').style.display='none';phase8ProductPhotoDataUrl='';phase8ProductPhotoFileName='';document.getElementById('pmCode').readOnly=true;document.getElementById('pmCategory').value='PINS';document.getElementById('pmSaveButton').disabled=false;document.getElementById('pmSaveButton').textContent='Save';}
+function clearProductMasterForm(){document.getElementById('pmCostWrap').style.display=inventoryIsManager()?'block':'none';document.getElementById('pmCode').dataset.editing='false';document.getElementById('pmModeLabel').textContent='Create a stock product';['pmCode','pmDescription','pmPrice','pmCost','pmLow'].forEach(id=>document.getElementById(id).value='');document.getElementById('pmSaleRows').replaceChildren();document.getElementById('pmStatus').value='ACTIVE';toggleProductSaleFields();document.getElementById('pmPhotoEmpty').style.display='block';document.getElementById('pmPhoto').value='';document.getElementById('pmPhotoPreview').removeAttribute('src');document.getElementById('pmPhotoPreview').style.display='none';phase8ProductPhotoDataUrl='';phase8ProductPhotoFileName='';document.getElementById('pmCode').readOnly=true;document.getElementById('pmCategory').value='PINS';document.getElementById('pmSaveButton').disabled=false;document.getElementById('pmSaveButton').textContent='Save';}
 function applySavedProductToInventory_(result){
  if(typeof window!=='undefined'&&Array.isArray(window.phase8Products)){
    let product=window.phase8Products.find(p=>String(p.productCode)===String(result.productCode));
