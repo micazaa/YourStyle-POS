@@ -1125,43 +1125,39 @@ function getYourFindsReprintLabelType_(item) {
   const hasSellingDetails = String(item && item.imageUrl || "").trim() !== "" &&
     String(item && item.name || "").trim() !== "" &&
     Number(item && item.price) > 0;
-  return status === INVENTORY_STATUS.INCOMPLETE || !hasSellingDetails
+  return status === 'INCOMPLETE' || !hasSellingDetails
     ? "INCOMPLETE"
     : "COMPLETED";
 }
 
-function getYourFindsItemsForLabelReprint() {
+function yourFindsReprintItem_(item) {
+  const status=String(item.status||'').trim().toUpperCase();
+  if(String(item.category||'').trim().toUpperCase()!=='YOURFINDS'||String(item.inventoryType||'').trim().toUpperCase()!=='UNIQUE'||
+    status==='RETURNED'||Number(item.stock)<=0||!String(item.code||'').trim()||!String(item.size||'').trim())return null;
+  return {code:item.code,description:item.name,size:item.size,sellingPrice:item.price,status:status,
+    labelType:getYourFindsReprintLabelType_(item),imageUrl:item.imageUrl,deliveryId:item.deliveryId||''};
+}
+function getYourFindsItemsForLabelReprint(options) {
   assertAppRequest_();
-  const items = getFullInventory().filter(function(item) {
-    const status = String(item.status || "").trim().toUpperCase();
-    const isYourFinds =
-      String(item.category || "").trim().toUpperCase() === "YOURFINDS" &&
-      String(item.inventoryType || "").trim().toUpperCase() === INVENTORY_TYPE.UNIQUE;
-
-    if (!isYourFinds || status === INVENTORY_STATUS.RETURNED || Number(item.stock) <= 0 ||
-      !String(item.code || "").trim() || !String(item.size || "").trim()) {
-      return false;
-    }
-
-    return true;
-  });
-
-  return {
-    success: true,
-    items: items.map(function(item) {
-      const status = String(item.status || "").trim().toUpperCase();
-      return {
-        code: item.code,
-        description: item.name,
-        size: item.size,
-        sellingPrice: item.price,
-        status: status,
-        labelType: getYourFindsReprintLabelType_(item),
-        imageUrl: item.imageUrl,
-        deliveryId: item.deliveryId || ""
-      };
-    })
-  };
+  const version=inventoryReadVersion_(),key=inventoryResponseCacheKey_(version,'label-reprint',[]);
+  if(!(options&&options.fresh)){const cached=readInventoryResponse_(key);if(cached)return cached;}
+  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+  if(!sheet||sheet.getLastRow()<2)return {success:true,items:[],version:version};
+  const count=sheet.getLastRow()-1,stored=inventoryHasStoredDeliveryMetadata_(sheet);
+  const values=sheet.getRange(2,1,count,stored?INV_COL.DELIVERY_ID:INV_COL.IMAGE).getValues();
+  const codes=sheet.getRange(2,INV_COL.CODE,count,1).getDisplayValues();
+  const metadata=stored?{}:inventoryDetailDeliveryMetadata_(version);
+  const items=values.map((row,index)=>{
+    const code=String(codes[index][0]||'').trim();
+    return yourFindsReprintItem_({code:code,name:String(row[INV_IDX.DESCRIPTION]||'').trim(),
+      category:row[INV_IDX.CATEGORY],inventoryType:row[INV_IDX.INVENTORY_TYPE],status:row[INV_IDX.STATUS],
+      stock:Number(row[INV_IDX.STOCK])||0,size:String(row[INV_IDX.SIZE]||'').trim().replace(/^BULKY$/i,'BNE'),
+      price:Number(row[INV_IDX.YS_PRICE])||0,imageUrl:String(row[INV_IDX.IMAGE]||'').trim(),
+      deliveryId:stored?String(row[INV_IDX.DELIVERY_ID]||'').trim():(metadata[code]?.deliveryId||'')});
+  }).filter(Boolean);
+  const result={success:true,items:items,version:version};
+  cacheInventoryResponses_({[key]:result},version);
+  return result;
 }
 
 function createCompletedYourFindsLabelPDFByCodes(codes) {
@@ -1276,7 +1272,7 @@ function createYourFindsReprintPDFByGroups(completedCodes, incompleteCodes) {
   const groups = { COMPLETED: normalize(completedCodes), INCOMPLETE: normalize(incompleteCodes) };
   if (!groups.COMPLETED.length && !groups.INCOMPLETE.length) throw new Error("Select at least one label.");
   const available = {};
-  getYourFindsItemsForLabelReprint().items.forEach(function(item) { available[item.code] = item.labelType; });
+  getYourFindsItemsForLabelReprint({fresh:true}).items.forEach(function(item) { available[item.code] = item.labelType; });
   Object.keys(groups).forEach(function(type) {
     groups[type].forEach(function(code) {
       if (available[code] !== type) throw new Error("Item " + code + " changed or is no longer available. Reopen the label list.");

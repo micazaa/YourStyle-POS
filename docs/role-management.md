@@ -4,13 +4,13 @@ Permissions now come from the Employees **Role** column. Access Level remains pa
 
 ## App controls
 
-The sidebar's **Access Management** button opens approval history for Owners, Managers and OIC. Owners also get Accounts and Permissions tabs. Owners can change an existing employee's role, reset their password, or deactivate/reactivate the account. Employee IDs, names and access numbers stay unchanged. The last active Owner with a valid login cannot be removed or demoted.
+The sidebar's **Access Management** button opens approval history for Owners and Managers. The modal starts closed on reload and opens only when selected. OIC and Cashier accounts cannot open Access Management or read approval history. Owners also get Accounts and Permissions tabs. Owners can change an existing employee's role, reset their password, or deactivate/reactivate the account. Employee IDs, names and access numbers stay unchanged. The last active Owner with a valid login cannot be removed or demoted.
 
 Account forms use an opaque record version. A stale form must reload before saving. Password fields start empty, are cleared after saving, and are never returned by account reads or written to approval history.
 
 OIC retains manager viewing access, including transaction dates and inventory costs. Creating or changing products, adjusting stock, returning stock, distribution, voids, exchanges, dashboard task changes and report changes require Manager or Owner approval. OIC credentials cannot approve these actions or change accounts. Cashiers retain their existing receiving and incomplete-item completion flows; supplier returns, exchanges, voids, corrections and ending shifts require approval. Cashier inventory editing/deleting stays blocked.
 
-Owners and Managers approve their own management actions automatically. A cashier shift explicitly selecting a different verifying manager still checks that manager's credential. Normal sign-in has report access on the cashier page; sales, reservations and exchanges require a server-linked open cashier shift. Browser role flags, supplied cashier names and supplied manager names cannot grant authority.
+Owners and Managers approve their own management actions automatically. A cashier shift explicitly selecting a different verifying manager still checks that manager's credential. Normal sign-in has report and read-only Transaction History access on the cashier page. The History button sits beside Add Items, outside the disabled transaction controls. Transaction details remain readable, while receipt/item voids, exchanges and reservation completion buttons are disabled. Sales, reservations, exchanges and voids require a server-linked open cashier shift; the backend checks this before requesting approval. Browser role flags, supplied cashier names and supplied manager names cannot grant authority.
 
 ## Approval records
 

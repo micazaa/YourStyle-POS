@@ -25,7 +25,7 @@ const ACCESS_PERMISSION_MODES_ = {
   'shift.end': ['allow','allow','approval','approval'],
   'actions.approve': ['allow','allow','deny','deny'],
   'approvals.verify': ['allow','allow','allow','allow'],
-  'approvals.view': ['allow','allow','allow','deny'],
+  'approvals.view': ['allow','allow','deny','deny'],
   'accounts.manage': ['allow','deny','deny','deny']
 };
 const ACCESS_ROLE_ORDER_ = ['OWNER','MANAGER','OIC','CASHIER'];
@@ -66,6 +66,13 @@ function employeeAuthFingerprint_(row) {
 }
 function accessRegistry_() {
   return {
+  "getInventorySnapshotBatch": {permission:"inventory.view", handler:getInventorySnapshotBatch},
+  "getInventoryPage": {permission:"inventory.view", handler:getInventoryPage},
+  "getInventorySummaryPage": {permission:"inventory.view", handler:getInventorySummaryPage},
+  "getInventoryItemDetails": {permission:"inventory.view", handler:getInventoryItemDetails},
+  "getInventoryItemDetailsBatch": {permission:"inventory.view", handler:getInventoryItemDetailsBatch},
+  "getInventoryChanges": {permission:"inventory.view", handler:getInventoryChanges},
+  "getInventoryChangeChoices": {permission:"inventory.view", handler:getInventoryChangeChoices},
   "getDeliveryHistoryFast": {permission:"inventory.view", handler:getDeliveryHistoryFast},
   "getInventoryMovementHistoryByCode": {permission:"inventory.view", handler:getInventoryMovementHistoryByCode},
   "adjustInventoryStock": {permission:"inventory.edit", handler:adjustInventoryStock},
@@ -147,7 +154,14 @@ function accessSafeValue_(value, key) {
 function actionBinding_(operation, args) {
   // Keep full values for approval binding. Display truncation must never weaken approval matching.
   const bound = JSON.parse(JSON.stringify(args, function(key, value) {
-    return /^(managerPin|managerToken|actorToken|sessionToken|token|password)$/i.test(key) ? undefined : value;
+    if (/^(managerPin|managerToken|actorToken|sessionToken|token|password)$/i.test(key)) return undefined;
+    // Separate Apps Script requests can deserialize object fields in different orders.
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const sorted = Object.create(null);
+      Object.keys(value).sort().forEach(name => { sorted[name] = value[name]; });
+      return sorted;
+    }
+    return value;
   }));
   return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
     JSON.stringify([operation, bound])));
@@ -300,7 +314,7 @@ function accessCredential_(request, args) {
     managerToken:credential.managerToken || data.managerToken || authContext.managerToken};
 }
 function requireCashierAccess_(access, request) {
-  if (!['sales.create','sales.exchange'].includes(access.permission)) return;
+  if (!['sales.create','sales.exchange','sales.void'].includes(access.permission)) return;
   if (!access.actor.cashierReportId || String(request.shiftReportId || '') !== access.actor.cashierReportId)
     throw new Error('Start or resume a cashier shift before processing a transaction.');
   const target = cashierShiftTarget_(access.actor.name, access.actor.cashierReportId, cashierReportRows_(), pettyHandoverRows_());
@@ -398,8 +412,9 @@ function finishAccessAudit_(record, access, result, error) {
 function callPosApi(request) {
   const access = accessRequest_(request), previous = ACCESS_REQUEST_CONTEXT_;
   ACCESS_REQUEST_CONTEXT_ = access;
-  let audit;
+  let audit, inventoryChanged=false,inventoryMutation=null;
   try {
+    requireCashierAccess_(access, request);
     if (access.mode === 'approval') {
       const lock = LockService.getScriptLock(); lock.waitLock(10000);
       let approved;
@@ -412,6 +427,7 @@ function callPosApi(request) {
             approved.binding !== actionBinding_(access.operation, access.args)) throw new Error('Approval does not match this action.');
         const before = actionSnapshot_(access.operation, access.args);
         if (JSON.stringify(before) !== JSON.stringify(approved.before)) throw new Error('The item changed. Review this change again.');
+        access.validatedBefore=before;
         const credential = accessCredential_(request, access.args);
         access.approver = requireManager_(credential.managerPin, credential.managerToken);
         CacheService.getScriptCache().remove(key);
@@ -425,23 +441,48 @@ function callPosApi(request) {
     }
     if (access.mode === 'approval' && access.operation === 'generateCashierShiftReportPDF' && access.approver.managerName !== access.args[0])
       throw new Error('Authorization must match the selected manager.');
-    requireCashierAccess_(access, request);
     bindAccessArguments_(access);
     const mutation = ['adjustInventoryStock','changeInventoryItem','convertYourFindsDeliveryItem','saveProductMaster',
       'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','voidAndRefundTransactionBackend',
       'completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle','completeBulkHolder','saveSupplierReturn',
       'acceptYourFindsDelivery','saveCashierShiftExit','generateCashierShiftReportPDF','regenerateCashierReport',
       'correctClosedCashReport','generateManagerDailyReportPDF','saveDashboardTask','saveManagedAccount'].includes(access.operation);
-    if (mutation) audit = beginAccessAudit_(access, actionSnapshot_(access.operation, access.args));
+    if (mutation) audit = beginAccessAudit_(access, access.validatedBefore===undefined?actionSnapshot_(access.operation, access.args):access.validatedBefore);
+    inventoryChanged=['adjustInventoryStock','changeInventoryItem','convertYourFindsDeliveryItem','saveProductMaster',
+      'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','executeCheckoutBackend',
+      'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle',
+      'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(access.operation);
+    if(inventoryChanged){inventoryMutation=beginInventoryMutation_();access.inventoryCodes=new Set();}
     const result = access.definition.handler.apply(null, access.args);
     if (audit) {
       // Once the action succeeds, a log-write outage must not invite a duplicate retry.
       try {finishAccessAudit_(audit, access, result);}
       catch (auditError) {console.error(JSON.stringify({event:'approval_log_pending', auditId:audit.id}));}
     }
+    if(inventoryMutation){
+      let parsed=result;const encoded=typeof result==='string';
+      if(encoded){try{parsed=JSON.parse(result);}catch(error){parsed=null;}}
+      actionCodes_(access.operation,access.args).forEach(code=>access.inventoryCodes.add(code));
+      if(parsed&&parsed.productCode)access.inventoryCodes.add(String(parsed.productCode));
+      if(parsed&&parsed.code)access.inventoryCodes.add(String(parsed.code));
+      let patch;
+      try {
+        const change=finishInventoryMutation_(inventoryMutation,Array.from(access.inventoryCodes),!!(parsed&&parsed.success));inventoryMutation=null;
+        if(!change.reset&&['adjustInventoryStock','changeInventoryItem'].includes(access.operation))reuseInventoryReadMetadata_(change.fromVersion,change.version);
+        patch=parsed&&parsed.success?getInventoryChanges({version:request.inventoryVersion}):null;
+      }catch(cacheError){console.warn('Inventory item update unavailable; clients will refresh safely.');}
+      if(parsed&&parsed.success){
+        parsed.inventoryPatch=patch||{success:true,reset:true};
+        return encoded?JSON.stringify(parsed):parsed;
+      }
+    }
     return result;
   } catch (error) {
     if (audit) {try {finishAccessAudit_(audit, access, null, error);} catch (auditError) {console.error('Approval log update failed: ' + audit.id);}}
     throw error;
-  } finally {ACCESS_REQUEST_CONTEXT_ = previous;}
+  } finally {
+    try {if(inventoryMutation)finishInventoryMutation_(inventoryMutation,[],false);}
+    catch(error){console.error(JSON.stringify({event:'inventory_cache_invalidation_failed',operation:access.operation}));}
+    finally {ACCESS_REQUEST_CONTEXT_ = previous;}
+  }
 }

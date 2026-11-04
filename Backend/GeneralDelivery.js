@@ -90,7 +90,7 @@ function getYourStyleDeliveryProducts() {
   const result = products.filter(function(item) {
     const category = String(item.category || "").trim().toUpperCase();
     const active = item.active === true || String(item.active || "").trim().toUpperCase() === "TRUE";
-    return active && (category === "PINS" || category === "OTHERS");
+    return active && ['PINS','OTHERS','WHOLESALE'].includes(category);
   }).map(function(item) {
     return {
       productCode: String(item.productCode || item.code || "").trim(),
@@ -237,7 +237,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
 
   if (
     category !== "PINS" &&
-    category !== "OTHERS"
+    category !== "OTHERS" && category !== "WHOLESALE"
   ) {
     throw new Error(
       "Product Code " +
@@ -303,6 +303,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
   }
 
   const newRowNumber = inventorySheet.getLastRow() + 1;
+  if(category==='WHOLESALE')allowWholesaleCategoryAtRow_(inventorySheet,newRowNumber,INV_COL.CATEGORY);
   inventorySheet.getRange(newRowNumber, 1, 1, INVENTORY_COLUMN_COUNT).setValues([row]);
   setInventoryCalculatedFields_(inventorySheet, newRowNumber, 1);
 
@@ -353,7 +354,8 @@ function acceptYourStyleDelivery(payload) {
     let lines = submittedLines.map(function(line, index) {
       const type = String(line.type || "").trim().toUpperCase();
       const mode = String(line.receiveMode || "").trim().toUpperCase();
-      if (type !== "PINS" && type !== "OTHERS") throw new Error("Item " + (index + 1) + ": invalid Type.");
+      if (!['PINS','OTHERS','WHOLESALE'].includes(type)) throw new Error("Item " + (index + 1) + ": invalid Type.");
+      if(type==='WHOLESALE'&&mode!==DELIVERY_RECEIVE_MODE.DIRECT)throw new Error('Wholesale products use Direct receiving.');
       if (mode !== DELIVERY_RECEIVE_MODE.DIRECT && mode !== DELIVERY_RECEIVE_MODE.BULK) throw new Error("Item " + (index + 1) + ": invalid Receive Mode.");
 
       if (mode === DELIVERY_RECEIVE_MODE.DIRECT) {

@@ -51,6 +51,9 @@ function changeInventoryStock(options) {
   const stockCell = inventorySheet.getRange(inventoryRow, INV_COL.STOCK);
   const stockBefore = Number(stockCell.getValue()) || 0;
   const stockAfter = stockBefore + qtyChange;
+  if(source===INVENTORY_MOVEMENT_SOURCE.SALE && qtyChange<0 && category==='YOURFINDS' && inventoryType===INVENTORY_TYPE.UNIQUE &&
+    String(rowValues[INV_IDX.STATUS]).toUpperCase()===INVENTORY_STATUS.INACTIVE)
+    throw new Error('YourFinds item '+code+' is disabled. Reload inventory.');
 
   try {
     logInventoryMovement({
@@ -69,6 +72,8 @@ function changeInventoryStock(options) {
       remainingBundleQty: remainingBundleQty,
       notes: notes
     });
+    syncSoldYourFindsStatus_(inventorySheet,[{rowNumber:inventoryRow,category:category,inventoryType:inventoryType,
+      status:String(rowValues[INV_IDX.STATUS]).toUpperCase(),stockAfter:stockAfter,source:source,qtyChange:qtyChange}]);
     inventorySheet.getRange(inventoryRow, INV_COL.UPDATED_AT).setValue(new Date());
   } catch (movementError) {
     throw new Error("Inventory movement failed. " + (movementError && movementError.message ? movementError.message : String(movementError)));
@@ -104,6 +109,7 @@ function changeInventoryStockBatch_(movements) {
   const rows = [];
   const results = [];
   const touchedRows = {};
+  const soldYourFinds=[];
   movements.forEach(function(options) {
     options = options || {};
     const code = String(options.code || "").trim();
@@ -115,6 +121,10 @@ function changeInventoryStockBatch_(movements) {
     const target = byCode[code];
     if (!target) throw new Error("Inventory Code " + code + " was not found.");
     if (String(target.row[INV_IDX.STATUS]).toUpperCase() === INVENTORY_STATUS.RESERVED) throw new Error("Reserved stock can only be changed by completing or exchanging its reservation.");
+    if(source===INVENTORY_MOVEMENT_SOURCE.SALE && qtyChange<0 && String(target.row[INV_IDX.CATEGORY]).toUpperCase()==='YOURFINDS' &&
+      String(target.row[INV_IDX.INVENTORY_TYPE]).toUpperCase()==='UNIQUE' &&
+      (String(target.row[INV_IDX.STATUS]).toUpperCase()!=='ACTIVE'||Number(target.row[INV_IDX.TOTAL_SOLD])>0&&target.stock<=0))
+      throw new Error('YourFinds item '+code+' is unavailable. Reload inventory.');
     const stockBefore = target.stock;
     const stockAfter = stockBefore + qtyChange;
     target.stock = stockAfter;
@@ -128,9 +138,13 @@ function changeInventoryStockBatch_(movements) {
       String(options.notes || "").trim()
     ]);
     touchedRows[target.rowNumber] = true;
+    soldYourFinds.push({rowNumber:target.rowNumber,category:target.row[INV_IDX.CATEGORY],inventoryType:target.row[INV_IDX.INVENTORY_TYPE],
+      status:target.row[INV_IDX.STATUS],stockAfter:stockAfter,source:source,qtyChange:qtyChange});
     results.push({success:true, code:code, rowNumber:target.rowNumber, qtyChange:qtyChange, stockBefore:stockBefore, stockAfter:stockAfter});
   });
   movementSheet.getRange(movementSheet.getLastRow() + 1, 1, rows.length, MOVEMENT_LOG_COLUMN_COUNT).setValues(rows);
+  recordInventoryChangedCodes_(results.map(result=>result.code));
+  syncSoldYourFindsStatus_(inventorySheet,soldYourFinds);
   const addresses = Object.keys(touchedRows).map(function(rowNumber) { return "Q" + rowNumber; });
   if (addresses.length && inventorySheet.getRangeList) inventorySheet.getRangeList(addresses).setValue(now);
   else Object.keys(touchedRows).forEach(function(rowNumber) { inventorySheet.getRange(Number(rowNumber), INV_COL.UPDATED_AT).setValue(now); });
@@ -138,9 +152,31 @@ function changeInventoryStockBatch_(movements) {
   return results;
 }
 
+const SOLD_YOURFINDS_NOTE_ = 'POS: automatically disabled after sale';
+function syncSoldYourFindsStatus_(sheet, changes) {
+  const latest=new Map();changes.forEach(change=>{latest.set(change.rowNumber,change);});
+  Array.from(latest.values()).forEach(change=>{
+    if(String(change.category).toUpperCase()!=='YOURFINDS'||String(change.inventoryType).toUpperCase()!=='UNIQUE')return;
+    if(['RESERVED','RETURNED','CONVERTED','INCOMPLETE'].includes(String(change.status).toUpperCase()))return;
+    const sale=change.source===INVENTORY_MOVEMENT_SOURCE.SALE||change.source===INVENTORY_MOVEMENT_SOURCE.EXCHANGE;
+    const restored=change.source===INVENTORY_MOVEMENT_SOURCE.VOID||change.source===INVENTORY_MOVEMENT_SOURCE.EXCHANGE;
+    if(sale&&change.qtyChange<0&&change.stockAfter<=0){
+      const cell=sheet.getRange(change.rowNumber,INV_COL.STATUS),note=cell.getNote();
+      cell.setValue(INVENTORY_STATUS.INACTIVE);
+      if(!note.includes(SOLD_YOURFINDS_NOTE_))cell.setNote(note+(note?'\n':'')+SOLD_YOURFINDS_NOTE_);
+    }else if(restored&&change.qtyChange>0&&change.stockAfter>0&&String(change.status).toUpperCase()==='INACTIVE'){
+      const cell=sheet.getRange(change.rowNumber,INV_COL.STATUS),note=cell.getNote();
+      // A manual deactivation must not be undone by returning unrelated stock.
+      if(note.includes(SOLD_YOURFINDS_NOTE_)){
+        cell.setValue(INVENTORY_STATUS.ACTIVE);cell.setNote(note.replace(SOLD_YOURFINDS_NOTE_,'').trim());
+      }
+    }
+  });
+}
+
 function logInventoryMovement(movement) {
   assertAppRequest_();
-  if (!movement) throw new Error("Inventory movement data is required.");
+  const row=inventoryMovementRow_(movement);
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
@@ -153,7 +189,12 @@ function logInventoryMovement(movement) {
       "Remaining Bundle Qty", "Notes"
     ]]);
   }
-
+  sheet.appendRow(row);
+  recordInventoryChangedCodes_([row[MOVE_IDX.CODE]]);
+  return true;
+}
+function inventoryMovementRow_(movement) {
+  if (!movement) throw new Error("Inventory movement data is required.");
   const movementId = String(movement.movementId || generateInventoryMovementId()).trim();
   const code = String(movement.code || "").trim();
   const type = String(movement.type || "").trim().toUpperCase();
@@ -177,8 +218,7 @@ function logInventoryMovement(movement) {
 
   const row = [movementId, new Date(), source, referenceId, sourceLineId, code, item, type, qtyChange, stockBefore, stockAfter, employee, reason, bundleNo, remainingBundleQty, notes];
   if (row.length !== MOVEMENT_LOG_COLUMN_COUNT) throw new Error("Inventory Movement row does not match A:P mapping.");
-  sheet.appendRow(row);
-  return true;
+  return row;
 }
 
 function getInventoryMovementType(category, inventoryType) {
@@ -187,7 +227,7 @@ function getInventoryMovementType(category, inventoryType) {
 
   if (normalizedCategory === "YOURFINDS" || normalizedInventoryType === INVENTORY_TYPE.UNIQUE) return INVENTORY_MOVEMENT_TYPE.YOURFINDS;
   if (normalizedCategory === "PINS") return INVENTORY_MOVEMENT_TYPE.PINS;
-  if (normalizedCategory === "OTHERS" || normalizedCategory === "WHOLE SALE") return INVENTORY_MOVEMENT_TYPE.OTHERS;
+  if (['OTHERS','WHOLE SALE','WHOLESALE'].includes(normalizedCategory)) return INVENTORY_MOVEMENT_TYPE.OTHERS;
   throw new Error("Unable to determine Inventory Movement Type for category: " + normalizedCategory);
 }
 
@@ -248,9 +288,7 @@ function adjustInventoryStock(payload) {
   if (!Number.isInteger(qty) || qty < 1) throw new Error("Quantity must be a positive whole number.");
   if (allowedReasons.indexOf(reason) === -1) throw new Error("Select a valid adjustment reason.");
   if (reason === "OTHER" && !notes) throw new Error("Notes are required when reason is OTHER.");
-  const itemResult = getInventoryItemByCode(code);
-  if (!itemResult || !itemResult.success || !itemResult.item) throw new Error("Inventory item not found.");
-  const item = itemResult.item;
+  const item = readInventoryStockTargets_([code])[0];
   if (String(item.inventoryType || "").toUpperCase() === INVENTORY_TYPE.UNIQUE) throw new Error("UNIQUE YourFinds items cannot use quantity stock adjustment.");
   const referenceId = adjustmentId_();
   const result = changeInventoryStock({
@@ -260,6 +298,26 @@ function adjustInventoryStock(payload) {
     notes: "Authorized by: " + auth.managerName + (notes ? " | " + notes : "")
   });
   return { success: true, referenceId: referenceId, manager: auth.managerName, stockAfter: result.stockAfter };
+}
+
+function readInventoryStockTargets_(codes) {
+  const sheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+  if(!sheet||sheet.getLastRow()<2)throw new Error('Inventory is empty.');
+  const requested=new Set(codes),rows=new Map();
+  sheet.getRange(2,INV_COL.CODE,sheet.getLastRow()-1,1).getDisplayValues().forEach((row,index)=>{
+    const code=String(row[0]||'').trim();
+    if(!requested.has(code))return;
+    if(rows.has(code))throw new Error('Inventory barcode '+code+' is duplicated.');
+    rows.set(code,index+2);
+  });
+  return codes.map(code=>{
+    const rowNumber=rows.get(code);
+    if(!rowNumber)throw new Error('Inventory Code '+code+' was not found.');
+    const row=sheet.getRange(rowNumber,1,1,INV_COL.STOCK).getValues()[0];
+    return {code:code,rowNumber:rowNumber,name:String(row[INV_IDX.DESCRIPTION]||'').trim(),
+      category:String(row[INV_IDX.CATEGORY]||'OTHERS').trim(),inventoryType:String(row[INV_IDX.INVENTORY_TYPE]||'STOCK').trim().toUpperCase(),
+      status:String(row[INV_IDX.STATUS]||'ACTIVE').trim().toUpperCase(),stock:Number(row[INV_IDX.STOCK])||0};
+  });
 }
 
 function changeInventoryItem(payload) {
@@ -296,15 +354,7 @@ function changeInventoryItem(payload) {
       This prevents stale row numbers / stock values if another
       stock transaction was running at the same time.
     */
-    const fromResult = getInventoryItemByCode(fromCode);
-    const toResult = getInventoryItemByCode(toCode);
-
-    if (!fromResult.success || !toResult.success) {
-      throw new Error("Source or destination inventory item was not found.");
-    }
-
-    const fromItem = fromResult.item;
-    const toItem = toResult.item;
+    const [fromItem,toItem] = readInventoryStockTargets_([fromCode,toCode]);
 
     if (
       String(fromItem.inventoryType || "").toUpperCase() !== INVENTORY_TYPE.STOCK ||
@@ -329,8 +379,8 @@ function changeInventoryItem(payload) {
 
     movementStart = mov.getLastRow();
 
-    fromBefore = Number(inv.getRange(fromItem.rowNumber, INV_COL.STOCK).getValue()) || 0;
-    toBefore = Number(inv.getRange(toItem.rowNumber, INV_COL.STOCK).getValue()) || 0;
+    fromBefore = fromItem.stock;
+    toBefore = toItem.stock;
 
     if (fromBefore < qty) {
       throw new Error(
@@ -342,7 +392,7 @@ function changeInventoryItem(payload) {
     const toAfter = toBefore + qty;
     const referenceId = adjustmentId_();
 
-    logInventoryMovement({
+    const movementRows=[inventoryMovementRow_({
       code: fromCode,
       type: getInventoryMovementType(fromItem.category, fromItem.inventoryType),
       qtyChange: -qty,
@@ -359,9 +409,7 @@ function changeInventoryItem(payload) {
         " | Authorized by: " +
         auth.managerName +
         (notes ? " | " + notes : "")
-    });
-
-    logInventoryMovement({
+    }),inventoryMovementRow_({
       code: toCode,
       type: getInventoryMovementType(toItem.category, toItem.inventoryType),
       qtyChange: qty,
@@ -378,7 +426,11 @@ function changeInventoryItem(payload) {
         " | Authorized by: " +
         auth.managerName +
         (notes ? " | " + notes : "")
-    });
+    })];
+    const capacity=mov.getMaxRows();
+    if(movementStart+movementRows.length>capacity)mov.insertRowsAfter(capacity,Math.max(100,movementStart+movementRows.length-capacity));
+    mov.getRange(movementStart+1,1,movementRows.length,MOVEMENT_LOG_COLUMN_COUNT).setValues(movementRows);
+    recordInventoryChangedCodes_([fromCode,toCode]);
 
     SpreadsheetApp.flush();
 
@@ -689,15 +741,14 @@ function convertYourFindsDeliveryItem(payload) {
 }
 
 function generateProductMasterCode_() {
-  const usedCodes = {};
-  getProductMaster_().forEach(function(product) {
-    const code = String(product.productCode || "").trim();
-    if (code) usedCodes[code] = true;
+  const usedCodes = new Set(),ss=SpreadsheetApp.getActiveSpreadsheet();
+  [getProductMasterSheet_(ss),ss.getSheetByName(SHEETS.INVENTORY)].forEach(sheet=>{
+    if(sheet&&sheet.getLastRow()>1)sheet.getRange(2,1,sheet.getLastRow()-1,1).getDisplayValues().forEach(row=>usedCodes.add(String(row[0]||'').trim()));
   });
 
   for (let attempt = 0; attempt < 1000; attempt++) {
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    if (!usedCodes[code]) return code;
+    if (!usedCodes.has(code)) return code;
   }
 
   throw new Error("Unable to generate a unique Product Code.");
@@ -792,7 +843,7 @@ function readCustomCosts_(sheet) {
 function ensureProductMasterInventoryRows_(products) {
   const stockProducts = (products || []).filter(function(product) {
     const category = String(product.category || '').trim().toUpperCase();
-    return (category === 'PINS' || category === 'OTHERS') && String(product.productCode || '').trim();
+    return ['PINS','OTHERS','WHOLESALE','WHOLE SALE'].includes(category) && String(product.productCode || '').trim();
   });
   if (!stockProducts.length) return 0;
 
@@ -839,6 +890,7 @@ function ensureProductMasterInventoryRows_(products) {
         String(product.imageUrl || '').trim(), now, now
       ];
     });
+    rows.forEach((row,index)=>{if(row[INV_IDX.CATEGORY]==='WHOLESALE')allowWholesaleCategoryAtRow_(sheet,startRow+index,INV_COL.CATEGORY);});
     sheet.getRange(startRow, 1, rows.length, INVENTORY_COLUMN_COUNT).setValues(rows);
     setInventoryCalculatedFields_(sheet, startRow, rows.length);
     SpreadsheetApp.flush();
@@ -875,7 +927,6 @@ function getInventoryForManagement(managerToken) {
   });
   const auth = verifyInventoryReadSession_(managerToken);
   if (!auth || !auth.success) throw new Error('Manager session expired. Sign in again.');
-  ensureProductMasterInventoryRows_(products);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const stockCosts = {};
   const uniqueCosts = {};
@@ -920,12 +971,12 @@ function saveProductMasterLocked_(payload) {
   payload = payload || {};
   let code = String(payload.productCode || "").trim();
   const description = String(payload.description || "").trim();
-  const category = String(payload.category || "").trim().toUpperCase();
+  const category = String(payload.category || "").trim().toUpperCase().replace(/^WHOLE\s+SALE$/,'WHOLESALE');
   const defaultPrice = Number(payload.defaultPrice), lowStockAt = Number(payload.lowStockAt);
   const costPrice = costPayload_(payload);
   const requestedStatus = String(payload.status || "").trim().toUpperCase();
   if (!description) throw new Error("Description is required.");
-  if (category !== "PINS" && category !== "OTHERS") throw new Error("Category must be PINS or OTHERS.");
+  if (!['PINS','OTHERS','WHOLESALE'].includes(category)) throw new Error("Category must be PINS, OTHERS or WHOLESALE.");
   if (!Number.isFinite(defaultPrice) || defaultPrice < 0) throw new Error("Prices must be valid non-negative numbers.");
   if (!Number.isInteger(lowStockAt) || lowStockAt < 0) throw new Error("Low Stock At must be a non-negative whole number.");
   const ss = SpreadsheetApp.getActiveSpreadsheet(); const sheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
@@ -942,7 +993,9 @@ function saveProductMasterLocked_(payload) {
   }
   if (payload.isNew === true && existing) throw new Error("This barcode is already in use. Reopen Add Product to generate another.");
   if (payload.isNew === false && !existing) throw new Error("Product Master entry no longer exists. Reload inventory.");
-  if (!existing && getFullInventory().some(function(item) { return String(item.code) === code; })) {
+  const existingInventory=ss.getSheetByName(SHEETS.INVENTORY);
+  if (!existing && existingInventory && existingInventory.getLastRow()>1 &&
+    existingInventory.getRange(2,INV_COL.CODE,existingInventory.getLastRow()-1,1).createTextFinder(code).matchEntireCell(true).findNext()) {
     throw new Error("This barcode already exists in Inventory. Reopen Add Product.");
   }
   const active = existing
@@ -1016,6 +1069,10 @@ function saveProductMasterLocked_(payload) {
     : null;
   const imageUrl = createdImage ? createdImage.imageUrl : (existing ? String(existing.imageUrl || "") : "");
   const now = new Date();
+  if(category==='WHOLESALE'){
+    allowWholesaleCategoryAtRow_(sheet,existing?existing.rowNumber:sheet.getLastRow()+1,PRODUCT_COL.CATEGORY);
+    if(inv)allowWholesaleCategoryAtRow_(inv,inventoryRow||inv.getLastRow()+1,INV_COL.CATEGORY);
+  }
   if (existing) {
     sheet.getRange(existing.rowNumber, PRODUCT_COL.DESCRIPTION, 1, 7).setValues([[
       description, category, INVENTORY_TYPE.STOCK, defaultPrice,
@@ -1167,6 +1224,7 @@ function setInventoryAdministrativeStatus(payload) {
       throw new Error("Only active or inactive items can be changed here. Complete unfinished items first.");
     }
     if (String(item.category).toUpperCase() === "YOURFINDS" && String(item.inventoryType).toUpperCase() === INVENTORY_TYPE.UNIQUE && inventoryStatus === INVENTORY_STATUS.ACTIVE) {
+      if(Number(item.stock)<=0)throw new Error('Sold YourFinds items stay disabled until stock is restored.');
       assertCompletedYourFinds_(item);
     }
     const masterSheet = ss.getSheetByName(SHEETS.PRODUCT_MASTER);
@@ -1200,7 +1258,9 @@ function setInventoryAdministrativeStatus(payload) {
       masterRange.setValues([masterUpdate]);
     }
     try {
-      sheet.getRange(inventoryRow, INV_COL.STATUS).setValue(inventoryStatus);
+      const statusCell=sheet.getRange(inventoryRow,INV_COL.STATUS);
+      statusCell.setValue(inventoryStatus);
+      if(isYourFindsUnique_(item))statusCell.setNote(statusCell.getNote().replace(SOLD_YOURFINDS_NOTE_,'').trim());
       sheet.getRange(inventoryRow, INV_COL.UPDATED_AT).setValue(new Date());
       if (master) logProductStatusChange_({
         code: code, item: item.name, category: item.category, inventoryType: item.inventoryType,

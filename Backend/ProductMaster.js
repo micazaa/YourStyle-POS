@@ -65,9 +65,13 @@ function getProductMaster_(options) {
     .getRange(2, 1, lastRow - 1, PRODUCT_MASTER_COLUMN_COUNT)
     .getValues();
 
-  const displayData = sheet
-    .getRange(2, 1, lastRow - 1, PRODUCT_MASTER_COLUMN_COUNT)
-    .getDisplayValues();
+  const displayData = options.compactRead
+    ? data.map(row=>row.slice())
+    : sheet.getRange(2, 1, lastRow - 1, PRODUCT_MASTER_COLUMN_COUNT).getDisplayValues();
+  if(options.compactRead){
+    const codes=sheet.getRange(2,PRODUCT_COL.PRODUCT_CODE,lastRow-1,1).getDisplayValues();
+    displayData.forEach((row,index)=>{row[PRODUCT_IDX.PRODUCT_CODE]=codes[index][0];});
+  }
   const hasSalePrices = hasProductSalePricesColumn_(sheet);
   const salePriceRows = hasSalePrices
     ? sheet.getRange(2, PRODUCT_COL.SALE_PRICES, lastRow - 1, 1).getValues()
@@ -172,7 +176,7 @@ function getProductMaster_(options) {
 
       description: description,
 
-      category: String(displayRow[PRODUCT_IDX.CATEGORY] || "").trim(),
+      category: String(displayRow[PRODUCT_IDX.CATEGORY] || "").trim().replace(/^WHOLE\s*SALE$/i,'WHOLESALE'),
 
       sellingPrice: Number(row[PRODUCT_IDX.SELLING_PRICE]) || 0,
 
@@ -454,9 +458,7 @@ function validateProductMaster() {
     .getRange(2, 1, lastRow - 1, PRODUCT_MASTER_COLUMN_COUNT)
     .getValues();
 
-  const displayData = sheet
-    .getRange(2, 1, lastRow - 1, PRODUCT_MASTER_COLUMN_COUNT)
-    .getDisplayValues();
+  const displayData=sheet.getRange(2,1,lastRow-1,PRODUCT_MASTER_COLUMN_COUNT).getDisplayValues();
 
   const errors = [];
   const warnings = [];

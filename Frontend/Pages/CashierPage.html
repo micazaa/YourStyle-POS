@@ -8,41 +8,23 @@
         <span>Petty Cash</span> <strong id="cashierPettyCash">₱0.00</strong>
       </div>
     </div>
-    <fieldset id="cashierWorkspaceControls" class="row g-4" aria-label="Cashier transactions" disabled>
+    <div id="cashierWorkspaceControls" class="row g-4" aria-label="Cashier transactions">
 
       <div class="col-md-4 h-100 d-flex flex-column">
         <div class="card-pane">
           <div class="pane-header">
             <h6>Add Items</h6>
-            <button
-              type="button"
-              class="btn btn-link p-0"
-              style="color:var(--pink-main);"
-              aria-label="Open transaction history"
-              title="Transaction history"
-              data-bs-toggle="tooltip"
-              data-bs-placement="top"
-              data-bs-title="Transaction history"
-              onclick="openTransactionHistoryModal()"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="12" r="9"></circle>
-                <polyline points="12 7 12 12 15 14"></polyline>
+            <button id="cashierTransactionHistoryBtn" type="button" class="btn btn-link p-0 ms-1"
+              style="color:var(--pink-main);" aria-label="Open transaction history" title="Transaction history"
+              data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Transaction history"
+              onclick="openTransactionHistoryModal()">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15 14"></polyline>
               </svg>
             </button>
           </div>
-          <div class="pane-body">
+          <fieldset class="pane-body" data-cashier-controls aria-label="Add items" disabled>
 
 
             <div class="mb-4">
@@ -101,16 +83,16 @@
               </div>
               <button type="button" class="btn btn-outline-pink btn-sm w-100" onclick="addCustomItem()">Add Custom Item</button>
             </div>
-          </div>
-          <div class="cashier-actions-footer">
+          </fieldset>
+          <fieldset class="cashier-actions-footer" data-cashier-controls aria-label="Void and exchange" disabled>
             <button type="button" class="btn btn-sm btn-outline-danger" onclick="toggleVoidModal(true)"><span aria-hidden="true">⊘</span> Void</button>
             <button  type="button" class="btn btn-sm btn-outline-secondary" onclick="openCustomerExchangeModal()"><span aria-hidden="true">⇄</span> Exchange</button>
-          </div>
+          </fieldset>
         </div>
       </div>
 
       <div class="col-md-8 h-100">
-        <div class="card-pane">
+        <fieldset class="card-pane" data-cashier-controls aria-label="Shopping cart and checkout" disabled>
           <div class="pane-header">
             <h6>Shopping Cart</h6>
             <button class="btn btn-sm text-danger border-0 bg-transparent fw-semibold" onclick="clearCart()">Clear All</button>
@@ -187,10 +169,10 @@
           </div>
           <!-- ===== End Checkout / Summary Section ===== -->
 
-        </div>
+        </fieldset>
       </div>
 
-    </fieldset>
+    </div>
   </div>
   <div id="successModal"
     style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center;">

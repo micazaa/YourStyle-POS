@@ -733,6 +733,7 @@ function unlockTerminalSession() {
     if(cashierMode&&(!response.shift||!response.shift.success))return failed(new Error(response&&response.shift&&response.shift.message||'Unable to start cashier shift.'));
     loginBusy=false;
     pageReadCache.clear();
+    if(typeof resetInventoryListSession==='function')resetInventoryListSession();
     localStorage.removeItem('ys_pos_inventory_tab');
     currentEmployee=result;currentCashier=result.fullName;currentSessionIsCashier=cashierMode;
     rememberLoginUsername(name);
@@ -752,11 +753,11 @@ function unlockTerminalSession() {
     button.disabled=false;button.textContent=cashierMode?'Start cashier shift':'Sign in';document.getElementById('cashierPin').value='';
     updateCashierNavigationAvailability();
     showPage(cashierMode||hasManagerViewAccess(result)?'posPage':'dashboardPage');saveSession();
-    if(cashierMode&&typeof refreshInventory==='function')refreshInventory();
-    if (hasManagerViewAccess(result) && typeof warmManagerExpectedCash === 'function') {
-      warmManagerExpectedCash(getCashReportToday());
-    }
-    if (typeof warmTransactionHistory === 'function') warmTransactionHistory();
+    if(typeof loadInventoryPage==='function')loadInventoryPage();
+    afterInventoryFirstPage(function(){
+      if (hasManagerViewAccess(result) && typeof warmManagerExpectedCash === 'function') warmManagerExpectedCash(getCashReportToday());
+      if (typeof warmTransactionHistory === 'function') warmTransactionHistory();
+    });
   };
   const runner=secureScriptRun.withSuccessHandler(onLoginSuccess).withFailureHandler(failed);
   if(cashierMode)runner.loginAndStartShift(name,pin,petty,loginPettyHandover&&loginPettyHandover.version);

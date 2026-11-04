@@ -94,6 +94,13 @@
   function canAuthorizeManagerActions(employee = currentEmployee) {
     return ['OWNER','MANAGER'].includes(String(employee && employee.role || '').trim().toUpperCase());
   }
+  function cashierTransactionActionsEnabled() {
+    return !!currentEmployee && currentSessionIsCashier === true;
+  }
+  function requireCashierTransactionActions() {
+    if(cashierTransactionActionsEnabled())return true;
+    showNotificationToast('Start a cashier shift to change a transaction.',true);return false;
+  }
   function hasManagerViewAccess(employee = currentEmployee) {
     return employeeIsOic(employee) || canAuthorizeManagerActions(employee);
   }
@@ -131,13 +138,25 @@
           if (handlers.failure) handlers.failure(error,handlers.userObject);
           else showNotificationToast(error && error.message || 'Unable to complete this action.',true);
         };
-        const succeed = value=>{releaseApproval();if(!POS_LOGIN_OPERATIONS.has(operation) && (!currentEmployee || currentEmployee.dashboardToken!==sessionToken))return;if (handlers.success) handlers.success(value,handlers.userObject);};
+        const succeed = value=>{
+          releaseApproval();if(!POS_LOGIN_OPERATIONS.has(operation)&&(!currentEmployee||currentEmployee.dashboardToken!==sessionToken))return;
+          let parsed=value;if(typeof value==='string'){try{parsed=JSON.parse(value);}catch(ignored){parsed=null;}}
+          if(parsed&&parsed.success&&['adjustInventoryStock','changeInventoryItem','convertYourFindsDeliveryItem','saveProductMaster',
+            'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','executeCheckoutBackend',
+            'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle',
+            'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(operation)){
+            if(typeof handleInventoryMutationResult==='function')handleInventoryMutationResult(parsed);
+            else {pageReadCache.delete('inventory');if(typeof invalidateLocalInventoryReads==='function')invalidateLocalInventoryReads();}
+          }
+          if(handlers.success)handlers.success(value,handlers.userObject);
+        };
         const run = ()=>google.script.run.withSuccessHandler(succeed).withFailureHandler(fail);
         if (POS_LOGIN_OPERATIONS.has(operation)) {run()[operation](...args);return;}
         if (!sessionToken) {fail(new Error('Please sign in again.'));return;}
         // Copy before prompting so later form edits cannot change an approved action.
         const request = {operation:operation,args:JSON.parse(JSON.stringify(args)),sessionToken:sessionToken,
-          shiftReportId:currentSessionIsCashier ? currentShiftReportId : ''};
+          shiftReportId:currentSessionIsCashier ? currentShiftReportId : '',
+          inventoryVersion:typeof inventoryDatasetReady==='function'&&inventoryDatasetReady()?inventoryDataset.version:''};
         const send = ()=>{
           if (!currentEmployee || currentEmployee.dashboardToken !== sessionToken) {fail(new Error('Account changed. Please sign in again.'));return;}
           run().callPosApi(request);
@@ -159,8 +178,7 @@
             send();
           };
           if (credential.managerPin || credential.managerToken) {
-            if (window.confirm(preview.description+'\n\nApprove this exact change using the entered manager authorization?')) approve(credential);
-            else approve(null);
+            approve(credential);
           } else requestManagerPin(preview.description,approve,true);
         }).withFailureHandler(fail).previewPosAction(request);
       };
@@ -221,6 +239,7 @@
       watch.busy = false;
       if (!result || !result.success) return;
       if (result.active === false) { logoutEndedAccount(watch.token); return; }
+      if(typeof observeInventoryVersion==='function')observeInventoryVersion(result.inventoryVersion);
       if (Number(result.expiresAt) > 0) {
         watch.expiresAt = Number(result.expiresAt);
         armAccountSessionExpiry(watch);
@@ -310,7 +329,9 @@
 
     restoreActivePage();
 
-    if (currentSessionIsCashier) refreshInventory(function () {
+    if (typeof loadInventoryPage === 'function') loadInventoryPage();
+
+    if (currentSessionIsCashier && document.getElementById('posPage').style.display !== 'none') refreshInventory(function () {
       renderCart();
     });
     else renderCart();

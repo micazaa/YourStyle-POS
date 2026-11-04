@@ -1,4 +1,4 @@
-<div id="accessManagementModal" class="generic-overlay-blur" style="z-index:10005">
+<div id="accessManagementModal" class="generic-overlay-blur" style="display:none;z-index:10005">
   <div class="custom-popup-card" style="max-width:960px;width:96%;max-height:90vh;overflow:auto">
     <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
       <h5 class="fw-bold m-0">Access Management</h5>
@@ -47,17 +47,18 @@
   }
   function resetAccessManagement() {
     ++accessLoadId;accessAccounts=[];accessHistory=[];accessSaving=false;
+    document.getElementById('accessManagementModal').style.display='none';
     document.getElementById('accessAccountSelect').replaceChildren();document.getElementById('accessHistoryBody').replaceChildren();
     document.getElementById('accessHistoryDetails').textContent='';document.getElementById('accessPassword').value='';
   }
   function openAccessManagement() {
-    if(!hasManagerViewAccess())return;
+    if(!canAuthorizeManagerActions())return;
     document.getElementById('accessAccountsTab').hidden=!accountIsOwner();document.getElementById('accessPermissionsTab').hidden=!accountIsOwner();
     document.getElementById('accessManagementModal').style.display='flex';
     showAccessManagementTab(accountIsOwner()?'accounts':'history');
   }
   function showAccessManagementTab(tab) {
-    if(accessSaving || tab!=='history'&&!accountIsOwner())return;
+    if(!canAuthorizeManagerActions() || accessSaving || tab!=='history'&&!accountIsOwner())return;
     ++accessLoadId;accessStatus('');
     ['accounts','history','permissions'].forEach(name=>{
       document.getElementById('access'+name[0].toUpperCase()+name.slice(1)+'Panel').hidden=name!==tab;

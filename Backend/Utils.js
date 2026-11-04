@@ -15,7 +15,17 @@ function normalizeInventoryCategoryValue_(category) {
   if (normalized === "PINS") return "PINS";
   if (normalized === "OTHERS" || normalized === "OTHER") return "Others";
   if (normalized === "YOURFINDS" || normalized === "YOUR FINDS") return "YourFinds";
+  if (normalized === "WHOLESALE" || normalized === "WHOLE SALE") return "WHOLESALE";
   return String(category || "").trim();
+}
+function allowWholesaleCategoryAtRow_(sheet,rowNumber,column) {
+  const capacity=sheet.getMaxRows();if(rowNumber>capacity)sheet.insertRowsAfter(capacity,rowNumber-capacity);
+  const cell=sheet.getRange(rowNumber,column),rule=cell.getDataValidation();if(!rule)return;
+  const criteria=rule.getCriteriaType(),values=rule.getCriteriaValues();let choices;
+  if(criteria===SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST)choices=values[0];
+  else if(criteria===SpreadsheetApp.DataValidationCriteria.VALUE_IN_RANGE)choices=values[0].getDisplayValues().flat().filter(Boolean);
+  else return;
+  if(!choices.includes('WHOLESALE'))cell.setDataValidation(rule.copy().requireValueInList([...new Set(choices),'WHOLESALE'],values[1]!==false).build());
 }
 
 function toProperCase(str) {

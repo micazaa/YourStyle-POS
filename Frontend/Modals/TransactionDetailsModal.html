@@ -308,6 +308,8 @@
 
     <div id="transactionReservationInfo" class="alert alert-light border small" hidden></div>
 
+    <p id="transactionHistoryReadOnlyNote" class="small text-muted" hidden>View only. Start a cashier shift to exchange, void, or complete a transaction.</p>
+
     <!-- ACTIONS -->
 
     <div class="d-flex gap-2">
@@ -491,7 +493,8 @@ function renderTransactionDetails(tx) {
   }
   const completeButton = document.getElementById('transactionReservationCompleteBtn');
   completeButton.style.display = reservation && reservation.status === 'RESERVED' ? 'block' : 'none';
-  completeButton.disabled = false;
+  completeButton.disabled = !cashierTransactionActionsEnabled();
+  completeButton.title = completeButton.disabled ? 'Start a cashier shift to complete this transaction.' : '';
   completeButton.textContent = 'Complete Transaction';
 
   document.getElementById(
@@ -597,7 +600,8 @@ function renderTransactionDetails(tx) {
       button.type = "button";
       button.className = "btn btn-sm btn-link text-danger p-1 lh-1";
       button.setAttribute("aria-label", "Void item");
-      button.title = "Void item";
+      button.disabled = !cashierTransactionActionsEnabled();
+      button.title = button.disabled ? "Start a cashier shift to void an item." : "Void item";
       button.innerHTML = `
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -770,6 +774,11 @@ function renderTransactionDetails(tx) {
     );
 
 
+  const readOnly = !cashierTransactionActionsEnabled();
+  document.getElementById('transactionHistoryReadOnlyNote').hidden = !readOnly;
+  voidButton.disabled = readOnly;
+  voidButton.title = readOnly ? 'Start a cashier shift to void a transaction.' : '';
+  if(exchangeButton){exchangeButton.disabled = readOnly;exchangeButton.title = readOnly ? 'Start a cashier shift to exchange items.' : '';}
   const canExchange = ["COMPLETED", "RESERVED"].includes(String(tx.status || "").trim().toUpperCase()) && !isExchange;
 
 
@@ -794,6 +803,7 @@ function renderTransactionDetails(tx) {
 ========================================================== */
 
 function voidTransactionFromHistory() {
+  if(!requireCashierTransactionActions())return;
 
   const receiptId =
     selectedTransactionReceiptId;
@@ -833,6 +843,7 @@ function voidTransactionFromHistory() {
 }
 
 function voidItemFromHistory(item) {
+  if(!requireCashierTransactionActions())return;
   const receiptId = String(selectedTransactionReceiptId || "").trim();
   const itemCode = typeof item === "string" ? item : (item && item.code) || "";
   const rowIndex = Number.isFinite(Number(item && item.rowIndex)) ? Number(item.rowIndex) : "";
@@ -847,6 +858,7 @@ function voidItemFromHistory(item) {
 }
 
 function exchangeCurrentTransaction() {
+  if(!requireCashierTransactionActions())return;
 
   const receiptId =
     String(

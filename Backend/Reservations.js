@@ -65,6 +65,7 @@ function reservationInventoryItem_(code) {
 }
 
 function setReservationInventoryStatus_(item, status) {
+  recordInventoryChangedCodes_([item.code]);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
   const cell = sheet.getRange(item.rowNumber, INV_COL.STATUS);
   setInventoryStatusValidation_(cell);
@@ -211,6 +212,7 @@ function processReservationPayment(payload) {
     if (balance && !movement) throw new Error('Inventory Movement Log sheet not found.');
     const movementStart = movement ? movement.getLastRow() : 0;
     const oldUpdatedAt = inventory.getRange(item.rowNumber, INV_COL.UPDATED_AT).getValue();
+    const oldStatusNote = inventory.getRange(item.rowNumber, INV_COL.STATUS).getNote();
     const oldReservationRow = balance ? sheet.getRange(reservation.rowNumber, 1, 1, RESERVATION_HEADERS_.length).getValues() : null;
     const row = reservationSalesRow_(reservation, payment, employee, balance, now);
     try {
@@ -237,6 +239,7 @@ function processReservationPayment(payload) {
       if (balance) sheet.getRange(reservation.rowNumber, 1, 1, RESERVATION_HEADERS_.length).setValues(oldReservationRow);
       else if (sheet.getLastRow() > reservationStart) sheet.getRange(reservationStart + 1, 1, 1, RESERVATION_HEADERS_.length).clearContent();
       setReservationInventoryStatus_(item, item.status);
+      inventory.getRange(item.rowNumber, INV_COL.STATUS).setNote(oldStatusNote);
       inventory.getRange(item.rowNumber, INV_COL.UPDATED_AT).setValue(oldUpdatedAt);
       SpreadsheetApp.flush();
       throw error;
