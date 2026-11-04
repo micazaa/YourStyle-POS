@@ -546,7 +546,7 @@
   function dashboardChangeStatus(index, status) {
     const t = dashboardData.tasks[index];
     dashboardMutateTask(
-      dashboardData.employee.manager
+      dashboardData.employee.manager && !employeeIsOic()
         ? { ...t, status: status }
         : { id: t.id, version: t.version, status: status },
       false
@@ -559,7 +559,8 @@
   }
   function dashboardMutateTask(task, remove, credential) {
     if (dashboardBusy) return;
-    if (employeeIsOic() && !credential) {
+    const statusOnly = task && task.id && !remove && typeof task.status === 'string' && Object.keys(task).every(key=>['id','version','status'].includes(key));
+    if (employeeIsOic() && !credential && !statusOnly) {
       const owner = currentEmployee;
       const dialog = document.getElementById('dashboardTaskDialog');
       const reopen = dialog.open;

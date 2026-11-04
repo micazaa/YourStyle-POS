@@ -1429,8 +1429,7 @@ function saveYourFindsItemDetails(payload) {
      * Receiving staff may complete a new item without manager approval.
      * Corrections to an already completed item remain manager-controlled.
      */
-    const actor = payload.actorToken ? dashboardEmployee_(payload.actorToken) : null;
-    const needsApproval = currentStatus !== INVENTORY_STATUS.INCOMPLETE || actor && actor.requiresManagerPin;
+    const needsApproval = currentStatus !== INVENTORY_STATUS.INCOMPLETE;
     const auth = needsApproval ? requireManager_(payload.managerPin, payload.managerToken) : null;
 
     oldImageUrl = String(item.imageUrl || "").trim();

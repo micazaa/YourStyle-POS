@@ -193,7 +193,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
   }
 
 
-  if (forceRefresh) { if (!keepVisible) pageReadCache.delete('standardDeliveryDetails'); pageReadCache.delete('deliveries'); pageReadCache.delete('deliverySummary'); }
+  if (forceRefresh) { invalidateBundleDistributionDetails();if (!keepVisible) pageReadCache.delete('standardDeliveryDetails'); pageReadCache.delete('deliveries'); pageReadCache.delete('deliverySummary'); }
   const refresh = beginPageRead('deliveries', '', true);
   if (refresh.cached !== undefined) {
     preloadDeliveryDetails(refresh.cached);
@@ -377,6 +377,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
 ========================================================== */
 
 function invalidateDeliveriesCache(keepData) {
+  invalidateBundleDistributionDetails();
   if (!keepData) pageReadCache.delete('standardDeliveryDetails');
 
   pageReadCache.delete('deliveries');

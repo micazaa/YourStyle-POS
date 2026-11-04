@@ -2,6 +2,7 @@
 
   var pageReadCache = new Map();
   function invalidateDeliveryItemCaches() {
+    invalidateBundleDistributionDetails();
     ['standardDeliveryDetails', 'deliveryItems', 'deliveryDetails', 'deliveryLabels', 'exchangeProducts', 'cashierInventory'].forEach(key => pageReadCache.delete(key));
     if(currentEmployee&&typeof deliveriesPageData!=='undefined')preloadDeliveryDetails(deliveriesPageData);
   }

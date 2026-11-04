@@ -69,7 +69,7 @@
           </div>
           <div id="yfEditorCostWrap" class="col-md-6" style="display:none;">
             <label class="form-label" for="yfEditorCostPrice">Custom Cost Price</label>
-            <div class="input-group"><span class="input-group-text">₱</span><input id="yfEditorCostPrice" type="number" min="0" step="0.01" class="form-control"></div>
+            <div class="input-group"><span class="input-group-text">₱</span><input id="yfEditorCostPrice" type="number" min="0" step="0.01" class="form-control" oninput="updateYourFindsApprovalFields()"></div>
             <small class="text-muted">This item only. Leave blank if unknown; zero is a valid cost.</small>
           </div>
           <div id="yfEditorManagerPinWrap" class="col-12">
@@ -433,7 +433,7 @@ function openYourFindsEditor(){
  document.getElementById('yfEditorCostWrap').style.display=inventoryIsManager()&&phase8SelectedItem.costSource==='CUSTOM'?'block':'none';
  document.getElementById('yfEditorCostPrice').value=inventoryIsManager()&&phase8SelectedItem.costSource==='CUSTOM'?(phase8SelectedItem.costPrice??''):'';
  document.getElementById('yfEditorManagerPin').value='';
- document.getElementById('yfEditorManagerPinWrap').style.display=!employeeIsOic()&&(incomplete||canAuthorizeManagerActions())?'none':'block';
+ updateYourFindsApprovalFields();
  document.getElementById('yfEditorPhoto').value='';
  renderYourFindsEditorPhoto(phase8SelectedItem.imageUrl||'');
  document.getElementById('yfEditorCompletionNote').style.display=incomplete?'block':'none';
@@ -441,6 +441,17 @@ function openYourFindsEditor(){
  document.getElementById('yourFindsEditorModal').style.display='flex';
 }
 
+function yourFindsCustomCostChanged(){
+ if(!phase8SelectedItem||!inventoryIsManager()||phase8SelectedItem.costSource!=='CUSTOM')return false;
+ const value=document.getElementById('yfEditorCostPrice').value.trim(),previous=phase8SelectedItem.costPrice;
+ const wasBlank=previous===null||previous===undefined||previous==='';
+ return value===''?!wasBlank:wasBlank||Number(value)!==Number(previous);
+}
+function updateYourFindsApprovalFields(){
+ const incomplete=phase8SelectedItem&&String(phase8SelectedItem.status).toUpperCase()==='INCOMPLETE';
+ const required=!canAuthorizeManagerActions()&&(!incomplete||yourFindsCustomCostChanged());
+ document.getElementById('yfEditorManagerPinWrap').style.display=required?'block':'none';
+}
 function renderYourFindsEditorPhoto(url){
  const preview=document.getElementById('yfEditorPhotoPreview'); const empty=document.getElementById('yfEditorPhotoEmpty');
  if(url){preview.src=url;preview.style.display='block';empty.style.display='none';}
@@ -477,7 +488,7 @@ function saveYourFindsDetailsClient(generateLabel){
  const originalPrice=Number(document.getElementById('yfEditorOriginalPrice').value);
  if(!Number.isFinite(originalPrice)||originalPrice<0)return showNotificationToast('Enter a valid Original Price.',true);
  payload.originalPrice=originalPrice;
- if(inventoryIsManager()&&phase8SelectedItem.costSource==='CUSTOM')payload.costPrice=document.getElementById('yfEditorCostPrice').value;
+ if(yourFindsCustomCostChanged())payload.costPrice=document.getElementById('yfEditorCostPrice').value;
  setYourFindsSaving(true,generateLabel);
  secureScriptRun.withSuccessHandler(function(result){
    setYourFindsSaving(false);

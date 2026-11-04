@@ -52,6 +52,7 @@ function groupDeliveryReceipts(receipts) {
 }
 function renderDeliverySummaryCards() {
   refreshInventoryBundleActions();
+  preloadBundleDistributionDetails(deliverySummaryData());
   const style = deliverySummaryVisible.filter(d => d.deliveryType === 'YOURSTYLE').length;
   const finds = deliverySummaryVisible.filter(d => d.deliveryType === 'YOURFINDS').length;
   document.getElementById('deliveryCountValue').textContent = deliverySummaryVisible.length + ' deliveries';

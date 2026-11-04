@@ -343,6 +343,11 @@ function dashboardTaskText_(value, max, required) {
     throw new Error('Task text is missing or too long.');
   return value.trim();
 }
+function dashboardStatusOnlyChange_(request) {
+  const task = request && request.task;
+  return !!task && !!task.id && !request.remove && typeof task.status === 'string' &&
+    Object.keys(task).every(key => ['id','version','status'].includes(key));
+}
 function saveDashboardTask(request) {
   assertAppRequest_();
   request = request || {};
@@ -352,7 +357,8 @@ function saveDashboardTask(request) {
     const employee = dashboardEmployee_(request.token),
       input = request.task || {},
       id = String(input.id || '');
-    if (employee.requiresManagerPin) requireManager_(request.managerPin, request.managerToken);
+    const statusOnly = dashboardStatusOnlyChange_(request);
+    if (employee.requiresManagerPin && !statusOnly) requireManager_(request.managerPin, request.managerToken);
     if (!id && !employee.manager) throw new Error('Only managers can create tasks.');
     let sheet = dashboardTaskSheet_(false);
     const rows = sheet ? sheet.getDataRange().getValues() : [];
@@ -377,7 +383,7 @@ function saveDashboardTask(request) {
       )
     )
       throw new Error('Cashiers may only change task status.');
-    const task = employee.manager
+    const task = employee.manager && !statusOnly
       ? {
           title: dashboardTaskText_(input.title, 120, true),
           instructions: dashboardTaskText_(input.instructions, 2000, false),
@@ -390,7 +396,7 @@ function saveDashboardTask(request) {
     if (typeof task.due !== 'string') throw new Error('Invalid due date.');
     if (task.due) dashboardDate_(task.due);
     if (
-      employee.manager &&
+      employee.manager && !statusOnly &&
       task.assignee &&
       !getEmployees().some((e) => String(e.id) === task.assignee)
     )

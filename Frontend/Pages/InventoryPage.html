@@ -420,6 +420,7 @@ function checkInventoryVersionInBackground() {
   inventoryVersionCheckAt=Date.now();if(typeof checkAccountSession==='function')checkAccountSession();
 }
 function invalidateLocalInventoryReads(refresh=true) {
+  invalidateBundleDistributionDetails();
   invalidateDeliveryCatalog();
   clearTimeout(inventoryChangesTimer);inventoryChangesRead=null;
   const hadPending=!!inventoryListPending,hadDownload=!!inventoryDownload;

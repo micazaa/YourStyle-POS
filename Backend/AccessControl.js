@@ -3,11 +3,11 @@ let ACCESS_REQUEST_CONTEXT_ = null;
 const ACCESS_PERMISSION_MODES_ = {
   'inventory.view': ['allow','allow','allow','allow'],
   'inventory.create': ['allow','allow','approval','deny'],
-  'inventory.complete': ['allow','allow','approval','allow'],
+  'inventory.complete': ['allow','allow','allow','allow'],
   'inventory.edit': ['allow','allow','approval','deny'],
   'inventory.delete': ['allow','allow','approval','deny'],
   'supplierReturns.create': ['allow','allow','approval','approval'],
-  'deliveries.create': ['allow','allow','approval','allow'],
+  'deliveries.create': ['allow','allow','allow','allow'],
   'sales.create': ['allow','allow','allow','allow'],
   'sales.exchange': ['allow','allow','approval','approval'],
   'sales.void': ['allow','allow','approval','approval'],
@@ -18,7 +18,7 @@ const ACCESS_PERMISSION_MODES_ = {
   'dashboard.edit': ['allow','allow','approval','allow'],
   'reports.view': ['allow','allow','allow','deny'],
   'reports.own': ['allow','allow','allow','allow'],
-  'reports.create': ['allow','allow','approval','allow'],
+  'reports.create': ['allow','allow','allow','allow'],
   'reports.createManager': ['allow','allow','approval','deny'],
   'reports.correct': ['allow','allow','approval','approval'],
   'shift.manage': ['allow','allow','allow','allow'],
@@ -299,6 +299,7 @@ function accessRequest_(request) {
   const args = Array.isArray(request.args) ? request.args : [];
   const permission = operationPermission_(request.operation, args, definition);
   let mode = permissionMode_(actor, permission);
+  if (permission === 'dashboard.edit' && employeeIsOic_(actor) && dashboardStatusOnlyChange_(args[0])) mode = 'allow';
   if (request.operation === 'generateManagerDailyReportPDF' && employeeIsOic_(actor) &&
       !findManagerDailyReport_(args[4] && args[4].reviewedBy, args[1])) mode = 'allow';
   if (mode === 'deny') throw new Error('Your role cannot perform this action.');
