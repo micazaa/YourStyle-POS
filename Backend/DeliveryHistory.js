@@ -199,6 +199,8 @@ function getDeliveryHistoryFast() {
 
           bulkTypes: [],
 
+          bundleNames: [],
+
           bulkBundleQty: 0,
 
           bulkEstimatedQuantity: 0,
@@ -314,6 +316,9 @@ function getDeliveryHistoryFast() {
       ) {
         group.hasBulk =
           true;
+
+        const bundleName = String(d[DELIVERY_IDX.DESCRIPTION] || '').trim();
+        if (bundleName && !group.bundleNames.includes(bundleName)) group.bundleNames.push(bundleName);
 
         if (
           type &&

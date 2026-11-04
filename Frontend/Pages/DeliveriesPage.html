@@ -637,12 +637,14 @@ function renderDeliveriesTable(
                 ? `
                   <button
                     type="button"
-                    class="btn btn-sm btn-pink"
+                    class="btn btn-sm btn-warning"
+                    title="Open BUNDLE"
+                    aria-label="Open BUNDLE for ${escapeDeliveriesHtml(deliveryId)}"
                     onclick="distributeDeliveryBundle(
                       '${escapeDeliveriesHtml(deliveryId)}'
                     )"
                   >
-                    Open BUNDLE
+                    ${inventoryIcon('openBundle')}
                   </button>
                 `
                 : ""
@@ -706,6 +708,7 @@ function buildDeliveryCategoryDisplay(
         function(key) {
 
           return (
+            !(delivery.hasBulk && /^(?:BULK|BUNDLE)\b/i.test(key)) &&
             Number(
               quantities[key]
             ) > 0
@@ -756,18 +759,8 @@ function buildDeliveryCategoryDisplay(
 
   if (delivery.hasBulk) {
 
-    const bulkTypes =
-      Array.isArray(
-        delivery.bulkTypes
-      )
-        ? delivery.bulkTypes
-        : [];
-
-
-    const typeText =
-      bulkTypes.length
-        ? bulkTypes.join(" / ")
-        : "BUNDLE";
+    const bundleNames = Array.isArray(delivery.bundleNames) ? delivery.bundleNames : [];
+    const bundleNameText = bundleNames.length ? bundleNames.join(' / ') : 'BUNDLE';
 
 
     const actual =
@@ -796,9 +789,9 @@ function buildDeliveryCategoryDisplay(
 
           ${
             escapeDeliveriesHtml(
-              typeText
+              bundleNameText
             )
-          }${bulkTypes.length ? ' BUNDLE' : ''}
+          }
 
         </div>
 
@@ -1032,6 +1025,7 @@ function filterDeliveriesPage() {
             delivery.acceptedBy,
             JSON.stringify(delivery.quantities || {}),
             JSON.stringify(delivery.bulkTypes || []),
+            JSON.stringify(delivery.bundleNames || []),
             delivery.deliveryType
 
           ]
