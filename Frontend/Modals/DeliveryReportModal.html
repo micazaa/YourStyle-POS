@@ -7,6 +7,7 @@
 </div>
 <script>
 let selectedDeliveryReportId = '', deliveryViewRequest = 0, deliveryViewData = null;
+let deliveryViewFilters = {size:'',status:'',group:''};
 function closeStandardDeliveryDetails(){++deliveryViewRequest;document.getElementById('standardDeliveryDetails').style.display='none';}
 function deliveryDetailsCache_(){
  const ownerKey=JSON.stringify(currentEmployee);
@@ -60,6 +61,7 @@ function scheduleDeliveryDetailsPreload_(cache) {
 }
 function viewDeliveryDetails(deliveryId) {
  selectedDeliveryReportId=String(deliveryId||'');
+ deliveryViewFilters={size:'',status:'',group:''};
  const request=++deliveryViewRequest,owner=currentEmployee;
  document.getElementById('standardDeliveryId').textContent=selectedDeliveryReportId;
  document.getElementById('standardDeliveryContent').innerHTML=loadingIndicator('Loading delivery…');
@@ -69,28 +71,75 @@ function viewDeliveryDetails(deliveryId) {
  entry.promise.then(data=>{if(request!==deliveryViewRequest||currentEmployee!==owner||!currentEmployee||pageReadCache.get('standardDeliveryDetails')!==cache)return;deliveryViewData=data;renderStandardDeliveryDetails();}).catch(error=>{if(request!==deliveryViewRequest||currentEmployee!==owner)return;document.getElementById('standardDeliveryContent').textContent=error.message||String(error);});
 
 }
+function deliveryDetailSizeKey_(value) {
+ const size=String(value||'').trim().replace(/\s+/g,' ').toUpperCase();
+ return ({S:'SNE',M:'MNE',L:'LNE',XL:'XLNE',BULKY:'BNE','NO SIZE':'NS'})[size]||size||'UNSPECIFIED SIZE';
+}
+function deliveryDetailSizeOrder_(a,b) {
+ const order=['SE','ME','LE','XLE','SNE','MNE','LNE','XLNE','BNE','NS'];
+ const x=deliveryDetailSizeKey_(a),y=deliveryDetailSizeKey_(b);
+ const rank=size=>order.includes(size)?order.indexOf(size):order.length;
+ return rank(x)-rank(y)||x.localeCompare(y,undefined,{numeric:true,sensitivity:'base'});
+}
+function toggleDeliveryDetailFilter_(kind,value) {
+ deliveryViewFilters[kind]=deliveryViewFilters[kind]===value?'':value;
+ renderStandardDeliveryDetails();
+}
+function deliveryDetailFilterCard_(label,quantity,kind,value) {
+ const button=document.createElement('button');button.type='button';
+ button.className='btn delivery-count-filter px-3 py-2';
+ button.setAttribute('aria-pressed',String(deliveryViewFilters[kind]===value));
+ button.setAttribute('aria-label','Filter '+label+' · '+quantity+' pcs');
+ const title=document.createElement('span');title.className='small d-block';title.textContent=label;
+ const count=document.createElement('strong');count.className='fs-4 d-block';count.textContent=quantity;
+ button.append(title,count);button.onclick=()=>toggleDeliveryDetailFilter_(kind,value);
+ return button;
+}
 function renderStandardDeliveryDetails(){
  const data=deliveryViewData,body=document.getElementById('standardDeliveryContent');body.replaceChildren();
+ const group=data.groups.find(item=>item.id===deliveryViewFilters.group)||data.groups[0];
+ deliveryViewFilters.group=group?group.id:'';
  const meta=document.createElement('div');meta.className='row g-3 mb-4';
  [['Delivery Date',data.date],['Status',data.status],['Driver',data.driver],['Plate No.',data.plate],['Accepted By',data.acceptedBy],['Category',data.category]].forEach(([label,value])=>{const field=document.createElement('div');field.className='col-6';const name=document.createElement('div');name.className='text-muted small';name.textContent=label;const text=document.createElement('div');text.className='fw-semibold';text.textContent=value||'—';if(label==='Status'){text.innerHTML=buildDeliveryStatusBadge(value);}field.append(name,text);meta.append(field);});body.append(meta);
  const summary=document.createElement('div');summary.className='bg-light rounded p-3 mb-4';
  const heading=document.createElement('div');heading.className='d-flex justify-content-between mb-3 fw-semibold';heading.innerHTML='<span>Quantity Received</span><span></span>';heading.lastElementChild.textContent=data.bundleCount?data.bundleCount+' bundles':'Total: '+data.actual+' pcs';summary.append(heading);
  const counts=document.createElement('div');counts.className='d-flex gap-3 flex-wrap';
- const entries=data.bundleCount?[['Estimated Pieces',data.estimated],['Actual Distributed',data.bulkActual],[data.status==='COMPLETED'?'Final Variance':'Current Variance',data.bulkActual-data.estimated]]:Object.entries(data.counts);
- entries.forEach(([label,quantity])=>{const box=document.createElement('div');box.className='border rounded bg-white px-3 py-2';const title=document.createElement('div');title.className='small text-muted';title.textContent=label;const count=document.createElement('strong');count.className='fs-4';count.textContent=quantity;box.append(title,count);counts.append(box);});summary.append(counts);body.append(summary);
- const headingItems=document.createElement('h6');headingItems.className='fw-bold';headingItems.textContent=data.bundleCount?'Distributed Items':'Delivered Items';body.append(headingItems);
+ let entries=data.bundleCount?[['Estimated Pieces',data.estimated],['Actual Distributed',data.bulkActual],[data.status==='COMPLETED'?'Final Variance':'Current Variance',data.bulkActual-data.estimated]]:Object.entries(data.counts);
+ if(data.yourFinds){
+  const sizes=new Map();entries.forEach(([label,quantity])=>{const key=deliveryDetailSizeKey_(label);sizes.set(key,(sizes.get(key)||0)+(Number(quantity)||0));});
+  entries=Array.from(sizes).sort(([a],[b])=>deliveryDetailSizeOrder_(a,b));
+ }
+ entries.forEach(([label,quantity])=>{
+  if(data.yourFinds){counts.append(deliveryDetailFilterCard_(label,quantity,'size',deliveryDetailSizeKey_(label)));return;}
+  const box=document.createElement('div');box.className='border rounded bg-white px-3 py-2';const title=document.createElement('div');title.className='small text-muted';title.textContent=label;const count=document.createElement('strong');count.className='fs-4';count.textContent=quantity;box.append(title,count);counts.append(box);
+ });summary.append(counts);body.append(summary);
+ if(data.yourFinds){
+  const statuses=document.createElement('div');statuses.className='d-flex gap-2 flex-wrap mb-4';statuses.setAttribute('aria-label','Item status quantities');
+  const items=(group?group.items:[]).filter(item=>!deliveryViewFilters.size||deliveryDetailSizeKey_(item.size)===deliveryViewFilters.size);
+  [['SOLD','Sold'],['INCOMPLETE','Incomplete'],['IN STOCK','In Stock']].forEach(([status,label])=>{
+   const quantity=items.filter(item=>getDeliveryItemDisplayStatus(item)===status).reduce((sum,item)=>sum+Math.max(0,Number(item.quantity)||0),0);
+   const card=deliveryDetailFilterCard_(label,quantity,'status',status);card.classList.add('flex-fill');statuses.append(card);
+  });body.append(statuses);
+ }
+ const itemsToolbar=document.createElement('div');itemsToolbar.className='d-flex align-items-center justify-content-between gap-2 mb-2';
+ const headingItems=document.createElement('h6');headingItems.className='fw-bold mb-0';headingItems.textContent=data.bundleCount?'Distributed Items':'Delivered Items';itemsToolbar.append(headingItems);
+ if(deliveryViewFilters.size||deliveryViewFilters.status){const clear=document.createElement('button');clear.type='button';clear.className='btn btn-sm btn-outline-secondary';clear.textContent='Clear filters';clear.onclick=()=>{deliveryViewFilters.size='';deliveryViewFilters.status='';renderStandardDeliveryDetails();};itemsToolbar.append(clear);}
+ body.append(itemsToolbar);
  const tabs=document.createElement('div');tabs.className='delivery-mode-toggle btn-group flex-wrap mb-3';tabs.setAttribute('role','group');tabs.setAttribute('aria-label','Delivery item groups');
  const items=document.createElement('div');
- data.groups.forEach((group,index)=>{const button=document.createElement('button');button.type='button';button.className='btn btn-sm btn-outline-pink';button.textContent=group.id==='direct'?'Direct':(new Set(data.groups.filter(g=>g.type).map(g=>g.type)).size>1?group.type+' · ':'')+group.label;button.onclick=()=>{tabs.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));renderStandardDeliveryItems(group,items);};tabs.append(button);if(index===0)button.setAttribute('aria-pressed','true');});
+ data.groups.forEach(itemGroup=>{const button=document.createElement('button');button.type='button';button.className='btn btn-sm btn-outline-pink';button.textContent=itemGroup.id==='direct'?'Direct':(new Set(data.groups.filter(g=>g.type).map(g=>g.type)).size>1?itemGroup.type+' · ':'')+itemGroup.label;button.onclick=()=>{deliveryViewFilters.group=itemGroup.id;renderStandardDeliveryDetails();};tabs.append(button);button.setAttribute('aria-pressed',String(itemGroup.id===deliveryViewFilters.group));});
  if(data.bundleCount)body.append(tabs);body.append(items);
- if(data.groups.length)renderStandardDeliveryItems(data.groups[0],items);
+ if(group)renderStandardDeliveryItems(group,items);
 }
 function renderStandardDeliveryItems(group,container){
  container.replaceChildren();
  if(group.id!=='direct'){const summary=document.createElement('div');summary.className='small text-muted mb-2';summary.textContent=(group.code?'Bundle code: '+group.code+' · ':'')+'Actual: '+group.items.reduce((sum,item)=>sum+item.quantity,0)+' pcs';container.append(summary);}
- if(!group.items.length){const empty=document.createElement('div');empty.className='text-muted text-center py-4';empty.textContent='No products distributed from this bundle yet.';container.append(empty);return;}
+ const filtered=group.items.filter(item=>!deliveryViewData.yourFinds||
+  ((!deliveryViewFilters.size||deliveryDetailSizeKey_(item.size)===deliveryViewFilters.size)&&(!deliveryViewFilters.status||getDeliveryItemDisplayStatus(item)===deliveryViewFilters.status)));
+ if(deliveryViewData.yourFinds)filtered.sort((a,b)=>deliveryDetailSizeOrder_(a.size,b.size)||String(a.name).localeCompare(String(b.name),undefined,{numeric:true,sensitivity:'base'}));
+ if(!filtered.length){const empty=document.createElement('div');empty.className='text-muted text-center py-4';empty.textContent=deliveryViewFilters.size||deliveryViewFilters.status?'No items match these filters.':'No products distributed from this bundle yet.';container.append(empty);return;}
  const list=document.createElement('div');list.className='delivery-detail-item-list';container.append(list);
- group.items.forEach(item=>{
+ filtered.forEach(item=>{
   const row=document.createElement('div');row.className='d-flex align-items-center gap-3 border rounded p-2 mb-2';
   if(item.imageUrl&&/^https?:\/\//i.test(item.imageUrl)){const photo=document.createElement('button');photo.type='button';photo.className='btn p-0';photo.setAttribute('aria-label','View '+item.name+' image');const image=document.createElement('img');image.loading='lazy';image.decoding='async';image.src=item.imageUrl;image.alt=item.name;image.style.cssText='width:56px;height:56px;object-fit:cover;border-radius:6px';photo.append(image);photo.onclick=()=>openInventoryImageViewer(item);row.append(photo);}else{const placeholder=document.createElement('span');placeholder.className='small text-muted bg-light rounded p-2';placeholder.style.cssText='width:56px;flex-shrink:0';placeholder.textContent='No Image';row.append(placeholder);}
   const info=document.createElement('div');info.className='flex-grow-1';info.style.minWidth='0';const name=document.createElement('strong');name.textContent=item.name;const code=document.createElement('div');code.className='small text-muted';code.textContent=item.code;info.append(name,code);
