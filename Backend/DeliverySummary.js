@@ -26,7 +26,21 @@ function buildDeliverySummaryData_(deliveries, inventory, movements) {
     dates.set(id, formatInventoryDateForClient(row[DELIVERY_IDX.DELIVERY_DATE]));
     deliveryTypes.set(id, upper(row[DELIVERY_IDX.DELIVERY_TYPE]));
   });
-  const receipts = new Map(), activity = new Set();
+  const receipts = new Map(), activity = new Set(), physicalProducts = new Map(), sold = new Map(), bundleProducts = new Set();
+  movements.forEach(row => {
+    const source = upper(row[MOVE_IDX.SOURCE]);
+    if (source === 'DELIVERY' && text(row[MOVE_IDX.NOTES]) === 'PHYSICAL_BUNDLE_RECEIPT') {
+      const code = text(row[MOVE_IDX.CODE]), holder = text(row[MOVE_IDX.SOURCE_LINE_ID]);
+      if (code && holder) { physicalProducts.set(holder, code); bundleProducts.add(code); }
+    }
+    if (source !== 'SALE' || Number(row[MOVE_IDX.QTY_CHANGE]) >= 0) return;
+    const allocation = parsePhysicalBundleAllocationNote_(row[MOVE_IDX.NOTES]);
+    if (!allocation) return;
+    const key = JSON.stringify([allocation.deliveryId, Number(allocation.sheetRow) || 0, Number(row[MOVE_IDX.BUNDLE_NO])]);
+    if (!sold.has(key)) sold.set(key, {full:false});
+    const state = sold.get(key);
+    if (allocation.kind === 'FULL') state.full = true;
+  });
   movements.forEach(row => {
     const id = text(row[MOVE_IDX.REFERENCE_ID]);
     const source = upper(row[MOVE_IDX.SOURCE]);
@@ -45,14 +59,20 @@ function buildDeliverySummaryData_(deliveries, inventory, movements) {
     if (source === 'DISTRIBUTION') activity.add(JSON.stringify([id, type, Number(row[MOVE_IDX.BUNDLE_NO])]));
   });
   const bundles = [];
+  const sequences = new Map();
   deliveries.forEach((row, index) => {
-    if (upper(row[DELIVERY_IDX.RECEIVE_MODE]) !== 'BULK' || !['PENDING', 'PARTIAL'].includes(upper(row[DELIVERY_IDX.STATUS]))) return;
+    if (upper(row[DELIVERY_IDX.RECEIVE_MODE]) !== 'BULK') return;
     const id = text(row[DELIVERY_IDX.DELIVERY_ID]), type = upper(row[DELIVERY_IDX.TYPE]);
+    const sequence = (sequences.get(id) || 0) + 1;sequences.set(id, sequence);
+    const productCode = physicalProducts.get(id + '-B' + String(sequence).padStart(2, '0')) || '';
+    if (!['PENDING', 'PARTIAL'].includes(upper(row[DELIVERY_IDX.STATUS]))) return;
     const quantity = Math.max(0, Math.floor(Number(row[DELIVERY_IDX.BUNDLE_QTY]) || 0));
     for (let number = 1; number <= quantity; number++) {
+      const sale = sold.get(JSON.stringify([id,index+2,number])) || sold.get(JSON.stringify([id,0,number]));
       bundles.push({deliveryId:id, date:dates.get(id), sheetRow:index+2, category:type, code:text(row[DELIVERY_IDX.DESCRIPTION]), bundleNo:number,
+        productCode:productCode, available:!activity.has(JSON.stringify([id,type,number])) && !(sale && sale.full),
         status:activity.has(JSON.stringify([id,type,number])) ? 'In progress' : 'Unopened'});
     }
   });
-  return {success:true, receipts:Array.from(receipts.values()), bundles:bundles};
+  return {success:true, receipts:Array.from(receipts.values()), bundles:bundles, bundleProducts:Array.from(bundleProducts)};
 }

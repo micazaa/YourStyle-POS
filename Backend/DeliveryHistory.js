@@ -71,7 +71,7 @@ function getDeliveryHistoryFast() {
         success: true,
         count: 0,
         deliveries: [],
-        summary: { success: true, receipts: [], bundles: [] }
+        summary: { success: true, receipts: [], bundles: [], bundleProducts: [] }
       };
     }
 

@@ -1,3 +1,10 @@
+<div id="inventoryBundleDeliveryModal" class="generic-overlay-blur" style="display:none;">
+  <div class="custom-popup-card" style="max-width:620px;width:95%;max-height:85vh;overflow:auto;">
+    <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3"><div><h5 class="fw-bold mb-1">Choose Delivery</h5><div id="inventoryBundleDeliveryName" class="small text-muted"></div></div><button type="button" class="btn-close" aria-label="Close delivery picker" onclick="closeModal('inventoryBundleDeliveryModal')"></button></div>
+    <div id="inventoryBundleDeliveryChoices" class="d-grid gap-2"></div>
+    <button type="button" class="btn btn-outline-secondary w-100 mt-3" onclick="closeModal('inventoryBundleDeliveryModal')">Cancel</button>
+  </div>
+</div>
 <div id="bulkDistributionModal" class="generic-overlay-blur" style="display:none;">
   <div class="custom-popup-card delivery-modal-card">
     <div class="d-flex justify-content-between align-items-start mb-4 pb-3 border-bottom">
@@ -34,6 +41,91 @@
 </div>
 
 <script>
+let inventoryBundleSummaryFailed = false;
+let inventoryBundlePickerItem = null;
+let inventoryBundlePickerOwner = '';
+
+function inventoryBundleActionState(item) {
+  const data = deliverySummaryData();
+  const ready = !!data && Array.isArray(data.bundleProducts);
+  const linked = ready && data.bundleProducts.includes(String(item.code));
+  const name = String(item.baseName || item.name || '');
+  const candidate = linked || (String(item.category).toUpperCase() === 'WHOLESALE' && / · \([1-9]\d*\) pcs(?:\s*[·-]\s*SALE)?$/i.test(name));
+  return {ready:ready, linked:linked, candidate:candidate,
+    available:linked ? data.bundles.filter(bundle => bundle.productCode === String(item.code) && bundle.available) : []};
+}
+function inventoryCanDistribute() {
+  return !!currentEmployee && ['allow','approval'].includes(currentEmployee.permissions && currentEmployee.permissions['deliveries.create']);
+}
+function updateInventoryBundleAction(button) {
+  const item = button.inventoryItem, state = inventoryBundleActionState(item);
+  const distribute = state.linked || !state.ready;
+  button.hidden = distribute ? !inventoryCanDistribute() : !button.inventoryCanDelete;
+  button.classList.toggle('btn-warning',distribute);button.classList.toggle('btn-outline-danger',!distribute);
+  button.innerHTML = inventoryIcon(distribute ? 'openBundle' : 'delete');
+  const failed = currentEmployee && inventoryBundleSummaryFailed === currentEmployee.dashboardToken;
+  button.disabled = distribute && (state.ready ? !state.available.length || Number(item.stock) <= 0 : !failed);
+  button.title = !distribute ? 'Delete item' : !state.ready ? failed ? 'Retry loading bundles' : 'Checking available bundles…' : button.disabled ? 'No unopened bundles available' : 'Distribute';
+  button.setAttribute('aria-label',button.title + ' · ' + (item.name || item.code));
+}
+function refreshInventoryBundleActions() {
+  document.querySelectorAll('.inventory-bundle-action').forEach(updateInventoryBundleAction);
+  const picker = document.getElementById('inventoryBundleDeliveryModal');
+  if (picker.style.display === 'flex' && inventoryBundlePickerItem && currentEmployee && inventoryBundlePickerOwner === currentEmployee.dashboardToken) renderInventoryBundleDeliveries(inventoryBundlePickerItem);
+}
+function prepareInventoryBundleActions() {
+  if (!document.querySelector('.inventory-bundle-action') || !currentEmployee) return;
+  const data = deliverySummaryData();
+  if (data && Array.isArray(data.bundleProducts)) return;
+  if (data) pageReadCache.delete('deliverySummary');
+  if (inventoryBundleSummaryFailed === currentEmployee.dashboardToken || pageReadCache.get('deliveries')?.pending) return;
+  loadDeliverySummaryData();
+}
+function handleInventoryBundleAction(button) {
+  const item = button.inventoryItem, state = inventoryBundleActionState(item);
+  if (!state.ready) { inventoryBundleSummaryFailed = false;loadDeliverySummaryData();refreshInventoryBundleActions();return; }
+  if (!state.linked) { if(button.inventoryCanDelete)deleteInventoryRow(item);return; }
+  if (!inventoryCanDistribute() || !state.available.length || Number(item.stock) <= 0) return;
+  const choices = inventoryBundleDeliveries(item);
+  if (choices.length === 1) { openInventoryBundleDelivery(item,choices[0]);return; }
+  inventoryBundlePickerItem = item;
+  const picker = document.getElementById('inventoryBundleDeliveryModal');
+  inventoryBundlePickerOwner = currentEmployee.dashboardToken;picker.style.display = 'flex';
+  document.getElementById('inventoryBundleDeliveryName').textContent = item.baseName || item.name;
+  renderInventoryBundleDeliveries(item);
+}
+function inventoryBundleDeliveries(item) {
+  const choices = new Map();
+  inventoryBundleActionState(item).available.forEach(bundle => {
+    const key = JSON.stringify([bundle.deliveryId,bundle.sheetRow]);
+    if (!choices.has(key)) choices.set(key,{...bundle,count:0});
+    choices.get(key).count++;
+  });
+  return Array.from(choices.values());
+}
+function renderInventoryBundleDeliveries(item) {
+  const box = document.getElementById('inventoryBundleDeliveryChoices');box.replaceChildren();
+  const choices = inventoryBundleDeliveries(item), owner = currentEmployee && currentEmployee.dashboardToken;
+  choices.forEach(choice => {
+    const button = document.createElement('button');button.type = 'button';
+    button.className = 'btn btn-outline-pink text-start p-3';
+    const title = document.createElement('strong');title.className = 'd-block';title.textContent = choice.deliveryId;
+    const detail = document.createElement('span');detail.className = 'small';
+    detail.textContent = choice.date + ' · ' + choice.category + ' · ' + choice.count + ' available bundle(s)';
+    button.append(title,detail);
+    button.onclick = () => {if(currentEmployee && currentEmployee.dashboardToken === owner)openInventoryBundleDelivery(item,choice);};
+    box.appendChild(button);
+  });
+  if (!choices.length) box.textContent = 'No unopened bundles available.';
+}
+function openInventoryBundleDelivery(item, choice) {
+  if (!inventoryCanDistribute()) return;
+  const current = inventoryBundleDeliveries(item).find(bundle => bundle.deliveryId === choice.deliveryId && bundle.sheetRow === choice.sheetRow);
+  if (!current) {refreshInventoryBundleActions();showNotificationToast('This delivery has no unopened bundles available.',true);return;}
+  closeModal('inventoryBundleDeliveryModal');
+  openBulkDistributionModal(current.deliveryId,current.sheetRow,getCurrentDeliveryEmployeeName(),current.bundleNo);
+}
+
 let bulkDistributionSaving = false;
 let bulkDistributionRequest = 0;
 let bulkDistributionHolder = null;

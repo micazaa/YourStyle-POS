@@ -26,11 +26,13 @@ function loadDeliverySummaryData() {
     if (!read.current()) return;
     if (!result || !result.success) { read.fail(); deliverySummaryFailure(); return; }
     read.save(result);
+    inventoryBundleSummaryFailed = false;
     renderDeliverySummaryCards();
     if (document.getElementById('deliverySummaryModal').style.display === 'flex') renderDeliverySummary();
   }).withFailureHandler(() => { if (read.current()) { read.fail(); deliverySummaryFailure(); } }).getDeliverySummaryData();
 }
 function deliverySummaryFailure() {
+  inventoryBundleSummaryFailed = currentEmployee && currentEmployee.dashboardToken;refreshInventoryBundleActions();
   document.getElementById('deliveryBundlesHint').textContent = 'Unable to load · Click to retry';
   document.getElementById('deliverySummaryMessage').textContent = 'Unable to load received items. Reopen this summary to retry.';
 }
@@ -49,6 +51,7 @@ function groupDeliveryReceipts(receipts) {
   return Array.from(groups.values());
 }
 function renderDeliverySummaryCards() {
+  refreshInventoryBundleActions();
   const style = deliverySummaryVisible.filter(d => d.deliveryType === 'YOURSTYLE').length;
   const finds = deliverySummaryVisible.filter(d => d.deliveryType === 'YOURFINDS').length;
   document.getElementById('deliveryCountValue').textContent = deliverySummaryVisible.length + ' deliveries';

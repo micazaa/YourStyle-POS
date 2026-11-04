@@ -20,11 +20,44 @@ function requestDeliveryDetails_(deliveryId){
  if(entry)return {cache:cache,entry:entry};
  entry={};cache.entries.set(id,entry);
  entry.promise=new Promise((resolve,reject)=>{
-  secureScriptRun.withSuccessHandler(data=>{entry.data=data;resolve(data);}).withFailureHandler(error=>{cache.entries.delete(id);reject(error);}).getDeliveryDetails(id);
+  secureScriptRun.withSuccessHandler(data=>{
+   if(!currentEmployee||cache.owner!==JSON.stringify(currentEmployee)||pageReadCache.get('standardDeliveryDetails')!==cache)return reject(new Error('Delivery data changed. Reopen the delivery.'));
+   if(!data||data.id!==id){cache.entries.delete(id);return reject(new Error('Unable to load delivery details.'));}
+   entry.data=data;resolve(data);
+  }).withFailureHandler(error=>{cache.entries.delete(id);reject(error);}).getDeliveryDetails(id);
  });
  return {cache:cache,entry:entry};
 }
 function prefetchDeliveryDetails(deliveryId){const entry=requestDeliveryDetails_(deliveryId).entry;if(entry.promise)entry.promise.catch(()=>{});}
+function preloadDeliveryDetails(deliveries) {
+ if(!currentEmployee||!Array.isArray(deliveries)||!deliveries.length)return;
+ const cache=deliveryDetailsCache_();
+ const queue=cache.preload||(cache.preload={ids:[],attempted:new Set(),active:0,timer:null});
+ const ids=[...new Set(deliveries.map(delivery=>String(delivery.deliveryId||'').trim()).filter(Boolean))];
+ ids.forEach(id=>{if(!queue.attempted.has(id)&&!cache.entries.has(id)){queue.attempted.add(id);queue.ids.push(id);}});
+ const preferred=new Set(ids);
+ queue.ids=queue.ids.filter(id=>preferred.has(id)).concat(queue.ids.filter(id=>!preferred.has(id)));
+ scheduleDeliveryDetailsPreload_(cache);
+}
+function scheduleDeliveryDetailsPreload_(cache) {
+ const queue=cache.preload;
+ if(!currentEmployee||pageReadCache.get('standardDeliveryDetails')!==cache||cache.owner!==JSON.stringify(currentEmployee)){
+  clearTimeout(queue.timer);queue.ids=[];return;
+ }
+ if(queue.timer||!queue.ids.length||queue.active>=2)return;
+ queue.timer=setTimeout(function pump(){
+  queue.timer=null;
+  if(!currentEmployee||pageReadCache.get('standardDeliveryDetails')!==cache||cache.owner!==JSON.stringify(currentEmployee))return;
+  if(workspaceForegroundLoading()){queue.timer=setTimeout(pump,100);return;}
+  while(queue.active<2&&queue.ids.length){
+   const id=queue.ids.shift();
+   if(cache.entries.has(id))continue;
+   queue.active++;
+   const entry=requestDeliveryDetails_(id).entry;
+   entry.promise.catch(()=>{}).finally(()=>{queue.active--;scheduleDeliveryDetailsPreload_(cache);});
+  }
+ },100);
+}
 function viewDeliveryDetails(deliveryId) {
  selectedDeliveryReportId=String(deliveryId||'');
  const request=++deliveryViewRequest,owner=currentEmployee;

@@ -3,6 +3,7 @@
   var pageReadCache = new Map();
   function invalidateDeliveryItemCaches() {
     ['standardDeliveryDetails', 'deliveryItems', 'deliveryDetails', 'deliveryLabels', 'exchangeProducts', 'cashierInventory'].forEach(key => pageReadCache.delete(key));
+    if(currentEmployee&&typeof deliveriesPageData!=='undefined')preloadDeliveryDetails(deliveriesPageData);
   }
   let deliveryCatalogCache = null;
   let deliveryCatalogPending = null;

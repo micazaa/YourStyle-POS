@@ -196,6 +196,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
   if (forceRefresh) { if (!keepVisible) pageReadCache.delete('standardDeliveryDetails'); pageReadCache.delete('deliveries'); pageReadCache.delete('deliverySummary'); }
   const refresh = beginPageRead('deliveries', '', true);
   if (refresh.cached !== undefined) {
+    preloadDeliveryDetails(refresh.cached);
     setWorkspaceTableLoading('deliveriesPage', false);
     finishWorkspacePageLoad('deliveriesPage');
     preloadHistoryAndReports();
@@ -248,6 +249,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
           !result ||
           !result.success
         ) {
+          prepareInventoryBundleActions();
 
           const message =
             result &&
@@ -298,6 +300,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
 
 
         refresh.save(deliveriesPageData);
+        preloadDeliveryDetails(deliveriesPageData);
         deliveriesPageLoaded = true;
         setWorkspaceTableLoading('deliveriesPage', false);
 
@@ -313,6 +316,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
       function(err) {
         if (!refresh.current()) return;
         refresh.fail();
+        prepareInventoryBundleActions();
 
         deliveriesPageLoading =
           false;
@@ -377,6 +381,7 @@ function invalidateDeliveriesCache(keepData) {
 
   pageReadCache.delete('deliveries');
   pageReadCache.delete('deliverySummary');
+  refreshInventoryBundleActions();
 
   if (!keepData) {
     deliveriesPageLoaded = false;
@@ -408,6 +413,7 @@ function refreshDeliveriesPage(keepVisible) {
 function renderDeliveriesTable(
   deliveries
 ) {
+  preloadDeliveryDetails(deliveries);
 
   const tbody =
     document.getElementById(

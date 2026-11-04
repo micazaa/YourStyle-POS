@@ -141,7 +141,7 @@ function addYourStyleDeliveryLine() {
   line.className = "yourstyle-delivery-line delivery-line " + (yourStyleDeliveryMode === "DIRECT" ? "direct" : "bundle");
   const referenceField = yourStyleDeliveryMode === "DIRECT"
     ? '<div class="change-item-search"><input type="search" class="form-control form-control-sm yourstyle-line-product" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="yourStyleProductOptions' + lineId + '" placeholder="Search product" aria-label="Product" autocomplete="off"><div id="yourStyleProductOptions' + lineId + '" class="list-group change-item-results" role="listbox" style="display:none;position:fixed;"></div></div>'
-    : '<input type="text" class="form-control form-control-sm yourstyle-line-bulk-description" maxlength="100" placeholder="Enter bundle code" aria-label="Bundle code">';
+    : '<input type="text" class="form-control form-control-sm yourstyle-line-bulk-description" maxlength="100" placeholder="Enter bundle name" aria-label="Bundle name">';
   const quantityFields = yourStyleDeliveryMode === "DIRECT"
     ? '<input type="number" class="form-control form-control-sm yourstyle-line-qty" min="1" max="99999" step="1" value="1" aria-label="Actual quantity" oninput="updateYourStyleDeliverySummary()">'
     : '<input type="number" class="form-control form-control-sm yourstyle-line-estimated-per-bundle" min="1" step="1" value="80" aria-label="Estimated units per bundle" oninput="updateYourStyleDeliverySummary()"><input type="number" class="form-control form-control-sm yourstyle-line-bundle-qty" min="1" step="1" value="1" aria-label="Bundle quantity" oninput="updateYourStyleDeliverySummary()"><div class="delivery-line-total yourstyle-line-total"></div>';
@@ -175,7 +175,7 @@ function renderYourStyleDeliveryMode() {
   bundleButton.setAttribute("aria-pressed", String(!direct));
   document.getElementById("yourStyleDeliveryHead").innerHTML = direct
     ? '<div class="delivery-line-head direct"><span>#</span><span>Type</span><span>Product</span><span>Actual Qty</span><span></span></div>'
-    : '<div class="delivery-line-head bundle"><span>#</span><span>Type</span><span>Bundle Code</span><span>Est. / Bundle</span><span>Bundles</span><span>Est. Actual Units</span><span></span></div>';
+    : '<div class="delivery-line-head bundle"><span>#</span><span>Type</span><span>Bundle Name</span><span>Est. / Bundle</span><span>Bundles</span><span>Est. Actual Units</span><span></span></div>';
 }
 
 function removeYourStyleDeliveryLine(button) {
@@ -352,6 +352,7 @@ function submitYourStyleDelivery() {
     button.disabled = false;
     button.textContent = "Accept Delivery";
     if (!result || !result.success) return showNotificationToast(result && result.message ? result.message : "Unable to accept YourStyle delivery.", true);
+    if (result.createdBundleProducts) pageReadCache.delete('productMaster');
     closeYourStyleDeliveryModal();
     refreshDeliveriesPage();
     showNotificationToast(result.deliveryId + " accepted — " + result.directUnits + " direct unit(s), " + result.bulkBundles + " bundle(s).");

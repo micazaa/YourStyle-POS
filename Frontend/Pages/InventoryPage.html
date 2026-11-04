@@ -780,12 +780,20 @@ function renderInventoryTable(items) {
       openInventoryDetails(item.code)
     );
 
-    if (isManager && !isAllocatedSaleRow && !isConverted) {
+    const bundleAction = inventoryBundleActionState(item);
+    if (!isConverted && (bundleAction.linked || bundleAction.candidate)) {
+      const button = document.createElement('button');
+      button.type = 'button';button.className = 'btn btn-sm inventory-bundle-action';
+      button.inventoryItem = item;button.inventoryCanDelete = isManager && !isAllocatedSaleRow;
+      button.onclick = () => handleInventoryBundleAction(button);
+      actions.appendChild(button);updateInventoryBundleAction(button);
+    } else if (isManager && !isAllocatedSaleRow && !isConverted) {
       action('delete', 'Delete item', () => deleteInventoryRow(item));
     }
 
     body.appendChild(row);
   });
+  prepareInventoryBundleActions();
 }
 
 function openInventoryImageViewer(item) {
