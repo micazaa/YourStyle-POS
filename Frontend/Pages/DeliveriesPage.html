@@ -32,7 +32,7 @@
       </div>
 
 
-      <div class="d-flex flex-wrap gap-2">
+      <div class="d-flex flex-wrap gap-2" data-page-header-actions>
         <button
           type="button"
           class="btn btn-outline-pink"
@@ -52,6 +52,9 @@
     </div>
 
 
+    <div data-page-loading="Loading deliveries…" class="text-center py-5" style="min-height:300px;align-content:center;" role="status" aria-live="polite" hidden></div>
+    <div data-page-error class="text-center text-danger py-5" role="alert" hidden><p data-page-error-message></p><button type="button" class="btn btn-outline-secondary" onclick="loadDeliveriesPage()">Retry</button></div>
+    <div data-page-content aria-busy="false">
     <!-- =====================================================
      OPERATIONAL SUMMARY
 ====================================================== -->
@@ -139,6 +142,7 @@
 
     </div>
 
+    </div>
   </div>
 
 </div>
@@ -192,14 +196,19 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
   if (forceRefresh) { if (!keepVisible) pageReadCache.delete('standardDeliveryDetails'); pageReadCache.delete('deliveries'); pageReadCache.delete('deliverySummary'); }
   const refresh = beginPageRead('deliveries', '', true);
   if (refresh.cached !== undefined) {
+    setWorkspaceTableLoading('deliveriesPage', false);
     finishWorkspacePageLoad('deliveriesPage');
     preloadHistoryAndReports();
     if (deliveriesPageLoaded && deliveriesPageData === refresh.cached) return;
     deliveriesPageData = refresh.cached;
     filterDeliveriesPage();
   }
-  if (!refresh.shouldFetch) return;
+  if (!refresh.shouldFetch) {
+    if (refresh.cached === undefined) setWorkspaceTableLoading('deliveriesPage', true);
+    return;
+  }
   deliveriesPageLoading = true;
+  setWorkspaceTableLoading('deliveriesPage', true);
   if (refresh.cached === undefined && !keepVisible) {
     deliverySummaryVisible = [];
     renderDeliverySummaryCards();
@@ -246,6 +255,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
               ? result.message
               : "Unable to load deliveries.";
 
+          setWorkspaceTableLoading('deliveriesPage', false, message);
 
           if (refresh.cached !== undefined) { showNotificationToast('Delivery refresh failed. Showing previously loaded data.', true); return; }
 
@@ -289,6 +299,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
 
         refresh.save(deliveriesPageData);
         deliveriesPageLoaded = true;
+        setWorkspaceTableLoading('deliveriesPage', false);
 
 
         filterDeliveriesPage();
@@ -314,6 +325,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
             ? err.message
             : "Unable to load deliveries.";
 
+        setWorkspaceTableLoading('deliveriesPage', false, message);
 
         console.error(
           "DELIVERIES PAGE ERROR:",
@@ -638,13 +650,14 @@ function renderDeliveriesTable(
 
 
                   <button type="button" class="btn btn-sm btn-outline-secondary" title="View delivery" aria-label="View delivery" onpointerenter="prefetchDeliveryDetails('${escapeDeliveriesHtml(deliveryId)}')" onfocus="prefetchDeliveryDetails('${escapeDeliveriesHtml(deliveryId)}')" ontouchstart="prefetchDeliveryDetails('${escapeDeliveriesHtml(deliveryId)}')" onclick="viewDeliveryDetails('${escapeDeliveriesHtml(deliveryId)}')">${inventoryIcon('view')}</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" title="Find items in inventory" aria-label="Find items from ${escapeDeliveriesHtml(deliveryId)} in inventory" onclick="searchDeliveryInventory('${escapeDeliveriesHtml(deliveryId)}')">${inventoryIcon('search')}</button>
             ${deliveryType === "YOURFINDS" ? `
                   <button
                     type="button"
                     class="btn btn-sm btn-outline-dark"
-                    title="Print labels"
-                    aria-label="Print labels"
-                    onclick="openYourFindsLabelModal(
+                    title="Reprint YourFinds labels"
+                    aria-label="Reprint YourFinds labels"
+                    onclick="openYourFindsReprintModal(
                       '${escapeDeliveriesHtml(deliveryId)}'
                     )"
                   >
@@ -1214,6 +1227,16 @@ function clearDeliveriesFilters() {
 /* ==========================================================
    OPEN NEXT PENDING BULK HOLDER
 ========================================================== */
+
+function searchDeliveryInventory(deliveryId) {
+  const id = String(deliveryId || '').trim();
+  if (!id) return;
+  clearTimeout(inventorySearchTimer);
+  document.getElementById('inventorySearch').value = id;
+  inventoryListPage = 1;inventoryScrollPage = 1;
+  inventoryIncompleteOnly = false;dashboardInventoryReminder = '';
+  navigateSidebar('inventoryPage');
+}
 
 function distributeDeliveryBundle(deliveryId) {
   openBulkDistributionModal(deliveryId, null, getCurrentDeliveryEmployeeName());

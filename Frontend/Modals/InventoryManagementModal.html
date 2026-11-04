@@ -292,10 +292,14 @@ function preloadInventoryItemDetails() {
    if(result.changed){inventoryItemDetailPreload=null;updateInventoryDatasetStatus();observeInventoryVersion(result.version);return;}
    if(result.version!==version||!Array.isArray(result.items)||JSON.stringify(result.codes)!==JSON.stringify(batch))return failed();
    result.items.forEach(item=>{
-    inventoryItemDetailCache.set(String(item.code),{owner:owner,version:version,time:Date.now(),item:item});
     const base=job.byCode.get(String(item.code));
-    if(base){item.availability=inventoryListStatus_(item);base.searchText=inventoryItemSearchText_(item);}
+    if(base){
+      if(!item.deliveryId&&base.deliveryId){item.deliveryId=base.deliveryId;item.dateDelivered=base.dateDelivered;item.deliveryMetadataLoaded=true;}
+      item.availability=inventoryListStatus_(item);base.searchText=inventoryItemSearchText_(item);
+    }
+    inventoryItemDetailCache.set(String(item.code),{owner:owner,version:version,time:Date.now(),item:item});
    });
+   inventoryLocalViews.clear();
    job.offset+=batch.length;job.retries=0;
    if(job.offset>=job.total){finish();return;}
    updateInventoryDatasetStatus();inventoryItemDetailPreloadTimer=setTimeout(next,150);

@@ -51,10 +51,42 @@
   }
 
   var workspacePreloadState = null;
+  var workspaceTableStates = new Map();
+
+  function setWorkspaceTableLoading(pageId, busy, error = '') {
+    const page = document.getElementById(pageId), owner = currentEmployee && currentEmployee.dashboardToken;
+    let state = workspaceTableStates.get(pageId);
+    if (!state || state.owner !== owner) {
+      if (state) state.buttons.forEach((disabled, button) => {button.disabled = disabled;});
+      state = {owner: owner, loaded: false, buttons: new Map()};
+      workspaceTableStates.set(pageId, state);
+    }
+    if (!busy && !error) state.loaded = true;
+    const initial = !state.loaded, content = page.querySelector('[data-page-content]');
+    const loading = page.querySelector('[data-page-loading]'), failure = page.querySelector('[data-page-error]');
+    content.hidden = initial && (busy || !!error);
+    content.inert = content.hidden;
+    content.setAttribute('aria-busy', String(busy));
+    content.querySelectorAll('table').forEach(table => {table.inert = busy;});
+    loading.hidden = !initial || !busy;
+    loading.innerHTML = initial && busy ? loadingIndicator(loading.dataset.pageLoading) : '';
+    failure.hidden = !initial || !error;
+    failure.querySelector('[data-page-error-message]').textContent = error;
+    page.querySelectorAll('[data-page-header-actions] button').forEach(button => {
+      if (initial && busy) {
+        if (!state.buttons.has(button)) state.buttons.set(button, button.disabled);
+        button.disabled = true;
+      } else if (state.buttons.has(button)) {
+        button.disabled = state.buttons.get(button);state.buttons.delete(button);
+      }
+    });
+  }
 
   function resetWorkspacePreload() {
     clearTimeout(workspacePreloadState && workspacePreloadState.timer);
     workspacePreloadState = null;
+    workspaceTableStates.forEach(state => state.buttons.forEach((disabled, button) => {button.disabled = disabled;}));
+    workspaceTableStates.clear();
   }
 
   function prioritizeWorkspacePage(pageId) {
@@ -530,7 +562,6 @@
       const acceptDeliveryModal = document.getElementById("acceptDeliveryModal");
       const acceptDeliveryTypeModal = document.getElementById("acceptDeliveryTypeModal");
 
-      const yourFindsLabelModal = document.getElementById("yourFindsLabelModal");
       const yourFindsReprintModal = document.getElementById("yourFindsReprintModal");
 
       const yourFindsDeliveryDetailsModal =
@@ -547,7 +578,6 @@
         (managerDailyModal && managerDailyModal.style.display === "flex") ||
         (acceptDeliveryModal && acceptDeliveryModal.style.display === "flex") ||
         (acceptDeliveryTypeModal && acceptDeliveryTypeModal.style.display === "flex") ||
-        (yourFindsLabelModal && yourFindsLabelModal.style.display === "flex") ||
         (yourFindsReprintModal && yourFindsReprintModal.style.display === "flex") ||
         (
           yourFindsDeliveryDetailsModal &&
