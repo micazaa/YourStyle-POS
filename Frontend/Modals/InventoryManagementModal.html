@@ -291,6 +291,7 @@ function preloadInventoryItemDetails() {
     inventoryItemDetailPreload=null;updateInventoryDatasetStatus();
     if(document.getElementById('inventoryPage').style.display!=='none'&&inventoryListQuery().search)loadInventoryPage(false,true);
     if(document.getElementById('inventorySummaryModal').style.display==='flex')renderInventorySummary();
+    refreshOpenYourFindsReprint();
  }
  inventoryItemDetailPreloadTimer=setTimeout(next,150);
 }

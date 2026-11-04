@@ -44,26 +44,54 @@ var yourFindsReprintBusy = false;
 var yourFindsReprintRequest = 0;
 var yourFindsReprintSort = {key:'deliveryId',direction:-1};
 function escapeYourFindsReprintHtml(value) { return escapeInventoryHtml(value); }
+function localYourFindsReprintItems() {
+ return inventoryDatasetReady()&&inventoryDataset.detailsReady&&!inventoryDataset.stale
+  ?inventoryDataset.items.map(yourFindsReprintItem_).filter(Boolean):null;
+}
+function refreshOpenYourFindsReprint() {
+ if(yourFindsReprintBusy||document.getElementById('yourFindsReprintModal').style.display!=='flex')return;
+ const items=localYourFindsReprintItems();if(items===null)return;
+ yourFindsReprintItems=items;
+ const available=new Set(items.map(item=>String(item.code)));
+ Object.keys(yourFindsReprintSelection).forEach(code=>{if(!available.has(code))delete yourFindsReprintSelection[code];});
+ populateYourFindsReprintFilters();renderYourFindsReprintItems();
+}
+function currentYourFindsReprintRead(request,refresh) {
+ if(request!==yourFindsReprintRequest)return false;
+ if(refresh.current())return true;
+ setYourFindsReprintBusy(false);
+ if(document.getElementById('yourFindsReprintModal').style.display==='flex')openYourFindsReprintModal();
+ return false;
+}
 function openYourFindsReprintModal() {
  document.getElementById('yourFindsReprintModal').style.display='flex';
  if(yourFindsReprintBusy)return;
  const request=++yourFindsReprintRequest;
- const refresh=beginPageRead('labelReprint');
- yourFindsReprintItems=refresh.cached||[];yourFindsReprintSelection={};
+ yourFindsReprintSelection={};
  document.getElementById('yourFindsReprintSearch').value='';
  document.getElementById('yourFindsReprintType').value='ALL';
  document.getElementById('yourFindsReprintDeliveryFilter').innerHTML='<option value="">All Deliveries</option>';
  document.getElementById('yourFindsReprintResult').style.display='none';
+ const local=localYourFindsReprintItems();
+ if(local!==null){yourFindsReprintItems=local;setYourFindsReprintBusy(false);populateYourFindsReprintFilters();renderYourFindsReprintItems();return;}
+ const refresh=beginPageRead('labelReprint',inventoryListVersion,true);
+ yourFindsReprintItems=refresh.cached||[];
+ if(refresh.cached!==undefined){setYourFindsReprintBusy(false);populateYourFindsReprintFilters();renderYourFindsReprintItems();return;}
+ if(!refresh.shouldFetch)return;
  setYourFindsReprintBusy(true,'Loading...');
- if(refresh.cached!==undefined){populateYourFindsReprintFilters();renderYourFindsReprintItems();}
- else document.getElementById('yourFindsReprintBody').innerHTML='<tr><td colspan="7" class="text-center text-muted py-5"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading labels...</span></td></tr>';
+ document.getElementById('yourFindsReprintBody').innerHTML='<tr><td colspan="7" class="text-center text-muted py-5"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading labels...</span></td></tr>';
  secureScriptRun.withSuccessHandler(function(result){
-   if(request!==yourFindsReprintRequest||!refresh.current())return;
+   if(!currentYourFindsReprintRead(request,refresh))return;
    if(result&&result.success){yourFindsReprintItems=Array.isArray(result.items)?result.items:[];refresh.save(yourFindsReprintItems);}
+   else refresh.fail();
+   const current=localYourFindsReprintItems();if(current!==null)yourFindsReprintItems=current;
    setYourFindsReprintBusy(false);populateYourFindsReprintFilters();renderYourFindsReprintItems();
    if(!result||!result.success)showNotificationToast(result&&result.message||'Unable to load labels.',true);
  }).withFailureHandler(function(error){
-   if(request!==yourFindsReprintRequest||!refresh.current())return;
+   if(!currentYourFindsReprintRead(request,refresh))return;
+   refresh.fail();
+   const current=localYourFindsReprintItems();
+   if(current!==null){yourFindsReprintItems=current;setYourFindsReprintBusy(false);populateYourFindsReprintFilters();renderYourFindsReprintItems();return;}
    setYourFindsReprintBusy(false);renderYourFindsReprintItems();showNotificationToast(error.message||String(error),true);
  }).getYourFindsItemsForLabelReprint();
 }
@@ -83,24 +111,27 @@ function getVisibleYourFindsReprintItems(){
  return yourFindsReprintItems.filter(function(item){return (type==='ALL'||item.labelType===type)&&(!delivery||String(item.deliveryId||'').trim()===delivery)&&[item.code,item.description,item.size,item.deliveryId].join(' ').toLowerCase().includes(search);});
 }
 function populateYourFindsReprintFilters(){
+ const previous=document.getElementById('yourFindsReprintDeliveryFilter').value;
  const deliveries=Array.from(new Set(yourFindsReprintItems.map(item=>String(item.deliveryId||'').trim()).filter(Boolean))).sort().reverse();
  document.getElementById('yourFindsReprintDeliveryFilter').innerHTML='<option value="">All Deliveries</option>'+deliveries.map(value=>'<option value="'+escapeYourFindsReprintHtml(value)+'">'+escapeYourFindsReprintHtml(value)+'</option>').join('');
+ if(deliveries.includes(previous))document.getElementById('yourFindsReprintDeliveryFilter').value=previous;
 }
 function sortYourFindsReprint(key){
  yourFindsReprintSort.direction=yourFindsReprintSort.key===key?-yourFindsReprintSort.direction:1;yourFindsReprintSort.key=key;renderYourFindsReprintItems();
 }
 function renderYourFindsReprintItems(){
+ const compare=inventorySortComparer_();
  const items=getVisibleYourFindsReprintItems().sort(function(a,b){
    const key=yourFindsReprintSort.key;
-   const diff=key==='sellingPrice'?(Number(a[key])||0)-(Number(b[key])||0):String(a[key]||'').localeCompare(String(b[key]||''),undefined,{numeric:true,sensitivity:'base'});
-   return diff*yourFindsReprintSort.direction||String(a.code).localeCompare(String(b.code),undefined,{numeric:true});
+   const diff=key==='sellingPrice'?(Number(a[key])||0)-(Number(b[key])||0):compare(a[key],b[key]);
+   return diff*yourFindsReprintSort.direction||compare(a.code,b.code);
  });
  document.querySelectorAll('[data-reprint-sort]').forEach(function(th){const selected=th.dataset.reprintSort===yourFindsReprintSort.key;th.setAttribute('aria-sort',selected?(yourFindsReprintSort.direction===1?'ascending':'descending'):'none');th.querySelector('span').textContent=selected?(yourFindsReprintSort.direction===1?'↑':'↓'):'↕';});
  const e=escapeYourFindsReprintHtml;
  const body=document.getElementById('yourFindsReprintBody');
  body.innerHTML=items.length?items.map(function(item){
    const selling=item.labelType==='COMPLETED';
-   return `<tr><td class="ps-4"><input type="checkbox" class="form-check-input" aria-label="Select ${e(item.code)}" value="${e(item.code)}" ${yourFindsReprintSelection[item.code]?'checked':''}></td><td><div class="d-flex align-items-center gap-2">${item.imageUrl?`<img loading="lazy" src="${e(item.imageUrl)}" alt="" style="width:42px;height:42px;object-fit:cover;border-radius:8px;">`:''}<span class="fw-semibold">${e(item.description||'Selling details not added')}</span></div></td><td class="font-monospace small">${e(item.code)}</td><td>${e(item.size)}</td><td class="small">${e(item.deliveryId||'—')}</td><td><span class="badge ${selling?'bg-success':'bg-warning text-dark'}">${selling?'Selling':'Initial'}</span><div class="small text-muted text-nowrap">${selling?'40 × 30':'30 × 20'} mm</div></td><td class="text-end pe-4">${selling?'₱'+(Number(item.sellingPrice)||0).toFixed(2):'—'}</td></tr>`;
+   return `<tr><td class="ps-4"><input type="checkbox" class="form-check-input" aria-label="Select ${e(item.code)}" value="${e(item.code)}" ${yourFindsReprintSelection[item.code]?'checked':''}></td><td><div class="d-flex align-items-center gap-2">${item.imageUrl?`<img loading="lazy" decoding="async" width="42" height="42" src="${e(inventoryThumbnailUrl(item.imageUrl))}" alt="" style="width:42px;height:42px;object-fit:cover;border-radius:8px;">`:''}<span class="fw-semibold">${e(item.description||'Selling details not added')}</span></div></td><td class="font-monospace small">${e(item.code)}</td><td>${e(item.size)}</td><td class="small">${e(item.deliveryId||'—')}</td><td><span class="badge ${selling?'bg-success':'bg-warning text-dark'}">${selling?'Selling':'Initial'}</span><div class="small text-muted text-nowrap">${selling?'40 × 30':'30 × 20'} mm</div></td><td class="text-end pe-4">${selling?'₱'+(Number(item.sellingPrice)||0).toFixed(2):'—'}</td></tr>`;
  }).join(''):'<tr><td colspan="7" class="text-center text-muted py-5">No matching labels.</td></tr>';
  body.onchange=function(event){if(event.target.type==='checkbox')toggleYourFindsReprintItem(event.target);};
  updateYourFindsReprintSelection();

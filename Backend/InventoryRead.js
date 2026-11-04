@@ -114,10 +114,12 @@ function inventoryListIndex_(version) {
 function inventoryListRequest_(request) {
   request=request||{};
   const sortKeys=['code','name','category','size','price','stock','availability','active'];
+  const administrative=value=>{const status=String(value||'').trim().toUpperCase();return ['INACTIVE','DISABLED'].includes(status)?'DEACTIVATED':status;};
+  const choices=(value,normalize)=>Array.from(new Set((Array.isArray(value)?value:[value]).map(normalize).filter(Boolean))).sort();
   return {search:String(request.search||'').trim().toLowerCase().slice(0,200),category:String(request.category||'').toUpperCase(),
-    status:String(request.status||'').toUpperCase(),stockStatus:String(request.stockStatus||'').toUpperCase(),
+    status:choices(request.status,administrative),stockStatus:choices(request.stockStatus,value=>String(value||'').trim().toUpperCase()),
     exclude:Array.from(new Set((Array.isArray(request.exclude)?request.exclude:[request.exclude===undefined?'DEACTIVATED':request.exclude])
-      .map(value=>String(value||'').trim().toUpperCase()).filter(Boolean))).sort(),incompleteOnly:request.incompleteOnly===true,
+      .map(administrative).filter(Boolean))).sort(),incompleteOnly:request.incompleteOnly===true,
     sort:sortKeys.includes(request.sort)?request.sort:'name',direction:Number(request.direction)===-1?-1:1,
     page:Math.max(1,Math.floor(Number(request.page)||1)),pageSize:50};
 }
@@ -141,9 +143,11 @@ function inventoryItemSearchText_(item) {
 }
 function inventoryListMatches_(item,request) {
   if(request.search){const text=item.searchText||inventoryItemSearchText_(item);if(!request.search.split(/\s+/).every(term=>text.includes(term)))return false;}
+  const statuses=Array.isArray(request.status)?request.status:request.status?[request.status]:[];
+  const stock=Array.isArray(request.stockStatus)?request.stockStatus:request.stockStatus?[request.stockStatus]:[];
   return (!request.category||item.category===request.category) &&
-    (!request.status||item.productStatus===request.status) &&
-    (!request.stockStatus||item.availability===request.stockStatus||request.stockStatus==='SOLD OUT'&&item.availability==='NEGATIVE STOCK') &&
+    (!statuses.length||statuses.includes(item.productStatus)) &&
+    (!stock.length||stock.includes(item.availability)||stock.includes('SOLD OUT')&&item.availability==='NEGATIVE STOCK') &&
     (!request.incompleteOnly||item.category==='YOURFINDS'&&item.status==='INCOMPLETE');
 }
 function inventoryGroupKey_(item) {
@@ -151,19 +155,21 @@ function inventoryGroupKey_(item) {
   return JSON.stringify([item.category,name.toUpperCase()]);
 }
 function inventoryListGroups_(items,request) {
-  const groups=new Map(),matches=new Set();
+  const groups=new Map();
   items.forEach(item=>{
-    if(inventoryListExcluded_(item,request))return;
+    if(inventoryListExcluded_(item,request)||!inventoryListMatches_(item,request))return;
     const key=inventoryGroupKey_(item);
-    if(inventoryListMatches_(item,request))matches.add(key);
     if(!groups.has(key))groups.set(key,{key:key,category:item.category,
-      name:item.category==='YOURFINDS'?(item.size||'Unspecified size'):(item.name||'Unnamed item'),stock:0,positiveStock:0,lowStockAt:0});
+      name:item.category==='YOURFINDS'?(item.size||'Unspecified size'):(item.name||'Unnamed item'),stock:0,positiveStock:0,lowStockAt:0,states:new Set()});
     const group=groups.get(key);
+    group.states.add(item.status);
     if(!['RETURNED','CONVERTED'].includes(item.status)){group.stock+=item.stock;group.positiveStock+=Math.max(0,item.stock);}
     group.lowStockAt=Math.max(group.lowStockAt,item.lowStockAt);
   });
-  return Array.from(groups.values()).filter(group=>matches.has(group.key)).map(group=>{
-    group.status=group.stock<=0?'SOLD OUT':group.category!=='YOURFINDS'&&group.lowStockAt>0&&group.stock<=group.lowStockAt?'LOW STOCK':'IN STOCK';return group;
+  return Array.from(groups.values()).map(group=>{
+    const state=group.states.size===1?group.states.values().next().value:'';delete group.states;
+    group.status=['INCOMPLETE','RESERVED','RETURNED','CONVERTED'].includes(state)?state:
+      group.stock<=0?'SOLD OUT':group.category!=='YOURFINDS'&&group.lowStockAt>0&&group.stock<=group.lowStockAt?'LOW STOCK':'IN STOCK';return group;
   });
 }
 function inventoryListSaleRows_(items) {
@@ -186,7 +192,7 @@ function inventoryPageSlice_(items,page,size) {
 function inventoryResponseCacheKey_(version,kind,query) {
   const manager=!!(ACCESS_REQUEST_CONTEXT_&&ACCESS_REQUEST_CONTEXT_.actor&&ACCESS_REQUEST_CONTEXT_.actor.manager);
   const digest=Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify([manager,query])));
-  return 'inventory-response:v3:'+kind+':'+version+':'+digest;
+  return 'inventory-response:v4:'+kind+':'+version+':'+digest;
 }
 function readInventoryResponse_(key) {
   try {const raw=CacheService.getScriptCache().get(key);return raw?JSON.parse(raw):null;}
@@ -224,9 +230,11 @@ function inventoryPriorityPages_(version,query,response) {
   const keys=queries.map(page=>inventoryResponseCacheKey_(version,'list-v2',page));
   try {
     const cached=CacheService.getScriptCache().getAll(keys);
-    if(keys.some(key=>!cached[key]))return null;
-    return queries.map((page,index)=>({query:page,data:JSON.parse(cached[keys[index]])}));
-  }catch(error){return null;}
+    return queries.flatMap((page,index)=>{
+      if(!cached[keys[index]])return [];
+      try{return [{query:page,data:JSON.parse(cached[keys[index]])}];}catch(error){return [];}
+    });
+  }catch(error){return [];}
 }
 function getInventoryPage(request) {
   assertAppRequest_();
@@ -235,10 +243,8 @@ function getInventoryPage(request) {
   const key=inventoryResponseCacheKey_(version,'list-v2',query),cached=readInventoryResponse_(key);
   if(cached){
     const priorityPages=inventoryPriorityPages_(version,query,cached);
-    if(priorityPages!==null){
-      console.log(JSON.stringify({event:'inventory_page',cacheHit:true,rowsReturned:cached.items.length,priorityPages:priorityPages.length,elapsedMs:Date.now()-started}));
-      return {...cached,priorityPages:priorityPages};
-    }
+    console.log(JSON.stringify({event:'inventory_page',cacheHit:true,rowsReturned:cached.items.length,priorityPages:priorityPages.length,elapsedMs:Date.now()-started}));
+    return {...cached,priorityPages:priorityPages};
   }
   const base=inventoryListIndex_(version),index=query.search?inventorySearchIndex_(base,version):base,groups=inventoryListGroups_(index,query);
   const rows=inventoryListSaleRows_(index.filter(item=>!inventoryListExcluded_(item,query)&&inventoryListMatches_(item,query)));
@@ -312,7 +318,8 @@ function getInventorySnapshotBatch(request) {
 function inventoryBrowserQueryFunctions_() {
   // Export only the pure display/query functions. No authentication, sheet access or cost readers.
   return [inventoryListStatus_,inventoryListRequest_,inventoryListExcluded_,inventoryItemSearchText_,inventoryListMatches_,inventoryGroupKey_,
-    inventoryListGroups_,inventoryListSaleRows_,inventoryPageSlice_,inventorySortComparer_,inventoryListResponse_,inventorySummaryResponse_]
+    inventoryListGroups_,inventoryListSaleRows_,inventoryPageSlice_,inventorySortComparer_,inventoryListResponse_,inventorySummaryResponse_,
+    getYourFindsReprintLabelType_,yourFindsReprintItem_]
     .map(fn=>fn.toString()).join('\n');
 }
 

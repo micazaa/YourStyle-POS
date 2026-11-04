@@ -329,9 +329,9 @@
 
     restoreActivePage();
 
-    if (typeof startInventoryDownload === 'function') startInventoryDownload();
+    if (typeof loadInventoryPage === 'function') loadInventoryPage();
 
-    if (currentSessionIsCashier) refreshInventory(function () {
+    if (currentSessionIsCashier && document.getElementById('posPage').style.display !== 'none') refreshInventory(function () {
       renderCart();
     });
     else renderCart();
