@@ -45,8 +45,13 @@ var yourFindsReprintRequest = 0;
 var yourFindsReprintSort = {key:'deliveryId',direction:-1};
 function escapeYourFindsReprintHtml(value) { return escapeInventoryHtml(value); }
 function localYourFindsReprintItems() {
- return inventoryDatasetReady()&&inventoryDataset.detailsReady&&!inventoryDataset.stale
-  ?inventoryDataset.items.map(yourFindsReprintItem_).filter(Boolean):null;
+ if(!inventoryDatasetReady()||!inventoryDataset.detailsReady||inventoryDataset.stale)return null;
+ const owner=currentEmployee.dashboardToken,version=inventoryDataset.version;
+ return inventoryDataset.items.map(item=>{
+  const cached=inventoryItemDetailCache.get(String(item.code));
+  const detail=cached&&cached.owner===owner&&cached.version===version?cached.item:null;
+  return yourFindsReprintItem_({...item,deliveryId:detail?detail.deliveryId:item.deliveryId});
+ }).filter(Boolean);
 }
 function refreshOpenYourFindsReprint() {
  if(yourFindsReprintBusy||document.getElementById('yourFindsReprintModal').style.display!=='flex')return;
@@ -131,8 +136,15 @@ function renderYourFindsReprintItems(){
  const body=document.getElementById('yourFindsReprintBody');
  body.innerHTML=items.length?items.map(function(item){
    const selling=item.labelType==='COMPLETED';
-   return `<tr><td class="ps-4"><input type="checkbox" class="form-check-input" aria-label="Select ${e(item.code)}" value="${e(item.code)}" ${yourFindsReprintSelection[item.code]?'checked':''}></td><td><div class="d-flex align-items-center gap-2">${item.imageUrl?`<img loading="lazy" decoding="async" width="42" height="42" src="${e(inventoryThumbnailUrl(item.imageUrl))}" alt="" style="width:42px;height:42px;object-fit:cover;border-radius:8px;">`:''}<span class="fw-semibold">${e(item.description||'Selling details not added')}</span></div></td><td class="font-monospace small">${e(item.code)}</td><td>${e(item.size)}</td><td class="small">${e(item.deliveryId||'—')}</td><td><span class="badge ${selling?'bg-success':'bg-warning text-dark'}">${selling?'Selling':'Initial'}</span><div class="small text-muted text-nowrap">${selling?'40 × 30':'30 × 20'} mm</div></td><td class="text-end pe-4">${selling?'₱'+(Number(item.sellingPrice)||0).toFixed(2):'—'}</td></tr>`;
+   const photo=item.imageUrl?`<button type="button" class="btn p-0 border-0 flex-shrink-0" data-reprint-photo="${e(item.code)}" title="View product image" aria-label="View image of ${e(item.description||item.code)}"><img loading="lazy" decoding="async" width="42" height="42" src="${e(inventoryThumbnailUrl(item.imageUrl))}" alt="" style="width:42px;height:42px;object-fit:cover;border-radius:8px;"></button>`:'';
+   return `<tr><td class="ps-4"><input type="checkbox" class="form-check-input" aria-label="Select ${e(item.code)}" value="${e(item.code)}" ${yourFindsReprintSelection[item.code]?'checked':''}></td><td><div class="d-flex align-items-center gap-2">${photo}<span class="fw-semibold">${e(item.description||'Selling details not added')}</span></div></td><td class="font-monospace small">${e(item.code)}</td><td>${e(item.size)}</td><td class="small">${e(item.deliveryId||'—')}</td><td><span class="badge ${selling?'bg-success':'bg-warning text-dark'}">${selling?'Selling':'Initial'}</span><div class="small text-muted text-nowrap">${selling?'40 × 30':'30 × 20'} mm</div></td><td class="text-end pe-4">${selling?'₱'+(Number(item.sellingPrice)||0).toFixed(2):'—'}</td></tr>`;
  }).join(''):'<tr><td colspan="7" class="text-center text-muted py-5">No matching labels.</td></tr>';
+ body.onclick=function(event){
+   const photo=event.target.closest('[data-reprint-photo]');
+   if(!photo||yourFindsReprintBusy)return;
+   const item=items.find(item=>String(item.code)===photo.dataset.reprintPhoto);
+   if(item&&item.imageUrl)openInventoryImageViewer({code:item.code,name:item.description,imageUrl:item.imageUrl});
+ };
  body.onchange=function(event){if(event.target.type==='checkbox')toggleYourFindsReprintItem(event.target);};
  updateYourFindsReprintSelection();
 }

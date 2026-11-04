@@ -304,15 +304,22 @@ const INVENTORY_SNAPSHOT_FIELDS_ = ['code','name','size','category','inventoryTy
 function getInventorySnapshotBatch(request) {
   assertAppRequest_();
   request=request||{};
+  const segment=String(request.segment||'ALL');
+  if(!['ALL','NON_INACTIVE','INACTIVE'].includes(segment))throw new Error('Invalid inventory snapshot segment.');
   const version=inventoryReadVersion_();
   if(request.version&&request.version!==version)return {success:true,changed:true,version:version};
   const offset=Math.max(0,Math.floor(Number(request.offset)||0));
   const limit=Math.max(1,Math.min(1000,Math.floor(Number(request.limit)||1000)));
-  const index=inventoryListIndex_(version),items=index.slice(offset,offset+limit);
+  const index=inventoryListIndex_(version);
+  const matching=segment==='ALL'?index:index.filter(item=>{
+    const inactive=item.productStatus==='DEACTIVATED'||item.status==='INACTIVE';
+    return segment==='INACTIVE'?inactive:!inactive;
+  });
+  const items=matching.slice(offset,offset+limit);
   const current=inventoryReadVersion_();
   if(current!==version)return {success:true,changed:true,version:current};
-  return {success:true,version:version,offset:offset,total:index.length,nextOffset:offset+items.length,
-    done:offset+items.length>=index.length,fields:INVENTORY_SNAPSHOT_FIELDS_,
+  return {success:true,version:version,segment:segment,inventoryTotal:index.length,offset:offset,total:matching.length,nextOffset:offset+items.length,
+    done:offset+items.length>=matching.length,fields:INVENTORY_SNAPSHOT_FIELDS_,
     items:items.map(item=>INVENTORY_SNAPSHOT_FIELDS_.map(field=>item[field]))};
 }
 function inventoryBrowserQueryFunctions_() {
