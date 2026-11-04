@@ -70,8 +70,11 @@ function createSalesSyncButtonFromMenu() {
 }
 
 function createOrRepairSalesSyncButton_() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
+  const sheet = getSalesLogSheet_();
   if (!sheet) throw new Error("Sales Log sheet not found.");
+  if (typeof sheet.getMaxColumns === 'function' && sheet.getMaxColumns() < 38) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), 38 - sheet.getMaxColumns());
+  }
 
   /*
     The clickable image is the SYNC button. Do not merge or format cells here:
@@ -167,6 +170,7 @@ function salesAutomationOnEdit_(event) {
     return;
   }
   if (sheet.getName() !== SHEETS.SALES_LOG || event.range.getRow() < 2) return;
+  configureSalesLogColumns_(sheet);
 
   const firstEditedColumn = event.range.getColumn();
   const lastEditedColumn = firstEditedColumn + event.range.getNumColumns() - 1;
@@ -353,7 +357,7 @@ function processPendingSalesLogRows(event) {
 
 function processPendingSalesLogRows_() {
   createOrRepairSalesSyncButton_();
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
+  const sheet = getSalesLogSheet_();
   if (!sheet || sheet.getLastRow() < 2) return { success: true, processed: 0, errors: 0 };
 
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, SALES_LOG_COLUMN_COUNT).getValues();

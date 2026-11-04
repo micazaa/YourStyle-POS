@@ -270,7 +270,7 @@ function cashierCount_(source) {
 }
 
 function cashierShiftMetrics_(row) {
-  const sales = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
+  const sales = getSalesLogSheet_();
   if (!sales) throw new Error('Sales Log sheet not found.');
   const end = row[CASH_REPORT_IDX.SHIFT_END] || new Date();
   return collectSalesMetrics(sales.getDataRange().getValues(), dateString_(row[CASH_REPORT_IDX.REPORT_DATE]),

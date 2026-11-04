@@ -172,7 +172,7 @@ function processReservationPayment(payload) {
     if (!balance && payload.kind !== 'RESERVATION_DEPOSIT') throw new Error('Invalid reservation payment.');
     const requestId = String(payload.requestId || '');
     if (!/^[a-zA-Z0-9-]{16,100}$/.test(requestId)) throw new Error('Reopen checkout before paying.');
-    const ss = SpreadsheetApp.getActiveSpreadsheet(), sales = ss.getSheetByName(SHEETS.SALES_LOG);
+    const ss = SpreadsheetApp.getActiveSpreadsheet(), sales = getSalesLogSheet_(ss);
     if (!sales) throw new Error('Sales Log sheet not found.');
     let reservation = balance ? findReservation_(payload.originalReceiptId) : readReservations_().find(row => row.depositRequestId === requestId);
     if (reservation && (balance ? reservation.balanceRequestId === requestId : true)) {

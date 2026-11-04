@@ -334,7 +334,7 @@ function requireCashierAccess_(access, request) {
 }
 function receiptVisibleToActor_(receiptId, actor) {
   if (actor.manager) return;
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
+  const sheet = getSalesLogSheet_();
   if (!sheet) throw new Error('Sales Log sheet not found.');
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const minimum = dashboardDayOffset_(today, -6), shared = dashboardDayOffset_(today, -1);

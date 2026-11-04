@@ -115,7 +115,7 @@ function executeCheckoutBackend(
     assertInventoryNotReserved_((cart || []).map(item => item.code));
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    const salesLogSheet = ss.getSheetByName(SHEETS.SALES_LOG);
+    const salesLogSheet = getSalesLogSheet_(ss);
  
     if (!salesLogSheet) {
       return JSON.stringify({
@@ -219,7 +219,7 @@ function executeCheckoutBackend(
     // 4) Write Sales Log rows (A–AB), repeating Cash Received/Change on every line.
     // POS writes are already inventory-synchronized, so mark them PROCESSED.
     const timestamp = new Date();
-    const rows = lines.map((l) => [
+    const rows = lines.map((l) => salesLogRowFromLegacyFields_([
       timestamp, // A Timestamp
       receiptId, // B Receipt ID
       cashierName, // C Cashier
@@ -257,7 +257,7 @@ function executeCheckoutBackend(
       normalizedPaymentParts[1] ? normalizedPaymentParts[1].method : "", // AF Payment 2 Method
       normalizedPaymentParts[1] ? normalizedPaymentParts[1].amount : "", // AG Payment 2 Amount
       normalizedPaymentParts[1] ? normalizedPaymentParts[1].reference : "", // AH Payment 2 Reference
-    ]);
+    ]));
     salesLogSheet
       .getRange(
         salesLogSheet.getLastRow() + 1,
@@ -382,7 +382,7 @@ function consumeSaleAllocations_(lines, employee, productSnapshot) {
 function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart) {
   assertAppRequest_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
+  const sheet = getSalesLogSheet_(ss);
   if (!sheet) return 0;
 
   const data = sheet.getDataRange().getValues();
@@ -424,7 +424,7 @@ function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart
 function getExpectedCashForManager(reportDate) {
   assertAppRequest_();
   const reviewers = employeeIsOic_(ACCESS_REQUEST_CONTEXT_.actor) ? {reviewers: getManagerReportReviewers_()} : {};
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
+  const sheet = getSalesLogSheet_();
   const lastRow = sheet && sheet.getLastRow();
   if (!sheet || lastRow < 2) return { expectedCashDrawer: 0, ...reviewers };
 
@@ -572,10 +572,7 @@ function voidAndRefundTransactionBackend(
       SpreadsheetApp.getActiveSpreadsheet();
 
 
-    const salesLogSheet =
-      ss.getSheetByName(
-        SHEETS.SALES_LOG
-      );
+    const salesLogSheet = getSalesLogSheet_(ss);
 
 
     if (!salesLogSheet) {
@@ -915,7 +912,7 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
+    const sheet = getSalesLogSheet_(ss);
 
     if (!sheet) {
       return {
@@ -1142,7 +1139,7 @@ function getTransactionDetails(receiptId) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
+    const sheet = getSalesLogSheet_(ss);
 
     if (!sheet) {
       return {
