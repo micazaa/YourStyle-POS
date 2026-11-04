@@ -205,20 +205,6 @@ var inventoryDataset=null,inventoryDownload=null,inventoryDataEpoch=0,inventoryD
 var inventoryLocalViews=new Map();
 var inventoryScrollPage=null;
 var inventoryChangesRead=null,inventoryChangesTimer=null;
-var inventoryInitialWarmups=[],inventoryInitialWarmupTimer=null;
-function afterInventoryFirstPage(callback) {
-  const owner=currentEmployee&&currentEmployee.dashboardToken;if(!owner)return;
-  inventoryInitialWarmups.push({owner:owner,callback:callback});
-  runInventoryInitialWarmups();
-}
-function runInventoryInitialWarmups() {
-  if(!inventoryHasLoaded||!inventoryInitialWarmups.length)return;
-  clearTimeout(inventoryInitialWarmupTimer);
-  inventoryInitialWarmupTimer=setTimeout(()=>{
-    const tasks=inventoryInitialWarmups;inventoryInitialWarmups=[];
-    tasks.forEach(task=>{if(currentEmployee&&currentEmployee.dashboardToken===task.owner)task.callback();});
-  },200);
-}
 function inventoryListCacheKey(query) {
   return JSON.stringify(inventoryListRequest_(query));
 }
@@ -297,6 +283,7 @@ function startInventoryDownload(version='',restarts=0) {
   const failed=()=>{if(!current())return;inventoryDownload=null;updateInventoryDatasetStatus(inventoryDatasetReady()?'Inventory refresh paused.':'Background preparation paused.');};
   function next(){
     if(!current())return;
+    if(workspaceForegroundLoading()){inventoryDownloadTimer=setTimeout(next,100);return;}
     secureScriptRun.withSuccessHandler(result=>{
       if(!current())return;if(!result||!result.success)return failed();
       if(result.changed){
@@ -427,7 +414,6 @@ function invalidateLocalInventoryReads(refresh=true) {
 }
 
 function resetInventoryListSession() {
-  clearTimeout(inventoryInitialWarmupTimer);inventoryInitialWarmups=[];
   resetInventoryStockActions();
   inventoryScrollPage=null;
   invalidateLocalInventoryReads(false);inventoryDataset=null;inventoryDownload=null;inventoryListVersion='';inventoryVersionCheckAt=0;updateInventoryDatasetStatus();inventoryHasLoaded=false;inventoryLoadingFocus=null;inventoryListBusy(false);inventoryListPage=1;inventoryListPageCount=1;inventoryPageData=[];
@@ -491,7 +477,7 @@ function applyInventoryPage(result) {
     header.querySelector('.inventory-sort-marker').textContent=selected?(inventorySort.direction===1?'↑':'↓'):'↕';
   });
   inventoryListBusy(false);
-  runInventoryInitialWarmups();
+  finishWorkspacePageLoad('inventoryPage');
   if(inventoryScrollPage===result.page){
     inventoryScrollPage=null;
     if(document.getElementById('inventoryPage').style.display!=='none'){
@@ -523,6 +509,7 @@ function loadInventoryPage(forceRefresh=false,keepVisible=false) {
   const request=++inventoryListRequest,started=performance.now();inventoryListPending={key:key,owner:owner,request:request};inventoryListBusy(true);
   const current=()=>request===inventoryListRequest&&currentEmployee&&currentEmployee.dashboardToken===owner;
   const failed=error=>{if(!current())return;inventoryScrollPage=null;inventoryListPending=null;inventoryListBusy(false);
+    finishWorkspacePageLoad('inventoryPage');
     if(!inventoryHasLoaded){document.getElementById('inventoryContent').hidden=true;document.getElementById('inventoryContent').inert=true;document.getElementById('inventoryContentError').hidden=false;}
     else document.getElementById('inventoryTableBody').innerHTML=`<tr><td colspan="${inventoryColumnCount()}" class="text-center text-danger py-5">Unable to load inventory. <button type="button" class="btn btn-outline-secondary btn-sm" onclick="loadInventoryPage()">Retry</button></td></tr>`;
     showNotificationToast(error.message||'Inventory refresh failed.',true);

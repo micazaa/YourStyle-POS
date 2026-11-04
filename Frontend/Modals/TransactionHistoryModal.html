@@ -529,24 +529,36 @@ function prepareTransactionHistoryData(transactions) {
 function warmTransactionHistory() {
   if (!currentEmployee || !currentCashier) return;
 
+  const owner = currentEmployee.dashboardToken;
+  const cashier = currentCashier;
   const today = getTransactionHistoryToday();
   const isManager = hasManagerViewAccess();
   const key = getTransactionHistoryCacheKey(today, today, isManager);
+  const existing = pageReadCache.get('transactions');
+  if (existing && existing.owner === JSON.stringify([currentEmployee, cashier]) && existing.key === JSON.stringify([today, today, isManager]) &&
+      (existing.pending || existing.data !== undefined && Date.now() - transactionHistoryLoadedAt <= 60000)) return;
+  const cached = transactionHistoryWarmCache;
+  if (cached && cached.owner === owner && cached.key === key && (cached.pending || cached.data !== null && Date.now() - cached.loadedAt <= 60000)) return;
 
-  if (transactionHistoryWarmCache && transactionHistoryWarmCache.key === key) return;
-
-  transactionHistoryWarmCache = {key: key, pending: true, data: null, loadedAt: 0};
-  secureScriptRun
+  const read = {owner: owner, key: key, pending: true, data: null, loadedAt: 0};
+  transactionHistoryWarmCache = read;
+  const current = () => transactionHistoryWarmCache === read && currentEmployee && currentEmployee.dashboardToken === owner && currentCashier === cashier;
+  read.promise = new Promise(resolve => secureScriptRun
     .withSuccessHandler(function(result) {
-      if (!result || result.success !== true || !transactionHistoryWarmCache || transactionHistoryWarmCache.key !== key) return;
-      transactionHistoryWarmCache.data = prepareTransactionHistoryData(result.transactions);
-      transactionHistoryWarmCache.pending = false;
-      transactionHistoryWarmCache.loadedAt = Date.now();
+      if (current()) {
+        if (result && result.success === true) {
+          read.data = prepareTransactionHistoryData(result.transactions);
+          read.pending = false;
+          read.loadedAt = Date.now();
+        } else transactionHistoryWarmCache = null;
+      }
+      resolve();
     })
     .withFailureHandler(function() {
-      if (transactionHistoryWarmCache && transactionHistoryWarmCache.key === key) transactionHistoryWarmCache = null;
+      if (current()) transactionHistoryWarmCache = null;
+      resolve();
     })
-    .getTransactionHistory(currentCashier, today, today, isManager);
+    .getTransactionHistory(cashier, today, today, isManager));
 }
 
 function clearTransactionHistoryCache() {
@@ -599,9 +611,19 @@ function loadTransactionHistory(forceRefresh) {
 
   const cacheKey = getTransactionHistoryCacheKey(fromDate, toDate, isManager);
   const warm = transactionHistoryWarmCache;
+  const owner = currentEmployee.dashboardToken;
+  if (forceRefresh !== true && warm && warm.owner === owner && warm.key === cacheKey && warm.pending) {
+    setTransactionHistoryLoading(true);
+    warm.promise.then(() => {
+      if (currentEmployee && currentEmployee.dashboardToken === owner && document.getElementById('transactionHistoryModal').style.display !== 'none' &&
+          document.getElementById('transactionHistoryFromDate').value === fromDate && document.getElementById('transactionHistoryToDate').value === toDate) loadTransactionHistory();
+    });
+    return;
+  }
   if (
     forceRefresh !== true &&
     warm &&
+    warm.owner === owner &&
     warm.key === cacheKey &&
     warm.data !== null &&
     Date.now() - warm.loadedAt <= 60000

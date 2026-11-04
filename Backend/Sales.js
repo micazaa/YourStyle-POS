@@ -423,9 +423,10 @@ function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart
 
 function getExpectedCashForManager(reportDate) {
   assertAppRequest_();
+  const reviewers = employeeIsOic_(ACCESS_REQUEST_CONTEXT_.actor) ? {reviewers: getManagerReportReviewers_()} : {};
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
   const lastRow = sheet && sheet.getLastRow();
-  if (!sheet || lastRow < 2) return { expectedCashDrawer: 0 };
+  if (!sheet || lastRow < 2) return { expectedCashDrawer: 0, ...reviewers };
 
   /* One contiguous read; avoid per-row Utilities.formatDate calls. */
   const rowCount = lastRow - 1;
@@ -455,7 +456,7 @@ function getExpectedCashForManager(reportDate) {
     }
   }
 
-  return { expectedCashDrawer: roundToTwo(cashSales) };
+  return { expectedCashDrawer: roundToTwo(cashSales), ...reviewers };
 
 }
 

@@ -50,6 +50,64 @@
     };
   }
 
+  var workspacePreloadState = null;
+
+  function resetWorkspacePreload() {
+    clearTimeout(workspacePreloadState && workspacePreloadState.timer);
+    workspacePreloadState = null;
+  }
+
+  function prioritizeWorkspacePage(pageId) {
+    if (!currentEmployee) return;
+    const owner = currentEmployee.dashboardToken;
+    if (!workspacePreloadState || workspacePreloadState.owner !== owner) {
+      resetWorkspacePreload();
+      workspacePreloadState = {owner: owner, started: false, timer: null};
+    }
+    clearTimeout(workspacePreloadState.timer);
+    workspacePreloadState.page = pageId;
+    workspacePreloadState.waiting = true;
+    scheduleWorkspacePreload();
+  }
+
+  function workspaceForegroundLoading() {
+    return !!(workspacePreloadState && currentEmployee && workspacePreloadState.owner === currentEmployee.dashboardToken && workspacePreloadState.waiting);
+  }
+
+  function finishWorkspacePageLoad(pageId) {
+    const state = workspacePreloadState;
+    if (!state || !currentEmployee || state.owner !== currentEmployee.dashboardToken || state.page !== pageId) return;
+    state.waiting = false;
+    if (state.started) {preloadHistoryAndReports();return;}
+    scheduleWorkspacePreload();
+  }
+
+  function scheduleWorkspacePreload() {
+    const state = workspacePreloadState;
+    if (!state || state.started) return;
+    clearTimeout(state.timer);
+    state.timer = setTimeout(() => {
+      if (workspacePreloadState !== state || !currentEmployee || state.owner !== currentEmployee.dashboardToken || state.started) return;
+      state.started = true;
+      const pages = {
+        posPage: () => {if (currentSessionIsCashier) refreshInventory();},
+        inventoryPage: () => loadInventoryPage(false, true),
+        deliveriesPage: () => loadDeliveriesPage(false, true),
+        supplierReturnsPage: () => loadSupplierReturnsPage()
+      };
+      Object.keys(pages).forEach(page => {if (page !== state.page) pages[page]();});
+    }, 75);
+  }
+
+  function preloadHistoryAndReports() {
+    const delivery = pageReadCache.get('deliveries');
+    if (!currentEmployee || workspaceForegroundLoading() || !inventoryDatasetReady() || inventoryDataset.stale || !inventoryDataset.detailsReady ||
+        !delivery || delivery.data === undefined || delivery.owner !== JSON.stringify([currentEmployee, currentCashier])) return;
+    warmTransactionHistory();
+    warmCashierReport();
+    if (hasManagerViewAccess()) warmManagerExpectedCash(getCashReportToday());
+  }
+
   function sanitizeDenominationCount(input) {
     const value = input.value;
     if (/^\d*$/.test(value) && (value === '' || Number.isSafeInteger(Number(value)))) {
@@ -329,8 +387,6 @@
 
     restoreActivePage();
 
-    if (typeof loadInventoryPage === 'function') loadInventoryPage();
-
     if (currentSessionIsCashier && document.getElementById('posPage').style.display !== 'none') refreshInventory(function () {
       renderCart();
     });
@@ -342,6 +398,7 @@
 
 
   function clearSession() {
+    resetWorkspacePreload();
     posApprovalRequest=null;
     stopAccountSessionMonitor();
     clearDashboardState();

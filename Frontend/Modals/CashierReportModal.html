@@ -472,12 +472,14 @@
   var cashierReportWriting = false;
   var cashierReportContextCache = null;
   var cashierReportDateCache = null;
+  var cashierReportPending = new Map();
   var cashierSavedExit = null;
   var cashierShiftPrintBusy = false;
 
   function clearCashierReportCache() {
     cashierReportContextCache = null;
     cashierReportDateCache = null;
+    cashierReportPending.clear();
   }
 
   function rememberCashierReportContext(context) {
@@ -486,14 +488,61 @@
       data: JSON.parse(JSON.stringify(context))};
   }
 
-  function cachedCashierReportContext() {
+  function cachedCashierReportContext(allowStale) {
     const cached = cashierReportContextCache;
     if (!cached || !currentEmployee || cached.owner !== currentEmployee.dashboardToken || cached.day !== getCashReportToday() ||
         cached.data.reportId !== currentShiftReportId || cached.data.status !== 'OPEN') return null;
     // A new report has no saved counts to retrieve. Its receipt ID is still
     // checked against the current sheet on Save; completed reports refresh sooner.
-    if (cached.data.hasSavedReport !== false && Date.now() - cached.time > 30000) return null;
+    if (!allowStale && cached.data.hasSavedReport !== false && Date.now() - cached.time > 30000) return null;
     return JSON.parse(JSON.stringify(cached.data));
+  }
+
+  function cachedCashierReportByDate(date, allowStale) {
+    const cached = cashierReportDateCache;
+    return cached && currentEmployee && cached.owner === currentEmployee.dashboardToken && cached.cashier === currentCashier &&
+      cached.date === date && (allowStale || Date.now() - cached.time < 30000) ? cached.result : null;
+  }
+
+  function refreshCachedCashierReport(kind, date, current, loaded) {
+    const formState = () => JSON.stringify(Array.from(document.querySelectorAll('#shiftReportModal input, #shiftReportModal select, #shiftReportModal textarea'),
+      input => [input.id, input.value, input.checked]));
+    const original = formState();
+    readCashierReport(kind, date, true).then(result => {
+      if (current() && !cashierExitBusy && !cashierReportWriting && original === formState()) loaded(result);
+    }).catch(() => {console.warn('Report refresh paused; showing the cached report.');});
+  }
+
+  function readCashierReport(kind, date, forceRefresh) {
+    if (!currentEmployee || !currentCashier) return Promise.reject(new Error('Please sign in to load reports.'));
+    const owner = currentEmployee.dashboardToken, cashier = currentCashier, reportId = currentShiftReportId;
+    const context = kind === 'context';
+    const cached = forceRefresh ? null : context ? cachedCashierReportContext() : cachedCashierReportByDate(date);
+    if (cached) return Promise.resolve(cached);
+    const key = JSON.stringify([owner, cashier, kind, context ? reportId : date]);
+    if (cashierReportPending.has(key)) return cashierReportPending.get(key).promise;
+    const read = {};
+    cashierReportPending.set(key, read);
+    read.promise = new Promise((resolve, reject) => {
+      const runner = secureScriptRun.withSuccessHandler(result => {
+        if (!result || !result.success) return reject(new Error(result && result.message || 'Unable to load report.'));
+        if (cashierReportPending.get(key) === read && currentEmployee && currentEmployee.dashboardToken === owner && currentCashier === cashier) {
+          if (context) {
+            if (currentShiftReportId === reportId) rememberCashierReportContext(result);
+          } else cashierReportDateCache = {owner: owner, cashier: cashier, date: date, time: Date.now(), result: result};
+        }
+        resolve(result);
+      }).withFailureHandler(reject);
+      if (context) runner.getCashierShiftContext(owner, reportId);
+      else runner.getCashReportByDate(cashier, date);
+    }).finally(() => {if (cashierReportPending.get(key) === read) cashierReportPending.delete(key);});
+    return read.promise;
+  }
+
+  function warmCashierReport() {
+    if (!currentEmployee || !currentCashier) return;
+    readCashierReport(currentSessionIsCashier && currentShiftReportId ? 'context' : 'date', getCashReportToday())
+      .catch(function() {});
   }
 
   function refreshCashierReport() {
@@ -581,7 +630,7 @@
     document.getElementById('cashierExitRetry').hidden = true;
     document.getElementById('cashierExitError').hidden = true;
     document.getElementById('cashierExitReauth').hidden = true;
-    const cached = forceRefresh ? null : cachedCashierReportContext();
+    const cached = forceRefresh ? null : cachedCashierReportContext(true);
     if (!cached) setCashierReportLoading(true);
     updateCashierExitReady();
     function current() { return request === phase10ReportLoadId && currentEmployee && currentEmployee.dashboardToken === owner; }
@@ -604,7 +653,6 @@
         showNotificationToast('Your shift is already paused. You are signed out.');
         return;
       }
-      if (!cached) rememberCashierReportContext(context);
       cashierExitContext = context;
       const saved = context.savedReport || context;
       if (cashierReportIntent === 'end') {
@@ -636,8 +684,11 @@
       saveSession();
       setCashierExitBusy(false);
     }
-    if (cached) loaded(cached);
-    else secureScriptRun.withSuccessHandler(loaded).withFailureHandler(failed).getCashierShiftContext(owner, currentShiftReportId);
+    if (cached) {
+      loaded(cached);
+      if (!cachedCashierReportContext()) refreshCachedCashierReport('context', '', current, loaded);
+    }
+    else readCashierReport('context', '', forceRefresh).then(loaded).catch(failed);
   }
 
   function reauthenticateCashierExit() {
@@ -1090,13 +1141,13 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
       showNotificationToast('Report date cannot be in the future.', true);
       return;
     }
-    const cachedContext = forceRefresh ? null : cachedCashierReportContext();
-    const cachedDate = !forceRefresh && cashierReportDateCache && cashierReportDateCache.owner === owner &&
-      cashierReportDateCache.cashier === cashier && cashierReportDateCache.date === date &&
-      Date.now() - cashierReportDateCache.time < 30000 ? cashierReportDateCache.result : null;
+    const cachedContext = forceRefresh ? null : cachedCashierReportContext(true);
+    const freshContext = forceRefresh ? null : cachedCashierReportContext();
+    const freshDate = forceRefresh ? null : cachedCashierReportByDate(date);
+    const cachedDate = forceRefresh ? null : cachedCashierReportByDate(date, true);
     const initialReport = cachedContext && cachedContext.reportDate === date
       ? {success: true, found: !!cachedContext.savedReport, report: cachedContext.savedReport} : null;
-    const cached = initialReport || cachedDate;
+    const cached = freshDate || initialReport || cachedDate;
     if (!cached) setCashierReportLoading(true);
 
     function isCurrentRequest() {
@@ -1119,7 +1170,6 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
           );
           return;
         }
-        if (!cached) cashierReportDateCache = {owner: owner, cashier: cashier, date: date, time: Date.now(), result: res};
 
         if (!res.found || !res.report) {
           // Do not copy today's petty cash into a historical report.
@@ -1202,8 +1252,12 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
           updateCashierReportReady();
         }
       }
-    if (cached) loaded(cached);
-    else secureScriptRun.withSuccessHandler(loaded).withFailureHandler(function(error) {
+    if (cached) {
+      loaded(cached);
+      if (!freshDate && !(freshContext && freshContext.reportDate === date))
+        refreshCachedCashierReport('date', date, isCurrentRequest, loaded);
+    }
+    else readCashierReport('date', date, forceRefresh).then(loaded).catch(function(error) {
         if (!isCurrentRequest()) return;
         setCashierReportLoading(false);
 
@@ -1211,8 +1265,7 @@ if (Math.abs(pettyReturnedTotal - getDisplayedPettyReceived()) > 0.001) {      d
           error && error.message ? error.message : String(error),
           true
         );
-      })
-      .getCashReportByDate(cashier, date);
+      });
   }
 
   function regenerateClosedReport() {

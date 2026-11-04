@@ -531,6 +531,7 @@ function rememberCashierInventory(items) {
   masterInventory = Array.isArray(items) ? items : [];
   read.save(masterInventory);
   populateManualDropdown(masterInventory);
+  finishWorkspacePageLoad('posPage');
 }
 function refreshInventory(callback) {
   const read = beginPageRead('cashierInventory', cashierInventoryCacheKey(), true);
@@ -541,6 +542,7 @@ function refreshInventory(callback) {
         populateManualDropdown(masterInventory);
       }
       if (callback) callback();
+      finishWorkspacePageLoad('posPage');
     } else if (callback) {
       const pending = pageReadCache.get('cashierInventory');
       if (pending) (pending.callbacks || (pending.callbacks = [])).push(callback);
@@ -556,11 +558,13 @@ function refreshInventory(callback) {
     populateManualDropdown(masterInventory);
     entry.callbacks.forEach(done => done());
     entry.callbacks = [];
+    finishWorkspacePageLoad('posPage');
   }).withFailureHandler(function(error) {
     if (!read.current()) return;
     read.fail();
     pageReadCache.delete('cashierInventory');
     entry.callbacks = [];
+    finishWorkspacePageLoad('posPage');
     showNotificationToast(error.message || 'Failed to load inventory.', true);
   }).getSellableInventory();
 }

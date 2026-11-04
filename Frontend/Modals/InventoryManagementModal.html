@@ -283,6 +283,7 @@ function preloadInventoryItemDetails() {
  }
  function next(){
   if(!current())return;
+  if(workspaceForegroundLoading()){inventoryItemDetailPreloadTimer=setTimeout(next,100);return;}
   if(job.offset>=job.total){finish();return;}
   const batch=job.codes.slice(job.offset,job.offset+200);
   secureScriptRun.withSuccessHandler(result=>{
@@ -306,7 +307,7 @@ function preloadInventoryItemDetails() {
     if(document.getElementById('inventoryPage').style.display!=='none'&&inventoryListQuery().search)loadInventoryPage(false,true);
     if(document.getElementById('inventorySummaryModal').style.display==='flex')renderInventorySummary();
     refreshOpenYourFindsReprint();
-    loadDeliveriesPage(false,true);
+    preloadHistoryAndReports();
  }
  inventoryItemDetailPreloadTimer=setTimeout(next,150);
 }
