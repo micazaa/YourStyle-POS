@@ -201,6 +201,13 @@ function actionSnapshot_(operation, args, result) {
       status:report.values[CASH_REPORT_IDX.STATUS], cash:report.values[CASH_REPORT_IDX.CASH_COUNTED],
       pettyReturned:report.values[CASH_REPORT_IDX.PETTY_RETURNED]} : null;
   }
+  if (operation === 'generateManagerDailyReportPDF') {
+    const reviewer = args[4] && args[4].reviewedBy || args[0];
+    const report = findManagerDailyReport_(reviewer, args[1]);
+    return report ? {reportId: String(report.values[CASH_REPORT_IDX.REPORT_ID]), manager: String(reviewer), date: args[1],
+      cash: report.values[CASH_REPORT_IDX.CASH_COUNTED], remark: report.values[CASH_REPORT_IDX.CASH_REMARK],
+      updatedAt: String(report.values[CASH_REPORT_IDX.UPDATED_AT]), preparedBy: result && result.preparedBy || ''} : {exists: false, manager: String(reviewer), date: args[1]};
+  }
   if (operation === 'saveDashboardTask') {
     const sheet = dashboardTaskSheet_(false);
     return sheet ? sheet.getDataRange().getValues().slice(1).filter(row=>String(row[0])===String(first.task && first.task.id)).map(dashboardTaskFromRow_) : [];
@@ -261,7 +268,8 @@ function actionDescription_(operation, args, before) {
     if (data.results) lines.push('Resulting items: ' + JSON.stringify(accessSafeValue_(data.results)));
     if (operation === 'voidAndRefundTransactionBackend') lines.push('Receipt: ' + args[0] + (args[3] ? ' · Item: ' + args[3] : ' · Entire transaction') + ' · Quantity: ' + (args[5] || 'all') + ' · Reason: ' + (args[2] || ''));
     if (operation === 'completeCustomerExchange') lines.push('Receipt: ' + data.originalReceiptId + ' · Additional payment: ₱' + Number(data.expectedAmountDue || 0).toFixed(2));
-    if (operation === 'generateManagerDailyReportPDF') lines.push('Report date: ' + args[1]);
+    if (operation === 'generateManagerDailyReportPDF') lines.push('Report date: ' + args[1] +
+      (args[4] && args[4].reviewedBy ? ' · Reviewer: ' + args[4].reviewedBy : ''));
   }
   return lines.join('\n').slice(0, 12000);
 }
@@ -290,7 +298,9 @@ function accessRequest_(request) {
   const actor = dashboardEmployee_(request.sessionToken);
   const args = Array.isArray(request.args) ? request.args : [];
   const permission = operationPermission_(request.operation, args, definition);
-  const mode = permissionMode_(actor, permission);
+  let mode = permissionMode_(actor, permission);
+  if (request.operation === 'generateManagerDailyReportPDF' && employeeIsOic_(actor) &&
+      !findManagerDailyReport_(args[4] && args[4].reviewedBy, args[1])) mode = 'allow';
   if (mode === 'deny') throw new Error('Your role cannot perform this action.');
   return {actor:actor, args:args, operation:request.operation, definition:definition,
     permission:permission, mode:mode, sessionToken:request.sessionToken};

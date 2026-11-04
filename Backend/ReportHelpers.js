@@ -1928,7 +1928,7 @@ function buildClassicDailyReportHTML_(data, isManager) {
     ? "MANAGER'S DAILY SALES REPORT"
     : "CASHIER'S DAILY SALES REPORT";
 
-  const preparedBy = isManager ? data.managerName : data.cashierName;
+  const preparedBy = isManager ? data.preparedBy || data.managerName : data.cashierName;
 
   return `
     <!DOCTYPE html>
@@ -2122,6 +2122,7 @@ function buildClassicDailyReportHTML_(data, isManager) {
           <div class="title">${title}</div>
           <div class="meta">
             Manager: ${esc(data.managerName)}
+            ${isManager && data.oicName ? `&nbsp;&nbsp; OIC: ${esc(data.oicName)}` : ''}
             ${isManager
               ? ''
               : `&nbsp;&nbsp; Cashier: ${esc(data.cashierName)}`}
@@ -2166,7 +2167,7 @@ function buildClassicDailyReportHTML_(data, isManager) {
         <div class="signature-cell">
           <div class="signature-line">
             ${isManager
-              ? 'Reviewed by:'
+              ? 'Reviewed by: ' + esc(data.reviewedBy || '')
               : 'Checked by: ' + esc(data.managerName)}
           </div>
         </div>

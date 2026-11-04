@@ -32,13 +32,22 @@
       </div>
 
 
-      <button
-        type="button"
-        class="btn btn-pink"
-        onclick="openAcceptDeliveryTypeModal();"
-      >
-        + Accept Delivery
-      </button>
+      <div class="d-flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="btn btn-outline-pink"
+          onclick="openYourFindsReprintModal()"
+        >
+          Reprint Barcode
+        </button>
+        <button
+          type="button"
+          class="btn btn-pink"
+          onclick="openAcceptDeliveryTypeModal();"
+        >
+          + Accept Delivery
+        </button>
+      </div>
 
     </div>
 
@@ -183,6 +192,8 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
   if (forceRefresh) { if (!keepVisible) pageReadCache.delete('standardDeliveryDetails'); pageReadCache.delete('deliveries'); pageReadCache.delete('deliverySummary'); }
   const refresh = beginPageRead('deliveries', '', true);
   if (refresh.cached !== undefined) {
+    finishWorkspacePageLoad('deliveriesPage');
+    preloadHistoryAndReports();
     if (deliveriesPageLoaded && deliveriesPageData === refresh.cached) return;
     deliveriesPageData = refresh.cached;
     filterDeliveriesPage();
@@ -221,6 +232,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
 
         deliveriesPageLoading =
           false;
+        finishWorkspacePageLoad('deliveriesPage');
 
 
         if (
@@ -280,6 +292,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
 
 
         filterDeliveriesPage();
+        preloadHistoryAndReports();
 
       }
     )
@@ -292,6 +305,7 @@ function loadDeliveriesPage(forceRefresh, keepVisible) {
 
         deliveriesPageLoading =
           false;
+        finishWorkspacePageLoad('deliveriesPage');
 
 
         const message =

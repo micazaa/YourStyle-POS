@@ -26,6 +26,9 @@
               id="managerDailyName"
               class="form-control form-control-sm fw-bold"
               readonly>
+            <select id="managerDailyReviewer" class="form-select form-select-sm" aria-label="Manager or Owner reviewing this report" style="display:none;">
+              <option value="">Select Manager or Owner</option>
+            </select>
           </div>
 
           <div class="col-md-6">
@@ -153,31 +156,47 @@ var managerReportExpectedReady = false;
 var managerReportLoadDate = '';
 var managerReportLoadOwner = '';
 var managerExpectedCashWarmCache = null;
+var managerExpectedCashPending = null;
 
-function getWarmManagerExpectedCash(reportDate) {
+function getWarmManagerExpectedCash(reportDate, allowStale) {
   const cached = managerExpectedCashWarmCache;
-  return cached && cached.date === reportDate && Date.now() - cached.time < 60000
+  return cached && currentEmployee && cached.owner === currentEmployee.dashboardToken && cached.date === reportDate &&
+    (allowStale || Date.now() - cached.time < 60000)
     ? cached.data
     : null;
 }
 
 function warmManagerExpectedCash(reportDate) {
-  if (!reportDate || getWarmManagerExpectedCash(reportDate)) return;
-  secureScriptRun
-    .withSuccessHandler(function(data) {
-      if (data && data.success !== false) {
-        managerExpectedCashWarmCache = { date: reportDate, time: Date.now(), data: data };
-      }
-    })
-    .withFailureHandler(function() {})
-    .getExpectedCashForManager(reportDate);
+  if (!currentEmployee || !hasManagerViewAccess() || !reportDate) return;
+  readManagerExpectedCash(reportDate).catch(function() {});
+}
+
+function readManagerExpectedCash(reportDate) {
+  const cached = getWarmManagerExpectedCash(reportDate);
+  if (cached) return Promise.resolve(cached);
+  const owner = currentEmployee.dashboardToken;
+  const pending = managerExpectedCashPending;
+  if (pending && pending.owner === owner && pending.date === reportDate) return pending.promise;
+  const read = {owner: owner, date: reportDate};
+  managerExpectedCashPending = read;
+  read.promise = new Promise((resolve, reject) => secureScriptRun.withSuccessHandler(data => {
+    if (data === null || data === undefined || data.success === false) return reject(new Error(data && data.message || 'Unable to calculate expected cash.'));
+    if (managerExpectedCashPending === read && currentEmployee && currentEmployee.dashboardToken === owner)
+      managerExpectedCashWarmCache = {owner: owner, date: reportDate, time: Date.now(), data: data};
+    resolve(data);
+  }).withFailureHandler(reject).getExpectedCashForManager(reportDate))
+    .finally(() => {if (managerExpectedCashPending === read) managerExpectedCashPending = null;});
+  return read.promise;
 }
 
 function clearManagerExpectedCashCache() {
   managerExpectedCashWarmCache = null;
+  managerExpectedCashPending = null;
 }
 
 function applyManagerExpectedCash(expectedCashData) {
+  if (employeeIsOic() && expectedCashData && Array.isArray(expectedCashData.reviewers))
+    populateManagerReportReviewers(expectedCashData.reviewers);
   const expectedCash = expectedCashData && typeof expectedCashData === "object"
     ? expectedCashData.expectedCashDrawer || 0
     : parseFloat(expectedCashData) || 0;
@@ -187,6 +206,15 @@ function applyManagerExpectedCash(expectedCashData) {
   expectedEl.dataset.expected = currentManagerExpectedCash.toFixed(2);
   updateManagerCashDrawerTotal();
   managerReportExpectedReady = true;
+}
+
+function populateManagerReportReviewers(reviewers) {
+  const select = document.getElementById('managerDailyReviewer'), previous = select.value;
+  const names = Array.from(new Set((reviewers || []).filter(canAuthorizeManagerActions)
+    .map(employee => String(employee.fullName || '').trim()).filter(Boolean)));
+  select.replaceChildren(new Option('Select Manager or Owner', ''));
+  names.forEach(name => select.add(new Option(name, name)));
+  if (names.includes(previous)) select.value = previous;
 }
 
 function setManagerReportLoading(loading, message) {
@@ -231,6 +259,11 @@ function openManagerReportModal() {
   // Always use the authenticated employee
   document.getElementById("managerDailyName").value =
     currentEmployee.fullName;
+  const oic = employeeIsOic();
+  document.getElementById('managerDailyName').style.display = oic ? 'none' : '';
+  document.getElementById('managerDailyReviewer').style.display = oic ? '' : 'none';
+  document.getElementById('managerDailyReviewer').value = '';
+  if (oic) populateManagerReportReviewers(loginEmployees);
 
   // Default business date to today
   const today = getCashReportToday();
@@ -321,10 +354,15 @@ function updateManagerExpectedCash() {
     return;
   }
 
-  const cachedExpected = getWarmManagerExpectedCash(reportDate);
-  if (cachedExpected) {
+  const cachedExpected = getWarmManagerExpectedCash(reportDate, true);
+  if (cachedExpected !== null) {
     applyManagerExpectedCash(cachedExpected);
     setManagerReportLoading(false);
+    if (getWarmManagerExpectedCash(reportDate) === null) {
+      readManagerExpectedCash(reportDate).then(data => {
+        if (current() && !managerReportGenerating) applyManagerExpectedCash(data);
+      }).catch(() => {console.warn('Expected-cash refresh paused; showing the cached amount.');});
+    }
     return;
   }
 
@@ -342,9 +380,7 @@ function updateManagerExpectedCash() {
     document.getElementById('managerReportError').textContent = err.message || 'Unable to calculate expected cash.';
     document.getElementById('managerReportRetry').hidden = false;
   }
-  secureScriptRun
-
-    .withSuccessHandler(function(expectedCashData) {
+  readManagerExpectedCash(reportDate).then(function(expectedCashData) {
       if (!current()) return;
       if (expectedCashData === null || expectedCashData === undefined || expectedCashData.success === false)
         return failed(new Error(expectedCashData && expectedCashData.message || 'Unable to calculate expected cash.'));
@@ -354,15 +390,10 @@ function updateManagerExpectedCash() {
         expectedCashData
       );
 
-      managerExpectedCashWarmCache = { date: reportDate, time: Date.now(), data: expectedCashData };
       applyManagerExpectedCash(expectedCashData);
       setManagerReportLoading(false);
 
-    })
-
-    .withFailureHandler(failed)
-
-    .getExpectedCashForManager(reportDate);
+    }).catch(failed);
 }
 
 
@@ -451,13 +482,6 @@ function generateManagerDailyReport() {
     return;
   }
 
-  if (employeeIsOic()) {
-    const owner = currentEmployee;
-    requestManagerPin('Manager PIN to generate the Manager Daily Report:', function(credential) {
-      if (credential && owner === currentEmployee) proceedWithManagerDailyReport(managerName, reportDate, credential);
-    });
-    return;
-  }
   proceedWithManagerDailyReport(managerName, reportDate);
 }
 
@@ -472,7 +496,13 @@ function proceedWithManagerDailyReport(
 ) {
   if (managerReportLoadingActive || managerReportGenerating || !managerReportExpectedReady) return;
 
+  const reviewedBy = employeeIsOic() ? document.getElementById('managerDailyReviewer').value : '';
+  if (employeeIsOic() && !reviewedBy) {
+    showNotificationToast('Select a Manager or Owner to review this report.', true);
+    return;
+  }
   const authContext = {sessionToken:currentEmployee && currentEmployee.dashboardToken,
+    reviewedBy: reviewedBy,
     ...(typeof credential === 'object' ? credential : credential ? {managerPin:credential} : {})};
   const cashBreakdown = {};
 

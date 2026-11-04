@@ -1080,12 +1080,16 @@ function buildClosedCashierPdf_(report) {
 function generateManagerDailyReportPDF(managerName, reportDate, cashOnHandObj, cashDrawerRemark, authContext) {
   assertAppRequest_();
   try {
-    const account = getEmployees().find(employee => employee.fullName === String(managerName || '').trim());
+    const employees = getEmployees();
+    const account = employees.find(employee => employee.fullName === String(managerName || '').trim());
     if (!account || !employeeHasManagerView_(account)) throw new Error('Manager or OIC access is required.');
-    if (employeeIsOic_(account)) {
+    const isOic = employeeIsOic_(account);
+    const reviewer = isOic ? employees.find(employee => employee.fullName === String(authContext && authContext.reviewedBy || '').trim() &&
+      employeeCanAuthorizeManager_(employee)) : account;
+    if (!reviewer) throw new Error('Select an active Manager or Owner to review the report.');
+    if (isOic) {
       const actor = dashboardEmployee_(authContext && authContext.sessionToken);
       if (actor.name !== account.fullName) throw new Error('Employee session changed. Reopen the report.');
-      requireManager_(authContext && authContext.managerPin, authContext && authContext.managerToken);
     }
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -1165,17 +1169,21 @@ function generateManagerDailyReportPDF(managerName, reportDate, cashOnHandObj, c
     /* ================= CASH REPORT LOG ================= */
 
     const managerLog = upsertManagerDailyCashReport(
-      managerName,
+      reviewer.fullName,
       reportDate,
       expectedCashDrawer,
       cashBreakdown,
-      cashDrawerRemark
+      cashDrawerRemark,
+      authContext
     );
 
     /* ================= BUILD REPORT ================= */
 
     const html = buildManagerReportHTML({
-      managerName,
+      managerName: reviewer.fullName,
+      oicName: isOic ? account.fullName : '',
+      preparedBy: account.fullName,
+      reviewedBy: isOic ? reviewer.fullName : '',
       todayDisplay,
 
       metrics,
@@ -1203,6 +1211,8 @@ function generateManagerDailyReportPDF(managerName, reportDate, cashOnHandObj, c
     if (pdf && pdf.success) {
       pdf.reportId = managerLog.reportId;
       pdf.updatedExisting = managerLog.updatedExisting;
+      pdf.preparedBy = account.fullName;
+      pdf.reviewedBy = isOic ? reviewer.fullName : '';
     }
 
     return pdf;
@@ -1271,12 +1281,31 @@ function buildCashReportObject(headers, row, rowNumber) {
   };
 }
 
+function getManagerReportReviewers_() {
+  return getEmployees().filter(employeeCanAuthorizeManager_).map(employee => ({fullName: employee.fullName, role: employee.role}));
+}
+
+function findManagerDailyReport_(managerName, reportDate, sheet) {
+  sheet = sheet || SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Cash Report Log');
+  if (!sheet || sheet.getLastRow() < 2) return null;
+  const manager = String(managerName || '').trim(), date = dateString_(reportDate);
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, CASH_REPORT_COLUMN_COUNT).getValues();
+  for (let index = rows.length - 1; index >= 0; index--) {
+    const row = rows[index];
+    if (String(row[CASH_REPORT_IDX.REPORT_TYPE] || '').trim().toUpperCase() === 'MANAGER DAILY' &&
+        dateString_(row[CASH_REPORT_IDX.REPORT_DATE]) === date && String(row[CASH_REPORT_IDX.MANAGER] || '').trim() === manager)
+      return {row: index + 2, values: row};
+  }
+  return null;
+}
+
 function upsertManagerDailyCashReport(
   managerName,
   reportDate,
   expectedCash,
   cashBreakdown,
-  cashRemark
+  cashRemark,
+  authContext
 ) {
   assertAppRequest_();
   const lock = LockService.getScriptLock();
@@ -1293,29 +1322,12 @@ function upsertManagerDailyCashReport(
     const cashCounted = sumBreakdown(cashBreakdown || {});
     const variance = roundToTwo(cashCounted - (Number(expectedCash) || 0));
 
-    let targetRow = 0;
-    let existing = null;
-
-    if (sheet.getLastRow() >= 2) {
-      const rows = sheet
-        .getRange(2, 1, sheet.getLastRow() - 1, CASH_REPORT_COLUMN_COUNT)
-        .getValues();
-
-      // Same manager + same date + MANAGER DAILY = update/override same row.
-      for (let i = rows.length - 1; i >= 0; i--) {
-        const r = rows[i];
-        if (
-          String(r[CASH_REPORT_IDX.REPORT_TYPE] || '')
-            .trim()
-            .toUpperCase() === 'MANAGER DAILY' &&
-          dateString_(r[CASH_REPORT_IDX.REPORT_DATE]) === dateStr &&
-          String(r[CASH_REPORT_IDX.MANAGER] || '').trim() === manager
-        ) {
-          targetRow = i + 2;
-          existing = r.slice();
-          break;
-        }
-      }
+    const found = findManagerDailyReport_(manager, dateStr, sheet);
+    let targetRow = found ? found.row : 0;
+    const existing = found ? found.values.slice() : null;
+    if (existing && employeeIsOic_(ACCESS_REQUEST_CONTEXT_.actor)) {
+      const approval = requireManager_(authContext && authContext.managerPin, authContext && authContext.managerToken);
+      if (approval.managerName !== manager) throw new Error('Authorization must match the selected reviewer.');
     }
 
     const row = existing || new Array(CASH_REPORT_COLUMN_COUNT).fill('');

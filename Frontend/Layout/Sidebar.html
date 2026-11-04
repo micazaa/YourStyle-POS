@@ -51,6 +51,7 @@ function navigateSidebar(page){showPage(page);toggleSidebar(false);}
 function showPage(pageId){
  const pages=['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'];if(!pages.includes(pageId))return;
  if(pageId==='posPage'&&!cashierPageIsAvailable()){showNotificationToast('Start a cashier shift to open the POS.',true);return;}
+ prioritizeWorkspacePage(pageId);
  pages.forEach(id=>{const page=document.getElementById(id);if(page)page.style.display=id===pageId?'block':'none';});
  localStorage.setItem('ys_pos_active_page',pageId);
  const inventoryWorkspace=pageId==='inventoryPage'||pageId==='deliveriesPage'||pageId==='supplierReturnsPage';
@@ -58,7 +59,7 @@ function showPage(pageId){
  document.querySelectorAll('[data-inventory-tab]').forEach(function(button){const active=button.dataset.inventoryTab===pageId;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
  activateMenu(document.querySelector('.sidebar-item[data-page="'+(inventoryWorkspace?'inventoryPage':pageId)+'"]'));
  document.getElementById('inventoryWorkspaceNav').hidden=!inventoryWorkspace;
- if(pageId==='posPage'){updateCashierNavigationAvailability();if(currentSessionIsCashier)refreshInventory();}
+ if(pageId==='posPage'){updateCashierNavigationAvailability();if(currentSessionIsCashier)refreshInventory();else finishWorkspacePageLoad(pageId);}
  if(pageId==='dashboardPage')loadDashboardPage();
  if(pageId==='inventoryPage')loadInventoryPage();
  if(pageId==='deliveriesPage')loadDeliveriesPage();
@@ -97,6 +98,8 @@ function openInventoryWorkspace(){
       if(typeof resetAccessManagement==='function')resetAccessManagement();
       document.getElementById('accessManagementNav').hidden=true;
       pageReadCache.clear();
+      clearTransactionHistoryCache();
+      clearManagerExpectedCashCache();
       ++loginAttempt;
       deliveryCatalogCache = null; deliveryCatalogPending = null;
       yourFindsCustomSizeCache = null;
