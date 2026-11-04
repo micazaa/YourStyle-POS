@@ -50,18 +50,9 @@ function getDeliveryDetails(deliveryId) {
   const groups=[],direct={id:'direct',label:'Direct',items:[]};
   let estimated=0,bundleCount=0;
   const counts={};
-  rows.forEach((r,rowIndex)=>{
-    const type=String(r[DELIVERY_IDX.TYPE]||'').trim();
+  rows.forEach(r=>{
     if(String(r[DELIVERY_IDX.RECEIVE_MODE]).toUpperCase()==='BULK'){
-      const quantity=Number(r[DELIVERY_IDX.BUNDLE_QTY])||0;bundleCount+=quantity;estimated+=Number(r[DELIVERY_IDX.ESTIMATED_QTY])||0;
-      for(let n=1;n<=quantity;n++){
-        const id=type+':'+n;
-        const existing=groups.find(g=>g.id===id);
-        const estimate=(Number(r[DELIVERY_IDX.ESTIMATED_QTY])||0)/quantity;
-        if(existing){existing.code='Multiple holders · '+type;existing.estimated+=estimate;existing.sheetRows.push(deliveryRows[rowIndex]);continue;}
-        groups.push({id:id,label:bundleDisplayName_(deliveryId,n),type:type,code:String(r[DELIVERY_IDX.DESCRIPTION]||''),bundleNo:n,
-          estimated:estimate,sheetRows:[deliveryRows[rowIndex]],closed:String(r[DELIVERY_IDX.STATUS]).toUpperCase()==='COMPLETED',soldHalves:0,fullSold:false,items:[]});
-      }
+      bundleCount+=Number(r[DELIVERY_IDX.BUNDLE_QTY])||0;estimated+=Number(r[DELIVERY_IDX.ESTIMATED_QTY])||0;
     }
   });
   const movement=ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
@@ -75,6 +66,17 @@ function getDeliveryDetails(deliveryId) {
         .concat(soldRows)
     : [];
   const moves=movement?readDeliveryDetailRows_(movement,movementRows,MOVEMENT_LOG_COLUMN_COUNT,false):[];
+  const splitRows=moves.filter(row=>parseBundleSplitNote_(row[MOVE_IDX.NOTES]));
+  rows.forEach((r,rowIndex)=>{
+    if(String(r[DELIVERY_IDX.RECEIVE_MODE]).toUpperCase()!=='BULK')return;
+    const type=String(r[DELIVERY_IDX.TYPE]||'').trim(),sheetRow=deliveryRows[rowIndex];
+    const quantity=Number(r[DELIVERY_IDX.BUNDLE_QTY])||0;
+    physicalBundleDefinitions_(deliveryId,sheetRow,quantity,splitRows).forEach(bundle=>{
+      groups.push({id:sheetRow+':'+bundle.bundleNo,label:bundle.label,type:type,code:bundle.description||String(r[DELIVERY_IDX.DESCRIPTION]||''),
+        bundleNo:bundle.bundleNo,split:!!bundle.split,estimated:bundle.estimatedQuantity||(Number(r[DELIVERY_IDX.ESTIMATED_QTY])||0)/quantity,
+        sheetRows:[sheetRow],closed:String(r[DELIVERY_IDX.STATUS]).toUpperCase()==='COMPLETED',soldHalves:0,fullSold:false,items:[]});
+    });
+  });
   const codes=new Set(moves.map(r=>String(r[MOVE_IDX.CODE]).trim()).filter(Boolean));
   const sheet=ss.getSheetByName(SHEETS.INVENTORY);
   if(sheet&&sheet.getLastRow()>1&&codes.size){
@@ -94,7 +96,7 @@ function getDeliveryDetails(deliveryId) {
     const code=String(r[MOVE_IDX.CODE]).trim(),product=inventory.get(code);
     // Negative holder movements are excluded; product inventory supplies the image and current status.
     if(!product)return;
-    const group=source==='DISTRIBUTION'?groups.find(g=>g.type===String(r[MOVE_IDX.TYPE])&&g.bundleNo===Number(r[MOVE_IDX.BUNDLE_NO])):direct;
+    const group=source==='DISTRIBUTION'?groups.find(g=>g.type===String(r[MOVE_IDX.TYPE])&&g.bundleNo===Number(r[MOVE_IDX.BUNDLE_NO])&&movementMatchesBundleHolder_(r,g.sheetRows[0])):direct;
     if(!group)return;
     const key=group.id+'|'+code;
     if(!items.has(key))items.set(key,{...product,code:code,name:product.name||String(r[MOVE_IDX.ITEM])||product.size||code,quantity:0,group:group.id});
@@ -119,7 +121,7 @@ function getDeliveryDetails(deliveryId) {
   });
   groups.forEach(group=>{
     const actual=group.items.reduce((sum,item)=>sum+item.quantity,0);
-    group.status=actual>0?'Distributed':group.fullSold||group.soldHalves>=2?'Sold':group.soldHalves?'Partially sold':group.closed?'Closed':'Unopened';
+    group.status=group.split?'Split':actual>0?'Distributed':group.fullSold||group.soldHalves>=2?'Sold':group.soldHalves?'Partially sold':group.closed?'Closed':'Unopened';
   });
   if(direct.items.length||!groups.length)groups.unshift(direct);
   const actual=groups.reduce((sum,g)=>sum+g.items.reduce((total,i)=>total+(String(i.status||'').trim().toUpperCase()===INVENTORY_STATUS.CONVERTED?0:i.quantity),0),0);

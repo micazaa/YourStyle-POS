@@ -97,6 +97,7 @@ function accessRegistry_() {
   "getYourStyleDeliveryProducts": {permission:"inventory.view", handler:getYourStyleDeliveryProducts},
   "acceptYourStyleDelivery": {permission:"deliveries.create", handler:acceptYourStyleDelivery},
   "getBulkDistributionData": {permission:"inventory.view", handler:getBulkDistributionData},
+  "splitPhysicalBundle": {permission:"deliveries.create", handler:splitPhysicalBundle},
   "distributeBulkBundle": {permission:"deliveries.create", handler:distributeBulkBundle},
   "completeBulkHolder": {permission:"deliveries.create", handler:completeBulkHolder},
   "getCompletableBulkHoldersForDelivery": {permission:"inventory.view", handler:getCompletableBulkHoldersForDelivery},
@@ -212,7 +213,7 @@ function actionSnapshot_(operation, args, result) {
     const sheet = dashboardTaskSheet_(false);
     return sheet ? sheet.getDataRange().getValues().slice(1).filter(row=>String(row[0])===String(first.task && first.task.id)).map(dashboardTaskFromRow_) : [];
   }
-  if (['acceptYourFindsDelivery','acceptYourStyleDelivery','distributeBulkBundle','completeBulkHolder'].includes(operation)) {
+  if (['acceptYourFindsDelivery','acceptYourStyleDelivery','distributeBulkBundle','splitPhysicalBundle','completeBulkHolder'].includes(operation)) {
     if (result) return accessSafeValue_(result);
     if (operation === 'acceptYourFindsDelivery') return {state:'Not accepted',date:args[0],quantities:accessSafeValue_(args[4])};
     if (operation === 'acceptYourStyleDelivery') return {state:'Not accepted',items:accessSafeValue_(first.lines)};
@@ -243,7 +244,7 @@ function actionDescription_(operation, args, before) {
     saveYourFindsItemDetails:'Save YourFinds Details',voidAndRefundTransactionBackend:'Void Transaction',
     completeCustomerExchange:'Customer Exchange',acceptYourStyleDelivery:'Accept YourStyle Delivery',
     acceptYourFindsDelivery:'Accept YourFinds Delivery',distributeBulkBundle:'Save Bundle Distribution',
-    completeBulkHolder:'Finish Bundle Distribution',saveSupplierReturn:'Return to Supplier',
+    splitPhysicalBundle:'Split Bundle',completeBulkHolder:'Finish Bundle Distribution',saveSupplierReturn:'Return to Supplier',
     saveCashierShiftExit:'Save Cashier Shift',generateCashierShiftReportPDF:'Generate Cashier Report',
     regenerateCashierReport:'Regenerate Cashier Report',correctClosedCashReport:'Correct Cashier Report',
     generateManagerDailyReportPDF:'Generate Manager Report',saveDashboardTask:'Update Dashboard Task',saveManagedAccount:'Update Account'};
@@ -455,13 +456,13 @@ function callPosApi(request) {
     bindAccessArguments_(access);
     const mutation = ['adjustInventoryStock','changeInventoryItem','convertYourFindsDeliveryItem','saveProductMaster',
       'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','voidAndRefundTransactionBackend',
-      'completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle','completeBulkHolder','saveSupplierReturn',
+      'completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle','splitPhysicalBundle','completeBulkHolder','saveSupplierReturn',
       'acceptYourFindsDelivery','saveCashierShiftExit','generateCashierShiftReportPDF','regenerateCashierReport',
       'correctClosedCashReport','generateManagerDailyReportPDF','saveDashboardTask','saveManagedAccount'].includes(access.operation);
     if (mutation) audit = beginAccessAudit_(access, access.validatedBefore===undefined?actionSnapshot_(access.operation, access.args):access.validatedBefore);
     inventoryChanged=['adjustInventoryStock','changeInventoryItem','convertYourFindsDeliveryItem','saveProductMaster',
       'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','executeCheckoutBackend',
-      'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle',
+      'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle','splitPhysicalBundle',
       'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(access.operation);
     if(inventoryChanged){inventoryMutation=beginInventoryMutation_();access.inventoryCodes=new Set();}
     const result = access.definition.handler.apply(null, access.args);

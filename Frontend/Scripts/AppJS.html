@@ -259,7 +259,7 @@
           let parsed=value;if(typeof value==='string'){try{parsed=JSON.parse(value);}catch(ignored){parsed=null;}}
           if(parsed&&parsed.success&&['adjustInventoryStock','changeInventoryItem','convertYourFindsDeliveryItem','saveProductMaster',
             'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','executeCheckoutBackend',
-            'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle',
+            'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle','splitPhysicalBundle',
             'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(operation)){
             if(typeof handleInventoryMutationResult==='function')handleInventoryMutationResult(parsed);
             else {pageReadCache.delete('inventory');if(typeof invalidateLocalInventoryReads==='function')invalidateLocalInventoryReads();}

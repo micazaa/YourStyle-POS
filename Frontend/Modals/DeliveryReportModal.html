@@ -183,7 +183,7 @@ function renderStandardDeliveryItems(group,container){
  const filtered=group.items.filter(item=>!deliveryViewData.yourFinds||
   ((!deliveryViewFilters.size||deliveryDetailSizeKey_(item.size)===deliveryViewFilters.size)&&(!deliveryViewFilters.status||getDeliveryItemDisplayStatus(item)===deliveryViewFilters.status)));
  if(deliveryViewData.yourFinds)filtered.sort((a,b)=>deliveryDetailSizeOrder_(a.size,b.size)||String(a.name).localeCompare(String(b.name),undefined,{numeric:true,sensitivity:'base'}));
- if(!filtered.length){const empty=document.createElement('div');empty.className='text-muted text-center border rounded p-4';empty.textContent=deliveryViewFilters.size||deliveryViewFilters.status?'No items match these filters.':group.id!=='direct'&&deliveryBundleStatus_(group)==='Sold'?'This bundle was sold without distribution.':'No items distributed yet.';container.append(empty);return;}
+ if(!filtered.length){const empty=document.createElement('div');empty.className='text-muted text-center border rounded p-4';empty.textContent=deliveryViewFilters.size||deliveryViewFilters.status?'No items match these filters.':group.id!=='direct'&&deliveryBundleStatus_(group)==='Split'?'This bundle was split. Select one of its smaller bundles.':group.id!=='direct'&&deliveryBundleStatus_(group)==='Sold'?'This bundle was sold without distribution.':'No items distributed yet.';container.append(empty);return;}
  const list=document.createElement('div');list.className='delivery-detail-item-list';container.append(list);
  filtered.forEach(item=>{
   const row=document.createElement('div');row.className='d-flex align-items-center gap-3 border rounded p-2 mb-2';
