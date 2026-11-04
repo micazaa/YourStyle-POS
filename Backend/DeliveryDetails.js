@@ -110,18 +110,19 @@ function getDeliveryDetails(deliveryId) {
     }
   });
   moves.forEach(row=>{
-    if(String(row[MOVE_IDX.SOURCE]).toUpperCase()!=='SALE'||Number(row[MOVE_IDX.QTY_CHANGE])>=0)return;
+    if(!['SALE','SUPPLIER_RETURN'].includes(String(row[MOVE_IDX.SOURCE]).toUpperCase())||Number(row[MOVE_IDX.QTY_CHANGE])>=0)return;
     const allocation=parsePhysicalBundleAllocationNote_(row[MOVE_IDX.NOTES]);
     if(!allocation||allocation.deliveryId!==deliveryId)return;
     const group=groups.find(g=>g.bundleNo===Number(row[MOVE_IDX.BUNDLE_NO])&&
       (allocation.sheetRow?g.sheetRows.includes(allocation.sheetRow):g.type===String(row[MOVE_IDX.TYPE])));
     if(!group)return;
     if(allocation.kind==='FULL')group.fullSold=true;
+    if(String(row[MOVE_IDX.SOURCE]).toUpperCase()==='SUPPLIER_RETURN')group.returned=true;
     if(allocation.kind==='HALF')group.soldHalves++;
   });
   groups.forEach(group=>{
     const actual=group.items.reduce((sum,item)=>sum+item.quantity,0);
-    group.status=group.split?'Split':actual>0?'Distributed':group.fullSold||group.soldHalves>=2?'Sold':group.soldHalves?'Partially sold':group.closed?'Closed':'Unopened';
+    group.status=group.split?'Split':group.returned?'Returned':actual>0?'Distributed':group.fullSold||group.soldHalves>=2?'Sold':group.soldHalves?'Partially sold':group.closed?'Closed':'Unopened';
   });
   if(direct.items.length||!groups.length)groups.unshift(direct);
   const actual=groups.reduce((sum,g)=>sum+g.items.reduce((total,i)=>total+(String(i.status||'').trim().toUpperCase()===INVENTORY_STATUS.CONVERTED?0:i.quantity),0),0);

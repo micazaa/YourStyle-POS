@@ -124,6 +124,40 @@ function cashierShiftStatus_(target) {
     : event && event[4] === 'RECEIVE' ? 'OPEN' : String(target.values[CASH_REPORT_IDX.STATUS]).trim().toUpperCase();
 }
 
+// Transaction authorization needs the current status, not every report and saved cash-count draft.
+function cashierShiftAccessStatus_(employee, reportId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet(), sheet = ss.getSheetByName(SHEETS.CASH_REPORT_LOG);
+  let values;
+  if (sheet && sheet.getLastRow() > 1) {
+    const matches = sheet.getRange(2, CASH_REPORT_COL.REPORT_ID, sheet.getLastRow() - 1, 1)
+      .createTextFinder(String(reportId)).matchCase(true).matchEntireCell(true).findAll()
+      .map(cell => cell.getRow()).sort((a,b) => b-a);
+    for (const row of matches) {
+      const candidate = sheet.getRange(row, 1, 1, CASH_REPORT_COLUMN_COUNT).getValues()[0];
+      if (String(candidate[CASH_REPORT_IDX.EMPLOYEE]).trim() === employee &&
+          String(candidate[CASH_REPORT_IDX.REPORT_TYPE]).trim().toUpperCase() === 'CASHIER SHIFT') {
+        values = candidate;break;
+      }
+    }
+  }
+  if (!values) throw new Error('No active cashier shift found. Sign in using Start cashier shift.');
+  const events = ss.getSheetByName(PETTY_HANDOVER_SHEET);
+  let event = null;
+  if (events && events.getLastRow() > 1) {
+    const headers = events.getRange(1, 1, 1, PETTY_HANDOVER_HEADERS.length).getValues()[0];
+    if (headers.some((value,index) => value !== PETTY_HANDOVER_HEADERS[index])) {
+      throw new Error('Petty Cash Handovers headers do not match the expected layout.');
+    }
+    const statuses = events.getRange(2, 3, events.getLastRow() - 1, 3).getValues();
+    for (let i = statuses.length - 1; i >= 0; i--) {
+      if (statuses[i][0] === reportId && statuses[i][2] !== 'REPORT_SAVED') {
+        event = [];event[4] = statuses[i][2];break;
+      }
+    }
+  }
+  return cashierShiftStatus_({values:values,event:event});
+}
+
 function cashierShiftContext_(target) {
   const row = target.values, event = target.event;
   const savedReport = buildCashReportObject([], row);

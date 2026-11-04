@@ -182,7 +182,10 @@ function physicalBundleAllocationNote_(deliveryId, kind, sheetRow) {
 }
 
 function parsePhysicalBundleAllocationNote_(value) {
-  const text = String(value || "").trim();
+  let text = String(value || "").trim();
+  if (text.startsWith('{')) {
+    try {text=String(JSON.parse(text).physicalBundleAllocation||'');} catch(error) {return null;}
+  }
   if (text.indexOf("PHYSICAL_BUNDLE|") !== 0) return null;
   const fields = {};
   text.split("|").slice(1).forEach(function(part) {
@@ -894,20 +897,21 @@ function getBulkBundleProgress_(deliveryId, sheetRow, holderType, bundleQty) {
       if (!savedLines[key]) savedLines[key] = {bundleNo:bundleNo,productCode:code,description:String(row[MOVE_IDX.ITEM] || ''),quantity:0};
       savedLines[key].quantity += qty;
     }
-    if (source !== INVENTORY_MOVEMENT_SOURCE.SALE) return;
+    if (![INVENTORY_MOVEMENT_SOURCE.SALE,INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN].includes(source) || qty>=0) return;
     const allocation = parsePhysicalBundleAllocationNote_(row[MOVE_IDX.NOTES]);
     if (!allocation || allocation.deliveryId !== deliveryId || (allocation.sheetRow && allocation.sheetRow !== Number(sheetRow))) return;
     if (!sold[bundleNo]) sold[bundleNo] = {full:false,halves:0};
     if (allocation.kind === 'FULL') sold[bundleNo].full = true;
+    if (source === INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN) sold[bundleNo].returned = true;
     if (allocation.kind === 'HALF') sold[bundleNo].halves = Math.min(2,sold[bundleNo].halves+1);
   });
   const bundles = definitions.map(definition => {
     const n = definition.bundleNo, actual = Number(totals[n]) || 0, sale = sold[n] || {full:false,halves:0};
-    const status = definition.split ? 'SPLIT' : actual > 0 ? 'DISTRIBUTION_SAVED' : sale.full ? 'FULL_BUNDLE_SOLD' : sale.halves >= 2 ? 'TWO_HALVES_SOLD' : sale.halves ? 'ONE_HALF_SOLD' : 'AVAILABLE';
-    const shortStatus = definition.split ? 'Split' : actual > 0 ? 'Saved' : sale.full ? 'Sold' : sale.halves >= 2 ? '2 halves sold' : sale.halves ? '1 half sold' : '';
+    const status = definition.split ? 'SPLIT' : sale.returned ? 'RETURNED' : actual > 0 ? 'DISTRIBUTION_SAVED' : sale.full ? 'FULL_BUNDLE_SOLD' : sale.halves >= 2 ? 'TWO_HALVES_SOLD' : sale.halves ? 'ONE_HALF_SOLD' : 'AVAILABLE';
+    const shortStatus = definition.split ? 'Split' : sale.returned ? 'Returned' : actual > 0 ? 'Saved' : sale.full ? 'Sold' : sale.halves >= 2 ? '2 halves sold' : sale.halves ? '1 half sold' : '';
     return {...definition,actualQuantity:actual,hasActivity:actual>0,disabled:!!definition.split||actual>0||sale.full,
       status:status,shortStatus:shortStatus,tooltip:definition.split?'Bundle already split':actual>0?'Distribution already saved':sale.full?'Full bundle sold at cashier':'Available for distribution',
-      soldHalves:sale.halves,fullSold:sale.full,lines:Object.values(savedLines).filter(line => line.bundleNo === n)};
+      soldHalves:sale.halves,fullSold:sale.full,returned:!!sale.returned,lines:Object.values(savedLines).filter(line => line.bundleNo === n)};
   });
   return {bundles:bundles,bundlesWithActivity:bundles.filter(bundle => bundle.actualQuantity>0).length,remarks:remarks,physicalProducts:physicalProducts};
 }

@@ -75,7 +75,7 @@
           <div id="yfEditorManagerPinWrap" class="col-12">
             <label class="form-label">Manager PIN <span class="text-danger">*</span></label>
             <input id="yfEditorManagerPin" type="password" class="form-control" autocomplete="off">
-            <div class="form-text">Required only when correcting an already completed item.</div>
+            <div class="form-text">Required when editing an existing in-stock item. Incomplete items do not need a PIN.</div>
           </div>
         </div>
       </div>
@@ -480,7 +480,10 @@ function saveYourFindsDetailsClient(generateLabel){
  if(!description)return showNotificationToast('Description is required.',true);
  if(!Number.isFinite(sellingPrice)||sellingPrice<=0)return showNotificationToast('Selling Price must be greater than zero.',true);
  if(!phase8SelectedItem.imageUrl&&!phase8YfPhotoDataUrl)return showNotificationToast('Choose a product picture.',true);
- const auth=inventoryIsManager()?managerCredentials('Manager authorization',employeeIsOic()?managerPin:undefined):(incomplete?{}:{managerPin:managerPin});
+ const costChanged=yourFindsCustomCostChanged();
+ const needsApproval=!incomplete||costChanged;
+ if(needsApproval&&!canAuthorizeManagerActions()&&!managerPin)return showNotificationToast('Enter a manager PIN to edit existing YourFinds selling details.',true);
+ const auth=!needsApproval?{}:inventoryIsManager()?managerCredentials('Manager authorization',employeeIsOic()?managerPin:undefined):{managerPin:managerPin};
  if(!auth)return;
  const payload={
    code:phase8SelectedItem.code,description:description,sellingPrice:sellingPrice,actorToken:currentEmployee && currentEmployee.dashboardToken,...auth,fileName:phase8YfPhotoFileName,dataUrl:phase8YfPhotoDataUrl
@@ -488,7 +491,7 @@ function saveYourFindsDetailsClient(generateLabel){
  const originalPrice=Number(document.getElementById('yfEditorOriginalPrice').value);
  if(!Number.isFinite(originalPrice)||originalPrice<0)return showNotificationToast('Enter a valid Original Price.',true);
  payload.originalPrice=originalPrice;
- if(yourFindsCustomCostChanged())payload.costPrice=document.getElementById('yfEditorCostPrice').value;
+ if(costChanged)payload.costPrice=document.getElementById('yfEditorCostPrice').value;
  setYourFindsSaving(true,generateLabel);
  secureScriptRun.withSuccessHandler(function(result){
    setYourFindsSaving(false);

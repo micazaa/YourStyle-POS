@@ -10,7 +10,7 @@ const SALES_LOG_SPLIT_PAYMENT_HEADERS_ = [
   "Payment 2 Method", "Payment 2 Amount", "Payment 2 Reference"
 ];
 
-function ensureSalesLogSplitPaymentColumns_(sheet) {
+function ensureSalesLogSplitPaymentColumns_(sheet, rowCount) {
   const firstColumn = SALES_COL.PAYMENT_1_METHOD;
   const lastColumn = SALES_COL.PAYMENT_2_REFERENCE;
   if (sheet.getMaxColumns() < lastColumn) {
@@ -23,19 +23,19 @@ function ensureSalesLogSplitPaymentColumns_(sheet) {
     if (actual && actual !== expected) throw new Error("Sales Log column " + (firstColumn + index) + " must be \"" + expected + "\".");
     return expected;
   });
-  sheet.getRange(1, firstColumn, 1, values.length).setValues([values]);
+  if (existing.some((value,index) => String(value || '').trim() !== values[index])) {
+    sheet.getRange(1, firstColumn, 1, values.length).setValues([values]);
+  }
   const allowedPaymentMethods = ["Cash", "GCash", "QR Code", "Credit Card", "Cash + GCash", "Cash + Credit Card", "GCash + Credit Card"];
   const paymentRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(allowedPaymentMethods, true)
     .setAllowInvalid(false)
     .build();
-  const dataRows = Math.max(1, sheet.getMaxRows() - 1);
-  sheet.getRange(2, SALES_COL.PAYMENT_METHOD, dataRows, 1).setDataValidation(paymentRule);
-  if (typeof SALES_SYNC_BUTTON_TITLE !== "undefined") {
-    sheet.getImages().forEach(function(image) {
-      if (image.getAltTextTitle() === SALES_SYNC_BUTTON_TITLE) image.setAnchorCell(sheet.getRange("AJ2"));
-    });
-  }
+  const startRow = Math.max(2, sheet.getLastRow() + 1);
+  const dataRows = Math.max(1, Math.floor(Number(rowCount) || 1));
+  const lastRow = startRow + dataRows - 1;
+  if (sheet.getMaxRows() < lastRow) sheet.insertRowsAfter(sheet.getMaxRows(), lastRow - sheet.getMaxRows());
+  sheet.getRange(startRow, SALES_COL.PAYMENT_METHOD, dataRows, 1).setDataValidation(paymentRule);
 }
 
 function normalizeCheckoutPaymentParts_(paymentMethod, paymentParts, baseTotal) {
@@ -136,7 +136,7 @@ function executeCheckoutBackend(
       throw new Error("Receipt number already exists. Reopen checkout before submitting again.");
     }
 
-    ensureSalesLogSplitPaymentColumns_(salesLogSheet);
+    ensureSalesLogSplitPaymentColumns_(salesLogSheet, cart.length);
 
     // 1) Per-line raw total and item-level discount
     let lines = cart.map((item) => {
@@ -155,7 +155,7 @@ function executeCheckoutBackend(
         lineAfterItemDiscount: roundToTwo(lineRaw - lineDiscount),
       });
     });
-    const productSnapshot = getProductMaster_();
+    const productSnapshot = getProductMaster_({compactRead:true});
     lines = validateSalePricing_(lines, productSnapshot);
 
     const subtotalAfterItemDiscounts = lines.reduce(
@@ -268,13 +268,12 @@ function executeCheckoutBackend(
       .setValues(rows);
 
     // 5) Decrement inventory stock for non-custom items
-    deductInventoryStock(lines, receiptId, cashierName);
+    deductInventoryStock(lines, receiptId, cashierName, productSnapshot);
     consumeSaleAllocations_(lines, cashierName, productSnapshot);
 
     return JSON.stringify({
       success: true,
       message: "Transaction completed.",
-      updatedInventory: getSellableInventory(),
     });
   } catch (err) {
     return JSON.stringify({ success: false, message: err.toString() });

@@ -226,7 +226,7 @@ function completeCustomerExchange(payload) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sales = getSalesLogSheet_(ss), movement = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
     if (!sales || !movement) throw new Error("Required Sales/Inventory sheets are missing.");
-    ensureSalesLogSplitPaymentColumns_(sales);
+    ensureSalesLogSplitPaymentColumns_(sales, returnLines.length + replacementLines.length);
     const exchangeId = generateExchangeId(), now = new Date();
     const lines = returnLines.concat(replacementLines);
     let chargedLeft = feeCharged, absorbedLeft = feeAbsorbed;

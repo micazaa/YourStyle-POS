@@ -15,8 +15,9 @@ function formatDeliveryReceiptDate_(value) {
 
 function buildDeliveryReceiptHtml_(details) {
   const safe=escapeDeliveryReceiptHtml_;
+  const isReturn=!!details.returnReceipt;
   const lines=(details.reportLines||[]).map(function(line) {
-    return '<tr><td>'+safe(line.code)+'</td><td>'+safe(line.description)+'</td><td class="qty">'+safe(line.quantity)+'</td><td>'+safe(line.remarks)+'</td></tr>';
+    return '<tr><td>'+safe(line.code)+'</td><td>'+safe(line.description)+'</td>'+(isReturn?'<td>'+safe(line.size)+'</td>':'')+'<td class="qty">'+safe(line.quantity)+'</td><td>'+safe(line.remarks)+'</td></tr>';
   }).join('');
   const adjustments=(details.adjustmentLines||[]).map(function(line) {
     const from=line.fromSize;
@@ -48,12 +49,13 @@ function buildDeliveryReceiptHtml_(details) {
     '.remarks{margin-top:10px}.remarks-label{color:#666;margin-right:12px}.signatures{margin-top:auto;padding-top:20px;page-break-inside:avoid;width:100%;border-collapse:separate;border-spacing:12px 0}'+
     '.signatures td{width:33.33%;text-align:center;vertical-align:bottom;font-size:11px}.sign-space{height:24mm;border-bottom:1px solid #333;margin-bottom:5px}.sign-name{font-weight:700}.sign-role{color:#666;margin-top:2px}'+
     '</style></head><body><div class="page">'+
-    '<div class="header"><div><h1>Delivery Receipt Form</h1><div class="delivery-id">'+safe(details.id)+'</div></div><div class="header-right"><div>'+safe(formatDeliveryReceiptDate_(details.date))+'</div><div>'+type+' &bull; Caloocan</div></div></div>'+
+    '<div class="header"><div><h1>'+(isReturn?'Return Receipt Form':'Delivery Receipt Form')+'</h1><div class="delivery-id">'+safe(details.id)+'</div></div><div class="header-right"><div>'+safe(formatDeliveryReceiptDate_(details.date))+'</div><div>'+type+' &bull; Caloocan</div></div></div>'+
     '<table class="details"><tr><td><div class="detail"><span class="detail-label">Driver</span><span class="detail-value">'+safe(details.driver)+'</span></div></td><td><div class="detail"><span class="detail-label">Plate No.</span><span class="detail-value">'+safe(details.plate)+'</span></div></td></tr>'+
     '<tr><td><div class="detail"><span class="detail-label">Prepared By</span><span class="detail-value">'+safe(details.preparedBy)+'</span></div></td><td><div class="detail"><span class="detail-label">Received By</span><span class="detail-value">'+safe(details.acceptedBy)+'</span></div></td></tr></table>'+
-    '<div><h2>Items Received</h2><table class="items"><thead><tr bgcolor="#f2dede"><th bgcolor="#f2dede">Code</th><th bgcolor="#f2dede">Description</th><th class="qty" bgcolor="#f2dede">Qty</th><th bgcolor="#f2dede">Remarks</th></tr></thead><tbody>'+lines+'<tr class="total"><td colspan="2">Total received</td><td class="qty">'+safe(details.reportTotal)+'</td><td></td></tr></tbody></table>'+adjustmentSection+
+    '<div><h2>'+(isReturn?'Items Returned':'Items Received')+'</h2><table class="items"><thead><tr bgcolor="#f2dede"><th bgcolor="#f2dede">Code</th><th bgcolor="#f2dede">Description</th>'+(isReturn?'<th bgcolor="#f2dede">Size</th>':'')+'<th class="qty" bgcolor="#f2dede">Qty</th><th bgcolor="#f2dede">'+(isReturn?'Reason':'Remarks')+'</th></tr></thead><tbody>'+lines+'<tr class="total"><td colspan="'+(isReturn?3:2)+'">Total '+(isReturn?'returned':'received')+'</td><td class="qty">'+safe(details.reportTotal)+'</td><td></td></tr></tbody></table>'+adjustmentSection+
+    (isReturn?'<div class="remarks">'+safe(details.summary)+'</div>':'')+
     '<div class="remarks"><span class="remarks-label">Remarks</span>'+safe(details.remarks||'—')+'</div></div>'+
-    '<table class="signatures"><tr><td><div class="sign-space"></div><div class="sign-name">'+safe(details.preparedBy)+'</div><div class="sign-role">Prepared by</div></td><td><div class="sign-space"></div><div class="sign-name">'+safe(details.driver)+'</div><div class="sign-role">Driver</div></td><td><div class="sign-space"></div><div class="sign-name">'+safe(details.acceptedBy)+'</div><div class="sign-role">Received by</div></td></tr></table>'+
+    '<table class="signatures"><tr><td><div class="sign-space"></div><div class="sign-name">'+safe(details.preparedBy)+'</div><div class="sign-role">Prepared by</div></td><td><div class="sign-space"></div><div class="sign-name">'+safe(isReturn?details.approvedBy:details.driver)+'</div><div class="sign-role">'+(isReturn?'Checked by':'Driver')+'</div></td><td><div class="sign-space"></div><div class="sign-name">'+safe(details.acceptedBy)+'</div><div class="sign-role">Received by</div></td></tr></table>'+
     '</div></body></html>';
 }
 
@@ -67,4 +69,41 @@ function createDeliveryReceiptPdf(deliveryId) {
   } catch(error) {
     return {success:false,message:error&&error.message?error.message:String(error)};
   }
+}
+
+function createSupplierReturnPdf(reference) {
+  assertAppRequest_();
+  try {
+    const draft=reference && typeof reference==='object' ? reference : null;
+    let rows,id;
+    if(draft) {
+      if(!['YOURSTYLE','YOURFINDS'].includes(draft.returnType)||!Array.isArray(draft.items)||!draft.items.length||draft.items.length>100)
+        throw new Error('Select items before previewing the return.');
+      const inventory=new Map(readInventoryListIndex_().map(item=>[String(item.code),item]));
+      id='Draft — '+String(draft.id||'Return');
+      rows=draft.items.map(line=>{
+        const item=inventory.get(String(line.code)),quantity=Number(line.quantity);
+        if(!item||supplierReturnType_(item)!==draft.returnType||!Number.isSafeInteger(quantity)||quantity<1)
+          throw new Error('Invalid return preview item.');
+        return {...item,quantity:quantity,reason:String(line.reason||''),returnDate:String(draft.returnDate||''),
+          driver:String(draft.driver||''),plate:String(draft.plate||''),preparedBy:String(draft.preparedBy||''),
+          approvedBy:'',receivedBy:String(draft.receivedBy||''),remarks:String(draft.remarks||'')};
+      });
+    } else {
+      id=String(reference||'').trim();
+      if(!id)throw new Error('Return ID is required.');
+      rows=getSupplierReturns().filter(record=>record.id===id);
+      if(!rows.length)throw new Error('Return not found.');
+    }
+    const first=rows[0],totals=new Map();
+    const yourFinds=rows.every(row=>String(row.category).toUpperCase()==='YOURFINDS');
+    rows.forEach(row=>{const key=yourFinds?row.size||'Unspecified size':row.category;totals.set(key,(totals.get(key)||0)+row.quantity);});
+    const details={returnReceipt:true,id:id,date:first.returnDate||String(first.date).slice(0,10),yourFinds:yourFinds,
+      driver:first.driver,plate:first.plate,preparedBy:first.preparedBy,approvedBy:first.approvedBy,acceptedBy:first.receivedBy,
+      remarks:first.remarks,reportTotal:rows.reduce((total,row)=>total+row.quantity,0),
+      reportLines:rows.map(row=>({code:row.code,description:row.name,size:row.size,quantity:row.quantity,remarks:row.reason})),
+      summary:Array.from(totals,([label,quantity])=>label+' '+quantity+' pcs').join(' · ')};
+    const pdf=Utilities.newBlob(buildDeliveryReceiptHtml_(details),'text/html','return-receipt.html').getAs('application/pdf');
+    return {success:true,fileName:'Return_Receipt_'+id.replace(/[^A-Za-z0-9_-]/g,'_')+'.pdf',base64:Utilities.base64Encode(pdf.getBytes())};
+  } catch(error) {return {success:false,message:error.message||String(error)};}
 }

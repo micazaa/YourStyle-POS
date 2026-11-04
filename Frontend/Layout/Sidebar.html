@@ -104,7 +104,7 @@ function openInventoryWorkspace(){
       invalidateDeliveryCatalog();
       yourFindsCustomSizeCache = null;
       ++bulkDistributionRequest; bulkDistributionHolder = null; bulkDistributionProducts = [];
-      ++supplierReturnLoad; supplierReturns = []; supplierReturnInventory = [];
+      resetSupplierReturnSession();
       masterInventory = [];
       currentShiftExpectedCash = 0; currentManagerExpectedCash = 0;
       calculatedBaseTotalDue = 0; finalActiveGrandTotal = 0;

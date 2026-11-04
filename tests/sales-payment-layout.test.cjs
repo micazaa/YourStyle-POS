@@ -9,14 +9,15 @@ const reorder = row => order.map(i => row[i] === undefined ? '' : row[i]);
 
 function context(grouped) {
   const rows=[grouped ? reorder(legacyHeaders) : legacyHeaders.slice()];
-  const sheet={getMaxColumns:()=>34,getMaxRows:()=>100,getLastRow:()=>rows.length,getImages:()=>[],
+  const calls={validations:[],headers:0,images:0};
+  const sheet={getMaxColumns:()=>34,getMaxRows:()=>100,getLastRow:()=>rows.length,getImages(){calls.images++;return [];},
     getDataRange:()=>({getValues:()=>rows}),
     getRange(row,col,height=1,width=1){return {
       getDisplayValues:()=>Array.from({length:height},(_,i)=>Array.from({length:width},(_,j)=>String(rows[row-1+i]?.[col-1+j]??''))),
       getValues:()=>Array.from({length:height},(_,i)=>Array.from({length:width},(_,j)=>rows[row-1+i]?.[col-1+j]??'')),
       getNotes:()=>Array.from({length:height},()=>['']),
-      setValues(values){values.forEach((line,i)=>{rows[row-1+i] ||= [];line.forEach((value,j)=>{rows[row-1+i][col-1+j]=value;});});return this;},
-      setValue(value){rows[row-1][col-1]=value;},clearContent(){rows[row-1][col-1]='';},setDataValidation(){},
+      setValues(values){if(row===1)calls.headers++;values.forEach((line,i)=>{rows[row-1+i] ||= [];line.forEach((value,j)=>{rows[row-1+i][col-1+j]=value;});});return this;},
+      setValue(value){rows[row-1][col-1]=value;},clearContent(){rows[row-1][col-1]='';},setDataValidation(){calls.validations.push({row,col,height,width});},
       createTextFinder:()=>({matchCase(){return this;},matchEntireCell(){return this;},findNext:()=>null})
     };}};
   const c=vm.createContext({
@@ -29,8 +30,32 @@ function context(grouped) {
     ACCESS_REQUEST_CONTEXT_:{actor:{name:'Cashier'}}
   });
   for(const name of ['Constants','Utils','Sales','Reservations','ReportHelpers','SalesAutomation'])vm.runInContext(fs.readFileSync('Backend/'+name+'.js','utf8'),c);
-  return {c,sheet,rows};
+  return {c,sheet,rows,calls};
 }
+
+test('checkout returns after the sale save without rebuilding the full inventory catalogue',()=>{
+  const {c,rows}=context(true);
+  c.getSellableInventory=()=>{throw Error('Checkout must not rebuild the catalogue');};
+  const result=JSON.parse(c.executeCheckoutBackend([{code:'600001',name:'Yellow',category:'PINS',quantity:1,price:100}],
+    'Cash','N/A','YS-FAST','percentage',0,'Cashier',100,0,false));
+  assert.equal(result.success,true,result.message);assert.equal(rows.length,2);
+  assert.equal(result.updatedInventory,undefined);
+});
+
+test('checkout payment rules touch only the new rows and leave existing headers and button alone',()=>{
+  const {c,sheet,calls}=context(true);sheet.getMaxRows=()=>10000;
+  c.getSalesLogSheet_();c.ensureSalesLogSplitPaymentColumns_(sheet,3);
+  assert.deepEqual(calls.validations,[{row:2,col:14,height:3,width:1}]);
+  assert.equal(calls.headers,0);assert.equal(calls.images,0);
+});
+
+test('payment setup expands a full Sales Log only enough for the new transaction',()=>{
+  const {c,sheet,rows,calls}=context(true);rows.push([],[]);
+  let maximum=3;
+  sheet.getMaxRows=()=>maximum;sheet.insertRowsAfter=(after,count)=>{assert.equal(after,3);maximum+=count;};
+  c.getSalesLogSheet_();c.ensureSalesLogSplitPaymentColumns_(sheet,2);
+  assert.equal(maximum,5);assert.deepEqual(calls.validations,[{row:4,col:14,height:2,width:1}]);
+});
 
 test('checkout writes payment amounts, references and status into both supported layouts',()=>{
   for(const grouped of [false,true]) {

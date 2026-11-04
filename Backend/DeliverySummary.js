@@ -38,7 +38,7 @@ function buildDeliverySummaryData_(deliveries, inventory, movements) {
     if (split && source === 'ADJUSTMENT' && Number(row[MOVE_IDX.QTY_CHANGE]) === -1) {
       bundleProducts.add(String(split.productCode));splitRows.push(row);
     }
-    if (source !== 'SALE' || Number(row[MOVE_IDX.QTY_CHANGE]) >= 0) return;
+    if (!['SALE','SUPPLIER_RETURN'].includes(source) || Number(row[MOVE_IDX.QTY_CHANGE]) >= 0) return;
     const allocation = parsePhysicalBundleAllocationNote_(row[MOVE_IDX.NOTES]);
     if (!allocation) return;
     const key = JSON.stringify([allocation.deliveryId, Number(allocation.sheetRow) || 0, Number(row[MOVE_IDX.BUNDLE_NO])]);

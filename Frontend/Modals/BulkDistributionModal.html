@@ -288,7 +288,7 @@ function renderBulkDistributionTabs() {
 }
 
 function bulkDistributionBundleStatus_(bundle){
-  return bundle.split?'Split':Number(bundle.actualQuantity)>0?'Distributed':bundle.fullSold||Number(bundle.soldHalves)>=2?'Sold':Number(bundle.soldHalves)>0?'Partially sold':'Unopened';
+  return bundle.split?'Split':bundle.returned?'Returned':Number(bundle.actualQuantity)>0?'Distributed':bundle.fullSold||Number(bundle.soldHalves)>=2?'Sold':Number(bundle.soldHalves)>0?'Partially sold':'Unopened';
 }
 function selectBulkDistributionBundle(bundleNo,focus) {
   if (bulkDistributionSaving) return;

@@ -37,7 +37,7 @@ function supplierReturnRecordFromLogRow_(row, display) {
     requestId: String(display[RETURN_IDX.RETURN_LINE_ID] || ""),
     lineId: String(display[RETURN_IDX.RETURN_LINE_ID] || ""),
     id: String(display[RETURN_IDX.RETURN_ID] || ""),
-    returnDate: String(display[RETURN_IDX.RETURN_DATE] || ""),
+    returnDate: formatInventoryDateForClient(row[RETURN_IDX.RETURN_DATE]),
     date: String(display[RETURN_IDX.TIMESTAMP] || display[RETURN_IDX.RETURN_DATE] || ""),
     timestamp: String(display[RETURN_IDX.TIMESTAMP] || ""),
     preparedBy: String(display[RETURN_IDX.PREPARED_BY] || ""),
@@ -88,7 +88,9 @@ function getLegacySupplierReturnRecords_() {
         date: row[MOVE_IDX.TIMESTAMP] instanceof Date
           ? Utilities.formatDate(row[MOVE_IDX.TIMESTAMP], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
           : String(row[MOVE_IDX.TIMESTAMP] || ""),
-        timestamp: row[MOVE_IDX.TIMESTAMP],
+        timestamp: row[MOVE_IDX.TIMESTAMP] instanceof Date
+          ? Utilities.formatDate(row[MOVE_IDX.TIMESTAMP], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
+          : String(row[MOVE_IDX.TIMESTAMP] || ""),
         preparedBy: String(details.preparedBy || row[MOVE_IDX.EMPLOYEE] || ""),
         employee: String(details.preparedBy || row[MOVE_IDX.EMPLOYEE] || ""),
         approvedBy: String(details.approvedBy || details.authorizedBy || ""),
@@ -138,6 +140,7 @@ function findSupplierReturnMovement_(lineId) {
 function saveSupplierReturn(payload) {
   assertAppRequest_();
   payload = payload || {};
+  if (Array.isArray(payload.items)) return saveSupplierReturnItems_(payload);
   const auth = requireManager_(payload.managerPin, payload.managerToken);
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -176,7 +179,7 @@ function saveSupplierReturn(payload) {
     let returnId = existingMovement ? existingMovement.id : "";
 
     if (!existingMovement) {
-      if (quantity > Number(item.stock) || String(item.status).toUpperCase() === "RETURNED") {
+      if (quantity > Number(item.stock) || ["RETURNED","RESERVED","CONVERTED"].includes(String(item.status).toUpperCase())) {
         throw new Error("Return quantity exceeds available stock.");
       }
       if (String(item.inventoryType).toUpperCase() === "UNIQUE" && quantity !== 1) {
@@ -224,4 +227,131 @@ function saveSupplierReturn(payload) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function supplierReturnType_(item) {
+  return String(item.category || '').toUpperCase() === 'YOURFINDS' || String(item.inventoryType).toUpperCase() === 'UNIQUE' ? 'YOURFINDS' : 'YOURSTYLE';
+}
+
+function getSupplierReturnInventory() {
+  assertAppRequest_();
+  return readInventoryListIndex_().filter(item => Number(item.stock)>0 && !['RESERVED','RETURNED','CONVERTED'].includes(item.status))
+    .map(item => ({code:item.code,name:item.name,size:item.size,category:item.category,inventoryType:item.inventoryType,
+      stock:item.stock,status:item.status,imageUrl:item.imageUrl,deliveryId:item.deliveryId}));
+}
+
+function supplierReturnBatchId_(type, date, requestId, usedIds) {
+  const prefix=(type==='YOURFINDS'?'YFR':'YSR')+'-'+date.replace(/-/g,'')+'-';
+  let hash=0;for (const letter of requestId) hash=(hash*31+letter.charCodeAt(0))%1000;
+  for(let offset=0;offset<1000;offset++) {
+    const id=prefix+String((hash+offset)%1000).padStart(3,'0');
+    if(!usedIds.has(id))return id;
+  }
+  throw new Error('No return numbers available for this date.');
+}
+
+// One approval and locked batch. Retries repair a missing business record without deducting stock twice.
+function saveSupplierReturnItems_(payload) {
+  const auth=requireManager_(payload.managerPin,payload.managerToken);
+  const lock=LockService.getScriptLock();lock.waitLock(30000);
+  let movementSheet,log,inventory,movementStart,logStart;
+  const statusRollback=[],updatedRollback=[];
+  try {
+    const text=value=>String(value||'').trim();
+    const requestId=text(payload.requestId).toUpperCase();
+    if(!/^[A-Z0-9-]{10,80}$/.test(requestId))throw new Error('Invalid return request. Reopen the form.');
+    const type=text(payload.returnType).toUpperCase();
+    if(!['YOURSTYLE','YOURFINDS'].includes(type))throw new Error('Choose YourStyle or YourFinds.');
+    const date=supplierReturnDate_(payload.returnDate), parsedDate=new Date(date+'T00:00:00Z');
+    if(isNaN(parsedDate.getTime())||parsedDate.toISOString().slice(0,10)!==date)throw new Error('Enter a valid return date.');
+    const preparedBy=text(payload.preparedBy),driver=text(payload.driver),plate=text(payload.plate).toUpperCase();
+    if(!preparedBy||!driver||!plate)throw new Error('Prepared by, driver and plate number are required.');
+    const status=text(payload.status||'RELEASED').toUpperCase(),receivedBy=text(payload.receivedBy);
+    if(!['RELEASED','RECEIVED'].includes(status)||status==='RECEIVED'&&!receivedBy)throw new Error('Received By is required when received by supplier.');
+    const supplier=text(payload.supplier)|| (type==='YOURFINDS'?'YourFinds':'YourStyle');
+    if(!Array.isArray(payload.items)||!payload.items.length||payload.items.length>100)throw new Error('Select between 1 and 100 products.');
+    const codes=new Set();
+    const items=payload.items.map(line=>{
+      const code=text(line.code),quantity=Number(line.quantity),reason=text(line.reason),condition=text(line.condition||'OTHER').toUpperCase();
+      if(!code||codes.has(code)||!Number.isSafeInteger(quantity)||quantity<1||!reason)throw new Error('Each product needs a valid quantity and reason. Duplicate barcodes are not allowed.');
+      if(!['SEALED','OPENED','DAMAGED','OTHER'].includes(condition))throw new Error('Invalid item condition.');
+      codes.add(code);return {code:code,quantity:quantity,reason:reason,condition:condition};
+    }).sort((a,b)=>a.code.localeCompare(b.code));
+    const common={returnDate:date,preparedBy:preparedBy,driver:driver,plate:plate,supplier:supplier,status:status,
+      receivedBy:receivedBy,remarks:text(payload.remarks),approvedBy:auth.managerName,recordedBy:text(payload.employee)};
+    const binding=Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
+      JSON.stringify({type:type,...common,approvedBy:undefined,items:items})));
+    const ss=SpreadsheetApp.getActiveSpreadsheet();
+    log=getSupplierReturnLogSheet_();movementSheet=ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);inventory=ss.getSheetByName(SHEETS.INVENTORY);
+    if(!movementSheet||!inventory||inventory.getLastRow()<2)throw new Error('Inventory sheets are missing.');
+    const logRows=log.getLastRow()>1?log.getRange(2,1,log.getLastRow()-1,RETURN_LOG_COLUMN_COUNT).getValues():[];
+    const moves=movementSheet.getLastRow()>1?movementSheet.getRange(2,1,movementSheet.getLastRow()-1,MOVEMENT_LOG_COLUMN_COUNT).getValues():[];
+    const prefix='YSRL-'+requestId+'-';
+    const previousMoves=moves.filter(row=>String(row[MOVE_IDX.SOURCE_LINE_ID]).startsWith(prefix)&&String(row[MOVE_IDX.SOURCE])===INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN);
+    previousMoves.forEach(row=>{let note;try{note=JSON.parse(row[MOVE_IDX.NOTES]);}catch(error){note={};}
+      if(note.batchBinding!==binding)throw new Error('This return request already exists with different details. Reopen the form.');});
+    const ids=new Set(previousMoves.map(row=>String(row[MOVE_IDX.REFERENCE_ID])));
+    if(ids.size>1)throw new Error('Return request has conflicting records. Contact a manager.');
+    const returnId=ids.size?Array.from(ids)[0]:supplierReturnBatchId_(type,date,requestId,new Set(logRows.map(row=>String(row[RETURN_IDX.RETURN_ID])).concat(moves.map(row=>String(row[MOVE_IDX.REFERENCE_ID])))));
+    const values=inventory.getRange(2,1,inventory.getLastRow()-1,inventoryHasStoredDeliveryMetadata_(inventory)?INV_COL.DATE_DELIVERED:INVENTORY_COLUMN_COUNT).getValues();
+    const codeValues=inventory.getRange(2,INV_COL.CODE,values.length,1).getDisplayValues();
+    const byCode=new Map();
+    values.forEach((row,index)=>{const code=text(codeValues[index][0]);if(codes.has(code)){
+      if(byCode.has(code))throw new Error('Duplicate inventory barcode: '+code);
+      byCode.set(code,{code:code,rowNumber:index+2,name:text(row[INV_IDX.DESCRIPTION]),size:text(row[INV_IDX.SIZE]),
+        category:text(row[INV_IDX.CATEGORY]),inventoryType:text(row[INV_IDX.INVENTORY_TYPE]),status:text(row[INV_IDX.STATUS]).toUpperCase(),
+        stock:Number(row[INV_IDX.STOCK])||0,updatedAt:row[INV_IDX.UPDATED_AT],deliveryId:text(row[INV_IDX.DELIVERY_ID])});
+    }});
+    const pendingMoves=[],pendingLog=[],now=new Date();
+    items.forEach(line=>{
+      const lineId=prefix+line.code,item=byCode.get(line.code);
+      if(!item||supplierReturnType_(item)!==type)throw new Error('Product does not match the selected return type: '+line.code);
+      const oldMoves=previousMoves.filter(row=>String(row[MOVE_IDX.SOURCE_LINE_ID])===lineId);
+      const logged=logRows.filter(row=>String(row[RETURN_IDX.RETURN_LINE_ID])===lineId);
+      if(logged.length){
+        if(logged.length!==1||String(logged[0][RETURN_IDX.RETURN_ID])!==returnId||!oldMoves.length)throw new Error('Return records need manager review.');
+        return;
+      }
+      const original=oldMoves.length?JSON.parse(String(oldMoves[0][MOVE_IDX.NOTES])):null;
+      const metadata=original||{...common,batchBinding:binding,originalDeliveryId:item.deliveryId,size:item.size};
+      if(!oldMoves.length){
+        updatedRollback.push({rowNumber:item.rowNumber,updatedAt:item.updatedAt});
+        if(['RESERVED','RETURNED','CONVERTED'].includes(item.status)||line.quantity>item.stock)throw new Error('Item is unavailable or return quantity exceeds stock: '+line.code);
+        if(String(item.inventoryType).toUpperCase()==='UNIQUE'&&line.quantity!==1)throw new Error('Unique items must have quantity 1.');
+        const movement={code:item.code,qtyChange:-line.quantity,referenceId:returnId,sourceLineId:lineId,
+          employee:common.recordedBy||preparedBy,item:item.name,reason:line.reason,source:INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN};
+        const namedBundle=String(item.category).toUpperCase()==='WHOLESALE'&&/ · \([1-9]\d*\) pcs$/i.test(item.name);
+        const queue=namedBundle?buildPhysicalBundleSaleQueue_(item.category,item.code):[];
+        if(queue.length){
+          const available=queue.filter(bundle=>!bundle.distributed&&!bundle.fullSold&&!bundle.soldHalves);
+          if(available.length<line.quantity)throw new Error('Not enough unopened bundles available to return: '+item.code);
+          available.slice(0,line.quantity).forEach(bundle=>pendingMoves.push({...movement,qtyChange:-1,bundleNo:bundle.bundleNo,
+            notes:JSON.stringify({...metadata,physicalBundleAllocation:physicalBundleAllocationNote_(bundle.deliveryId,'FULL',bundle.sheetRow)})}));
+        }else pendingMoves.push({...movement,notes:JSON.stringify(metadata)});
+      }
+      pendingLog.push([returnId,lineId,date,now,metadata.preparedBy,metadata.approvedBy,metadata.driver,metadata.plate,
+        metadata.receivedBy,metadata.supplier,metadata.originalDeliveryId,item.code,item.name,item.size,
+        supplierReturnCategoryForSheet_(item.category),line.quantity,line.reason,line.condition,status,metadata.remarks]);
+      if(String(item.inventoryType).toUpperCase()==='UNIQUE'&&item.status!=='RETURNED')statusRollback.push({rowNumber:item.rowNumber,status:item.status});
+    });
+    movementStart=movementSheet.getLastRow();logStart=log.getLastRow();
+    if(pendingMoves.length)changeInventoryStockBatch_(pendingMoves);
+    if(pendingLog.length) {
+      const end=logStart+pendingLog.length;if(end>log.getMaxRows())log.insertRowsAfter(log.getMaxRows(),end-log.getMaxRows());
+      log.getRange(logStart+1,1,pendingLog.length,RETURN_LOG_COLUMN_COUNT).setValues(pendingLog);
+    }
+    statusRollback.forEach(item=>{
+      const cell=inventory.getRange(item.rowNumber,INV_COL.STATUS);setInventoryStatusValidation_(cell);cell.setValue(INVENTORY_STATUS.RETURNED);
+    });
+    recordInventoryChangedCodes_(items.map(item=>item.code));SpreadsheetApp.flush();
+    return {success:true,id:returnId,lineIds:items.map(item=>prefix+item.code),quantity:items.reduce((n,item)=>n+item.quantity,0)};
+  } catch(error) {
+    if(logStart!==undefined&&log.getLastRow()>logStart)log.deleteRows(logStart+1,log.getLastRow()-logStart);
+    if(movementStart!==undefined&&movementSheet.getLastRow()>movementStart)movementSheet.deleteRows(movementStart+1,movementSheet.getLastRow()-movementStart);
+    if(movementStart!==undefined){
+      statusRollback.forEach(item=>inventory.getRange(item.rowNumber,INV_COL.STATUS).setValue(item.status));
+      updatedRollback.forEach(item=>inventory.getRange(item.rowNumber,INV_COL.UPDATED_AT).setValue(item.updatedAt));
+    }
+    SpreadsheetApp.flush();throw error;
+  } finally {lock.releaseLock();}
 }

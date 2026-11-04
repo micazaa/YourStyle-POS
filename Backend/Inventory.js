@@ -1876,7 +1876,7 @@ function buildPhysicalBundleSaleQueue_(category, productCode) {
       if (state) state.distributed = true;
       return;
     }
-    if (source !== INVENTORY_MOVEMENT_SOURCE.SALE) return;
+    if (![INVENTORY_MOVEMENT_SOURCE.SALE,INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN].includes(source)||Number(row[MOVE_IDX.QTY_CHANGE])>=0) return;
     const allocation = parsePhysicalBundleAllocationNote_(row[MOVE_IDX.NOTES]);
     if (!allocation) return;
     const state = states.find(function(item) {
@@ -1892,7 +1892,7 @@ function buildPhysicalBundleSaleQueue_(category, productCode) {
   return states;
 }
 
-function deductInventoryStock(soldItems, receiptId, employeeName) {
+function deductInventoryStock(soldItems, receiptId, employeeName, productSnapshot) {
   assertAppRequest_();
   /* ========================================================
      VALIDATE
@@ -1903,7 +1903,7 @@ function deductInventoryStock(soldItems, receiptId, employeeName) {
   }
 
   const movements = [];
-  const productSnapshot = getProductMaster_();
+  productSnapshot = Array.isArray(productSnapshot) ? productSnapshot : getProductMaster_();
   const queues = {};
 
   /* ========================================================

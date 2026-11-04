@@ -932,6 +932,16 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 .control-loading[hidden] {display:none;}
 @media(min-width:992px){#menuToggleBtn{display:none}}
 
+/* Supplier returns reuse the delivery layout and keep picker metadata out of selected rows. */
+#supplierReturnModal [hidden]{display:none!important}
+.supplier-return-picker-scroll{max-height:360px;overflow-y:auto;overscroll-behavior:contain}
+.supplier-return-picker-scroll thead{position:sticky;top:0;z-index:1}
+.supplier-return-photo{width:66px}
+.supplier-return-photo img{width:44px;height:44px;object-fit:cover;border-radius:7px}
+.supplier-return-photo .btn{max-width:60px;white-space:normal}
+.supplier-return-selected .supplier-return-qty{min-width:70px;max-width:90px;margin:auto}
+.supplier-return-selected td:nth-child(4){min-width:160px}
+
 /* Shared delivery form layout. */
 .delivery-modal-card{max-width:980px;width:96%;max-height:92vh;overflow-y:auto}
 .delivery-detail-item-list{overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:4px}
