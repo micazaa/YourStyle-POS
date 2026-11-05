@@ -999,4 +999,46 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 .delivery-summary{display:flex;justify-content:flex-end;gap:24px;flex-wrap:wrap;background:var(--pink-light);border-radius:8px;padding:12px 14px}
 .delivery-summary span{color:var(--text-gray);font-size:.82rem}.delivery-summary strong{color:var(--text-dark);margin-left:5px}
 @media(max-width:575px){.delivery-items-toolbar{grid-template-columns:1fr auto}.delivery-items-toolbar .delivery-mode-toggle{grid-column:1/-1;grid-row:2}.delivery-items-toolbar .delivery-add-item{grid-column:2;grid-row:1}}
+/* Bundle actions: approved Action tabs layout. */
+#bulkDistributionModal [hidden]{display:none!important}
+#bulkDistributionModal .bundle-actions-card{max-width:900px}
+#bulkDistributionModal .delivery-bundle-selector{max-width:640px;margin-inline:auto}
+#bulkDistributionModal .bundle-navigation-small{display:flex;flex-direction:column;gap:6px}
+#bulkDistributionModal .bundle-navigation-toggle{justify-content:center;flex-wrap:wrap}
+#bulkDistributionModal .bundle-navigation-toggle .btn{min-height:42px}
+#bulkDistributionModal .bundle-selected-summary{font-variant-numeric:tabular-nums}
+#bulkDistributionModal .bundle-action-tabs{display:flex;gap:24px;border-bottom:1px solid var(--border-color)}
+#bulkDistributionModal .bundle-action-tabs button{border:0;border-bottom:2px solid transparent;background:transparent;color:var(--text-gray);padding:8px 0 12px;font:inherit;font-weight:600;min-height:44px}
+#bulkDistributionModal .bundle-action-tabs button[aria-selected="true"]{color:var(--text-dark);border-bottom-color:var(--pink-main)}
+#bulkDistributionModal .bundle-action-tabs button:disabled{opacity:.5;cursor:not-allowed}
+#bulkDistributionModal .bundle-action-tabs button:focus-visible{outline:2px solid var(--pink-main);outline-offset:4px}
+#bulkDistributionModal .delivery-line.direct,#bulkDistributionModal .delivery-line-head.direct{grid-template-columns:24px minmax(0,1fr) 100px 36px;min-width:0;gap:10px}
+#bulkDistributionModal .delivery-line .form-control{min-width:0;margin:0}
+#bulkDistributionModal .bulk-distribution-qty{text-align:right;font-variant-numeric:tabular-nums}
+#bulkDistributionModal .bundle-count-total{display:flex;justify-content:flex-end;gap:6px;font-variant-numeric:tabular-nums}
+#bulkDistributionModal .bundle-locked-message{text-align:center;margin-block:12px}
+#bulkDistributionModal .bundle-action-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:16px}
+#bulkDistributionModal .bundle-action-fields .form-control{margin-bottom:0}
+#bulkDistributionModal .bundle-action-footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px}
+#bulkDistributionModal .bundle-action-footer>span{flex:1}
+#bulkDistributionModal .bundle-action-footer .btn{min-height:44px}
+#bulkDistributionModal .bundle-fraction-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+#bulkDistributionModal .bundle-fraction-options .btn{min-width:0;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:5px;border-radius:8px}
+#bulkDistributionModal .bundle-fraction-options .btn[aria-pressed="true"]{background:var(--pink-light);color:var(--text-dark);border-color:var(--pink-main)}
+#bulkDistributionModal .bundle-fraction-value{font-size:1.5rem;font-weight:600;line-height:1.2}
+#bulkDistributionModal .bundle-fraction-options .btn:disabled{background:var(--bg-main);border-color:var(--border-color);color:var(--text-gray);opacity:.65}
+#bulkDistributionModal .bundle-split-result-line{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-color);font-variant-numeric:tabular-nums}
+@media(max-width:575px){
+ #bulkDistributionModal .bundle-actions-card{padding:20px 16px}
+ #bulkDistributionModal .delivery-bundle-selector{grid-template-columns:minmax(0,1fr) auto;gap:8px}
+ #bulkDistributionModal .delivery-bundle-selector>label{grid-column:1/-1;text-align:center}
+ #bulkDistributionModal .delivery-line.direct,#bulkDistributionModal .delivery-line-head.direct{grid-template-columns:18px minmax(0,1fr) 72px 30px;gap:6px}
+ #bulkDistributionModal .delivery-line .form-control{padding-inline:8px;font-size:16px}
+ #bulkDistributionModal .bundle-action-fields{grid-template-columns:minmax(0,1fr);gap:12px}
+ #bulkDistributionModal .bundle-action-footer>span{flex-basis:100%}
+ #bulkDistributionModal .bundle-action-footer .btn{flex:1;min-width:0}
+ #bulkDistributionModal .bundle-fraction-options{gap:8px}
+ #bulkDistributionModal .bundle-action-tabs{gap:20px}
+}
+/* End bundle actions layout. */
 </style>

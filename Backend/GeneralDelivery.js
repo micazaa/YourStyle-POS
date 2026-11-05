@@ -933,6 +933,7 @@ function splitPhysicalBundle(payload) {
     if (!employee) throw new Error('Employee is required.');
     const holder = getBulkHolderDetails(deliveryId,sheetRow).holder;
     const bundle = holder.bundles.find(item => item.bundleNo === bundleNo);
+    if (bundle && Number(bundle.parentBundleNo)>0) throw new Error('Resulting bundles cannot be split again. Distribute their items instead.');
     if (!bundle || bundleAccountedFor_(bundle) || Number(bundle.soldHalves)>0) throw new Error('Only an unopened, unsold bundle can be split.');
     const pieces = Number(bundle.estimatedQuantity || holder.estimatedQuantity / holder.bundleQty) / parts;
     if (!Number.isSafeInteger(pieces) || pieces < 1) throw new Error('This fraction does not produce a whole number of pieces.');
@@ -1013,7 +1014,7 @@ function distributeBulkBundle(payload) {
       throw new Error('Select an available bundle from this delivery.');
     }
     const selectedBundle = (holder.bundles || []).find(function(bundle) { return Number(bundle.bundleNo) === bundleNo; });
-    if (!selectedBundle || selectedBundle.disabled) {
+    if (!selectedBundle || selectedBundle.disabled || selectedBundle.split) {
       throw new Error(selectedBundle && selectedBundle.tooltip ? selectedBundle.tooltip + "." : "This bundle is no longer available for distribution.");
     }
 

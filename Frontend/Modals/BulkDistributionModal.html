@@ -6,53 +6,59 @@
   </div>
 </div>
 <div id="bulkDistributionModal" class="generic-overlay-blur" style="display:none;">
-  <div class="custom-popup-card delivery-modal-card">
+  <div class="custom-popup-card delivery-modal-card bundle-actions-card">
     <div class="d-flex justify-content-between align-items-start mb-4 pb-3 border-bottom">
-      <div><h5 class="fw-bold mb-1">Distribute Bundles</h5><div id="bulkDistributionSubtitle" class="small text-muted"></div></div>
-      <button type="button" class="btn-close" aria-label="Close" onclick="closeBulkDistributionModal()"></button>
-    </div>
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <div class="fw-semibold">Items Received</div>
-      <button type="button" id="bulkDistributionAddItemBtn" class="btn btn-sm btn-outline-dark delivery-add-item" onclick="addBulkDistributionLine()">+ Add Item</button>
+      <div><h5 class="fw-bold mb-1">Manage Bundles</h5><div id="bulkDistributionSubtitle" class="small text-muted"></div></div>
+      <button type="button" class="btn-close" aria-label="Close bundle actions" onclick="closeBulkDistributionModal()"></button>
     </div>
     <div id="bulkDistributionBundleTabs" class="delivery-bundle-selector mb-3" role="group" aria-label="Bundle navigation"></div>
-    <div id="bulkDistributionSelectedSummary" class="bg-light rounded p-3 mb-3" hidden><div class="d-flex justify-content-between align-items-start gap-3 mb-1"><strong id="bulkDistributionSelectedName"></strong><span id="bulkDistributionSelectedStatus" class="badge"></span></div><div id="bulkDistributionBundleSummary" class="small text-muted"></div></div>
-    <div id="bulkDistributionSplitControls" class="bundle-split-toolbar mb-3" hidden>
-      <div class="bundle-split-choice">
-        <div id="bulkDistributionSplitLabel" class="small text-muted mb-1">Split into</div>
-        <input id="bulkDistributionSplitParts" type="hidden" value="">
-        <div class="delivery-mode-toggle bundle-split-fractions" role="group" aria-labelledby="bulkDistributionSplitLabel">
-          <button type="button" class="btn btn-outline-pink" data-bundle-split-parts="2" aria-label="Split into halves" aria-pressed="false" onclick="selectBundleSplitFraction(2)">½</button>
-          <button type="button" class="btn btn-outline-pink" data-bundle-split-parts="3" aria-label="Split into thirds" aria-pressed="false" onclick="selectBundleSplitFraction(3)">⅓</button>
-          <button type="button" class="btn btn-outline-pink" data-bundle-split-parts="4" aria-label="Split into quarters" aria-pressed="false" onclick="selectBundleSplitFraction(4)">¼</button>
-        </div>
-      </div>
-      <div class="bundle-split-result" aria-live="polite" aria-atomic="true">
-        <div id="bulkDistributionSplitPreview" class="fw-semibold">Choose a fraction</div>
-        <div id="bulkDistributionSplitSource" class="small text-muted"></div>
-      </div>
-      <button id="bulkDistributionSplitBtn" type="button" class="btn btn-pink bundle-split-submit" onclick="submitBundleSplit()" disabled>Split Bundle</button>
+    <div id="bulkDistributionSelectedSummary" class="bundle-selected-summary bg-light rounded p-3 mb-3" hidden><div class="d-flex justify-content-between align-items-start gap-3 mb-1"><strong id="bulkDistributionSelectedName"></strong><span id="bulkDistributionSelectedStatus" class="badge"></span></div><div id="bulkDistributionBundleSummary" class="small text-muted"></div><div id="bulkDistributionSplitInto" class="small mt-2" hidden></div></div>
+    <div id="bulkDistributionModes" class="bundle-action-tabs mb-3" role="tablist" aria-label="Bundle action" onkeydown="handleBulkDistributionModeKey(event)">
+      <button type="button" id="bulkDistributionDistributeTab" role="tab" aria-controls="bulkDistributionDistributePanel" aria-selected="true" onclick="setBulkDistributionMode('distribute')">Distribute items</button>
+      <button type="button" id="bulkDistributionSplitTab" role="tab" aria-controls="bulkDistributionSplitPanel" aria-selected="false" tabindex="-1" onclick="setBulkDistributionMode('split')" disabled>Split bundle</button>
     </div>
     <div id="bulkDistributionProductsLoading" class="text-center text-muted py-3" style="display:none;"><span class="app-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Loading Product Master...</span></div>
     <div id="bulkDistributionProductsError" class="alert alert-danger" style="display:none;" role="alert"></div>
     <datalist id="bulkDistributionProductList"></datalist>
-    <div class="delivery-line-scroll mb-3">
-      <div class="delivery-line-head direct"><span>#</span><span>Type</span><span>Product</span><span>Actual Qty</span><span></span></div>
-      <div id="bulkDistributionLines"></div>
+    <section id="bulkDistributionDistributePanel" role="tabpanel" aria-labelledby="bulkDistributionDistributeTab">
+      <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+        <h6 class="fw-semibold mb-0">Items to distribute</h6>
+        <button type="button" id="bulkDistributionAddItemBtn" class="btn btn-sm btn-outline-pink delivery-add-item" onclick="addBulkDistributionLine()">+ Add Item</button>
+      </div>
+      <div id="bulkDistributionSoldInfo" class="small text-muted bg-light rounded p-2 mb-2" hidden></div>
+      <div id="bulkDistributionItemsTable" class="delivery-line-scroll">
+        <div class="delivery-line-head direct"><span>#</span><span>Product</span><span class="text-end">Actual qty</span><span></span></div>
+        <div id="bulkDistributionLines"></div>
+      </div>
+      <div id="bulkDistributionLockedMessage" class="bundle-locked-message small text-muted bg-light rounded p-3" hidden></div>
+      <div class="bundle-count-total small text-muted mt-2" aria-live="polite"><span id="bulkDistributionCountLabel">Total entered</span> <strong id="bulkDistributionSelectedActualQty" class="text-dark">0 pcs</strong></div>
+      <p id="bulkDistributionCountNote" class="small text-muted mt-2 mb-0" hidden>Enter the actual remaining pieces. The estimate does not limit your count.</p>
+    </section>
+    <section id="bulkDistributionSplitPanel" role="tabpanel" aria-labelledby="bulkDistributionSplitTab" hidden>
+      <div id="bulkDistributionSplitControls" hidden>
+        <h6 id="bulkDistributionSplitLabel" class="fw-semibold mb-2">Split into</h6>
+        <input id="bulkDistributionSplitParts" type="hidden" value="">
+        <div class="bundle-fraction-options" role="group" aria-labelledby="bulkDistributionSplitLabel">
+          <button type="button" class="btn btn-outline-pink" data-bundle-split-parts="2" aria-label="Split into halves" aria-pressed="false" onclick="selectBundleSplitFraction(2)"><span class="bundle-fraction-value">½</span><span id="bulkDistributionSplitOption2" class="small"></span></button>
+          <button type="button" class="btn btn-outline-pink" data-bundle-split-parts="3" aria-label="Split into thirds" aria-pressed="false" onclick="selectBundleSplitFraction(3)"><span class="bundle-fraction-value">⅓</span><span id="bulkDistributionSplitOption3" class="small"></span></button>
+          <button type="button" class="btn btn-outline-pink" data-bundle-split-parts="4" aria-label="Split into quarters" aria-pressed="false" onclick="selectBundleSplitFraction(4)"><span class="bundle-fraction-value">¼</span><span id="bulkDistributionSplitOption4" class="small"></span></button>
+        </div>
+        <div class="bundle-split-result mt-3" aria-live="polite" aria-atomic="true"><div id="bulkDistributionSplitPreview" class="fw-semibold">Choose a fraction</div><div id="bulkDistributionSplitSource" class="small text-muted"></div></div>
+        <div id="bulkDistributionSplitResultRows" class="mt-2"></div>
+        <p class="small text-muted mt-2 mb-0">The original bundle stays in history as Split.</p>
+        <div id="bulkDistributionSplitDraftNotice" class="alert alert-warning small mt-3 mb-0" role="alert" hidden>Splitting replaces the unsaved item rows for this bundle. Select Confirm split to continue.</div>
+      </div>
+    </section>
+    <div class="bundle-action-fields border-top pt-3 mt-4">
+      <div><label for="bulkDistributionEmployee" id="bulkDistributionEmployeeLabel" class="form-label">Distributed by</label><input id="bulkDistributionEmployee" class="form-control" readonly></div>
+      <div><label for="bulkDistributionRemarks" class="form-label">Remarks <span class="small text-muted">(optional)</span></label><textarea id="bulkDistributionRemarks" class="form-control" rows="1" placeholder="Add a note about this bundle"></textarea></div>
     </div>
-    <div class="delivery-summary mb-4" aria-live="polite"><span id="bulkDistributionProductSummary"></span></div>
-    <div class="fw-semibold mb-2">Delivery Summary</div>
-    <div class="row g-2 text-center mb-4" aria-live="polite">
-      <div class="col-4"><div class="bg-light rounded p-3"><div class="small text-muted">Delivery Estimate</div><div id="bulkDistributionEstimatedQty" class="fw-bold fs-4">0</div></div></div>
-      <div class="col-4"><div class="bg-light rounded p-3"><div class="small text-muted">Actual Counted</div><div id="bulkDistributionActualQty" class="fw-bold fs-4">0</div></div></div>
-      <div class="col-4"><div class="bg-light rounded p-3"><div class="small text-muted">Current Variance</div><div id="bulkDistributionCurrentVariance" class="fw-bold fs-4">0</div></div></div>
-    </div>
-    <div class="mb-3"><label for="bulkDistributionEmployee" class="form-label">Distributed By</label><input id="bulkDistributionEmployee" class="form-control" readonly></div>
-    <div class="mb-4"><label for="bulkDistributionRemarks" class="form-label">Remarks</label><textarea id="bulkDistributionRemarks" class="form-control" rows="2" placeholder="Optional notes"></textarea></div>
-    <div class="d-flex gap-2">
-      <button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeBulkDistributionModal()">Cancel</button>
-      <button type="button" id="confirmBulkDistributionBtn" class="btn btn-outline-secondary flex-fill fw-bold" onclick="submitBulkDistribution(false)">Save</button>
-      <button type="button" id="completeBulkDistributionBtn" hidden class="btn btn-pink flex-fill fw-bold" onclick="submitBulkDistribution(true)">Done Distribution</button>
+    <div class="bundle-action-footer border-top pt-3 mt-4">
+      <span id="bulkDistributionSaveState" class="small text-muted" role="status" aria-live="polite"></span>
+      <button type="button" class="btn btn-outline-secondary" onclick="closeBulkDistributionModal()">Cancel</button>
+      <button type="button" id="confirmBulkDistributionBtn" class="btn btn-pink fw-bold" onclick="submitBulkDistribution(false)">Save distribution</button>
+      <button id="bulkDistributionSplitBtn" type="button" class="btn btn-pink fw-bold" onclick="submitBundleSplit()" hidden disabled>Split Bundle</button>
+      <button type="button" id="completeBulkDistributionBtn" hidden class="btn btn-pink fw-bold" onclick="submitBulkDistribution(true)">Done Distribution</button>
     </div>
   </div>
 </div>
@@ -143,6 +149,8 @@ function openInventoryBundleDelivery(item, choice) {
   openBulkDistributionModal(current.deliveryId,current.sheetRow,getCurrentDeliveryEmployeeName(),current.bundleNo);
 }
 
+let bulkDistributionMode = 'distribute';
+let bulkDistributionSplitConfirmation = '';
 let bulkDistributionSaving = false;
 let bulkDistributionRequest = 0;
 let bulkDistributionHolder = null;
@@ -209,6 +217,7 @@ function openBulkDistributionModal(deliveryId, sheetRow, employee, bundleNo) {
   const request = ++bulkDistributionRequest;
   const catalog = cachedDeliveryCatalog();
   const cachedHolder = cachedBundleDistributionDetails_(deliveryId,sheetRow)?.data;
+  bulkDistributionMode = 'distribute';bulkDistributionSplitConfirmation = '';
   bulkDistributionHolder = null;
   bulkDistributionProducts = [];
   bulkDistributionLineCounter = 0;
@@ -254,6 +263,7 @@ function closeBulkDistributionModal() {
   if (bulkDistributionSaving) return;
   bulkDistributionRequest++;
   document.getElementById("bulkDistributionModal").style.display = "none";
+  bulkDistributionMode = 'distribute';bulkDistributionSplitConfirmation = '';
   bulkDistributionHolder = null; bulkDistributionProducts = []; bulkDistributionEmployee = "";
 }
 
@@ -266,35 +276,47 @@ function renderBulkDistributionHolder() {
 }
 
 function renderBulkDistributionTabs() {
-  const box = document.getElementById("bulkDistributionBundleTabs");
-  box.replaceChildren();
-  const bundles = bulkDistributionHolder.bundles || [];
-  const label=document.createElement('label');label.htmlFor='bulkDistributionBundleSelect';label.className='small text-muted';label.textContent='Bundle';
+  const box=document.getElementById('bulkDistributionBundleTabs');box.replaceChildren();
+  const bundles=bulkDistributionHolder.bundles||[],compact=bundles.length<=3;
+  box.classList.toggle('bundle-navigation-small',compact);
+  const label=document.createElement(compact?'span':'label');label.className='small text-muted';label.textContent='Bundle';
+  if(!compact)label.htmlFor='bulkDistributionBundleSelect';
+  box.append(label);
+  if(compact){
+    const group=document.createElement('div');group.className='delivery-mode-toggle bundle-navigation-toggle';
+    bundles.forEach(bundle=>{
+      const button=document.createElement('button');button.type='button';button.className='btn btn-outline-pink';
+      button.textContent=bundle.label||bundleDisplayName_(bulkDistributionHolder.deliveryId,bundle.bundleNo);
+      button.title=bulkDistributionBundleStatus_(bundle);button.disabled=bulkDistributionSaving;
+      button.setAttribute('aria-label',button.textContent+' · '+button.title);
+      button.setAttribute('aria-pressed',String(Number(bundle.bundleNo)===bulkDistributionSelectedBundleNo));
+      button.onclick=()=>selectBulkDistributionBundle(bundle.bundleNo,'toggle');group.append(button);
+    });box.append(group);return;
+  }
   const select=document.createElement('select');select.id='bulkDistributionBundleSelect';select.className='form-select';select.disabled=bulkDistributionSaving;
-  bundles.forEach(function(bundle) {
+  bundles.forEach(bundle=>{
     const option=document.createElement('option');option.value=bundle.bundleNo;
     option.textContent=(bundle.label||bundleDisplayName_(bulkDistributionHolder.deliveryId,bundle.bundleNo))+' · '+bulkDistributionBundleStatus_(bundle)+(bundle.actualQuantity?' · '+bundle.actualQuantity+' pcs':'');
     option.selected=Number(bundle.bundleNo)===bulkDistributionSelectedBundleNo;select.append(option);
-  });
-  select.onchange=()=>selectBulkDistributionBundle(select.value,'select');
+  });select.onchange=()=>selectBulkDistributionBundle(select.value,'select');
   const nav=document.createElement('div');nav.className='delivery-bundle-nav d-flex gap-1';
   const index=bundles.findIndex(bundle=>Number(bundle.bundleNo)===bulkDistributionSelectedBundleNo);
   [[-1,'previous','Previous bundle','‹'],[1,'next','Next bundle','›']].forEach(([offset,key,title,icon])=>{
     const button=document.createElement('button');button.type='button';button.className='btn btn-outline-secondary';
     button.dataset.distributionNavigation=key;button.title=title;button.setAttribute('aria-label',title);button.textContent=icon;
     button.disabled=bulkDistributionSaving||!bundles[index+offset];button.onclick=()=>selectBulkDistributionBundle(bundles[index+offset].bundleNo,key);nav.append(button);
-  });
-  box.append(label,select,nav);
+  });box.append(select,nav);
 }
 
 function bulkDistributionBundleStatus_(bundle){
-  return bundle.split?'Split':bundle.returned?'Returned':Number(bundle.actualQuantity)>0?'Distributed':bundle.fullSold||Number(bundle.soldHalves)>=2?'Sold':Number(bundle.soldHalves)>0?'Partially sold':'Unopened';
+  return bundle.split?'Split':bundle.returned?'Returned':Number(bundle.actualQuantity)>0?'Distribution saved':bundle.fullSold?'Sold':Number(bundle.soldHalves)>=2?'2 halves sold':Number(bundle.soldHalves)>0?'Half sold':'Unopened';
 }
 function selectBulkDistributionBundle(bundleNo,focus) {
   if (bulkDistributionSaving) return;
   const requested = (bulkDistributionHolder && bulkDistributionHolder.bundles || []).find(b => Number(b.bundleNo) === Number(bundleNo));
   if (!requested) return;
   bulkDistributionSelectedBundleNo = Number(bundleNo) || 1;
+  bulkDistributionMode='distribute';bulkDistributionSplitConfirmation='';
   document.getElementById('bulkDistributionSplitParts').value='';
   renderBulkDistributionTabs();
   let index = 0;
@@ -304,10 +326,10 @@ function selectBulkDistributionBundle(bundleNo,focus) {
     if (selected) row.querySelector(".delivery-line-number").textContent = ++index;
   });
   const addButton = document.getElementById("bulkDistributionAddItemBtn");
-  if (addButton) addButton.disabled = !!(getSelectedBulkBundle() || {}).disabled;
+  if (addButton) addButton.disabled = bulkDistributionBundleLocked_(getSelectedBulkBundle());
   updateBulkDistributionSummary();
   if(focus){const control=focus==='select'?document.getElementById('bulkDistributionBundleSelect'):document.querySelector('#bulkDistributionBundleTabs [data-distribution-navigation="'+focus+'"]');
-    if(control&&!control.disabled)control.focus();else document.getElementById('bulkDistributionBundleSelect')?.focus();}
+    if(control&&!control.disabled)control.focus();else (document.getElementById('bulkDistributionBundleSelect')||document.querySelector('#bulkDistributionBundleTabs [aria-pressed="true"]'))?.focus();}
 }
 function getSelectedBulkBundle(){return (bulkDistributionHolder&&bulkDistributionHolder.bundles||[]).find(function(b){return Number(b.bundleNo)===Number(bulkDistributionSelectedBundleNo);})||null;}
 
@@ -320,17 +342,17 @@ function restoreBulkDistributionLines() {
     });
   });
   selectBulkDistributionBundle(selectedBundleNo);
-  if (!(getSelectedBulkBundle()||{}).disabled && !getBulkDistributionLines(selectedBundleNo,true).length && bulkDistributionProducts.length) addBulkDistributionLine();
+  if (!bulkDistributionBundleLocked_(getSelectedBulkBundle()) && !getBulkDistributionLines(selectedBundleNo,true).length && bulkDistributionProducts.length) addBulkDistributionLine();
 }
 
 function addBulkDistributionLine(saved) {
   if(bulkDistributionSaving)return;
-  if(!saved&&(getSelectedBulkBundle()||{}).disabled){showNotificationToast("This bundle is unavailable.",true);return;}
+  if(!saved&&bulkDistributionBundleLocked_(getSelectedBulkBundle())){showNotificationToast("This bundle is unavailable.",true);return;}
   if(!saved && !bulkDistributionProducts.length){showNotificationToast("Product Master is still loading.",true);return;}
   bulkDistributionLineCounter++; const id=bulkDistributionLineCounter; const c=document.getElementById("bulkDistributionLines"); const line=document.createElement("div");
   line.className="bulk-distribution-line delivery-line direct";
   line.dataset.bundleNo = bulkDistributionSelectedBundleNo;
-  line.innerHTML=`<span class="delivery-line-number"></span><input class="form-control form-control-sm bulk-distribution-type" aria-label="Type" readonly><div><input type="text" class="form-control form-control-sm bulk-distribution-product-search" aria-label="Product" placeholder="Search product name or code" autocomplete="off" list="bulkDistributionProductList" oninput="handleBulkDistributionProductSearch(this)"><input type="hidden" class="bulk-distribution-product-code"></div><input type="number" class="form-control form-control-sm bulk-distribution-qty" aria-label="Actual quantity" min="1" step="1" value="1" oninput="updateBulkDistributionSummary()"><button type="button" class="btn btn-sm btn-outline-danger" aria-label="Remove item" onclick="removeBulkDistributionLine(this)">×</button>`;
+  line.innerHTML=`<span class="delivery-line-number"></span><div><input type="hidden" class="bulk-distribution-type"><input type="text" class="form-control form-control-sm bulk-distribution-product-search" aria-label="Product" placeholder="Search product name or code" autocomplete="off" list="bulkDistributionProductList" oninput="handleBulkDistributionProductSearch(this)"><input type="hidden" class="bulk-distribution-product-code"></div><input type="number" class="form-control form-control-sm bulk-distribution-qty" aria-label="Actual quantity" min="1" step="1" value="1" oninput="updateBulkDistributionSummary()"><button type="button" class="btn btn-sm btn-outline-danger" aria-label="Remove item" onclick="removeBulkDistributionLine(this)">×</button>`;
   line.querySelector(".bulk-distribution-type").value = bulkDistributionHolder.type;
   c.appendChild(line);
   if (saved) {
@@ -350,32 +372,86 @@ function handleBulkDistributionProductSearch(input){const line=input.closest(".b
 function removeBulkDistributionLine(button){const line=button.closest(".bulk-distribution-line");if(line)line.remove();selectBulkDistributionBundle(bulkDistributionSelectedBundleNo);}
 function getBulkDistributionLines(bundleNo, includeSaved){return Array.from(document.querySelectorAll("#bulkDistributionLines .bulk-distribution-line")).filter(row=>(includeSaved || row.dataset.saved !== "true") && (bundleNo===undefined || Number(row.dataset.bundleNo)===Number(bundleNo))).map(function(row){const code=String(row.querySelector(".bulk-distribution-product-code").value||"").trim();const qty=Number(row.querySelector(".bulk-distribution-qty").value)||0;return{productCode:code,quantity:qty,bundleNo:Number(row.dataset.bundleNo)};});}
 
+function bulkDistributionBundleLocked_(bundle) {
+  return !!(bundle&&(bundle.disabled||bundle.split));
+}
+function bulkDistributionCanSplit_() {
+  const holder=bulkDistributionHolder,bundle=getSelectedBulkBundle();
+  return !!holder&&!!bundle&&!bundle.disabled&&!bundle.split&&!(Number(bundle.parentBundleNo)>0)&&!bundle.fullSold&&!bundle.returned&&
+    !Number(bundle.actualQuantity)&&!Number(bundle.soldHalves)&&
+    (!!bundle.productCode||Object.keys(holder.physicalProducts||{}).length>0);
+}
+function setBulkDistributionMode(mode) {
+  if(bulkDistributionSaving||!['distribute','split'].includes(mode)||!bulkDistributionHolder)return;
+  if(getSelectedBulkBundle()?.split)return;
+  if(mode==='split'&&!bulkDistributionCanSplit_())return;
+  bulkDistributionMode=mode;bulkDistributionSplitConfirmation='';
+  if(mode==='split'){
+    const bundle=getSelectedBulkBundle(),pieces=Number(bundle.estimatedQuantity)||bulkDistributionHolder.estimatedQuantity/bulkDistributionHolder.bundleQty;
+    const parts=[2,3,4].find(value=>Number.isSafeInteger(pieces/value)&&pieces/value>0);
+    document.getElementById('bulkDistributionSplitParts').value=parts?String(parts):'';
+  }
+  updateBulkDistributionSummary();
+}
+function handleBulkDistributionModeKey(event) {
+  if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+  const buttons=Array.from(document.querySelectorAll('#bulkDistributionModes [role="tab"]')).filter(button=>!button.disabled);
+  if(!buttons.includes(event.target)||!buttons.length)return;
+  event.preventDefault();const index=buttons.indexOf(event.target);
+  const next=event.key==='Home'?buttons[0]:event.key==='End'?buttons[buttons.length-1]:buttons[(index+(event.key==='ArrowRight'?1:buttons.length-1))%buttons.length];
+  setBulkDistributionMode(next.id==='bulkDistributionSplitTab'?'split':'distribute');next.focus();
+}
+function updateBulkDistributionMode_() {
+  const canSplit=bulkDistributionCanSplit_();
+  const selected=getSelectedBulkBundle();
+  if(bulkDistributionMode==='split'&&!canSplit)bulkDistributionMode='distribute';
+  const split=bulkDistributionMode==='split';
+  ['Distribute','Split'].forEach(name=>{
+    const button=document.getElementById('bulkDistribution'+name+'Tab'),active=(name==='Split')===split;
+    button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1;
+    button.disabled=bulkDistributionSaving||!bulkDistributionHolder||!!selected?.split||(name==='Split'&&!canSplit);
+    button.title=selected?.split?'Original bundle already split':name==='Split'&&selected?.parentBundleNo?'Resulting bundles cannot be split again':'';
+  });
+  document.getElementById('bulkDistributionDistributePanel').hidden=split;
+  document.getElementById('bulkDistributionSplitPanel').hidden=!split;
+  document.getElementById('confirmBulkDistributionBtn').hidden=split;
+  document.getElementById('bulkDistributionSplitBtn').hidden=!split;
+  document.getElementById('completeBulkDistributionBtn').hidden=split||!bulkDistributionAllAccountedFor();
+  document.getElementById('bulkDistributionEmployeeLabel').textContent=split?'Split by':'Distributed by';
+}
 function updateBulkDistributionSummary() {
-  const h = bulkDistributionHolder;
-  const total = lines => lines.reduce((sum, line) => sum + (line.productCode ? line.quantity : 0), 0);
-  const selectedLines = getBulkDistributionLines(bulkDistributionSelectedBundleNo);
-  const selected = getSelectedBulkBundle();
-  const bundleActual = (Number(selected && selected.actualQuantity) || 0) + total(selectedLines);
-  const estimate = Number(h && h.estimatedQuantity) || 0;
-  const actual = (Number(h && h.actualQuantity) || 0) + total(getBulkDistributionLines());
-  const bundleEstimate = Number(selected && selected.estimatedQuantity) || (h ? estimate / (Number(h.bundleQty) || 1) : 0);
+  const h=bulkDistributionHolder,selected=getSelectedBulkBundle();
+  const selectedLines=getBulkDistributionLines(bulkDistributionSelectedBundleNo);
+  const bundleActual=(Number(selected&&selected.actualQuantity)||0)+selectedLines.reduce((sum,line)=>sum+(line.productCode?line.quantity:0),0);
+  const estimate=Number(selected&&selected.estimatedQuantity)||(h?Number(h.estimatedQuantity)/(Number(h.bundleQty)||1):0);
+  const halves=Number(selected&&selected.soldHalves)||0,locked=bulkDistributionBundleLocked_(selected);
   document.getElementById('bulkDistributionSelectedSummary').hidden=!h;
   document.getElementById('bulkDistributionSelectedName').textContent=selected&&selected.description||h&&h.description||'';
   const status=selected?bulkDistributionBundleStatus_(selected):'',badge=document.getElementById('bulkDistributionSelectedStatus');
-  badge.textContent=status;badge.className='badge '+({Unopened:'bg-warning text-dark',Distributed:'bg-success',Sold:'bg-danger','Partially sold':'bg-info text-dark'}[status]||'bg-secondary');
-  document.getElementById("bulkDistributionBundleSummary").textContent = "Estimated: " + Number(bundleEstimate.toFixed(2)) + " pcs · Counted: " + bundleActual + " pcs";
-  const products = new Map();
-  getBulkDistributionLines(bulkDistributionSelectedBundleNo, true).forEach(function(line) {
-    const product = bulkDistributionProducts.find(p => String(p.productCode) === line.productCode);
-    if (product) products.set(product.description, (products.get(product.description) || 0) + line.quantity);
-  });
-  document.getElementById("bulkDistributionProductSummary").textContent = Array.from(products, ([name, qty]) => name + " " + qty).join(" · ");
-  document.getElementById('bulkDistributionProductSummary').parentElement.hidden=!products.size;
-  document.getElementById("bulkDistributionEstimatedQty").textContent = estimate;
-  document.getElementById("bulkDistributionActualQty").textContent = actual;
-  document.getElementById("bulkDistributionCurrentVariance").textContent = (actual > estimate ? "+" : "") + (actual - estimate);
-  document.getElementById('completeBulkDistributionBtn').hidden=!bulkDistributionAllAccountedFor();
-  updateBulkDistributionSplit();
+  badge.textContent=status;badge.className='badge '+({'Distribution saved':'bg-success',Sold:'bg-danger','Half sold':'bg-info text-dark','2 halves sold':'bg-info text-dark'}[status]||'bg-secondary');
+  document.getElementById('bulkDistributionBundleSummary').textContent='Estimated: '+Number(estimate.toFixed(2))+' pcs'+(halves?' · Remaining estimate: '+Math.max(0,estimate*(1-halves/2))+' pcs':'');
+  const splitInto=document.getElementById('bulkDistributionSplitInto'),parentNo=Number(selected?.parentBundleNo)||0;
+  splitInto.hidden=!selected?.split&&!parentNo;
+  const children=(h?.bundles||[]).filter(bundle=>Number(bundle.parentBundleNo)===Number(selected?.bundleNo));
+  if(parentNo&&!selected?.split){const parent=(h?.bundles||[]).find(bundle=>Number(bundle.bundleNo)===parentNo);splitInto.textContent='Split from: '+(parent?.label||bundleDisplayName_(h.deliveryId,parentNo))+'. Further splitting is disabled.';}
+  else splitInto.textContent=children.length?'Split into: '+children.map(bundle=>(bundle.label||bundleDisplayName_(h.deliveryId,bundle.bundleNo))+(Number(bundle.estimatedQuantity)>0?' ('+Number(bundle.estimatedQuantity)+' pcs)':'')).join(', '):'Split completed. Resulting bundle codes are not available.';
+  document.getElementById('bulkDistributionSelectedActualQty').textContent=bundleActual+' pcs';
+  document.getElementById('bulkDistributionCountLabel').textContent=Number(selected&&selected.actualQuantity)>0?'Actual counted':'Total entered';
+  const soldInfo=document.getElementById('bulkDistributionSoldInfo');soldInfo.hidden=!halves||locked;
+  soldInfo.textContent=halves+' half bundle'+(halves===1?'':'s')+' sold · '+(estimate*halves/2)+' pcs estimated';
+  document.getElementById('bulkDistributionCountNote').hidden=!halves||locked;
+  const unavailable=!!selected&&(selected.fullSold||selected.split||selected.returned);
+  document.getElementById('bulkDistributionItemsTable').hidden=unavailable;
+  const message=document.getElementById('bulkDistributionLockedMessage');message.hidden=!unavailable;
+  message.textContent=selected&&selected.split?'This original bundle is read only. Select a resulting bundle to distribute its items.':selected&&selected.returned?'This bundle was returned to the supplier.': 'Sold as a full bundle. Distribution is unavailable.';
+  const drafts=getBulkDistributionLines(),valid=drafts.length>0&&drafts.every(line=>line.productCode&&Number.isSafeInteger(line.quantity)&&line.quantity>0);
+  document.getElementById('bulkDistributionSaveState').textContent=locked?'Read only':drafts.length?'Unsaved changes':'No items added';
+  document.getElementById('bulkDistributionAddItemBtn').disabled=bulkDistributionSaving||!h||locked||!bulkDistributionProducts.length;
+  document.getElementById('bulkDistributionRemarks').disabled=bulkDistributionSaving||locked;
+  document.getElementById('confirmBulkDistributionBtn').disabled=bulkDistributionSaving||!h||locked||!valid;
+  if(!bulkDistributionSaving)document.getElementById('confirmBulkDistributionBtn').textContent=locked&&Number(selected.actualQuantity)>0?'Saved':'Save distribution';
+  document.getElementById('completeBulkDistributionBtn').disabled=bulkDistributionSaving||!h||!bulkDistributionAllAccountedFor()||(drafts.length>0&&!valid);
+  updateBulkDistributionMode_();updateBulkDistributionSplit();
 }
 
 function bulkDistributionAllAccountedFor() {
@@ -386,34 +462,47 @@ function selectBundleSplitFraction(parts) {
   if(bulkDistributionSaving)return;
   const button=document.querySelector('[data-bundle-split-parts="'+parts+'"]');
   if(!button||button.disabled)return;
+  bulkDistributionSplitConfirmation='';
   document.getElementById('bulkDistributionSplitParts').value=String(parts);
   updateBulkDistributionSplit();
 }
 function updateBulkDistributionSplit() {
   const holder=bulkDistributionHolder,bundle=getSelectedBulkBundle();
-  const controls=document.getElementById('bulkDistributionSplitControls');
-  const pieces=Number(bundle&&bundle.estimatedQuantity)||Number(holder&&holder.estimatedQuantity)/Number(holder&&holder.bundleQty);
-  const linked=!!(bundle&&bundle.productCode)||!!(holder&&Object.keys(holder.physicalProducts||{}).length);
-  controls.hidden=!holder||!bundle||bundle.disabled||Number(bundle.soldHalves)>0||!linked;
+  const controls=document.getElementById('bulkDistributionSplitControls');controls.hidden=!bulkDistributionCanSplit_();
+  const pieces=Number(bundle&&bundle.estimatedQuantity)||(holder?Number(holder.estimatedQuantity)/Number(holder.bundleQty):0);
   const parts=Number(document.getElementById('bulkDistributionSplitParts').value);
   document.querySelectorAll('[data-bundle-split-parts]').forEach(button=>{
-    const fraction=Number(button.dataset.bundleSplitParts);
-    const wholePieces=Number.isSafeInteger(pieces/fraction)&&pieces/fraction>=1;
-    button.disabled=bulkDistributionSaving||!wholePieces;
+    const fraction=Number(button.dataset.bundleSplitParts),wholePieces=Number.isSafeInteger(pieces/fraction)&&pieces/fraction>=1;
+    button.disabled=bulkDistributionSaving||controls.hidden||!wholePieces;
     button.setAttribute('aria-pressed',String(fraction===parts));
     button.title=wholePieces?'Create '+fraction+' bundles of '+(pieces/fraction)+' pcs':'Requires whole pieces per bundle';
+    document.getElementById('bulkDistributionSplitOption'+fraction).textContent=wholePieces?fraction+' × '+pieces/fraction+' pcs':'Not whole pieces';
   });
-  const draft=Array.from(document.querySelectorAll('#bulkDistributionLines .bulk-distribution-line')).some(row=>Number(row.dataset.bundleNo)===bulkDistributionSelectedBundleNo&&row.dataset.saved!=='true'&&row.querySelector('.bulk-distribution-product-search').value.trim());
   const valid=[2,3,4].includes(parts)&&Number.isSafeInteger(pieces/parts)&&pieces/parts>0;
-  document.getElementById('bulkDistributionSplitBtn').disabled=bulkDistributionSaving||controls.hidden||!valid||draft;
-  document.getElementById('bulkDistributionSplitPreview').textContent=draft?'Save or remove selected item rows first.':valid?parts+' bundles × '+(pieces/parts)+' pcs':'Choose a fraction';
-  document.getElementById('bulkDistributionSplitSource').textContent=Number.isFinite(pieces)?'From 1 bundle · '+pieces+' pcs':'';
+  const confirmed=bulkDistributionSplitConfirmation===bulkDistributionSelectedBundleNo+':'+parts;
+  const button=document.getElementById('bulkDistributionSplitBtn');button.disabled=bulkDistributionSaving||controls.hidden||bulkDistributionMode!=='split'||!valid;
+  if(!bulkDistributionSaving)button.textContent=confirmed?'Confirm split':valid?'Split into '+parts+' bundles':'Split bundle';
+  document.getElementById('bulkDistributionSplitDraftNotice').hidden=!confirmed;
+  document.getElementById('bulkDistributionSplitPreview').textContent=valid?'Resulting bundles':'Choose a fraction';
+  document.getElementById('bulkDistributionSplitSource').textContent=pieces>0?'From 1 bundle · '+pieces+' pcs':'';
+  const rows=document.getElementById('bulkDistributionSplitResultRows');rows.replaceChildren();
+  if(valid){
+    const parentLabel=bundle.label||bundleDisplayName_(holder.deliveryId,bundle.bundleNo);
+    for(let index=1;index<=parts;index++){
+      const row=document.createElement('div');row.className='bundle-split-result-line';
+      const label=document.createElement('span');label.textContent='Bundle '+parentLabel+'-'+index;
+      const quantity=document.createElement('strong');quantity.textContent=pieces/parts+' pcs';row.append(label,quantity);rows.append(row);
+    }
+  }
 }
+
 function submitBundleSplit() {
-  if(bulkDistributionSaving||!bulkDistributionHolder)return;
+  if(bulkDistributionSaving||!bulkDistributionHolder||bulkDistributionMode!=='split')return;
   updateBulkDistributionSplit();
   const button=document.getElementById('bulkDistributionSplitBtn');if(button.disabled)return;
   const bundleNo=bulkDistributionSelectedBundleNo,parts=Number(document.getElementById('bulkDistributionSplitParts').value);
+  const draft=Array.from(document.querySelectorAll('#bulkDistributionLines .bulk-distribution-line')).some(row=>Number(row.dataset.bundleNo)===bundleNo&&row.dataset.saved!=='true'&&row.querySelector('.bulk-distribution-product-search').value.trim());
+  if(draft&&bulkDistributionSplitConfirmation!==bundleNo+':'+parts){bulkDistributionSplitConfirmation=bundleNo+':'+parts;updateBulkDistributionSplit();return;}
   const request=bulkDistributionRequest;
   document.getElementById('bulkDistributionProductsError').style.display='none';
   setBulkDistributionSaving(true);button.innerHTML=loadingIndicator('Splitting…');
@@ -442,20 +531,21 @@ function submitBundleSplit() {
 function setBulkDistributionSaving(saving) {
   bulkDistributionSaving = saving;
   document.querySelectorAll("#bulkDistributionModal button, #bulkDistributionModal input, #bulkDistributionModal textarea, #bulkDistributionModal select").forEach(control => { control.disabled = saving || (control.tagName === "BUTTON" && !!control.closest('[data-saved="true"]')); });
-  document.getElementById("confirmBulkDistributionBtn").innerHTML = saving ? loadingIndicator("Saving...") : "Save";
+  document.getElementById("confirmBulkDistributionBtn").innerHTML = saving ? loadingIndicator("Saving...") : "Save distribution";
   renderBulkDistributionTabs();
-  document.getElementById('bulkDistributionAddItemBtn').disabled=saving||!!(getSelectedBulkBundle()||{}).disabled;
+  document.getElementById('bulkDistributionAddItemBtn').disabled=saving||bulkDistributionBundleLocked_(getSelectedBulkBundle());
   updateBulkDistributionSummary();
 }
 
 function submitBulkDistribution(complete) {
-  if (bulkDistributionSaving) return;
+  if (bulkDistributionSaving||bulkDistributionMode!=='distribute') return;
+  if(getSelectedBulkBundle()?.split)return showNotificationToast('Select a resulting bundle to distribute its items.',true);
   if (!bulkDistributionHolder) return showNotificationToast("BUNDLE holder is not loaded.", true);
   if (complete && !bulkDistributionAllAccountedFor()) return showNotificationToast('Distribute or sell every remaining bundle before finishing.',true);
   const employee = bulkDistributionEmployee;
   if (!employee) return showNotificationToast("Unable to identify the logged-in employee.", true);
   const lines = getBulkDistributionLines();
-  if (!lines.length && !complete) { closeBulkDistributionModal(); return showNotificationToast("Saved entries are already up to date."); }
+  if (!lines.length && !complete) return showNotificationToast("Saved entries are already up to date.");
   for (const line of lines) {
     if (!line.productCode || !Number.isInteger(line.quantity) || line.quantity < 1) {
       selectBulkDistributionBundle(line.bundleNo);
@@ -487,8 +577,8 @@ function submitBulkDistribution(complete) {
       } else {
         setBulkDistributionSaving(false);
         const allAccountedFor=bulkDistributionAllAccountedFor();
-        if(!allAccountedFor)closeBulkDistributionModal();
-        showNotificationToast(allAccountedFor?"All bundles accounted for. Select Done Distribution to finish.":"Distribution saved. Open BUNDLE to continue.");
+        renderBulkDistributionTabs();
+        showNotificationToast(allAccountedFor?"All bundles accounted for. Select Done Distribution to finish.":"Distribution saved. Select another bundle to continue.");
         refreshDeliveriesPage();
       }
       return;
