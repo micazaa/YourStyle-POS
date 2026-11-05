@@ -64,6 +64,7 @@ function openCashierBundlePicker(product,index=null) {
   secureScriptRun.withSuccessHandler(result=>{
     if(!current())return;
     if(!result||!result.success)return fail(new Error(result&&result.message||'Unable to load bundles.'));
+    rememberCashierCartBundleChoices(product.code,result);
     if(index!==null&&cart[index]!==product)return fail(new Error('The cart changed. Close this window and choose again.'));
     if(result.managed===false){
       closeCashierBundlePicker();

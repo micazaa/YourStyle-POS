@@ -354,7 +354,7 @@
             <td class="ps-3">${imgTag}</td>
             <td><div class="fw-bold${isSaleItem ? " text-danger" : ""}">${escapeInventoryHtml(
               cashierItemDisplayName(item)
-            )}</div><div class="small${isSaleItem ? " text-danger" : " text-muted"}">${escapeInventoryHtml(item.code)}</div>${cashierBundleKind(item) ? `<button type="button" class="btn btn-link text-start p-0 small" onclick="openCashierBundlePicker(cart[${index}],${index})">${escapeInventoryHtml(item.bundleSelection ? 'Bundle '+item.bundleSelection.label+' · Change' : 'Choose bundle')}</button>${item.bundleSelection ? `<div class="small text-muted text-break">${escapeInventoryHtml(item.bundleSelection.deliveryId)}</div>` : ''}` : ''}</td>
+            )}</div><div class="small${isSaleItem ? " text-danger" : " text-muted"}">${escapeInventoryHtml(item.code)}</div>${cashierBundleKind(item) ? `<select class="form-select form-select-sm mt-1 cart-bundle-select" aria-label="Bundle code for ${escapeInventoryHtml(item.name || item.code)}" data-idx="${index}" data-field="bundle"><option value="">${escapeInventoryHtml(item.bundleSelection ? item.bundleSelection.label : 'Loading bundle codes…')}</option></select>${item.bundleSelection ? `<div class="small text-muted text-break">${escapeInventoryHtml(item.bundleSelection.deliveryId)}</div>` : ''}` : ''}</td>
             <td class="text-center fw-semibold">${item.size || ""}</td>
             <td class="text-center">
               <input type="number" class="form-control form-control-sm text-center mx-auto" style="width:60px; font-weight:600;" value="${
@@ -387,6 +387,12 @@
       fragment.appendChild(tr);
     });
     tbody.appendChild(fragment);
+    tbody.querySelectorAll('.cart-bundle-select').forEach(select => {
+      const item=cart[Number(select.dataset.idx)];
+      loadCashierCartBundleOptions(select,item);
+      select.addEventListener('focus',()=>loadCashierCartBundleOptions(select,item,true));
+      select.addEventListener('change',()=>selectCashierCartBundle(select,item));
+    });
 
     const globalReduction = cartReservation() ? 0 : calculateGlobalDiscount(subtotalAccumulator);
 
@@ -531,6 +537,70 @@ function cashierBundleQuantityLimit(item,index) {
   const others=cart.filter((line,i)=>i!==index&&line.bundleSelection&&cashierBundleKey(line.bundleSelection)===cashierBundleKey(choice));
   if(others.some(line=>line.bundleSelection.kind==='FULL')||(choice.kind==='FULL'&&others.length))return 0;
   return Math.max(0,Number(choice.capacity)||1)-others.reduce((sum,line)=>sum+(Number(line.quantity)||0),0);
+}
+
+var cashierCartBundleCache=null;
+function cashierCartBundleState() {
+  const owner=currentEmployee&&currentEmployee.dashboardToken||'';
+  const version=typeof inventoryDataset==='undefined'?'':inventoryDataset.version||'';
+  if(!cashierCartBundleCache||cashierCartBundleCache.owner!==owner||cashierCartBundleCache.version!==version)
+    cashierCartBundleCache={owner:owner,version:version,choices:new Map(),pending:new Map()};
+  return cashierCartBundleCache;
+}
+function rememberCashierCartBundleChoices(code,result) {
+  cashierCartBundleState().choices.set(String(code),{result:result,time:Date.now()});
+}
+function getCashierCartBundleChoices(code,refresh) {
+  const state=cashierCartBundleState(),key=String(code),cached=state.choices.get(key);
+  if(!refresh&&cached&&Date.now()-cached.time<30000)return Promise.resolve(cached.result);
+  if(state.pending.has(key))return state.pending.get(key);
+  const promise=new Promise((resolve,reject)=>{
+    secureScriptRun.withSuccessHandler(result=>{
+      if(!result||!result.success)return reject(new Error(result&&result.message||'Unable to load bundle codes.'));
+      if(state!==cashierCartBundleState())return reject(new Error('Inventory changed. Choose a bundle again.'));
+      rememberCashierCartBundleChoices(key,result);resolve(result);
+    }).withFailureHandler(reject).getCashierBundleChoices(code);
+  });
+  state.pending.set(key,promise);
+  promise.finally(()=>{if(state.pending.get(key)===promise)state.pending.delete(key);}).catch(()=>{});
+  return promise;
+}
+function loadCashierCartBundleOptions(select,item,refresh=false) {
+  const state=cashierCartBundleState();
+  const current=()=>select.isConnected&&cart.includes(item)&&state===cashierCartBundleState();
+  getCashierCartBundleChoices(item.code,refresh).then(result=>{
+    if(!current())return;
+    const index=cart.indexOf(item),quantity=Number(item.quantity)||1;
+    const choices=(result.choices||[]).filter(choice=>cashierBundleQuantityLimit({bundleSelection:choice},index)>=quantity);
+    select.bundleChoices=choices;select.replaceChildren();
+    const placeholder=document.createElement('option');placeholder.value='';
+    placeholder.textContent=result.managed===false?'No linked bundle':choices.length?'Select bundle code':'No available bundle codes';
+    select.appendChild(placeholder);
+    choices.forEach(choice=>{
+      const option=document.createElement('option');option.value=cashierBundleKey(choice);option.textContent=choice.label;
+      option.title=choice.deliveryId+' · '+(choice.deliveryDate||'');select.appendChild(option);
+    });
+    const selected=item.bundleSelection&&choices.find(choice=>cashierBundleKey(choice)===cashierBundleKey(item.bundleSelection));
+    if(selected)select.value=cashierBundleKey(selected);
+    else if(item.bundleSelection)placeholder.textContent='Selected bundle unavailable';
+    select.disabled=result.managed===false||!!cartReservation();select.title='';
+  }).catch(error=>{
+    if(!current())return;
+    select.title=error.message||String(error);
+    if(!select.bundleChoices){select.options[0].textContent='Unable to load bundle codes';select.value='';}
+    if(refresh)showNotificationToast(select.title,true);
+  });
+}
+function selectCashierCartBundle(select,item) {
+  const index=cart.indexOf(item),choice=(select.bundleChoices||[]).find(choice=>cashierBundleKey(choice)===select.value);
+  if(index<0||cartReservation())return;
+  if(!choice){renderCart();return;}
+  if(cashierBundleQuantityLimit({bundleSelection:choice},index)<(Number(item.quantity)||1)){
+    showNotificationToast('This bundle is already selected in the cart. Choose another bundle.',true);renderCart();return;
+  }
+  const base=item.bundleBaseVariantKey||item.variantKey||item.code;
+  Object.assign(item,{bundleSelection:{...choice},bundleKind:choice.kind,bundleBaseVariantKey:base,variantKey:base+'|BUNDLE|'+cashierBundleKey(choice)});
+  renderCart();saveSession();
 }
 
 var cashierSearchRows = [];

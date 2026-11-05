@@ -5,8 +5,8 @@
   <div data-page-content aria-busy="false">
   <div class="row g-3 mb-4">
     <div class="col-md-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openSupplierReturnSummary('returns')"><span class="card-body"><span class="small text-muted d-block">Return Count</span><strong id="supplierReturnCount" class="fs-4 d-block">0</strong><span id="supplierReturnCountHint" class="small text-muted">YourStyle · YourFinds</span></span></button></div>
-    <div class="col-md-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openSupplierReturnSummary('pieces')"><span class="card-body"><span class="small text-muted d-block">Pieces Returned</span><strong id="supplierReturnPieces" class="fs-4 d-block">0</strong><span class="small text-muted">Returned quantities by product</span></span></button></div>
-    <div class="col-md-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openSupplierReturnSummary('products')"><span class="card-body"><span class="small text-muted d-block">Products Returned</span><strong id="supplierReturnProducts" class="fs-4 d-block">0</strong><span class="small text-muted">Barcodes and return history</span></span></button></div>
+    <div class="col-md-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openSupplierReturnSummary('pieces')"><span class="card-body"><span class="small text-muted d-block">Pieces Returned</span><strong id="supplierReturnPieces" class="fs-4 d-block">0</strong><span class="small text-muted">YourStyle and YourFinds quantities</span></span></button></div>
+    <div class="col-md-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openSupplierReturnSummary('products')"><span class="card-body"><span class="small text-muted d-block">Products Returned</span><strong id="supplierReturnProducts" class="fs-4 d-block">0</strong><span class="small text-muted">YourStyle products · YourFinds sizes</span></span></button></div>
   </div>
   <div class="card border-0 shadow-sm mb-3"><div class="card-body d-flex flex-wrap gap-2"><select id="supplierReturnCategory" class="form-select" style="width:180px" aria-label="Return category" onchange="renderSupplierReturns()"><option value="">All</option><option>YOURFINDS</option><option>YOURSTYLE</option></select><input id="supplierReturnSearch" type="search" class="form-control" style="flex:1;min-width:220px" placeholder="Search code, product, category, supplier..." aria-label="Search returns" oninput="renderSupplierReturns()"></div></div>
   <div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th class="" data-return-sort="id" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','id')">Return <span class="sort-marker">↕</span></button></th><th class="" data-return-sort="type" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','type')">Type <span class="sort-marker">↕</span></button></th><th class="" data-return-sort="returnDate" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','returnDate')">Date <span class="sort-marker">↕</span></button></th><th class="" data-return-sort="driver" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','driver')">Driver / Plate <span class="sort-marker">↕</span></button></th><th class="" data-return-sort="preparedBy" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','preparedBy')">Returned By <span class="sort-marker">↕</span></button></th><th class="" data-return-sort="categories" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','categories')">Categories <span class="sort-marker">↕</span></button></th><th class="text-center" data-return-sort="quantity" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','quantity')">Total <span class="sort-marker">↕</span></button></th><th class="text-center" data-return-sort="status" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','status')">Status <span class="sort-marker">↕</span></button></th><th class="text-start">Actions</th></tr></thead><tbody id="supplierReturnRows"></tbody></table></div></div>
@@ -142,7 +142,8 @@ function renderSupplierReturns(){
   supplierReturnVisible=supplierReturnGroups().filter(group=>(!category||group.items.some(item=>supplierReturnBrand(item)===category))&&[group.id,group.supplier,group.driver,group.plate,group.employee,group.status,...group.items.flatMap(item=>[item.code,item.name,item.category,item.size,item.reason,item.originalDeliveryId])].join(' ').toLowerCase().includes(search));
   document.getElementById('supplierReturnCount').textContent=supplierReturnVisible.length+' returns';
   document.getElementById('supplierReturnPieces').textContent=supplierReturnVisible.reduce((sum,row)=>sum+row.quantity,0)+' pcs';
-  document.getElementById('supplierReturnProducts').textContent=new Set(supplierReturnVisible.flatMap(row=>row.items.map(item=>item.code))).size+' products';
+  const products=supplierReturnProductTotals(),sizes=products.filter(item=>supplierReturnBrand(item)==='YOURFINDS').length;
+  document.getElementById('supplierReturnProducts').textContent=[products.length-sizes?products.length-sizes+' products':'',sizes?sizes+' sizes':''].filter(Boolean).join(' · ')||'0 products';
   document.getElementById('supplierReturnCountHint').textContent=supplierReturnVisible.filter(group=>group.type==='YOURSTYLE').length+' YourStyle · '+supplierReturnVisible.filter(group=>group.type==='YOURFINDS').length+' YourFinds';
   const sort=deliverySummarySort.supplierReturnsMain;
   document.querySelectorAll('[data-return-sort]').forEach(header=>{const selected=sort&&sort.key===header.dataset.returnSort;header.setAttribute('aria-sort',selected?sort.direction===1?'ascending':'descending':'none');header.querySelector('.sort-marker').textContent=selected?sort.direction===1?'↑':'↓':'↕';});
@@ -163,32 +164,51 @@ function renderSupplierReturns(){
 function setSupplierReturnSort(table,key){const previous=deliverySummarySort[table];deliverySummarySort[table]={key:key,direction:previous&&previous.key===key?-previous.direction:1};if(table==='supplierReturnsMain')renderSupplierReturns();else renderSupplierReturnSummary();}
 function openSupplierReturnSummary(kind){supplierReturnSummaryKind=kind;supplierReturnHistoryCode='';document.getElementById('supplierReturnSummary').style.display='flex';renderSupplierReturnSummary();}
 function closeSupplierReturnHistory(){supplierReturnHistoryCode='';renderSupplierReturnSummary();}
+function supplierReturnProductKey(item){
+  const brand=supplierReturnBrand(item);
+  return JSON.stringify([brand,brand==='YOURFINDS'?deliveryDetailSizeKey_(item.size):String(item.code)]);
+}
 function supplierReturnProductTotals(){
-  const products=new Map();supplierReturnVisible.forEach(group=>group.items.forEach(item=>{if(!products.has(item.code))products.set(item.code,{...item,quantity:0,returnIds:new Set()});const total=products.get(item.code);total.quantity+=Number(item.quantity)||0;total.returnIds.add(group.id);}));
-  return Array.from(products.values(),item=>({...item,returns:item.returnIds.size}));
+  const products=new Map();
+  supplierReturnVisible.forEach(group=>group.items.forEach(item=>{
+    const key=supplierReturnProductKey(item),yourFinds=supplierReturnBrand(item)==='YOURFINDS';
+    if(!products.has(key))products.set(key,{...item,key:key,name:yourFinds?deliveryDetailSizeKey_(item.size):item.name,code:yourFinds?'':item.code,quantity:0,returnIds:new Set()});
+    const total=products.get(key);total.quantity+=Number(item.quantity)||0;total.returnIds.add(group.id);
+  }));
+  return Array.from(products.values(),item=>({...item,returns:item.returnIds.size})).sort((a,b)=>{
+    const category=String(a.category).localeCompare(String(b.category));
+    return category||(supplierReturnBrand(a)==='YOURFINDS'?deliveryDetailSizeOrder_(a.name,b.name):String(a.name).localeCompare(String(b.name),undefined,{numeric:true,sensitivity:'base'}));
+  });
 }
 function renderSupplierReturnSummary(){
   const kind=supplierReturnSummaryKind,history=supplierReturnHistoryCode;
   const titles={returns:'Return Count',pieces:'Pieces Returned',products:'Products Returned'};
-  document.getElementById('supplierReturnSummaryTitle').textContent=history?'Item Return History':titles[kind];
+  const products=supplierReturnProductTotals(),selected=products.find(item=>item.key===history);
+  document.getElementById('supplierReturnSummaryTitle').textContent=history?(selected&&supplierReturnBrand(selected)==='YOURFINDS'?'Size Return History':'Item Return History'):titles[kind];
   document.getElementById('supplierReturnHistoryBack').hidden=!history;
   const message=document.getElementById('supplierReturnSummaryMessage');message.textContent=history?'': 'Matches the Return page filters.';
   document.getElementById('supplierReturnSummaryBreakdown').innerHTML=deliverySummaryStats(['YOURSTYLE','YOURFINDS'].map(type=>{
-    const groups=supplierReturnVisible.filter(group=>group.type===type),items=groups.flatMap(group=>group.items);
-    return [type==='YOURSTYLE'?'YourStyle':'YourFinds',kind==='returns'?groups.length+' returns':kind==='products'?new Set(items.map(item=>item.code)).size+' products':items.reduce((sum,item)=>sum+Number(item.quantity),0)+' pcs'];
+    const groups=supplierReturnVisible.filter(group=>group.items.some(item=>supplierReturnBrand(item)===type)),items=groups.flatMap(group=>group.items).filter(item=>supplierReturnBrand(item)===type);
+    return [type==='YOURSTYLE'?'YourStyle':'YourFinds',kind==='returns'?groups.length+' returns':kind==='products'?products.filter(item=>supplierReturnBrand(item)===type).length+(type==='YOURFINDS'?' sizes':' products'):items.reduce((sum,item)=>sum+Number(item.quantity),0)+' pcs'];
   }));
   let columns,rows,table,action;
   if(history){
-    rows=supplierReturnVisible.flatMap(group=>group.items.filter(item=>item.code===history).map(item=>({...item,returnDate:group.returnDate||group.date})));
-    message.textContent=(rows[0]?.name||history)+' · '+rows.reduce((sum,item)=>sum+Number(item.quantity),0)+' pcs returned';
-    columns=[['returnDate','Date'],['id','Return'],['reason','Reason'],['quantity','Returned pcs']];table='supplierReturnHistory';
+    rows=supplierReturnVisible.flatMap(group=>group.items.filter(item=>supplierReturnProductKey(item)===history).map(item=>({...item,returnDate:group.returnDate||group.date})));
+    message.textContent=(selected?.name||'Returned item')+' · '+rows.reduce((sum,item)=>sum+Number(item.quantity),0)+' pcs returned';
+    columns=[['returnDate','Date'],['id','Return'],['name','Product'],['code','Barcode'],['reason','Reason'],['quantity','Returned pcs']];table='supplierReturnHistory';
     action=row=>deliverySummaryAction('data-return-jump',row.id,'Go to return','jump');
   }else if(kind==='returns'){
     rows=supplierReturnVisible;columns=[['id','Return'],['returnDate','Date'],['type','Type'],['quantity','Returned pcs']];table='supplierReturnCounts';
     action=row=>deliverySummaryAction('data-return-jump',row.id,'Go to return','jump');
+  }else if(kind==='pieces'){
+    rows=['YOURSTYLE','YOURFINDS'].map(type=>{
+      const groups=supplierReturnVisible.filter(group=>group.items.some(item=>supplierReturnBrand(item)===type));
+      return {type:type==='YOURSTYLE'?'YourStyle':'YourFinds',quantity:groups.reduce((sum,group)=>sum+group.items.filter(item=>supplierReturnBrand(item)===type).reduce((total,item)=>total+(Number(item.quantity)||0),0),0),returns:groups.length};
+    });
+    columns=[['type','Type'],['quantity','Returned pcs'],['returns','Returns']];table='supplierReturnPieces';
   }else{
-    rows=supplierReturnProductTotals();columns=[['category','Category'],['name','Product'],['code','Barcode'],['size','Size'],['quantity','Returned pcs'],['returns','Returns']];table='supplierReturnItems';
-    action=row=>deliverySummaryAction('data-return-history',row.code,'View return history','history');
+    rows=products;columns=[['category','Category'],['name','Product / Size'],['quantity','Returned pcs'],['returns','Returns']];table='supplierReturnItems';
+    action=row=>deliverySummaryAction('data-return-history',row.key,'View return history','history');
   }
   document.getElementById('supplierReturnSummaryTable').innerHTML=deliverySummaryTable(table,columns,rows,action);
 }
