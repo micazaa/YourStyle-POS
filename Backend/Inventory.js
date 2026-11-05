@@ -1859,6 +1859,9 @@ function getCashierBundleChoices(productCode) {
   assertAppRequest_();
   const code = String(productCode || '').trim();
   if (!code) throw new Error('Select a bundle product.');
+  const version=inventoryReadVersion_(),key=inventoryResponseCacheKey_(version,'cashier-bundle-choices',[code]);
+  const cached=readInventoryResponse_(key);
+  if(cached)return cached;
   const {product,kind} = readCashierBundleProduct_(code,getProductMaster_({cashierOnly:true,compactRead:true}));
   const category = String(product.category).toUpperCase().replace(/^WHOLE\s+SALE$/, 'WHOLESALE');
   const queue = buildPhysicalBundleSaleQueue_(category,category === 'WHOLESALE' ? code : undefined);
@@ -1868,7 +1871,9 @@ function getCashierBundleChoices(productCode) {
       bundleNo:state.bundleNo,label:state.label,kind:kind,capacity:kind === 'HALF' ? 2-state.soldHalves : 1
     }));
   // Old standalone Wholesale stock has no physical delivery allocation to choose.
-  return {success:true,managed:category !== 'WHOLESALE' || queue.hasLinkedReceipt || queue.length > 0,choices:choices};
+  const result={success:true,managed:category !== 'WHOLESALE' || queue.hasLinkedReceipt || queue.length > 0,choices:choices};
+  cacheInventoryResponses_({[key]:result},version);
+  return result;
 }
 
 function readCashierBundleProduct_(code, products) {

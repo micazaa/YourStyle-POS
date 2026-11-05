@@ -61,10 +61,9 @@ function openCashierBundlePicker(product,index=null) {
     const message=document.getElementById('cashierBundleError');message.hidden=false;message.textContent=error.message||String(error);
     document.getElementById('cashierBundleRetry').hidden=false;
   };
-  secureScriptRun.withSuccessHandler(result=>{
+  getCashierCartBundleChoices(product.code).then(result=>{
     if(!current())return;
     if(!result||!result.success)return fail(new Error(result&&result.message||'Unable to load bundles.'));
-    rememberCashierCartBundleChoices(product.code,result);
     if(index!==null&&cart[index]!==product)return fail(new Error('The cart changed. Close this window and choose again.'));
     if(result.managed===false){
       closeCashierBundlePicker();
@@ -86,7 +85,7 @@ function openCashierBundlePicker(product,index=null) {
     select.value=String(Math.max(0,selected));
     document.getElementById('cashierBundleFields').hidden=false;button.disabled=false;
     renderCashierBundleChoice();select.focus();
-  }).withFailureHandler(fail).getCashierBundleChoices(product.code);
+  }).catch(fail);
 }
 function renderCashierBundleChoice() {
   const state=cashierBundlePicker,choice=state&&state.choices[Number(document.getElementById('cashierBundleSelect').value)];
