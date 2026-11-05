@@ -7,7 +7,7 @@ const ACCESS_PERMISSION_MODES_ = {
   'inventory.sellingDetails': ['allow','allow','approval','approval'],
   'inventory.edit': ['allow','allow','approval','deny'],
   'inventory.delete': ['allow','allow','approval','deny'],
-  'supplierReturns.create': ['allow','allow','approval','approval'],
+  'supplierReturns.create': ['allow','allow','allow','allow'],
   'deliveries.create': ['allow','allow','allow','allow'],
   'sales.create': ['allow','allow','allow','allow'],
   'sales.exchange': ['allow','allow','approval','approval'],
@@ -23,7 +23,7 @@ const ACCESS_PERMISSION_MODES_ = {
   'reports.createManager': ['allow','allow','approval','deny'],
   'reports.correct': ['allow','allow','approval','approval'],
   'shift.manage': ['allow','allow','allow','allow'],
-  'shift.end': ['allow','allow','approval','approval'],
+  'shift.end': ['allow','allow','allow','allow'],
   'actions.approve': ['allow','allow','deny','deny'],
   'approvals.verify': ['allow','allow','allow','allow'],
   'approvals.view': ['allow','allow','deny','deny'],
@@ -453,11 +453,7 @@ function callPosApi(request) {
         CacheService.getScriptCache().remove(key);
       } finally {lock.releaseLock();}
     } else if (employeeCanAuthorizeManager_(access.actor) && access.operation !== 'verifyManagerPin') {
-      const ending = access.operation === 'saveCashierShiftExit' && access.args[0] && access.args[0].action === 'END';
-      const credential = accessCredential_(request, access.args);
-      access.approver = ending && access.args[0].managerName !== access.actor.name
-        ? requireManager_(credential.managerPin, credential.managerToken)
-        : {success:true, managerName:access.actor.name, employeeId:access.actor.id};
+      access.approver = {success:true, managerName:access.actor.name, employeeId:access.actor.id};
     }
     if (access.mode === 'approval' && access.operation === 'generateCashierShiftReportPDF' && access.approver.managerName !== access.args[0])
       throw new Error('Authorization must match the selected manager.');

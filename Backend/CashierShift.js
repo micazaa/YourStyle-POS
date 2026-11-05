@@ -355,8 +355,9 @@ function saveCashierShiftExit(payload) {
         if (payload.acknowledged !== true) throw new Error('Confirm the sales and cash handover acknowledgment before ending your shift.');
         const managerName = String(payload.managerName || '').trim();
         if (!managerName) throw new Error('Select a verifying manager.');
-        const auth = verifyManagerPin(payload.managerCredential, managerName);
-        if (!auth || !auth.success) throw new Error(auth && auth.message || 'Manager verification is required.');
+        const manager = getEmployees().find(employee => employeeCanAuthorizeManager_(employee) &&
+          (String(employee.firstName).trim() + ' ' + String(employee.lastName).trim()).trim() === managerName);
+        if (!manager) throw new Error('Select an active manager or owner.');
         const cash = cashierCount_(payload.cashBreakdown), row = target.values.slice(), now = new Date();
         const history = events.filter(event => event[2] === row[0] && event[4] !== 'REPORT_SAVED');
         const prior = history.filter(event => ['PAUSE', 'END'].includes(event[4]));
@@ -371,7 +372,7 @@ function saveCashierShiftExit(payload) {
         const totalBreakdown = {...breakdown};
         if (baseline) Object.keys(totalBreakdown).forEach(d => { totalBreakdown[d] += Number(baseline[CASH_REPORT_IDX['PETTY_' + d]]) || 0; });
         prior.forEach(event => { const counted = JSON.parse(event[8]); Object.keys(totalBreakdown).forEach(d => totalBreakdown[d] += Number(counted[d]) || 0); });
-        row[CASH_REPORT_IDX.MANAGER] = auth.managerName;
+        row[CASH_REPORT_IDX.MANAGER] = managerName;
         row[CASH_REPORT_IDX.SHIFT_END] = now;
         row[CASH_REPORT_IDX.EXPECTED_CASH] = roundToTwo(buildPaymentSummary(cashierShiftMetrics_(row)).cashSales);
         row[CASH_REPORT_IDX.CASH_COUNTED] = sumBreakdown(cash);

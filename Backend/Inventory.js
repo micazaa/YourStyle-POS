@@ -1426,7 +1426,7 @@ function acceptYourFindsDelivery(
               source: INVENTORY_MOVEMENT_SOURCE.DELIVERY,
               bundleNo: "",
               remainingBundleQty: "",
-              notes: deliveryId ? "Delivery ID: " + deliveryId : ""
+              notes: ""
             });
 
           }

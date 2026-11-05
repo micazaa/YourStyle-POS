@@ -36,6 +36,9 @@ function buildDeliveryReceiptHtml_(details) {
       '<div class="report-section"><h2>Final Items Received</h2><table class="items"><thead><tr bgcolor="#f2dede"><th bgcolor="#f2dede">Code</th><th bgcolor="#f2dede">Description</th><th class="qty" bgcolor="#f2dede">Qty</th><th bgcolor="#f2dede">Remarks</th></tr></thead><tbody>'+finalLines+'<tr class="total"><td colspan="2">Final inventory units</td><td class="qty">'+safe(details.finalReportTotal)+'</td><td></td></tr></tbody></table></div>'
     : '';
   const type=details.yourFinds?'YourFinds':'YourStyle';
+  const signatures=(isReturn?[[details.preparedBy,'Prepared by'],[details.checkedBy||details.approvedBy,'Checked by'],[details.receivedBy||details.driver,'Received by']]
+    :[[details.preparedBy,'Prepared by'],[details.driver,'Driver'],[details.acceptedBy,'Received by']])
+    .map(([name,role])=>'<td><div class="sign-space"></div><div class="sign-name">'+safe(name)+'</div><div class="sign-role">'+role+'</div></td>').join('');
   return '<!doctype html><html><head><meta charset="utf-8"><style>'+
     '@page{size:A4;margin:8mm 9mm}*{box-sizing:border-box}body{margin:0;color:#333;font:11.5px/1.45 "Segoe UI",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
     '.page{min-height:276mm;display:flex;flex-direction:column}.header{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:2px solid #d8a7a7;padding-bottom:7px}'+
@@ -51,11 +54,12 @@ function buildDeliveryReceiptHtml_(details) {
     '</style></head><body><div class="page">'+
     '<div class="header"><div><h1>'+(isReturn?'Return Receipt Form':'Delivery Receipt Form')+'</h1><div class="delivery-id">'+safe(details.id)+'</div></div><div class="header-right"><div>'+safe(formatDeliveryReceiptDate_(details.date))+'</div><div>'+type+' &bull; Caloocan</div></div></div>'+
     '<table class="details"><tr><td><div class="detail"><span class="detail-label">Driver</span><span class="detail-value">'+safe(details.driver)+'</span></div></td><td><div class="detail"><span class="detail-label">Plate No.</span><span class="detail-value">'+safe(details.plate)+'</span></div></td></tr>'+
-    '<tr><td><div class="detail"><span class="detail-label">Prepared By</span><span class="detail-value">'+safe(details.preparedBy)+'</span></div></td><td><div class="detail"><span class="detail-label">Received By</span><span class="detail-value">'+safe(details.acceptedBy)+'</span></div></td></tr></table>'+
+    '<tr><td><div class="detail"><span class="detail-label">Prepared By</span><span class="detail-value">'+safe(details.preparedBy)+'</span></div></td><td><div class="detail"><span class="detail-label">'+(isReturn?'Category':'Received By')+'</span><span class="detail-value">'+safe(isReturn?type:details.acceptedBy)+'</span></div></td></tr>'+
+    (isReturn?'<tr><td><div class="detail"><span class="detail-label">Checked By</span><span class="detail-value">'+safe(details.checkedBy||details.approvedBy)+'</span></div></td><td><div class="detail"><span class="detail-label">Received By</span><span class="detail-value">'+safe(details.receivedBy||details.driver)+'</span></div></td></tr>':'')+'</table>'+
     '<div><h2>'+(isReturn?'Items Returned':'Items Received')+'</h2><table class="items"><thead><tr bgcolor="#f2dede"><th bgcolor="#f2dede">Code</th><th bgcolor="#f2dede">Description</th>'+(isReturn?'<th bgcolor="#f2dede">Size</th>':'')+'<th class="qty" bgcolor="#f2dede">Qty</th><th bgcolor="#f2dede">'+(isReturn?'Reason':'Remarks')+'</th></tr></thead><tbody>'+lines+'<tr class="total"><td colspan="'+(isReturn?3:2)+'">Total '+(isReturn?'returned':'received')+'</td><td class="qty">'+safe(details.reportTotal)+'</td><td></td></tr></tbody></table>'+adjustmentSection+
     (isReturn?'<div class="remarks">'+safe(details.summary)+'</div>':'')+
     '<div class="remarks"><span class="remarks-label">Remarks</span>'+safe(details.remarks||'—')+'</div></div>'+
-    '<table class="signatures"><tr><td><div class="sign-space"></div><div class="sign-name">'+safe(details.preparedBy)+'</div><div class="sign-role">Prepared by</div></td><td><div class="sign-space"></div><div class="sign-name">'+safe(isReturn?details.approvedBy:details.driver)+'</div><div class="sign-role">'+(isReturn?'Checked by':'Driver')+'</div></td><td><div class="sign-space"></div><div class="sign-name">'+safe(details.acceptedBy)+'</div><div class="sign-role">Received by</div></td></tr></table>'+
+    '<table class="signatures"><tr>'+signatures+'</tr></table>'+
     '</div></body></html>';
 }
 
@@ -71,35 +75,18 @@ function createDeliveryReceiptPdf(deliveryId) {
   }
 }
 
-function createSupplierReturnPdf(reference) {
+function createSupplierReturnPdf(returnId) {
   assertAppRequest_();
   try {
-    const draft=reference && typeof reference==='object' ? reference : null;
-    let rows,id;
-    if(draft) {
-      if(!['YOURSTYLE','YOURFINDS'].includes(draft.returnType)||!Array.isArray(draft.items)||!draft.items.length||draft.items.length>100)
-        throw new Error('Select items before previewing the return.');
-      const inventory=new Map(readInventoryListIndex_().map(item=>[String(item.code),item]));
-      id='Draft — '+String(draft.id||'Return');
-      rows=draft.items.map(line=>{
-        const item=inventory.get(String(line.code)),quantity=Number(line.quantity);
-        if(!item||supplierReturnType_(item)!==draft.returnType||!Number.isSafeInteger(quantity)||quantity<1)
-          throw new Error('Invalid return preview item.');
-        return {...item,quantity:quantity,reason:String(line.reason||''),returnDate:String(draft.returnDate||''),
-          driver:String(draft.driver||''),plate:String(draft.plate||''),preparedBy:String(draft.preparedBy||''),
-          approvedBy:'',receivedBy:String(draft.receivedBy||''),remarks:String(draft.remarks||'')};
-      });
-    } else {
-      id=String(reference||'').trim();
-      if(!id)throw new Error('Return ID is required.');
-      rows=getSupplierReturns().filter(record=>record.id===id);
-      if(!rows.length)throw new Error('Return not found.');
-    }
+    const id=String(returnId||'').trim();
+    if(!id)throw new Error('Return ID is required.');
+    const rows=getSupplierReturns(false).filter(record=>record.id===id);
+    if(!rows.length)throw new Error('Return not found.');
     const first=rows[0],totals=new Map();
     const yourFinds=rows.every(row=>String(row.category).toUpperCase()==='YOURFINDS');
     rows.forEach(row=>{const key=yourFinds?row.size||'Unspecified size':row.category;totals.set(key,(totals.get(key)||0)+row.quantity);});
     const details={returnReceipt:true,id:id,date:first.returnDate||String(first.date).slice(0,10),yourFinds:yourFinds,
-      driver:first.driver,plate:first.plate,preparedBy:first.preparedBy,approvedBy:first.approvedBy,acceptedBy:first.receivedBy,
+      driver:first.driver,plate:first.plate,preparedBy:first.preparedBy,approvedBy:first.approvedBy,checkedBy:first.checkedBy,receivedBy:first.receivedBy||first.driver,
       remarks:first.remarks,reportTotal:rows.reduce((total,row)=>total+row.quantity,0),
       reportLines:rows.map(row=>({code:row.code,description:row.name,size:row.size,quantity:row.quantity,remarks:row.reason})),
       summary:Array.from(totals,([label,quantity])=>label+' '+quantity+' pcs').join(' · ')};

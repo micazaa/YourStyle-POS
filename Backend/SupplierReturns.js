@@ -94,6 +94,7 @@ function getLegacySupplierReturnRecords_() {
         preparedBy: String(details.preparedBy || row[MOVE_IDX.EMPLOYEE] || ""),
         employee: String(details.preparedBy || row[MOVE_IDX.EMPLOYEE] || ""),
         approvedBy: String(details.approvedBy || details.authorizedBy || ""),
+        checkedBy: String(details.checkedBy || details.approvedBy || details.authorizedBy || ""),
         driver: String(details.driver || ""),
         plate: String(details.plate || ""),
         receivedBy: String(details.receivedBy || ""),
@@ -112,14 +113,26 @@ function getLegacySupplierReturnRecords_() {
     });
 }
 
-function getSupplierReturns() {
+function getSupplierReturns(includeImages) {
   assertAppRequest_();
   const records = getSupplierReturnLogRecords_();
   const lineIds = {};
   records.forEach(function(record) { lineIds[record.lineId] = true; });
-  getLegacySupplierReturnRecords_().forEach(function(record) {
+  const movementRecords=getLegacySupplierReturnRecords_();
+  const checkerByLine=new Map(movementRecords.map(record=>[record.lineId,record.checkedBy]));
+  records.forEach(record=>{record.checkedBy=checkerByLine.get(record.lineId)||record.approvedBy||'';});
+  movementRecords.forEach(function(record) {
     if (!lineIds[record.lineId]) records.push(record);
   });
+  if(includeImages!==false && records.length){
+    const inventory=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY);
+    if(inventory && inventory.getLastRow()>1){
+      const count=inventory.getLastRow()-1,codes=inventory.getRange(2,INV_COL.CODE,count,1).getDisplayValues();
+      const photos=inventory.getRange(2,INV_COL.IMAGE,count,1).getValues();
+      const images=new Map(codes.map((row,index)=>[String(row[0]).trim(),String(photos[index][0]||'').trim()]));
+      records.forEach(record=>{record.imageUrl=images.get(record.code)||'';});
+    }
+  }
   return records.reverse();
 }
 
@@ -137,11 +150,19 @@ function findSupplierReturnMovement_(lineId) {
   return null;
 }
 
+function supplierReturnActor_() {
+  const actor=ACCESS_REQUEST_CONTEXT_ && ACCESS_REQUEST_CONTEXT_.actor;
+  if(!actor || permissionMode_(actor,'supplierReturns.create')!=='allow') {
+    throw new Error('Sign in with an account allowed to return items.');
+  }
+  return actor;
+}
+
 function saveSupplierReturn(payload) {
   assertAppRequest_();
   payload = payload || {};
   if (Array.isArray(payload.items)) return saveSupplierReturnItems_(payload);
-  const auth = requireManager_(payload.managerPin, payload.managerToken);
+  const actor = supplierReturnActor_();
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -161,9 +182,10 @@ function saveSupplierReturn(payload) {
     const condition = String(payload.condition || "").trim().toUpperCase();
     const supplier = String(payload.supplier || "").trim();
     const status = String(payload.status || "RELEASED").trim().toUpperCase();
-    const receivedBy = String(payload.receivedBy || "").trim();
-    const preparedBy = String(payload.preparedBy || payload.employee || auth.managerName || "").trim();
-    const approvedBy = String(auth.managerName || preparedBy).trim();
+    const receivedBy = String(payload.driver || "").trim();
+    const checkedBy = String(payload.checkedBy || "").trim();
+    const preparedBy = String(payload.preparedBy || actor.name || "").trim();
+    const approvedBy = employeeCanAuthorizeManager_(actor) ? String(actor.name) : "";
 
     if (!code || !Number.isInteger(quantity) || quantity < 1 || !reason || !supplier || !preparedBy) {
       throw new Error("Product, supplier, reason, prepared by and positive whole quantity are required.");
@@ -193,6 +215,8 @@ function saveSupplierReturn(payload) {
         remarks: String(payload.remarks || "").trim(),
         preparedBy: preparedBy,
         approvedBy: approvedBy,
+        checkedBy: checkedBy,
+        recordedBy: actor.name,
         receivedBy: receivedBy,
         originalDeliveryId: String(payload.originalDeliveryId || "").trim(),
         size: String(item.size || "").trim(),
@@ -205,7 +229,7 @@ function saveSupplierReturn(payload) {
         qtyChange: -quantity,
         referenceId: returnId,
         sourceLineId: lineId,
-        employee: preparedBy,
+        employee: actor.name,
         item: item.name,
         reason: reason,
         source: INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN,
@@ -252,7 +276,7 @@ function supplierReturnBatchId_(type, date, requestId, usedIds) {
 
 // One approval and locked batch. Retries repair a missing business record without deducting stock twice.
 function saveSupplierReturnItems_(payload) {
-  const auth=requireManager_(payload.managerPin,payload.managerToken);
+  const actor=supplierReturnActor_();
   const lock=LockService.getScriptLock();lock.waitLock(30000);
   let movementSheet,log,inventory,movementStart,logStart;
   const statusRollback=[],updatedRollback=[];
@@ -264,9 +288,9 @@ function saveSupplierReturnItems_(payload) {
     if(!['YOURSTYLE','YOURFINDS'].includes(type))throw new Error('Choose YourStyle or YourFinds.');
     const date=supplierReturnDate_(payload.returnDate), parsedDate=new Date(date+'T00:00:00Z');
     if(isNaN(parsedDate.getTime())||parsedDate.toISOString().slice(0,10)!==date)throw new Error('Enter a valid return date.');
-    const preparedBy=text(payload.preparedBy),driver=text(payload.driver),plate=text(payload.plate).toUpperCase();
-    if(!preparedBy||!driver||!plate)throw new Error('Prepared by, driver and plate number are required.');
-    const status=text(payload.status||'RELEASED').toUpperCase(),receivedBy=text(payload.receivedBy);
+    const preparedBy=text(payload.preparedBy),checkedBy=text(payload.checkedBy),driver=text(payload.driver),plate=text(payload.plate).toUpperCase();
+    if(!preparedBy||!checkedBy||!driver||!plate)throw new Error('Prepared by, checked by, driver and plate number are required.');
+    const status=text(payload.status||'RELEASED').toUpperCase(),receivedBy=driver;
     if(!['RELEASED','RECEIVED'].includes(status)||status==='RECEIVED'&&!receivedBy)throw new Error('Received By is required when received by supplier.');
     const supplier=text(payload.supplier)|| (type==='YOURFINDS'?'YourFinds':'YourStyle');
     if(!Array.isArray(payload.items)||!payload.items.length||payload.items.length>100)throw new Error('Select between 1 and 100 products.');
@@ -277,8 +301,8 @@ function saveSupplierReturnItems_(payload) {
       if(!['SEALED','OPENED','DAMAGED','OTHER'].includes(condition))throw new Error('Invalid item condition.');
       codes.add(code);return {code:code,quantity:quantity,reason:reason,condition:condition};
     }).sort((a,b)=>a.code.localeCompare(b.code));
-    const common={returnDate:date,preparedBy:preparedBy,driver:driver,plate:plate,supplier:supplier,status:status,
-      receivedBy:receivedBy,remarks:text(payload.remarks),approvedBy:auth.managerName,recordedBy:text(payload.employee)};
+    const common={returnDate:date,preparedBy:preparedBy,checkedBy:checkedBy,driver:driver,plate:plate,supplier:supplier,status:status,
+      receivedBy:receivedBy,remarks:text(payload.remarks),approvedBy:employeeCanAuthorizeManager_(actor)?actor.name:'',recordedBy:text(actor.name)};
     const binding=Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
       JSON.stringify({type:type,...common,approvedBy:undefined,items:items})));
     const ss=SpreadsheetApp.getActiveSpreadsheet();

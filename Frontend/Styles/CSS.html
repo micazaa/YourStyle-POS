@@ -907,7 +907,8 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 .table th.text-end button {text-align:right;}
 .table th.text-center button {text-align:center;}
 
-#deliveriesTableBody tr.delivery-row-highlight > td {
+#deliveriesTableBody tr.delivery-row-highlight > td,
+#supplierReturnRows tr.delivery-row-highlight > td {
   background-color: var(--pink-light);
   --bs-table-bg-state: var(--pink-light);
   --bs-table-bg-type: var(--pink-light);
@@ -938,9 +939,18 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 .supplier-return-picker-scroll thead{position:sticky;top:0;z-index:1}
 .supplier-return-photo{width:66px}
 .supplier-return-photo img{width:44px;height:44px;object-fit:cover;border-radius:7px}
+.supplier-return-detail-photo{width:56px;height:56px;object-fit:cover;border-radius:6px}
+.supplier-return-detail-placeholder{width:56px;flex-shrink:0}
+#supplierReturnSummary [hidden]{display:none!important}
+
 .supplier-return-photo .btn{max-width:60px;white-space:normal}
 .supplier-return-selected .supplier-return-qty{min-width:70px;max-width:90px;margin:auto}
 .supplier-return-selected td:nth-child(4){min-width:160px}
+.supplier-return-reason{max-width:460px}
+.supplier-return-reason-row{display:flex;align-items:stretch;gap:8px}
+.supplier-return-reason-row .form-control{flex:1;min-width:0;min-height:40px}
+.supplier-return-reason-row .btn{flex-shrink:0;min-height:40px;white-space:nowrap;padding-inline:14px}
+
 
 /* Shared delivery form layout. */
 .delivery-modal-card{max-width:980px;width:96%;max-height:92vh;overflow-y:auto}

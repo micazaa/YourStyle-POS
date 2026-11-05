@@ -517,7 +517,7 @@ function acceptYourStyleDelivery(payload) {
           item: line.description,
           reason: "",
           source: INVENTORY_MOVEMENT_SOURCE.DELIVERY,
-          notes: "Delivery ID: " + identifiers.deliveryId
+          notes: ""
         });
         return;
       }
@@ -536,7 +536,7 @@ function acceptYourStyleDelivery(payload) {
         source: INVENTORY_MOVEMENT_SOURCE.DELIVERY,
         bundleNo: "",
         remainingBundleQty: line.bundleQty,
-        notes: "Delivery ID: " + identifiers.deliveryId
+        notes: ""
       });
       const bundleProduct = ensureWholesaleBundleProduct_(line, bundleProducts, createdProductRows);
       {

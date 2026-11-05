@@ -258,14 +258,21 @@ function getInventoryMovementHistoryByCode(code) {
   const movements = [];
   display.forEach(function(d) {
     if (String(d[MOVE_IDX.CODE] || "").trim() !== code) return;
+    const source = String(d[MOVE_IDX.SOURCE] || '').trim();
+    const returned = [INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN, 'RETURN'].includes(source.toUpperCase());
+    const referenceId = String(d[MOVE_IDX.REFERENCE_ID] || '').trim();
+    const storedNotes = String(d[MOVE_IDX.NOTES] || '').trim();
+    const repeatedDeliveryId = source.toUpperCase() === INVENTORY_MOVEMENT_SOURCE.DELIVERY &&
+      referenceId && storedNotes === 'Delivery ID: ' + referenceId;
     movements.push({
       movementId: String(d[MOVE_IDX.MOVEMENT_ID] || ""), timestamp: String(d[MOVE_IDX.TIMESTAMP] || ""), code: code,
       type: String(d[MOVE_IDX.TYPE] || ""), qtyChange: Number(String(d[MOVE_IDX.QTY_CHANGE] || "").replace(/,/g, "")) || 0,
       stockBefore: Number(String(d[MOVE_IDX.STOCK_BEFORE] || "").replace(/,/g, "")) || 0, stockAfter: Number(String(d[MOVE_IDX.STOCK_AFTER] || "").replace(/,/g, "")) || 0,
-      referenceId: String(d[MOVE_IDX.REFERENCE_ID] || ""), sourceLineId: String(d[MOVE_IDX.SOURCE_LINE_ID] || ""), employee: String(d[MOVE_IDX.EMPLOYEE] || ""),
+      referenceId: referenceId, sourceLineId: String(d[MOVE_IDX.SOURCE_LINE_ID] || ""), employee: String(d[MOVE_IDX.EMPLOYEE] || ""),
       item: String(d[MOVE_IDX.ITEM] || ""), reason: String(d[MOVE_IDX.REASON] || ""),
-      source: String(d[MOVE_IDX.SOURCE] || ""), bundleNo: String(d[MOVE_IDX.BUNDLE_NO] || ""),
-      remainingBundleQty: String(d[MOVE_IDX.REMAINING_BUNDLE_QTY] || ""), notes: String(d[MOVE_IDX.NOTES] || "")
+      source: returned ? 'RETURN' : source, bundleNo: String(d[MOVE_IDX.BUNDLE_NO] || ""),
+      // Return metadata supports retry/report recovery; only its human reason belongs in item history.
+      remainingBundleQty: String(d[MOVE_IDX.REMAINING_BUNDLE_QTY] || ""), notes: returned || repeatedDeliveryId ? '' : storedNotes
     });
   });
   movements.reverse();
