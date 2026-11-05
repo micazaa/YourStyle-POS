@@ -354,7 +354,7 @@
             <td class="ps-3">${imgTag}</td>
             <td><div class="fw-bold${isSaleItem ? " text-danger" : ""}">${escapeInventoryHtml(
               cashierItemDisplayName(item)
-            )}</div><div class="small${isSaleItem ? " text-danger" : " text-muted"}">${escapeInventoryHtml(item.code)}</div>${cashierBundleKind(item) ? `<select class="form-select form-select-sm mt-1 cart-bundle-select" aria-label="Bundle code for ${escapeInventoryHtml(item.name || item.code)}" data-idx="${index}" data-field="bundle"><option value="">${escapeInventoryHtml(item.bundleSelection ? item.bundleSelection.label : 'Loading bundle codes…')}</option></select>${item.bundleSelection ? `<div class="small text-muted text-break">${escapeInventoryHtml(item.bundleSelection.deliveryId)}</div>` : ''}` : ''}</td>
+            )}</div><div class="small${isSaleItem ? " text-danger" : " text-muted"}">${escapeInventoryHtml(item.code)}</div>${cashierBundleKind(item) ? `<select class="form-select form-select-sm mt-1 cart-bundle-select" aria-label="Bundle code for ${escapeInventoryHtml(item.name || item.code)}" data-idx="${index}" data-field="bundle"><option value="">${escapeInventoryHtml(item.bundleSelection ? item.bundleSelection.label : 'Select bundle code')}</option></select>${item.bundleSelection ? `<div class="small text-muted text-break">${escapeInventoryHtml(item.bundleSelection.deliveryId)}</div>` : ''}` : ''}</td>
             <td class="text-center fw-semibold">${item.size || ""}</td>
             <td class="text-center">
               <input type="number" class="form-control form-control-sm text-center mx-auto" style="width:60px; font-weight:600;" value="${
@@ -546,14 +546,20 @@ var cashierCartBundleCache=null;
 function cashierCartBundleState() {
   const owner=currentEmployee&&currentEmployee.dashboardToken||'';
   const version=typeof inventoryDataset==='undefined'?'':inventoryDataset.version||'';
+  if(cashierCartBundleCache&&cashierCartBundleCache.owner===owner&&cashierCartBundleCache.serverVersion===version)
+    cashierCartBundleCache.version=version;
   if(!cashierCartBundleCache||cashierCartBundleCache.owner!==owner||cashierCartBundleCache.version!==version){
     if(cashierCartBundleCache)clearTimeout(cashierCartBundleCache.timer);
-    cashierCartBundleCache={owner:owner,version:version,choices:new Map(),pending:new Map(),preloadCodes:[],preloading:false,timer:null};
+    cashierCartBundleCache={owner:owner,version:version,serverVersion:null,choices:new Map(),pending:new Map(),preloadCodes:[],preloading:false,timer:null};
   }
   return cashierCartBundleCache;
 }
 function rememberCashierCartBundleChoices(code,result) {
   cashierCartBundleState().choices.set(String(code),result);
+}
+function rememberCashierBundlePreload(choices,version) {
+  const state=cashierCartBundleState();state.serverVersion=version;
+  Object.entries(choices).forEach(([code,result])=>state.choices.set(code,result));
 }
 function getCashierCartBundleChoices(code,refresh) {
   const state=cashierCartBundleState(),key=String(code),cached=state.choices.get(key);
@@ -593,7 +599,7 @@ function preloadCashierBundleCodes(items) {
 function loadCashierCartBundleOptions(select,item,refresh=false) {
   const state=cashierCartBundleState();
   const current=()=>select.isConnected&&cart.includes(item)&&state===cashierCartBundleState();
-  getCashierCartBundleChoices(item.code,refresh).then(result=>{
+  function apply(result){
     if(!current())return;
     const unlinked=result.managed===false;
     if(!!item.bundleUnlinked!==unlinked){item.bundleUnlinked=unlinked;renderCart();saveSession();return;}
@@ -611,7 +617,10 @@ function loadCashierCartBundleOptions(select,item,refresh=false) {
     if(selected)select.value=cashierBundleKey(selected);
     else if(item.bundleSelection)placeholder.textContent='Selected bundle unavailable';
     select.disabled=result.managed===false||!!cartReservation();select.title='';
-  }).catch(error=>{
+  }
+  const cached=state.choices.get(String(item.code));
+  if(!refresh&&cached){apply(cached);return;}
+  getCashierCartBundleChoices(item.code,refresh).then(apply).catch(error=>{
     if(!current())return;
     select.title=error.message||String(error);
     if(!select.bundleChoices){select.options[0].textContent='Unable to load bundle codes';select.value='';}
@@ -690,7 +699,8 @@ function refreshInventory(callback) {
   entry.callbacks = callback ? [callback] : [];
   secureScriptRun.withSuccessHandler(function(data) {
     if (!read.current()) return;
-    masterInventory = Array.isArray(data) ? data : [];
+    masterInventory = Array.isArray(data) ? data : data&&Array.isArray(data.inventory)?data.inventory:[];
+    if(data&&data.bundleChoices)rememberCashierBundlePreload(data.bundleChoices,data.version);
     read.save(masterInventory);
     populateManualDropdown(masterInventory);
     entry.callbacks.forEach(done => done());
@@ -703,7 +713,7 @@ function refreshInventory(callback) {
     entry.callbacks = [];
     finishWorkspacePageLoad('posPage');
     showNotificationToast(error.message || 'Failed to load inventory.', true);
-  }).getSellableInventory();
+  }).getSellableInventory({includeBundleChoices:true});
 }
 
   function populateManualDropdown(items) {

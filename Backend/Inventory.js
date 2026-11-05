@@ -1660,7 +1660,7 @@ function generateYourFindsDeliveryCodes(sheet, deliveryDate, size, quantity) {
   return codes;
 }
 
-function getSellableInventory() {
+function getSellableInventory(options) {
   assertAppRequest_();
   const products = getProductMaster_({cashierOnly:true});
   expireEndedProductSales_(products);
@@ -1702,6 +1702,10 @@ function getSellableInventory() {
     }));
     saleRows.forEach(function(row) { if (row.stock > 0) result.push(row); });
   });
+  if(options&&options.includeBundleChoices===true){
+    const bundleData=preloadCashierBundleChoices_(result);
+    return {inventory:result,bundleChoices:bundleData.choices,version:bundleData.version};
+  }
   return result;
 }
 
@@ -1865,15 +1869,38 @@ function getCashierBundleChoices(productCode) {
   const {product,kind} = readCashierBundleProduct_(code,getProductMaster_({cashierOnly:true,compactRead:true}));
   const category = String(product.category).toUpperCase().replace(/^WHOLE\s+SALE$/, 'WHOLESALE');
   const queue = buildPhysicalBundleSaleQueue_(category,category === 'WHOLESALE' ? code : undefined);
+  const result=cashierBundleChoicesFromQueue_(queue,category,kind);
+  cacheInventoryResponses_({[key]:result},version);
+  return result;
+}
+
+function cashierBundleChoicesFromQueue_(queue,category,kind) {
   const choices = queue.filter(state => !state.distributed && !state.fullSold &&
     (kind === 'HALF' ? state.soldHalves < 2 : state.soldHalves === 0)).map(state => ({
       deliveryId:state.deliveryId,deliveryDate:state.deliveryDate,sheetRow:state.sheetRow,
       bundleNo:state.bundleNo,label:state.label,kind:kind,capacity:kind === 'HALF' ? 2-state.soldHalves : 1
     }));
   // Old standalone Wholesale stock has no physical delivery allocation to choose.
-  const result={success:true,managed:category !== 'WHOLESALE' || queue.hasLinkedReceipt || queue.length > 0,choices:choices};
-  cacheInventoryResponses_({[key]:result},version);
-  return result;
+  return {success:true,managed:category !== 'WHOLESALE' || queue.hasLinkedReceipt || queue.length > 0,choices:choices};
+}
+
+function preloadCashierBundleChoices_(items) {
+  const version=inventoryReadVersion_(),choices={},entries={},queues=new Map();
+  let source;
+  items.forEach(item=>{
+    const code=String(item.code),kind=physicalBundleSaleKind_(item.category,item.name);
+    if(!kind||!(Number(item.price)>0)||choices[code])return;
+    const key=inventoryResponseCacheKey_(version,'cashier-bundle-choices',[code]),cached=readInventoryResponse_(key);
+    if(cached){choices[code]=cached;return;}
+    if(!source)source=readPhysicalBundleSaleSource_();
+    const category=String(item.category).toUpperCase().replace(/^WHOLE\s+SALE$/,'WHOLESALE');
+    const queueKey=category==='WHOLESALE'?category+':'+code:category;
+    if(!queues.has(queueKey))queues.set(queueKey,buildPhysicalBundleSaleQueue_(category,category==='WHOLESALE'?code:undefined,source));
+    choices[code]=cashierBundleChoicesFromQueue_(queues.get(queueKey),category,kind);
+    entries[key]=choices[code];
+  });
+  cacheInventoryResponses_(entries,version);
+  return {version:version,choices:choices};
 }
 
 function readCashierBundleProduct_(code, products) {
@@ -1907,15 +1934,20 @@ function choosePhysicalBundleForSale_(queue, kind, selection, name) {
   return selected;
 }
 
-function buildPhysicalBundleSaleQueue_(category, productCode) {
+function readPhysicalBundleSaleSource_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const deliverySheet = ss.getSheetByName(SHEETS.DELIVERY_LOG);
   const movementSheet = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
-  if (!deliverySheet || deliverySheet.getLastRow() < 2) return [];
+  if (!deliverySheet || deliverySheet.getLastRow() < 2) return {deliveries:[],movements:[]};
   const deliveries = deliverySheet.getRange(2, 1, deliverySheet.getLastRow() - 1, DELIVERY_LOG_COLUMN_COUNT).getValues();
   const movements = movementSheet && movementSheet.getLastRow() >= 2
     ? movementSheet.getRange(2, 1, movementSheet.getLastRow() - 1, MOVEMENT_LOG_COLUMN_COUNT).getValues()
     : [];
+  return {deliveries:deliveries,movements:movements};
+}
+
+function buildPhysicalBundleSaleQueue_(category, productCode, source) {
+  const {deliveries,movements}=source||readPhysicalBundleSaleSource_();
   const wanted = String(category || "").trim().toUpperCase();
   const receipts = new Map(), splitRows = [];
   movements.forEach(row => {
