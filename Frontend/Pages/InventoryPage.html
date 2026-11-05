@@ -412,6 +412,7 @@ function refreshInventoryChanges() {
   }).withFailureHandler(()=>{if(current())inventoryChangesRead=null;}).getInventoryChanges({version:version});
 }
 function handleInventoryMutationResult(result) {
+  pageReadCache.delete('cashierInventory');
   if(applyInventoryPatch(result.inventoryPatch))return;
   if(!result.inventoryPatch?.reset&&inventoryDatasetReady()&&!inventoryDataset.stale){refreshInventoryChanges();return;}
   invalidateLocalInventoryReads();

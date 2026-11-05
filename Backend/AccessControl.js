@@ -485,8 +485,8 @@ function callPosApi(request) {
       try {
         const change=finishInventoryMutation_(inventoryMutation,Array.from(access.inventoryCodes),!!(parsed&&parsed.success));inventoryMutation=null;
         if(!change.reset&&['adjustInventoryStock','changeInventoryItem'].includes(access.operation))reuseInventoryReadMetadata_(change.fromVersion,change.version);
-        // Checkout confirms saved sales first; the client already refreshes changes in the background.
-        patch=parsed&&parsed.success ? access.operation==='executeCheckoutBackend'
+        // Confirm committed sales/bundles first; the client refreshes inventory in the background.
+        patch=parsed&&parsed.success ? ['executeCheckoutBackend','splitPhysicalBundle','distributeBulkBundle'].includes(access.operation)
           ? {success:true,deferred:true,version:change.version}
           : getInventoryChanges({version:request.inventoryVersion}) : null;
       }catch(cacheError){console.warn('Inventory item update unavailable; clients will refresh safely.');}

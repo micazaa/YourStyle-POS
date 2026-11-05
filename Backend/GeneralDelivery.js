@@ -99,7 +99,10 @@ function generateDeliveryIdentifiers(deliveryType, deliveryDate) {
 
 function getYourStyleDeliveryProducts() {
   assertAppRequest_();
-  const products = getProductMaster_();
+  return yourStyleDeliveryProducts_(getProductMaster_());
+}
+
+function yourStyleDeliveryProducts_(products) {
   const result = products.filter(function(item) {
     const category = String(item.category || "").trim().toUpperCase();
     const active = item.active === true || String(item.active || "").trim().toUpperCase() === "TRUE";
@@ -206,7 +209,16 @@ function parsePhysicalBundleAllocationNote_(value) {
    → changeInventoryStock() will perform the actual increase
 ========================================================== */
 
-function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) {
+// This snapshot is used only within one locked delivery write, never across requests.
+function yourStyleInventoryWriteContext_(sheet, products, movementRows) {
+  const count = Math.max(0, sheet.getLastRow() - 1);
+  const rows = count ? sheet.getRange(2, 1, count, INVENTORY_COLUMN_COUNT).getValues() : [];
+  const codes = count ? sheet.getRange(2, INV_COL.CODE, count, 1).getDisplayValues() : [];
+  rows.forEach((row, index) => { row[INV_IDX.CODE] = String(codes[index][0] || '').trim(); });
+  return {sheet:sheet, products:products, inventoryRows:rows, movementRows:movementRows};
+}
+
+function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId, context) {
   assertAppRequest_();
   productCode = String(productCode || "").trim();
 
@@ -215,20 +227,20 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
   }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const inventorySheet = ss.getSheetByName(SHEETS.INVENTORY);
+  const inventorySheet = context ? context.sheet : ss.getSheetByName(SHEETS.INVENTORY);
 
   if (!inventorySheet) {
     throw new Error("Inventory sheet not found.");
   }
 
-  const lastRow = inventorySheet.getLastRow();
+  const lastRow = context ? context.inventoryRows.length + 1 : inventorySheet.getLastRow();
 
   /* ========================================================
      CHECK IF INVENTORY ROW ALREADY EXISTS
   ======================================================== */
 
   if (lastRow >= 2) {
-    const codes = inventorySheet
+    const codes = context ? context.inventoryRows : inventorySheet
       .getRange(
         2,
         INV_COL.CODE,
@@ -242,17 +254,19 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
         String(codes[i][0] || "").trim() ===
         productCode
       ) {
-        const existingProduct = getProductMaster_().find(function(item) {
+        const existingProduct = (context ? context.products : getProductMaster_()).find(function(item) {
           return String(item.productCode || item.code || "").trim() === productCode;
         });
 
-        if (existingProduct && existingProduct.imageUrl) {
+        if (existingProduct && existingProduct.imageUrl &&
+            (!context || context.inventoryRows[i][INV_IDX.IMAGE] !== existingProduct.imageUrl)) {
           inventorySheet
             .getRange(i + 2, INV_COL.IMAGE)
             .setValue(existingProduct.imageUrl);
         }
 
-        inventorySheet.getRange(i + 2, INV_COL.UPDATED_AT).setValue(new Date());
+        // The stock batch updates every touched row's timestamp in one write.
+        if (!context) inventorySheet.getRange(i + 2, INV_COL.UPDATED_AT).setValue(new Date());
 
         return {
           success: true,
@@ -267,7 +281,7 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
      LOAD PRODUCT MASTER
   ======================================================== */
 
-  const products = getProductMaster_();
+  const products = context ? context.products : getProductMaster_();
 
   const product = products.find(function(item) {
     return (
@@ -358,10 +372,16 @@ function ensureYourStyleInventoryProduct(productCode, deliveryDate, deliveryId) 
     );
   }
 
-  const newRowNumber = inventorySheet.getLastRow() + 1;
+  const newRowNumber = lastRow + 1;
   if(category==='WHOLESALE')allowWholesaleCategoryAtRow_(inventorySheet,newRowNumber,INV_COL.CATEGORY);
   inventorySheet.getRange(newRowNumber, 1, 1, INVENTORY_COLUMN_COUNT).setValues([row]);
   setInventoryCalculatedFields_(inventorySheet, newRowNumber, 1);
+  if (context) {
+    // A removed Inventory row can still have history. Match its restored stock formula.
+    row[INV_IDX.STOCK] = (context.movementRows || []).reduce((sum, movement) =>
+      sum + (String(movement[MOVE_IDX.CODE] || '').trim() === productCode ? Number(movement[MOVE_IDX.QTY_CHANGE]) || 0 : 0), 0);
+    context.inventoryRows[newRowNumber - 2] = row;
+  }
 
   return {
     success: true,
@@ -783,6 +803,10 @@ function getBulkDistributionData(deliveryId, omitProducts, sheetRow) {
 }
 
 function getBulkHolderDetails(deliveryId, sheetRow) {
+  return readBulkHolderDetails_(deliveryId, sheetRow);
+}
+
+function readBulkHolderDetails_(deliveryId, sheetRow, movementRows) {
   assertAppRequest_();
   deliveryId = String(deliveryId || "").trim();
   sheetRow = Number(sheetRow);
@@ -813,7 +837,7 @@ function getBulkHolderDetails(deliveryId, sheetRow) {
   const bundleQty = Math.max(1, Number(raw[DELIVERY_IDX.BUNDLE_QTY]) || 1);
   const estimated = Number(raw[DELIVERY_IDX.ESTIMATED_QTY]) || 0;
   const actual = Number(raw[DELIVERY_IDX.ACTUAL_QTY]) || 0;
-  const progress = getBulkBundleProgress_(deliveryId, sheetRow, type, bundleQty);
+  const progress = getBulkBundleProgress_(deliveryId, sheetRow, type, bundleQty, movementRows);
 
   return {success:true, holder:{
     sheetRow:sheetRow, deliveryId:storedDeliveryId,
@@ -875,9 +899,13 @@ function bundleAccountedFor_(bundle) {
   return !!bundle.split || !!bundle.fullSold || Number(bundle.soldHalves) >= 2 || Number(bundle.actualQuantity) > 0;
 }
 
-function getBulkBundleProgress_(deliveryId, sheetRow, holderType, bundleQty) {
+function readBulkBundleMovements_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
-  const rows = sheet && sheet.getLastRow() >= 2 ? sheet.getRange(2,1,sheet.getLastRow()-1,MOVEMENT_LOG_COLUMN_COUNT).getValues() : [];
+  return sheet && sheet.getLastRow() >= 2 ? sheet.getRange(2,1,sheet.getLastRow()-1,MOVEMENT_LOG_COLUMN_COUNT).getValues() : [];
+}
+
+function getBulkBundleProgress_(deliveryId, sheetRow, holderType, bundleQty, movementRows) {
+  const rows = movementRows || readBulkBundleMovements_();
   const definitions = physicalBundleDefinitions_(deliveryId,sheetRow,bundleQty,rows);
   const totals = {}, savedLines = {}, sold = {}, physicalProducts = {};
   const numbers = new Set(definitions.map(bundle => bundle.bundleNo));
@@ -931,7 +959,8 @@ function splitPhysicalBundle(payload) {
     if (![2,3,4].includes(parts)) throw new Error('Choose ½, ⅓, or ¼.');
     const deliveryId = String(payload.deliveryId || '').trim(), employee = String(payload.employee || '').trim();
     if (!employee) throw new Error('Employee is required.');
-    const holder = getBulkHolderDetails(deliveryId,sheetRow).holder;
+    const movementRows = readBulkBundleMovements_();
+    const holder = readBulkHolderDetails_(deliveryId,sheetRow,movementRows).holder;
     const bundle = holder.bundles.find(item => item.bundleNo === bundleNo);
     if (bundle && Number(bundle.parentBundleNo)>0) throw new Error('Resulting bundles cannot be split again. Distribute their items instead.');
     if (!bundle || bundleAccountedFor_(bundle) || Number(bundle.soldHalves)>0) throw new Error('Only an unopened, unsold bundle can be split.');
@@ -942,11 +971,12 @@ function splitPhysicalBundle(payload) {
     const sourceCode = bundle.productCode || holder.physicalProducts[holderCode];
     const products = getProductMaster_(), source = products.find(product => String(product.productCode) === sourceCode);
     if (!source || String(source.category).toUpperCase() !== 'WHOLESALE') throw new Error('This bundle needs a linked Wholesale product before splitting.');
-    const match = inventory.getRange(2,INV_COL.CODE,inventory.getLastRow()-1,1).createTextFinder(sourceCode).matchEntireCell(true).findNext();
-    if (!match || Number(inventory.getRange(match.getRow(),INV_COL.STOCK).getValue()) < 1) throw new Error('No bundle stock available to split.');
+    const context = yourStyleInventoryWriteContext_(inventory,products,movementRows);
+    const sourceRow = context.inventoryRows.find(row => row[INV_IDX.CODE] === sourceCode);
+    if (!sourceRow || Number(sourceRow[INV_IDX.STOCK]) < 1) throw new Error('No bundle stock available to split.');
     const description = bundle.description || holder.description;
     const product = ensureWholesaleBundleProduct_({description:description,estimatedQuantity:pieces,bundleQty:1},products,createdProducts);
-    const ensured = ensureYourStyleInventoryProduct(product.productCode,holder.deliveryDate,deliveryId);
+    const ensured = ensureYourStyleInventoryProduct(product.productCode,holder.deliveryDate,deliveryId,context);
     if (ensured.created) {
       createdInventory.push(ensured.rowNumber);
       if (!(Number(product.defaultPrice)>0)) {
@@ -958,12 +988,13 @@ function splitPhysicalBundle(payload) {
     const children = Array.from({length:parts},(_,index)=>lastNumber+index+1);
     const note = JSON.stringify({kind:'BUNDLE_SPLIT',deliveryId:deliveryId,sheetRow:sheetRow,bundleNo:bundleNo,
       parts:parts,pieces:pieces,productCode:String(product.productCode),description:description,children:children});
+    const appendedRows = [];
     changeInventoryStockBatch_([
       {code:sourceCode,qtyChange:-1,referenceId:deliveryId,employee:employee,item:source.description,reason:'BUNDLE SPLIT',source:INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,bundleNo:bundleNo,notes:note},
       {code:product.productCode,qtyChange:parts,referenceId:deliveryId,employee:employee,item:product.description,reason:'BUNDLE SPLIT',source:INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,notes:'Split from '+bundle.label}
-    ]);
+    ], {inventoryRows:context.inventoryRows, appendedRows:appendedRows});
     writeInventoryDeliveryMetadata_(inventory,[ensured.rowNumber],deliveryId,holder.deliveryDate);
-    const updated = getBulkHolderDetails(deliveryId,sheetRow).holder;
+    const updated = {...holder,...getBulkBundleProgress_(deliveryId,sheetRow,holder.type,holder.bundleQty,movementRows.concat(appendedRows))};
     return {success:true,holder:updated,productCode:product.productCode,createdBundleProducts:createdProducts.length,parts:parts,pieces:pieces};
   } catch (error) {
     if (movementStart && movements.getLastRow()>movementStart) movements.deleteRows(movementStart+1,movements.getLastRow()-movementStart);
@@ -1008,7 +1039,8 @@ function distributeBulkBundle(payload) {
     if (!employee) throw new Error("Employee is required.");
     if (!submittedLines.length) throw new Error("Add at least one distributed product.");
 
-    const holder = getBulkHolderDetails(deliveryId, sheetRow).holder;
+    const movementRows = readBulkBundleMovements_();
+    const holder = readBulkHolderDetails_(deliveryId, sheetRow, movementRows).holder;
     const holderType = String(holder.type || "").trim().toUpperCase();
     if (!Number.isInteger(bundleNo) || bundleNo < 1 || !holder.bundles.some(bundle => bundle.bundleNo === bundleNo)) {
       throw new Error('Select an available bundle from this delivery.');
@@ -1018,7 +1050,8 @@ function distributeBulkBundle(payload) {
       throw new Error(selectedBundle && selectedBundle.tooltip ? selectedBundle.tooltip + "." : "This bundle is no longer available for distribution.");
     }
 
-    const productResult = getYourStyleDeliveryProducts();
+    const products = getProductMaster_();
+    const productResult = yourStyleDeliveryProducts_(products);
     const productMap = {};
     (productResult.products || []).forEach(function(product){ productMap[String(product.productCode||"").trim()] = product; });
     const combined = {};
@@ -1043,8 +1076,9 @@ function distributeBulkBundle(payload) {
 
     ensureInventoryDeliveryMetadataColumns_(inventorySheet);
     holderRollback=deliverySheet.getRange(sheetRow,DELIVERY_COL.ACTUAL_QTY,1,5).getValues()[0];
+    const context = yourStyleInventoryWriteContext_(inventorySheet,products,movementRows);
     const receivedInventoryRows=lines.map(function(line){
-      const ensured=ensureYourStyleInventoryProduct(line.productCode,holder.deliveryDate,deliveryId);
+      const ensured=ensureYourStyleInventoryProduct(line.productCode,holder.deliveryDate,deliveryId,context);
       if (ensured.created) createdInventoryRows.push(ensured.rowNumber);
       return ensured.rowNumber;
     });
@@ -1053,13 +1087,14 @@ function distributeBulkBundle(payload) {
     const holderCode=deliveryId+"-B"+String(getBulkHolderSequenceForRow(deliverySheet,sheetRow,deliveryId)).padStart(2,"0");
     const physicalKind = Number(selectedBundle.soldHalves) === 1 ? "HALF" : (Number(selectedBundle.soldHalves) >= 2 ? "" : "FULL");
     const linkedCode = selectedBundle.productCode || (holder.physicalProducts || {})[holderCode];
-    const namedBundle = linkedCode ? getProductMaster_().find(product => String(product.productCode) === linkedCode) : null;
+    const namedBundle = linkedCode ? products.find(product => String(product.productCode) === linkedCode) : null;
     if (linkedCode && !namedBundle) throw new Error('The received Wholesale bundle product is missing from Product Master.');
     const physicalProduct = namedBundle
       ? (physicalKind === 'FULL' ? namedBundle : null)
       : physicalKind ? findPhysicalBundleProduct_(productResult.products, holderType, physicalKind) : null;
+    const stockChanges = [];
     if (physicalProduct) {
-      changeInventoryStock({
+      stockChanges.push({
         code: physicalProduct.productCode,
         qtyChange: -1,
         referenceId: deliveryId,
@@ -1072,16 +1107,18 @@ function distributeBulkBundle(payload) {
       });
     }
     const estimatedConsumption=Math.min(distributionActual,oldRemaining);
+    const holderMovements = [];
     if (estimatedConsumption > 0) {
-      logInventoryMovement({code:holderCode,type:bulkMovementType,qtyChange:-estimatedConsumption,stockBefore:oldRemaining,stockAfter:newRemaining,referenceId:deliveryId,employee:employee,item:holder.description,reason:"",source:INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION,bundleNo:bundleNo,remainingBundleQty:"",notes:remarks});
+      holderMovements.push({code:holderCode,type:bulkMovementType,qtyChange:-estimatedConsumption,stockBefore:oldRemaining,stockAfter:newRemaining,referenceId:deliveryId,employee:employee,item:holder.description,reason:"",source:INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION,bundleNo:bundleNo,remainingBundleQty:"",notes:remarks});
     }
     lines.forEach(function(line){
-      changeInventoryStock({code:line.productCode,qtyChange:line.quantity,referenceId:deliveryId,sourceLineId:"BUNDLE_ROW:"+sheetRow,employee:employee,item:line.description,reason:"",source:INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION,bundleNo:bundleNo,remainingBundleQty:"",notes:remarks});
+      stockChanges.push({code:line.productCode,qtyChange:line.quantity,referenceId:deliveryId,sourceLineId:"BUNDLE_ROW:"+sheetRow,employee:employee,item:line.description,reason:"",source:INVENTORY_MOVEMENT_SOURCE.DISTRIBUTION,bundleNo:bundleNo,remainingBundleQty:"",notes:remarks});
     });
+    const appendedRows = [];
+    changeInventoryStockBatch_(stockChanges, {inventoryRows:context.inventoryRows, additionalMovements:holderMovements, appendedRows:appendedRows});
 
     deliverySheet.getRange(sheetRow,DELIVERY_COL.ACTUAL_QTY,1,5).setValues([[newActual,newRemaining,"","",DELIVERY_STATUS.PARTIAL]]);
-    SpreadsheetApp.flush();
-    const progress=getBulkBundleProgress_(deliveryId,sheetRow,holderType,Number(holder.bundleQty));
+    const progress=getBulkBundleProgress_(deliveryId,sheetRow,holderType,Number(holder.bundleQty),movementRows.concat(appendedRows));
     writeInventoryDeliveryMetadata_(inventorySheet,receivedInventoryRows,deliveryId,holder.deliveryDate);
     return {success:true,deliveryId:deliveryId,deliveryNo:holder.deliveryNo,bundleNo:bundleNo,distributionActual:distributionActual,bundleActual:(progress.bundles[bundleNo-1]||{}).actualQuantity||0,actualQuantity:newActual,remainingQuantity:newRemaining,currentVariance:currentVariance,status:DELIVERY_STATUS.PARTIAL,bundles:progress.bundles};
   } catch(err) {

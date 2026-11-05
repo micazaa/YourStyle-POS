@@ -2,9 +2,11 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const html=fs.readFileSync('Frontend/Modals/BulkDistributionModal.html','utf8');
 function fixture({halves=0,disabled=false,actual=0,fullSold=false,estimate=150,rows=[],count=5}={}){
  const nodes={},calls=[],toasts=[],elements=[];
- function element(tag='div'){const n={tagName:tag.toUpperCase(),children:[],dataset:{},style:{},value:'',textContent:'',disabled:false,hidden:false,attributes:{},
-  classList:{toggle(){}},setAttribute(k,v){this.attributes[k]=v;},append(...v){this.children.push(...v);},replaceChildren(...v){this.children=v;},focus(){},
-  querySelector(){return null;},closest(){return null;}};elements.push(n);return n;}
+ function element(tag='div'){let text='';const n={tagName:tag.toUpperCase(),children:[],dataset:{},style:{},value:'',disabled:false,hidden:false,attributes:{},
+  classList:{toggle(){}},setAttribute(k,v){this.attributes[k]=v;},append(...v){this.children.push(...v);},replaceChildren(...v){text='';this.children=v;},focus(){},
+  querySelector(){return null;},closest(){return null;}};
+  Object.defineProperty(n,'textContent',{get(){return text+this.children.map(child=>typeof child==='string'?child:child.textContent||'').join('');},set(value){text=String(value??'');this.children=[];}});
+  elements.push(n);return n;}
  const get=id=>nodes[id]||=(element(id.endsWith('Btn')||id.endsWith('Tab')?'button':'div'));
  const lineNodes=rows.map(item=>{const row=element();row.dataset={bundleNo:1,saved:item.saved?'true':'false'};
   const fields={'.bulk-distribution-product-code':{value:item.code||''},'.bulk-distribution-qty':{value:item.qty??1},'.bulk-distribution-product-search':{value:item.name||item.code||''}};
@@ -31,6 +33,7 @@ test('action tabs isolate split from item entry and preview the same child label
  assert.equal(f.get('confirmBulkDistributionBtn').hidden,true);assert.equal(f.get('bulkDistributionSplitBtn').disabled,false);
  assert.equal(f.get('bulkDistributionSplitParts').value,'2');assert.equal(f.fractions[2].disabled,true);
  assert.equal(f.get('bulkDistributionEmployeeLabel').textContent,'Split by');
+ assert.equal(f.get('bulkDistributionSplitTab').hidden,false);
  assert.deepEqual(f.get('bulkDistributionSplitResultRows').children.map(row=>row.children.map(n=>n.textContent)),[['Bundle 096-A-1','75 pcs'],['Bundle 096-A-2','75 pcs']]);
  f.c.submitBulkDistribution(false);assert.equal(f.calls.length,0,'distribution cannot submit from Split mode');
  f.c.setBulkDistributionMode('distribute');f.c.submitBundleSplit();assert.equal(f.calls.length,0,'splitting cannot submit from Distribute mode');
@@ -84,6 +87,9 @@ test('a split original locks both actions and displays the actual immediate chil
  f.c.updateBulkDistributionSummary();
  for(const id of ['bulkDistributionDistributeTab','bulkDistributionSplitTab','bulkDistributionAddItemBtn','confirmBulkDistributionBtn'])assert.equal(f.get(id).disabled,true,id);
  assert.equal(f.get('bulkDistributionRemarks').disabled,true);
+ assert.equal(f.get('bulkDistributionModes').hidden,true);
+ assert.equal(f.get('bulkDistributionDistributePanel').hidden,true);
+ assert.equal(f.get('bulkDistributionSplitPanel').hidden,true);
  assert.equal(f.get('bulkDistributionSplitInto').hidden,false);
  assert.equal(f.get('bulkDistributionSplitInto').textContent,'Split into: 096-A-1 (75 pcs), 096-A-2 (75 pcs)');
  f.c.setBulkDistributionMode('split');f.c.submitBundleSplit();f.c.submitBulkDistribution(false);
@@ -93,16 +99,36 @@ test('resulting bundles remain distributable but cannot be split again',()=>{
  const f=fixture({rows:[{code:'100001',qty:100}]});f.c.seed.bundles[0].parentBundleNo=9;f.c.seed.bundles[0].label='096-I-1';
  f.c.updateBulkDistributionSummary();f.c.setBulkDistributionMode('split');
  assert.equal(f.get('bulkDistributionDistributeTab').disabled,false);assert.equal(f.get('bulkDistributionSplitTab').disabled,true);
+ assert.equal(f.get('bulkDistributionSplitTab').hidden,true);
  assert.equal(f.get('bulkDistributionAddItemBtn').disabled,false);assert.equal(f.get('confirmBulkDistributionBtn').disabled,false);
- assert.equal(f.get('bulkDistributionSplitInto').textContent,'Split from: 096-I. Further splitting is disabled.');
+ assert.equal(f.get('bulkDistributionSplitInto').textContent,'Split from: 096-I');
  f.c.submitBundleSplit();assert.equal(f.calls.length,0);f.c.submitBulkDistribution(false);assert.equal(f.calls[0].method,'distribute');
+});
+test('child-code shortcuts switch bundles locally and restore item entry without losing drafts',()=>{
+ const f=fixture({rows:[{code:'100001',qty:25}]});
+ f.lineNodes[0].dataset.bundleNo=6;
+ f.c.seed.bundles[0].split=true;
+ f.c.seed.bundles.push({bundleNo:6,label:'096-A-1',parentBundleNo:1,estimatedQuantity:75,disabled:false},{bundleNo:7,label:'096-A-2',parentBundleNo:1,estimatedQuantity:75,disabled:false});
+ f.c.updateBulkDistributionSummary();
+ const buttons=f.get('bulkDistributionSplitInto').children.filter(node=>node.tagName==='BUTTON');
+ assert.deepEqual(buttons.map(button=>button.textContent),['096-A-1','096-A-2']);
+ assert.deepEqual(buttons.map(button=>button.attributes['aria-label']),['Open bundle 096-A-1','Open bundle 096-A-2']);
+ buttons[0].onclick();assert.equal(f.c.getSelectedBulkBundle().bundleNo,6);
+ assert.equal(f.get('bulkDistributionModes').hidden,false);assert.equal(f.get('bulkDistributionDistributePanel').hidden,false);
+ assert.equal(f.get('bulkDistributionAddItemBtn').disabled,false);assert.equal(f.get('bulkDistributionSelectedActualQty').textContent,'25 pcs');
+ assert.equal(f.get('bulkDistributionSplitTab').disabled,true);assert.equal(f.lineNodes.length,1);assert.equal(f.calls.length,0);
+ f.c.selectBulkDistributionBundle(1);
+ const second=f.get('bulkDistributionSplitInto').children.filter(node=>node.tagName==='BUTTON')[1];second.onclick();
+ assert.equal(f.c.getSelectedBulkBundle().bundleNo,7);assert.equal(f.calls.length,0);
+ f.c.selectBulkDistributionBundle(2);
+ assert.equal(f.get('bulkDistributionSplitTab').hidden,false);assert.equal(f.get('bulkDistributionSplitTab').disabled,false);
 });
 function backendSplitFixture(bundle){
  let writes=0,released=false;const sheet={getLastRow:()=>1,deleteRows(){writes++;}};
  const c=vm.createContext({assertAppRequest_(){},SpreadsheetApp:{getActiveSpreadsheet:()=>({getSheetByName:()=>sheet}),flush(){}},
   LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){released=true;}})}});
  for(const file of ['Constants','GeneralDelivery'])vm.runInContext(fs.readFileSync('Backend/'+file+'.js','utf8'),c);
- c.getBulkHolderDetails=()=>({holder:{type:'PINS',bundles:[bundle]}});c.changeInventoryStockBatch_=()=>{writes++;};
+ c.readBulkBundleMovements_=()=>[];c.readBulkHolderDetails_=()=>({holder:{type:'PINS',bundles:[bundle]}});c.changeInventoryStockBatch_=()=>{writes++;};
  c.getYourStyleDeliveryProducts=()=>{throw Error('Must reject before loading products');};
  return {c,writes:()=>writes,released:()=>released};
 }
@@ -111,8 +137,8 @@ test('backend rejects split descendants and distribution from split originals be
  const child=backendSplitFixture({bundleNo:1,parentBundleNo:9,actualQuantity:0,disabled:false,soldHalves:0});
  assert.match(child.c.splitPhysicalBundle(payload).message,/cannot be split again/);assert.equal(child.writes(),0);assert.equal(child.released(),true);
  const original=backendSplitFixture({bundleNo:1,split:true,disabled:false,actualQuantity:0});
- assert.equal(original.c.splitPhysicalBundle(payload).success,false);
- assert.equal(original.c.distributeBulkBundle(payload).success,false);assert.equal(original.writes(),0);assert.equal(original.released(),true);
+ assert.match(original.c.splitPhysicalBundle(payload).message,/Only an unopened, unsold bundle/);
+ assert.match(original.c.distributeBulkBundle(payload).message,/no longer available for distribution/);assert.equal(original.writes(),0);assert.equal(original.released(),true);
 });
 test('child-code preview follows the persisted split record labels',()=>{
  const {c}=backendSplitFixture({});

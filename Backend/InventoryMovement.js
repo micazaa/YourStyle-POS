@@ -103,12 +103,13 @@ function changeInventoryStock(options) {
   return { success: true, code: code, rowNumber: inventoryRow, qtyChange: qtyChange, stockBefore: stockBefore, stockAfter: stockAfter };
 }
 
-function changeInventoryStockBatch_(movements) {
+function changeInventoryStockBatch_(movements, options) {
   if (!Array.isArray(movements) || !movements.length) return [];
+  options = options || {};
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const inventorySheet = ss.getSheetByName(SHEETS.INVENTORY);
   if (!inventorySheet || inventorySheet.getLastRow() < 2) throw new Error("Inventory is empty.");
-  const inventoryRows = inventorySheet.getRange(2, 1, inventorySheet.getLastRow() - 1, INVENTORY_COLUMN_COUNT).getValues();
+  const inventoryRows = options.inventoryRows || inventorySheet.getRange(2, 1, inventorySheet.getLastRow() - 1, INVENTORY_COLUMN_COUNT).getValues();
   const byCode = {};
   inventoryRows.forEach(function(row, index) {
     const code = String(row[INV_IDX.CODE] || "").trim();
@@ -162,13 +163,17 @@ function changeInventoryStockBatch_(movements) {
       status:target.row[INV_IDX.STATUS],stockAfter:stockAfter,source:source,qtyChange:qtyChange});
     results.push({success:true, code:code, rowNumber:target.rowNumber, qtyChange:qtyChange, stockBefore:stockBefore, stockAfter:stockAfter});
   });
+  // Virtual bundle estimates have no Inventory row, but commit with the counted stock.
+  const additionalRows = (options.additionalMovements || []).map(inventoryMovementRow_);
+  rows.unshift(...additionalRows);
   movementSheet.getRange(movementSheet.getLastRow() + 1, 1, rows.length, MOVEMENT_LOG_COLUMN_COUNT).setValues(rows);
-  recordInventoryChangedCodes_(results.map(result=>result.code));
+  recordInventoryChangedCodes_(results.map(result=>result.code).concat(additionalRows.map(row=>row[MOVE_IDX.CODE])));
   syncSoldYourFindsStatus_(inventorySheet,soldYourFinds);
   const addresses = Object.keys(touchedRows).map(function(rowNumber) { return "Q" + rowNumber; });
   if (addresses.length && inventorySheet.getRangeList) inventorySheet.getRangeList(addresses).setValue(now);
   else Object.keys(touchedRows).forEach(function(rowNumber) { inventorySheet.getRange(Number(rowNumber), INV_COL.UPDATED_AT).setValue(now); });
   SpreadsheetApp.flush();
+  if (options.appendedRows) options.appendedRows.push(...rows);
   return results;
 }
 

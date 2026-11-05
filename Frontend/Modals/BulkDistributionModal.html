@@ -395,7 +395,7 @@ function setBulkDistributionMode(mode) {
 }
 function handleBulkDistributionModeKey(event) {
   if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
-  const buttons=Array.from(document.querySelectorAll('#bulkDistributionModes [role="tab"]')).filter(button=>!button.disabled);
+  const buttons=Array.from(document.querySelectorAll('#bulkDistributionModes [role="tab"]')).filter(button=>!button.disabled&&!button.hidden);
   if(!buttons.includes(event.target)||!buttons.length)return;
   event.preventDefault();const index=buttons.indexOf(event.target);
   const next=event.key==='Home'?buttons[0]:event.key==='End'?buttons[buttons.length-1]:buttons[(index+(event.key==='ArrowRight'?1:buttons.length-1))%buttons.length];
@@ -409,11 +409,14 @@ function updateBulkDistributionMode_() {
   ['Distribute','Split'].forEach(name=>{
     const button=document.getElementById('bulkDistribution'+name+'Tab'),active=(name==='Split')===split;
     button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1;
+    button.hidden=name==='Split'&&Number(selected?.parentBundleNo)>0;
     button.disabled=bulkDistributionSaving||!bulkDistributionHolder||!!selected?.split||(name==='Split'&&!canSplit);
-    button.title=selected?.split?'Original bundle already split':name==='Split'&&selected?.parentBundleNo?'Resulting bundles cannot be split again':'';
+    button.title=selected?.split?'Original bundle already split':'';
   });
-  document.getElementById('bulkDistributionDistributePanel').hidden=split;
-  document.getElementById('bulkDistributionSplitPanel').hidden=!split;
+  const originalSplit=!!selected?.split;
+  document.getElementById('bulkDistributionModes').hidden=originalSplit;
+  document.getElementById('bulkDistributionDistributePanel').hidden=originalSplit||split;
+  document.getElementById('bulkDistributionSplitPanel').hidden=originalSplit||!split;
   document.getElementById('confirmBulkDistributionBtn').hidden=split;
   document.getElementById('bulkDistributionSplitBtn').hidden=!split;
   document.getElementById('completeBulkDistributionBtn').hidden=split||!bulkDistributionAllAccountedFor();
@@ -433,8 +436,21 @@ function updateBulkDistributionSummary() {
   const splitInto=document.getElementById('bulkDistributionSplitInto'),parentNo=Number(selected?.parentBundleNo)||0;
   splitInto.hidden=!selected?.split&&!parentNo;
   const children=(h?.bundles||[]).filter(bundle=>Number(bundle.parentBundleNo)===Number(selected?.bundleNo));
-  if(parentNo&&!selected?.split){const parent=(h?.bundles||[]).find(bundle=>Number(bundle.bundleNo)===parentNo);splitInto.textContent='Split from: '+(parent?.label||bundleDisplayName_(h.deliveryId,parentNo))+'. Further splitting is disabled.';}
-  else splitInto.textContent=children.length?'Split into: '+children.map(bundle=>(bundle.label||bundleDisplayName_(h.deliveryId,bundle.bundleNo))+(Number(bundle.estimatedQuantity)>0?' ('+Number(bundle.estimatedQuantity)+' pcs)':'')).join(', '):'Split completed. Resulting bundle codes are not available.';
+  splitInto.replaceChildren();
+  if(parentNo&&!selected?.split){const parent=(h?.bundles||[]).find(bundle=>Number(bundle.bundleNo)===parentNo);splitInto.textContent='Split from: '+(parent?.label||bundleDisplayName_(h.deliveryId,parentNo));}
+  else if(children.length){
+    splitInto.append('Split into: ');
+    children.forEach((bundle,index)=>{
+      if(index)splitInto.append(', ');
+      const code=bundle.label||bundleDisplayName_(h.deliveryId,bundle.bundleNo);
+      const shortcut=document.createElement('button');shortcut.type='button';shortcut.className='btn btn-link bundle-child-shortcut';
+      shortcut.textContent=code;shortcut.disabled=bulkDistributionSaving;
+      shortcut.setAttribute('aria-label','Open bundle '+code);
+      shortcut.onclick=()=>selectBulkDistributionBundle(bundle.bundleNo,'select');
+      splitInto.append(shortcut);
+      if(Number(bundle.estimatedQuantity)>0)splitInto.append(' ('+Number(bundle.estimatedQuantity)+' pcs)');
+    });
+  }else splitInto.textContent='Split completed. Resulting bundle codes are not available.';
   document.getElementById('bulkDistributionSelectedActualQty').textContent=bundleActual+' pcs';
   document.getElementById('bulkDistributionCountLabel').textContent=Number(selected&&selected.actualQuantity)>0?'Actual counted':'Total entered';
   const soldInfo=document.getElementById('bulkDistributionSoldInfo');soldInfo.hidden=!halves||locked;

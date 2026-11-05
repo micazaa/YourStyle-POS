@@ -521,9 +521,11 @@ function indexCashierInventory(items) {
   cashierBarcodeIndex = new Map();
   cashierSearchRows = items.map(function(item, index) {
     const code = String(item.code || '').trim();
+    const category = String(item.category || '').trim().toUpperCase().replace(/^WHOLE\s+SALE$/, 'WHOLESALE');
+    const aliases = category === 'WHOLESALE' ? 'bundle bundles wholesale whole sale' : '';
     if (!cashierBarcodeIndex.has(code)) cashierBarcodeIndex.set(code, []);
     cashierBarcodeIndex.get(code).push(item);
-    return {item:item, index:index, searchText:[item.name, item.size, item.category, code].join(' ').toLowerCase()};
+    return {item:item, index:index, searchText:[item.name, item.size, item.category, code, aliases].join(' ').toLowerCase()};
   });
 }
 function rememberCashierInventory(items) {

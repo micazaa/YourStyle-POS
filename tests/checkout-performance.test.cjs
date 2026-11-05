@@ -46,6 +46,18 @@ test('other inventory mutations retain their immediate inventory patch',()=>{
   assert.equal(result.inventoryPatch.version,'v2');
 });
 
+test('bundle writes finish their audit and mutation before returning, while inventory refresh runs later',()=>{
+  for(const operation of ['splitPhysicalBundle','distributeBulkBundle']){
+    const {c,calls}=router(operation);
+    c.beginAccessAudit_=()=>({id:'AUDIT'});c.finishAccessAudit_=()=>{calls.auditFinished=true;};
+    c.actionSnapshot_=()=>({state:'Pending'});
+    const result=JSON.parse(c.callPosApi({inventoryVersion:'v1'}));
+    assert.equal(result.success,true);assert.equal(result.inventoryPatch.deferred,true);
+    assert.equal(result.inventoryPatch.version,'v2');assert.equal(calls.changes,0);
+    assert.equal(calls.finish,1);assert.equal(calls.auditFinished,true);
+  }
+});
+
 function shift() {
   const reads=[];
   const c=vm.createContext({});vm.runInContext(source('Constants')+'\n'+source('CashierShift')+'\n'+source('AccessControl'),c);
