@@ -354,7 +354,7 @@
             <td class="ps-3">${imgTag}</td>
             <td><div class="fw-bold${isSaleItem ? " text-danger" : ""}">${escapeInventoryHtml(
               cashierItemDisplayName(item)
-            )}</div><div class="small${isSaleItem ? " text-danger" : " text-muted"}">${escapeInventoryHtml(item.code)}</div>${cashierBundleKind(item) ? `<select class="form-select form-select-sm mt-1 cart-bundle-select" aria-label="Bundle code for ${escapeInventoryHtml(item.name || item.code)}" data-idx="${index}" data-field="bundle"><option value="">${escapeInventoryHtml(item.bundleSelection ? item.bundleSelection.label : 'Select bundle code')}</option></select>${item.bundleSelection ? `<div class="small text-muted text-break">${escapeInventoryHtml(item.bundleSelection.deliveryId)}</div>` : ''}` : ''}</td>
+            )}</div><div class="small${isSaleItem ? " text-danger" : " text-muted"}">${escapeInventoryHtml(item.code)}</div>${cashierBundleKind(item) ? `<select class="form-select form-select-sm mt-1 cart-bundle-select" aria-label="Bundle code for ${escapeInventoryHtml(item.name || item.code)}" data-idx="${index}" data-field="bundle"><option value="">${escapeInventoryHtml(item.bundleSelection ? item.bundleSelection.label : 'Select bundle code')}</option></select>` : ''}</td>
             <td class="text-center fw-semibold">${item.size || ""}</td>
             <td class="text-center">
               <input type="number" class="form-control form-control-sm text-center mx-auto" style="width:60px; font-weight:600;" value="${
@@ -545,7 +545,7 @@ function cashierBundleQuantityLimit(item,index) {
 var cashierCartBundleCache=null;
 function cashierCartBundleState() {
   const owner=currentEmployee&&currentEmployee.dashboardToken||'';
-  const version=typeof inventoryDataset==='undefined'?'':inventoryDataset.version||'';
+  const version=typeof inventoryDataset==='undefined'?'':inventoryDataset?.version||'';
   if(cashierCartBundleCache&&cashierCartBundleCache.owner===owner&&cashierCartBundleCache.serverVersion===version)
     cashierCartBundleCache.version=version;
   if(!cashierCartBundleCache||cashierCartBundleCache.owner!==owner||cashierCartBundleCache.version!==version){
@@ -927,13 +927,12 @@ function selectManualItem(index) {
   }
 
 
+  resetManualItemSearch();
+
   addItemToCart(
     selectedItem,
     false
   );
-
-
-  resetManualItemSearch();
 
 
   // Immediately ready for another product
@@ -1022,6 +1021,17 @@ function addItemToCart(
   const productCode =
     String(product.code || "").trim();
 
+  if(!isCustom&&cashierBundleKind(product)&&!product.bundleSelection&&!product.bundleUnlinked){
+    const base=String(product.bundleBaseVariantKey||product.variantKey||productCode);
+    const pending=cart.findIndex(item=>!item.isCustom&&!item.bundleSelection&&!item.bundleUnlinked&&
+      String(item.bundleBaseVariantKey||item.variantKey||item.code)===base);
+    if(pending>=0){
+      showNotificationToast('Choose a bundle code for the item already in your cart.',true);
+      const select=document.querySelector('#cartRows .cart-bundle-select[data-idx="'+pending+'"]');
+      if(select)select.focus();
+      return;
+    }
+  }
 
   let existingItem = null;
 

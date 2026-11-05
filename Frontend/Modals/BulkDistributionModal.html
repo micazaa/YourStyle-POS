@@ -12,7 +12,7 @@
       <button type="button" class="btn-close" aria-label="Close bundle actions" onclick="closeBulkDistributionModal()"></button>
     </div>
     <div id="bulkDistributionBundleTabs" class="delivery-bundle-selector mb-3" role="group" aria-label="Bundle navigation"></div>
-    <div id="bulkDistributionSelectedSummary" class="bundle-selected-summary bg-light rounded p-3 mb-3" hidden><div class="d-flex justify-content-between align-items-start gap-3 mb-1"><strong id="bulkDistributionSelectedName"></strong><span id="bulkDistributionSelectedStatus" class="badge"></span></div><div id="bulkDistributionBundleSummary" class="small text-muted"></div><div id="bulkDistributionSplitInto" class="small mt-2" hidden></div></div>
+    <div id="bulkDistributionSelectedSummary" class="bundle-selected-summary bg-light rounded p-3 mb-3" hidden><div class="d-flex justify-content-between align-items-start gap-3 mb-1"><strong id="bulkDistributionSelectedName"></strong><span id="bulkDistributionSelectedStatus" class="badge"></span></div><div id="bulkDistributionBundleSummary" class="small text-muted" aria-live="polite" aria-atomic="true"></div><div id="bulkDistributionSplitInto" class="small mt-2" hidden></div></div>
     <div id="bulkDistributionModes" class="bundle-action-tabs mb-3" role="tablist" aria-label="Bundle action" onkeydown="handleBulkDistributionModeKey(event)">
       <button type="button" id="bulkDistributionDistributeTab" role="tab" aria-controls="bulkDistributionDistributePanel" aria-selected="true" onclick="setBulkDistributionMode('distribute')">Distribute items</button>
       <button type="button" id="bulkDistributionSplitTab" role="tab" aria-controls="bulkDistributionSplitPanel" aria-selected="false" tabindex="-1" onclick="setBulkDistributionMode('split')" disabled>Split bundle</button>
@@ -375,6 +375,22 @@ function getBulkDistributionLines(bundleNo, includeSaved){return Array.from(docu
 function bulkDistributionBundleLocked_(bundle) {
   return !!(bundle&&(bundle.disabled||bundle.split));
 }
+function bulkDistributionProductCountLabel_() {
+  const products=new Map();
+  document.querySelectorAll('#bulkDistributionLines .bulk-distribution-line').forEach(row=>{
+    if(Number(row.dataset.bundleNo)!==Number(bulkDistributionSelectedBundleNo))return;
+    const code=String(row.querySelector('.bulk-distribution-product-code').value||'').trim();
+    if(!code)return;
+    const quantity=Number(row.querySelector('.bulk-distribution-qty').value)||0;
+    const entered=String(row.querySelector('.bulk-distribution-product-search').value||'').trim();
+    const prefix=code+' — ';
+    const product=bulkDistributionProducts.find(item=>String(item.productCode)===code);
+    const name=(entered.startsWith(prefix)?entered.slice(prefix.length):product?.description)||entered||code;
+    const count=products.get(code)||{name,quantity:0};
+    count.quantity+=quantity;products.set(code,count);
+  });
+  return [...Array.from(products.values(),item=>item.name+' '+item.quantity),'Total'].join(' · ');
+}
 function bulkDistributionCanSplit_() {
   const holder=bulkDistributionHolder,bundle=getSelectedBulkBundle();
   return !!holder&&!!bundle&&!bundle.disabled&&!bundle.split&&!(Number(bundle.parentBundleNo)>0)&&!bundle.fullSold&&!bundle.returned&&
@@ -432,7 +448,15 @@ function updateBulkDistributionSummary() {
   document.getElementById('bulkDistributionSelectedName').textContent=selected&&selected.description||h&&h.description||'';
   const status=selected?bulkDistributionBundleStatus_(selected):'',badge=document.getElementById('bulkDistributionSelectedStatus');
   badge.textContent=status;badge.className='badge '+({'Distribution saved':'bg-success',Sold:'bg-danger','Half sold':'bg-info text-dark','2 halves sold':'bg-info text-dark'}[status]||'bg-secondary');
-  document.getElementById('bulkDistributionBundleSummary').textContent='Estimated: '+Number(estimate.toFixed(2))+' pcs'+(halves?' · Remaining estimate: '+Math.max(0,estimate*(1-halves/2))+' pcs':'');
+  const remainingEstimate=Math.max(0,estimate*(1-halves/2));
+  const summary=['Estimated: '+Number(estimate.toFixed(2))+' pcs'];
+  if(halves)summary.push('Remaining estimate: '+Number(remainingEstimate.toFixed(2))+' pcs');
+  const distributing=bulkDistributionMode!=='split'||!bulkDistributionCanSplit_();
+  if(distributing&&selected&&!selected.split&&!selected.fullSold&&!selected.returned){
+    const variance=Number((bundleActual-remainingEstimate).toFixed(2));
+    summary.push('Actual: '+bundleActual+' pcs','Variance: '+(variance>0?'+':'')+variance+' pcs');
+  }
+  document.getElementById('bulkDistributionBundleSummary').textContent=summary.join(' · ');
   const splitInto=document.getElementById('bulkDistributionSplitInto'),parentNo=Number(selected?.parentBundleNo)||0;
   splitInto.hidden=!selected?.split&&!parentNo;
   const children=(h?.bundles||[]).filter(bundle=>Number(bundle.parentBundleNo)===Number(selected?.bundleNo));
@@ -452,7 +476,7 @@ function updateBulkDistributionSummary() {
     });
   }else splitInto.textContent='Split completed. Resulting bundle codes are not available.';
   document.getElementById('bulkDistributionSelectedActualQty').textContent=bundleActual+' pcs';
-  document.getElementById('bulkDistributionCountLabel').textContent=Number(selected&&selected.actualQuantity)>0?'Actual counted':'Total entered';
+  document.getElementById('bulkDistributionCountLabel').textContent=bulkDistributionProductCountLabel_();
   const soldInfo=document.getElementById('bulkDistributionSoldInfo');soldInfo.hidden=!halves||locked;
   soldInfo.textContent=halves+' half bundle'+(halves===1?'':'s')+' sold · '+(estimate*halves/2)+' pcs estimated';
   document.getElementById('bulkDistributionCountNote').hidden=!halves||locked;

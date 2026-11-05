@@ -69,6 +69,47 @@ test('save waits for valid rows and keeps the modal open with saved entries lock
  assert.equal(f.get('bulkDistributionAddItemBtn').disabled,true);assert.equal(f.get('confirmBulkDistributionBtn').disabled,true);
  assert.equal(f.get('bulkDistributionSelectedActualQty').textContent,'155 pcs');
 });
+test('selected bundle banner shows live actual and variance only in Distribute mode',()=>{
+ const f=fixture({rows:[{code:'100001',qty:2}]});
+ assert.equal(f.get('bulkDistributionBundleSummary').textContent,'Estimated: 150 pcs · Actual: 2 pcs · Variance: -148 pcs');
+ f.lineNodes[0].querySelector('.bulk-distribution-qty').value=150;f.c.updateBulkDistributionSummary();
+ assert.equal(f.get('bulkDistributionBundleSummary').textContent,'Estimated: 150 pcs · Actual: 150 pcs · Variance: 0 pcs');
+ f.lineNodes[0].querySelector('.bulk-distribution-qty').value=155;f.c.updateBulkDistributionSummary();
+ assert.match(f.get('bulkDistributionBundleSummary').textContent,/Actual: 155 pcs · Variance: \+5 pcs$/);
+ f.c.setBulkDistributionMode('split');assert.equal(f.get('bulkDistributionBundleSummary').textContent,'Estimated: 150 pcs');
+ f.c.setBulkDistributionMode('distribute');assert.match(f.get('bulkDistributionBundleSummary').textContent,/Variance: \+5 pcs$/);
+ f.c.selectBulkDistributionBundle(2);assert.equal(f.get('bulkDistributionBundleSummary').textContent,'Estimated: 150 pcs · Actual: 0 pcs · Variance: -150 pcs');
+});
+test('saved rows count once; split children and sold halves use their own remaining estimate',()=>{
+ const saved=fixture({actual:2,disabled:true,rows:[{code:'100001',qty:2,saved:true}]});
+ assert.equal(saved.get('bulkDistributionBundleSummary').textContent,'Estimated: 150 pcs · Actual: 2 pcs · Variance: -148 pcs');
+ const child=fixture({estimate:75,rows:[{code:'100001',qty:80}]});child.c.seed.bundles[0].parentBundleNo=9;child.c.updateBulkDistributionSummary();
+ assert.equal(child.get('bulkDistributionBundleSummary').textContent,'Estimated: 75 pcs · Actual: 80 pcs · Variance: +5 pcs');
+ const half=fixture({halves:1,rows:[{code:'100001',qty:80}]});
+ assert.equal(half.get('bulkDistributionBundleSummary').textContent,'Estimated: 150 pcs · Remaining estimate: 75 pcs · Actual: 80 pcs · Variance: +5 pcs');
+ for(const options of [{fullSold:true,disabled:true}])assert.doesNotMatch(fixture(options).get('bulkDistributionBundleSummary').textContent,/Actual:|Variance:/);
+});
+test('count footer groups products, includes saved rows once and follows the selected bundle',()=>{
+ const f=fixture({actual:1,rows:[
+  {code:'100002',name:'100002 — BLACK',qty:1,saved:true},
+  {code:'100003',name:'100003 — BLUE',qty:1},
+  {code:'100002',name:'100002 — BLACK',qty:2},
+  {name:'unfinished search',qty:5},
+  {code:'100004',name:'100004 — RED',qty:9}
+ ]});
+ f.lineNodes[4].dataset.bundleNo=2;f.c.updateBulkDistributionSummary();
+ assert.equal(f.get('bulkDistributionCountLabel').textContent,'BLACK 3 · BLUE 1 · Total');
+ assert.equal(f.get('bulkDistributionSelectedActualQty').textContent,'4 pcs');
+ f.lineNodes[2].querySelector('.bulk-distribution-qty').value=3;f.c.updateBulkDistributionSummary();
+ assert.equal(f.get('bulkDistributionCountLabel').textContent,'BLACK 4 · BLUE 1 · Total');
+ assert.equal(f.get('bulkDistributionSelectedActualQty').textContent,'5 pcs');
+ f.c.selectBulkDistributionBundle(2);
+ assert.equal(f.get('bulkDistributionCountLabel').textContent,'RED 9 · Total');
+ assert.equal(f.get('bulkDistributionSelectedActualQty').textContent,'9 pcs');
+ f.c.selectBulkDistributionBundle(3);
+ assert.equal(f.get('bulkDistributionCountLabel').textContent,'Total');
+ assert.equal(f.get('bulkDistributionSelectedActualQty').textContent,'0 pcs');
+});
 test('bundle navigation uses centered toggles for up to three bundles and a dropdown above three',()=>{
  for(const count of [1,3,4]){const f=fixture({count});f.c.renderBulkDistributionTabs();const children=f.get('bulkDistributionBundleTabs').children;
   assert.equal(children.some(n=>n.tagName==='SELECT'),count>3);if(count<=3)assert.equal(children[1].children.length,count);
