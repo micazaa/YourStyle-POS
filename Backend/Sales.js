@@ -216,6 +216,11 @@ function executeCheckoutBackend(
       l.salesLineId = generateSalesLineId();
     });
 
+    // Validate selected physical bundles under the checkout lock before saving sales.
+    // Reuse this plan at commit so bundle history is read only once.
+    const bundleStockPlan = lines.some(line => line.bundleSelection)
+      ? deductInventoryStock(lines,receiptId,cashierName,productSnapshot,true) : null;
+
     // 4) Write Sales Log rows (A–AB), repeating Cash Received/Change on every line.
     // POS writes are already inventory-synchronized, so mark them PROCESSED.
     const timestamp = new Date();
@@ -268,7 +273,8 @@ function executeCheckoutBackend(
       .setValues(rows);
 
     // 5) Decrement inventory stock for non-custom items
-    deductInventoryStock(lines, receiptId, cashierName, productSnapshot);
+    if (bundleStockPlan) changeInventoryStockBatch_(bundleStockPlan);
+    else deductInventoryStock(lines, receiptId, cashierName, productSnapshot);
     consumeSaleAllocations_(lines, cashierName, productSnapshot);
 
     return JSON.stringify({

@@ -354,12 +354,12 @@
             <td class="ps-3">${imgTag}</td>
             <td><div class="fw-bold${isSaleItem ? " text-danger" : ""}">${escapeInventoryHtml(
               cashierItemDisplayName(item)
-            )}</div><div class="small${isSaleItem ? " text-danger" : " text-muted"}">${escapeInventoryHtml(item.code)}</div></td>
+            )}</div><div class="small${isSaleItem ? " text-danger" : " text-muted"}">${escapeInventoryHtml(item.code)}</div>${cashierBundleKind(item) ? `<button type="button" class="btn btn-link text-start p-0 small" onclick="openCashierBundlePicker(cart[${index}],${index})">${escapeInventoryHtml(item.bundleSelection ? 'Bundle '+item.bundleSelection.label+' · Change' : 'Choose bundle')}</button>${item.bundleSelection ? `<div class="small text-muted text-break">${escapeInventoryHtml(item.bundleSelection.deliveryId)}</div>` : ''}` : ''}</td>
             <td class="text-center fw-semibold">${item.size || ""}</td>
             <td class="text-center">
               <input type="number" class="form-control form-control-sm text-center mx-auto" style="width:60px; font-weight:600;" value="${
                 item.quantity
-              }" data-idx="${index}" data-field="qty" onchange="updateQty(${index}, this.value)">
+              }" min="1" ${item.bundleSelection ? `max="${cashierBundleQuantityLimit(item,index)}"${item.bundleSelection.kind === 'FULL' ? ' readonly aria-label="One selected bundle"' : ''}` : ''} data-idx="${index}" data-field="qty" onchange="updateQty(${index}, this.value)">
             </td>
             <td class="text-end fw-semibold">₱${item.price.toFixed(2)}</td>
             <td>
@@ -473,6 +473,10 @@ document
 
   function updateQty(index, val) {
     let qty = parseInt(val) || 1;
+    if (cart[index].bundleSelection && qty > cashierBundleQuantityLimit(cart[index],index)) {
+      showNotificationToast('That quantity exceeds the selected bundle. Add another bundle separately.',true);
+      renderCart();return;
+    }
     cart[index].quantity = qty <= 0 ? 1 : qty;
     if (!cart[index].isCustom && cart[index].quantity > (Number(cart[index].stock) || 0)) {
       showNotificationToast(
@@ -510,6 +514,24 @@ document
     document.getElementById("globalDiscountType").value = "percentage";
     renderCart();
   }
+
+function cashierBundleKind(item) {
+  if (item.bundleKind) return item.bundleKind;
+  const category=String(item.category||'').trim().toUpperCase().replace(/^WHOLE\s+SALE$/,'WHOLESALE');
+  const name=String(item.name||'').trim().toUpperCase().replace(/\s+/g,' ').replace(/\s*[·-]\s*SALE$/,'');
+  if(category==='WHOLESALE'&&/ · \([1-9]\d*\) PCS$/.test(name))return 'FULL';
+  if(['PINS','OTHERS'].includes(category))return name==='BUNDLE'?'FULL':name==='HALF BUNDLE'?'HALF':'';
+  return '';
+}
+function cashierBundleKey(selection) {
+  return JSON.stringify([selection.deliveryId,Number(selection.sheetRow),Number(selection.bundleNo)]);
+}
+function cashierBundleQuantityLimit(item,index) {
+  const choice=item.bundleSelection;if(!choice)return Infinity;
+  const others=cart.filter((line,i)=>i!==index&&line.bundleSelection&&cashierBundleKey(line.bundleSelection)===cashierBundleKey(choice));
+  if(others.some(line=>line.bundleSelection.kind==='FULL')||(choice.kind==='FULL'&&others.length))return 0;
+  return Math.max(0,Number(choice.capacity)||1)-others.reduce((sum,line)=>sum+(Number(line.quantity)||0),0);
+}
 
 var cashierSearchRows = [];
 var cashierBarcodeIndex = new Map();
@@ -873,6 +895,9 @@ function addItemToCart(
 ) {
 
   if (cartReservation()) return showNotificationToast('Complete or remove the reserved item before adding other items.', true);
+  if (!isCustom && cashierBundleKind(product) && !product.bundleSelection && !product.bundleUnlinked) {
+    openCashierBundlePicker(product);return;
+  }
 
   const productCode =
     String(product.code || "").trim();
@@ -895,6 +920,9 @@ function addItemToCart(
 
 
   if (existingItem) {
+    if(existingItem.bundleSelection&&existingItem.quantity>=cashierBundleQuantityLimit(existingItem,cart.indexOf(existingItem))){
+      showNotificationToast('This bundle is already selected. Choose another bundle.',true);return;
+    }
 
     existingItem.quantity++;
 
@@ -945,7 +973,11 @@ function addItemToCart(
         product.priceSource || (isCustom ? "MANUAL" : "REGULAR"),
 
       saleReferenceId:
-        product.saleReferenceId || ""
+        product.saleReferenceId || "",
+
+      bundleKind:product.bundleKind || cashierBundleKind(product),
+      bundleSelection:product.bundleSelection || null,
+      bundleBaseVariantKey:product.bundleBaseVariantKey || product.variantKey || productCode
 
     });
 

@@ -1,0 +1,120 @@
+<div id="cashierBundleModal" class="generic-overlay-blur" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cashierBundleTitle">
+  <div class="custom-popup-card p-4" style="width:600px;max-width:calc(100vw - 32px);">
+    <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
+      <h5 id="cashierBundleTitle" class="fw-bold m-0">Choose Bundle</h5>
+      <button id="cashierBundleClose" type="button" class="btn-close" aria-label="Close bundle picker" onclick="closeCashierBundlePicker()"></button>
+    </div>
+    <p id="cashierBundleProduct" class="fw-semibold mb-3"></p>
+    <div id="cashierBundleLoading" class="small text-muted mb-3" role="status">Loading available bundles…</div>
+    <div id="cashierBundleError" class="alert alert-danger" role="alert" hidden></div>
+    <button id="cashierBundleRetry" class="btn btn-outline-secondary mb-3" type="button" onclick="retryCashierBundlePicker()" hidden>Retry</button>
+    <div id="cashierBundleFields" hidden>
+      <label for="cashierBundleSelect" class="form-label">Bundle</label>
+      <select id="cashierBundleSelect" class="form-select" onchange="renderCashierBundleChoice()"></select>
+      <div class="small text-muted mt-2">Oldest available bundle is selected first. Choose the code on the physical bundle.</div>
+      <div class="bg-light rounded p-3 mt-3 mb-4" aria-live="polite">
+        <div id="cashierBundleCode" class="fw-bold"></div>
+        <div id="cashierBundleDelivery" class="small text-break mt-1"></div>
+        <div id="cashierBundleDate" class="small text-muted mt-1"></div>
+      </div>
+    </div>
+    <div class="d-flex gap-2 mt-3">
+      <button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeCashierBundlePicker()">Cancel</button>
+      <button id="cashierBundleConfirm" type="button" class="btn btn-pink fw-bold flex-fill" onclick="confirmCashierBundleChoice()" disabled>Add to cart</button>
+    </div>
+  </div>
+</div>
+<script>
+let cashierBundlePicker=null;
+let cashierBundlePickerRequest=0;
+
+function closeCashierBundlePicker() {
+  const state=cashierBundlePicker;
+  cashierBundlePicker=null;++cashierBundlePickerRequest;
+  document.getElementById('cashierBundleModal').style.display='none';
+  if(state&&state.focus&&state.focus.isConnected)state.focus.focus();
+}
+function retryCashierBundlePicker() {
+  if(cashierBundlePicker){
+    const state=cashierBundlePicker;openCashierBundlePicker(state.product,state.index);
+    cashierBundlePicker.focus=state.focus;
+  }
+}
+function openCashierBundlePicker(product,index=null) {
+  if(cartReservation())return showNotificationToast('Complete or remove the reserved item before adding other items.',true);
+  const request=++cashierBundlePickerRequest;
+  const state={product:product,index:index,choices:[],focus:document.activeElement,request:request};
+  cashierBundlePicker=state;
+  document.getElementById('cashierBundleModal').style.display='flex';
+  document.getElementById('cashierBundleClose').focus();
+  document.getElementById('cashierBundleProduct').textContent=product.name;
+  document.getElementById('cashierBundleLoading').hidden=false;
+  document.getElementById('cashierBundleFields').hidden=true;
+  document.getElementById('cashierBundleError').hidden=true;
+  document.getElementById('cashierBundleRetry').hidden=true;
+  const button=document.getElementById('cashierBundleConfirm');button.disabled=true;
+  button.textContent=index===null?'Add to cart':'Update bundle';
+  const current=()=>cashierBundlePicker===state&&cashierBundlePickerRequest===request;
+  const fail=error=>{
+    if(!current())return;
+    document.getElementById('cashierBundleLoading').hidden=true;
+    const message=document.getElementById('cashierBundleError');message.hidden=false;message.textContent=error.message||String(error);
+    document.getElementById('cashierBundleRetry').hidden=false;
+  };
+  secureScriptRun.withSuccessHandler(result=>{
+    if(!current())return;
+    if(!result||!result.success)return fail(new Error(result&&result.message||'Unable to load bundles.'));
+    if(index!==null&&cart[index]!==product)return fail(new Error('The cart changed. Close this window and choose again.'));
+    if(result.managed===false){
+      closeCashierBundlePicker();
+      if(index===null)addItemToCart({...product,bundleUnlinked:true},false);
+      else showNotificationToast('This stock has no physical bundle delivery to select.');
+      return;
+    }
+    const quantity=index===null?1:Number(product.quantity)||1;
+    state.choices=(result.choices||[]).filter(choice=>cashierBundleQuantityLimit({bundleSelection:choice},index)>=quantity);
+    const select=document.getElementById('cashierBundleSelect');select.replaceChildren();
+    state.choices.forEach((choice,i)=>{
+      const option=document.createElement('option');option.value=String(i);
+      option.textContent=choice.label+' · '+(choice.deliveryDate||'Date unavailable')+' · '+choice.deliveryId;
+      select.appendChild(option);
+    });
+    document.getElementById('cashierBundleLoading').hidden=true;
+    if(!state.choices.length)return fail(new Error('No available bundle remains for this product and quantity. Bundles already in the cart are excluded.'));
+    const selected=product.bundleSelection?state.choices.findIndex(choice=>cashierBundleKey(choice)===cashierBundleKey(product.bundleSelection)):-1;
+    select.value=String(Math.max(0,selected));
+    document.getElementById('cashierBundleFields').hidden=false;button.disabled=false;
+    renderCashierBundleChoice();select.focus();
+  }).withFailureHandler(fail).getCashierBundleChoices(product.code);
+}
+function renderCashierBundleChoice() {
+  const state=cashierBundlePicker,choice=state&&state.choices[Number(document.getElementById('cashierBundleSelect').value)];
+  if(!choice)return;
+  document.getElementById('cashierBundleCode').textContent='Bundle '+choice.label;
+  document.getElementById('cashierBundleDelivery').textContent='Delivery: '+choice.deliveryId;
+  document.getElementById('cashierBundleDate').textContent='Delivered: '+(choice.deliveryDate||'—')+(choice.kind==='HALF'?' · '+choice.capacity+(choice.capacity===1?' half remaining':' halves remaining'):'');
+}
+function confirmCashierBundleChoice() {
+  const state=cashierBundlePicker,choice=state&&state.choices[Number(document.getElementById('cashierBundleSelect').value)];
+  if(!choice||document.getElementById('cashierBundleConfirm').disabled)return;
+  const quantity=state.index===null?1:Number(state.product.quantity)||1;
+  if((state.index!==null&&cart[state.index]!==state.product)||cashierBundleQuantityLimit({bundleSelection:choice},state.index)<quantity){
+    showNotificationToast('This bundle is already selected in the cart. Choose another bundle.',true);return;
+  }
+  const base=state.product.bundleBaseVariantKey||state.product.variantKey||state.product.code;
+  const product={...state.product,bundleSelection:{...choice},bundleKind:choice.kind,bundleBaseVariantKey:base,
+    variantKey:base+'|BUNDLE|'+cashierBundleKey(choice)};
+  closeCashierBundlePicker();
+  if(state.index===null)addItemToCart(product,false);
+  else {Object.assign(cart[state.index],product);renderCart();saveSession();}
+}
+document.getElementById('cashierBundleModal').addEventListener('keydown',event=>{
+  if(event.key==='Escape'){event.preventDefault();closeCashierBundlePicker();}
+  if(event.key==='Tab'){
+    const controls=Array.from(document.getElementById('cashierBundleModal').querySelectorAll('button:not([disabled]),select')).filter(control=>control.getClientRects().length);
+    const first=controls[0],last=controls[controls.length-1];
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+  }
+});
+</script>

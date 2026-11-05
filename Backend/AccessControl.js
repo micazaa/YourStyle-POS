@@ -87,6 +87,7 @@ function accessRegistry_() {
   "deleteUnusedInventoryItem": {permission:"inventory.delete", handler:deleteUnusedInventoryItem},
   "saveYourFindsItemDetails": {permission:"inventory.edit", handler:saveYourFindsItemDetails},
   "executeCheckoutBackend": {permission:"sales.create", handler:executeCheckoutBackend},
+  "getCashierBundleChoices": {permission:"inventory.view", handler:getCashierBundleChoices},
   "getExpectedCashForManager": {permission:"reports.view", handler:getExpectedCashForManager},
   "voidAndRefundTransactionBackend": {permission:"sales.void", handler:voidAndRefundTransactionBackend},
   "getTransactionHistory": {permission:"transactions.view", handler:getTransactionHistory},

@@ -141,6 +141,7 @@ function changeInventoryStockBatch_(movements, options) {
     if (!source) throw new Error("Inventory movement Source is required.");
     const target = byCode[code];
     if (!target) throw new Error("Inventory Code " + code + " was not found.");
+    if (options.expectedStatus && String(target.row[INV_IDX.STATUS]).toUpperCase() !== options.expectedStatus) throw new Error('Selected bundle is no longer active. Refresh Cashier.');
     if (String(target.row[INV_IDX.STATUS]).toUpperCase() === INVENTORY_STATUS.RESERVED) throw new Error("Reserved stock can only be changed by completing or exchanging its reservation.");
     if(source===INVENTORY_MOVEMENT_SOURCE.SALE && qtyChange<0 && String(target.row[INV_IDX.CATEGORY]).toUpperCase()==='YOURFINDS' &&
       String(target.row[INV_IDX.INVENTORY_TYPE]).toUpperCase()==='UNIQUE' &&

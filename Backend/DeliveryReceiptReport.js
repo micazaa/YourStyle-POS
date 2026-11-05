@@ -16,6 +16,16 @@ function formatDeliveryReceiptDate_(value) {
 function buildDeliveryReceiptHtml_(details) {
   const safe=escapeDeliveryReceiptHtml_;
   const isReturn=!!details.returnReceipt;
+  const returnSizes=new Map();
+  if(isReturn&&details.yourFinds)(details.reportLines||[]).forEach(function(line) {
+    const size=String(line.size||'Unspecified size').trim();
+    returnSizes.set(size,(returnSizes.get(size)||0)+(Number(line.quantity)||0));
+  });
+  const returnSizeSummary=returnSizes.size
+    ? '<div class="report-section return-size-summary"><h2>Size Summary</h2><table class="items"><thead><tr bgcolor="#f2dede"><th bgcolor="#f2dede">Size</th><th class="qty" bgcolor="#f2dede">Qty</th></tr></thead><tbody>'+
+      Array.from(returnSizes,([size,quantity])=>'<tr><td>'+safe(size)+'</td><td class="qty">'+safe(quantity)+'</td></tr>').join('')+
+      '<tr class="total"><td>Total</td><td class="qty">'+safe(details.reportTotal)+'</td></tr></tbody></table></div>'
+    : '';
   const lines=(details.reportLines||[]).map(function(line) {
     return '<tr><td>'+safe(line.code)+'</td><td>'+safe(line.description)+'</td>'+(isReturn?'<td>'+safe(line.size)+'</td>':'')+'<td class="qty">'+safe(line.quantity)+'</td><td>'+safe(line.remarks)+'</td></tr>';
   }).join('');
@@ -49,6 +59,7 @@ function buildDeliveryReceiptHtml_(details) {
     '.items{width:100%;border-collapse:collapse}.items th,.items td{border:1px solid #e3c6c6;padding:6px 7px;text-align:left;font-size:11.5px;font-weight:400}'+
     '.items th{background-color:#f2dede !important;color:#65454b;font-weight:700}.items .qty{text-align:center;width:13%}.items th:first-child{width:18%}.items th:last-child{width:24%}'+
     '.items .total td{background:#fbf6f7;font-weight:700}.items thead{display:table-header-group}.items tr{page-break-inside:avoid}'+
+    '.return-size-summary{width:45%}.return-size-summary th:first-child{width:65%}.return-size-summary .qty{width:35%}'+
     '.remarks{margin-top:10px}.remarks-label{color:#666;margin-right:12px}.signatures{margin-top:auto;padding-top:20px;page-break-inside:avoid;width:100%;border-collapse:separate;border-spacing:12px 0}'+
     '.signatures td{width:33.33%;text-align:center;vertical-align:bottom;font-size:11px}.sign-space{height:24mm;border-bottom:1px solid #333;margin-bottom:5px}.sign-name{font-weight:700}.sign-role{color:#666;margin-top:2px}'+
     '</style></head><body><div class="page">'+
@@ -57,7 +68,7 @@ function buildDeliveryReceiptHtml_(details) {
     '<tr><td><div class="detail"><span class="detail-label">Prepared By</span><span class="detail-value">'+safe(details.preparedBy)+'</span></div></td><td><div class="detail"><span class="detail-label">'+(isReturn?'Category':'Received By')+'</span><span class="detail-value">'+safe(isReturn?type:details.acceptedBy)+'</span></div></td></tr>'+
     (isReturn?'<tr><td><div class="detail"><span class="detail-label">Checked By</span><span class="detail-value">'+safe(details.checkedBy||details.approvedBy)+'</span></div></td><td><div class="detail"><span class="detail-label">Received By</span><span class="detail-value">'+safe(details.receivedBy||details.driver)+'</span></div></td></tr>':'')+'</table>'+
     '<div><h2>'+(isReturn?'Items Returned':'Items Received')+'</h2><table class="items"><thead><tr bgcolor="#f2dede"><th bgcolor="#f2dede">Code</th><th bgcolor="#f2dede">Description</th>'+(isReturn?'<th bgcolor="#f2dede">Size</th>':'')+'<th class="qty" bgcolor="#f2dede">Qty</th><th bgcolor="#f2dede">'+(isReturn?'Reason':'Remarks')+'</th></tr></thead><tbody>'+lines+'<tr class="total"><td colspan="'+(isReturn?3:2)+'">Total '+(isReturn?'returned':'received')+'</td><td class="qty">'+safe(details.reportTotal)+'</td><td></td></tr></tbody></table>'+adjustmentSection+
-    (isReturn?'<div class="remarks">'+safe(details.summary)+'</div>':'')+
+    (isReturn?(details.yourFinds?returnSizeSummary:'<div class="remarks">'+safe(details.summary)+'</div>'):'')+
     '<div class="remarks"><span class="remarks-label">Remarks</span>'+safe(details.remarks||'—')+'</div></div>'+
     '<table class="signatures"><tr>'+signatures+'</tr></table>'+
     '</div></body></html>';
