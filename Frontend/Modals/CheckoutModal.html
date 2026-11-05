@@ -81,6 +81,7 @@
   }
   function triggerCheckoutConsoleModal(context) {
     if (checkoutSubmitting) return;
+    if (!context && !cashierCartBundlesReady()) return;
     const reserved = !context && cartReservation();
     if (reserved) context = {kind:'RESERVATION_BALANCE', owner:currentEmployee, originalReceiptId:reserved.reservationReceiptId,
       requestId:reserved.balanceRequestId, amountDue:reserved.balanceDue};
