@@ -897,12 +897,12 @@ function getBulkBundleProgress_(deliveryId, sheetRow, holderType, bundleQty) {
       if (!savedLines[key]) savedLines[key] = {bundleNo:bundleNo,productCode:code,description:String(row[MOVE_IDX.ITEM] || ''),quantity:0};
       savedLines[key].quantity += qty;
     }
-    if (![INVENTORY_MOVEMENT_SOURCE.SALE,INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN].includes(source) || qty>=0) return;
-    const allocation = parsePhysicalBundleAllocationNote_(row[MOVE_IDX.NOTES]);
+    if (!(source === INVENTORY_MOVEMENT_SOURCE.SALE || isSupplierReturnSource_(source)) || qty>=0) return;
+    const allocation = parsePhysicalBundleAllocationNote_(inventoryMovementInternalNotes_(row));
     if (!allocation || allocation.deliveryId !== deliveryId || (allocation.sheetRow && allocation.sheetRow !== Number(sheetRow))) return;
     if (!sold[bundleNo]) sold[bundleNo] = {full:false,halves:0};
     if (allocation.kind === 'FULL') sold[bundleNo].full = true;
-    if (source === INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN) sold[bundleNo].returned = true;
+    if (isSupplierReturnSource_(source)) sold[bundleNo].returned = true;
     if (allocation.kind === 'HALF') sold[bundleNo].halves = Math.min(2,sold[bundleNo].halves+1);
   });
   const bundles = definitions.map(definition => {

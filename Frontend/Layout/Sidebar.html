@@ -49,7 +49,7 @@ function cashierSessionIsActive(){return typeof currentEmployee==='undefined'||!
 function cashierPageIsAvailable(){return !!currentEmployee&&(currentSessionIsCashier||hasManagerViewAccess());}
 function navigateSidebar(page){showPage(page);toggleSidebar(false);}
 function showPage(pageId){
- const pages=['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'];if(!pages.includes(pageId))return;
+ const pages=['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'];if(pageId==='dashboardPage'||!pages.includes(pageId))return;
  if(pageId==='posPage'&&!cashierPageIsAvailable()){showNotificationToast('Start a cashier shift to open the POS.',true);return;}
  prioritizeWorkspacePage(pageId);
  pages.forEach(id=>{const page=document.getElementById(id);if(page)page.style.display=id===pageId?'block':'none';});
@@ -60,12 +60,11 @@ function showPage(pageId){
  activateMenu(document.querySelector('.sidebar-item[data-page="'+(inventoryWorkspace?'inventoryPage':pageId)+'"]'));
  document.getElementById('inventoryWorkspaceNav').hidden=!inventoryWorkspace;
  if(pageId==='posPage'){updateCashierNavigationAvailability();if(currentSessionIsCashier)refreshInventory();else finishWorkspacePageLoad(pageId);}
- if(pageId==='dashboardPage')loadDashboardPage();
  if(pageId==='inventoryPage')loadInventoryPage();
  if(pageId==='deliveriesPage')loadDeliveriesPage();
  if(pageId==='supplierReturnsPage')loadSupplierReturnsPage();
 }
-function restoreActivePage(){restoreSidebarLayout();const saved=localStorage.getItem('ys_pos_active_page');const allowed=['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'].includes(saved)?saved:'posPage';showPage(!cashierPageIsAvailable()&&allowed==='posPage'?'dashboardPage':allowed);}
+function restoreActivePage(){restoreSidebarLayout();const saved=localStorage.getItem('ys_pos_active_page');const allowed=['posPage','inventoryPage','deliveriesPage','supplierReturnsPage'].includes(saved)?saved:currentSessionIsCashier?'posPage':'inventoryPage';showPage(!currentSessionIsCashier&&allowed==='posPage'?'inventoryPage':allowed);}
 function updatePettyCashDisplay(){
  const amount='₱'+(Number(currentShiftPettyCash)||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
  const display=document.getElementById('cashierPettyCash');

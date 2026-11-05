@@ -75,11 +75,11 @@ function getLegacySupplierReturnRecords_() {
   if (!sheet || sheet.getLastRow() < 2) return [];
   return sheet.getRange(2, 1, sheet.getLastRow() - 1, MOVEMENT_LOG_COLUMN_COUNT).getValues()
     .filter(function(row) {
-      return String(row[MOVE_IDX.SOURCE] || "").trim().toUpperCase() === INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN;
+      return isSupplierReturnSource_(row[MOVE_IDX.SOURCE]);
     })
     .map(function(row) {
       let details = {};
-      try { details = JSON.parse(String(row[MOVE_IDX.NOTES] || "{}")); } catch (error) { details = {}; }
+      try { details = JSON.parse(inventoryMovementInternalNotes_(row) || "{}"); } catch (error) { details = {}; }
       return {
         requestId: String(row[MOVE_IDX.SOURCE_LINE_ID] || ""),
         lineId: String(row[MOVE_IDX.SOURCE_LINE_ID] || ""),
@@ -142,7 +142,7 @@ function findSupplierReturnMovement_(lineId) {
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, MOVEMENT_LOG_COLUMN_COUNT).getValues();
   for (let index = 0; index < rows.length; index++) {
     const row = rows[index];
-    if (String(row[MOVE_IDX.SOURCE] || "").trim().toUpperCase() === INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN &&
+    if (isSupplierReturnSource_(row[MOVE_IDX.SOURCE]) &&
         String(row[MOVE_IDX.SOURCE_LINE_ID] || "").trim() === lineId) {
       return { id: String(row[MOVE_IDX.REFERENCE_ID] || ""), row: row };
     }
@@ -311,8 +311,8 @@ function saveSupplierReturnItems_(payload) {
     const logRows=log.getLastRow()>1?log.getRange(2,1,log.getLastRow()-1,RETURN_LOG_COLUMN_COUNT).getValues():[];
     const moves=movementSheet.getLastRow()>1?movementSheet.getRange(2,1,movementSheet.getLastRow()-1,MOVEMENT_LOG_COLUMN_COUNT).getValues():[];
     const prefix='YSRL-'+requestId+'-';
-    const previousMoves=moves.filter(row=>String(row[MOVE_IDX.SOURCE_LINE_ID]).startsWith(prefix)&&String(row[MOVE_IDX.SOURCE])===INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN);
-    previousMoves.forEach(row=>{let note;try{note=JSON.parse(row[MOVE_IDX.NOTES]);}catch(error){note={};}
+    const previousMoves=moves.filter(row=>String(row[MOVE_IDX.SOURCE_LINE_ID]).startsWith(prefix)&&isSupplierReturnSource_(row[MOVE_IDX.SOURCE]));
+    previousMoves.forEach(row=>{let note;try{note=JSON.parse(inventoryMovementInternalNotes_(row));}catch(error){note={};}
       if(note.batchBinding!==binding)throw new Error('This return request already exists with different details. Reopen the form.');});
     const ids=new Set(previousMoves.map(row=>String(row[MOVE_IDX.REFERENCE_ID])));
     if(ids.size>1)throw new Error('Return request has conflicting records. Contact a manager.');
@@ -336,7 +336,7 @@ function saveSupplierReturnItems_(payload) {
         if(logged.length!==1||String(logged[0][RETURN_IDX.RETURN_ID])!==returnId||!oldMoves.length)throw new Error('Return records need manager review.');
         return;
       }
-      const original=oldMoves.length?JSON.parse(String(oldMoves[0][MOVE_IDX.NOTES])):null;
+      const original=oldMoves.length?JSON.parse(inventoryMovementInternalNotes_(oldMoves[0])):null;
       const metadata=original||{...common,batchBinding:binding,originalDeliveryId:item.deliveryId,size:item.size};
       if(!oldMoves.length){
         updatedRollback.push({rowNumber:item.rowNumber,updatedAt:item.updatedAt});

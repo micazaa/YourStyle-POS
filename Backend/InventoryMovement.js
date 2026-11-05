@@ -5,6 +5,26 @@
    Phase 7 stock engine + Phase 8 inventory management.
 ========================================================== */
 
+// Preserve return retry/report metadata outside the visible reason and notes.
+function cleanInventoryMovementRow_(row) {
+  while (row.length < MOVEMENT_LOG_COLUMN_COUNT) row.push('');
+  if (isSupplierReturnSource_(row[MOVE_IDX.SOURCE])) {
+    row[MOVE_IDX.SOURCE] = 'RETURN';
+    const notes = String(row[MOVE_IDX.NOTES] || '').trim();
+    if (notes.startsWith('{')) {
+      const details = JSON.parse(notes);
+      if (!details || Array.isArray(details)) throw new Error('Invalid return metadata.');
+      if (row[MOVE_IDX.RETURN_METADATA] && row[MOVE_IDX.RETURN_METADATA] !== notes) throw new Error('Conflicting return metadata.');
+      row[MOVE_IDX.RETURN_METADATA] = notes;
+      row[MOVE_IDX.NOTES] = '';
+    }
+  } else if (row[MOVE_IDX.SOURCE] === 'DELIVERY' && row[MOVE_IDX.REFERENCE_ID] &&
+      row[MOVE_IDX.NOTES] === 'Delivery ID: ' + row[MOVE_IDX.REFERENCE_ID]) {
+    row[MOVE_IDX.NOTES] = '';
+  }
+  return row;
+}
+
 function changeInventoryStock(options) {
   assertAppRequest_();
   if (!options) throw new Error("Stock movement options are required.");
@@ -101,7 +121,7 @@ function changeInventoryStockBatch_(movements) {
     movementSheet.getRange(1, 1, 1, MOVEMENT_LOG_COLUMN_COUNT).setValues([[
       "Movement ID", "Timestamp", "Movement Source", "Reference ID", "Source Line ID",
       "Product Code", "Item Name", "Category", "Quantity Change", "Stock Before",
-      "Stock After", "Employee", "Reason", "Bundle No.", "Remaining Bundle Qty", "Notes"
+      "Stock After", "Employee", "Reason", "Bundle No.", "Remaining Bundle Qty", "Notes", "", "Return Metadata"
     ]]);
   }
 
@@ -129,14 +149,14 @@ function changeInventoryStockBatch_(movements) {
     const stockAfter = stockBefore + qtyChange;
     target.stock = stockAfter;
     const type = getInventoryMovementType(target.row[INV_IDX.CATEGORY], target.row[INV_IDX.INVENTORY_TYPE]);
-    rows.push([
+    rows.push(cleanInventoryMovementRow_([
       generateInventoryMovementId(), now, source, String(options.referenceId || "").trim(),
       String(options.sourceLineId || "").trim(), code, String(options.item || "").trim(), type,
       qtyChange, stockBefore, stockAfter, String(options.employee || "").trim(),
       String(options.reason || "").trim(), options.bundleNo === "" || options.bundleNo == null ? "" : options.bundleNo,
       options.remainingBundleQty === "" || options.remainingBundleQty == null ? "" : Number(options.remainingBundleQty),
       String(options.notes || "").trim()
-    ]);
+    ]));
     touchedRows[target.rowNumber] = true;
     soldYourFinds.push({rowNumber:target.rowNumber,category:target.row[INV_IDX.CATEGORY],inventoryType:target.row[INV_IDX.INVENTORY_TYPE],
       status:target.row[INV_IDX.STATUS],stockAfter:stockAfter,source:source,qtyChange:qtyChange});
@@ -186,7 +206,7 @@ function logInventoryMovement(movement) {
       "Movement ID", "Timestamp", "Movement Source", "Reference ID", "Source Line ID",
       "Product Code", "Item Name", "Category", "Quantity Change",
       "Stock Before", "Stock After", "Employee", "Reason", "Bundle No.",
-      "Remaining Bundle Qty", "Notes"
+      "Remaining Bundle Qty", "Notes", "", "Return Metadata"
     ]]);
   }
   sheet.appendRow(row);
@@ -216,8 +236,8 @@ function inventoryMovementRow_(movement) {
   if (!Number.isFinite(qtyChange) || qtyChange === 0) throw new Error("Inventory movement quantity must be non-zero.");
   if (!source) throw new Error("Inventory movement Source is required.");
 
-  const row = [movementId, new Date(), source, referenceId, sourceLineId, code, item, type, qtyChange, stockBefore, stockAfter, employee, reason, bundleNo, remainingBundleQty, notes];
-  if (row.length !== MOVEMENT_LOG_COLUMN_COUNT) throw new Error("Inventory Movement row does not match A:P mapping.");
+  const row = cleanInventoryMovementRow_([movementId, new Date(), source, referenceId, sourceLineId, code, item, type, qtyChange, stockBefore, stockAfter, employee, reason, bundleNo, remainingBundleQty, notes]);
+  if (row.length !== MOVEMENT_LOG_COLUMN_COUNT) throw new Error("Inventory Movement row does not match A:R mapping.");
   return row;
 }
 

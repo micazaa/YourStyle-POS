@@ -142,7 +142,7 @@ function setInventoryCalculatedFields_(sheet, startRow, rowCount) {
       '=IF(A' + rowNumber + '="","",-SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"SALE"))'
     ]);
     returnedFormulas.push([
-      '=IF(A' + rowNumber + '="","",-SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"SUPPLIER_RETURN"))'
+      '=IF(A' + rowNumber + '="","",-SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"SUPPLIER_RETURN")-SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"RETURN"))'
     ]);
     adjustmentFormulas.push([
       '=IF(A' + rowNumber + '="","",SUMIFS(\'Inventory Movement Log\'!$I$2:$I,\'Inventory Movement Log\'!$F$2:$F,A' + rowNumber + ',\'Inventory Movement Log\'!$C$2:$C,"ADJUSTMENT"))'
@@ -1876,8 +1876,8 @@ function buildPhysicalBundleSaleQueue_(category, productCode) {
       if (state) state.distributed = true;
       return;
     }
-    if (![INVENTORY_MOVEMENT_SOURCE.SALE,INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN].includes(source)||Number(row[MOVE_IDX.QTY_CHANGE])>=0) return;
-    const allocation = parsePhysicalBundleAllocationNote_(row[MOVE_IDX.NOTES]);
+    if (!(source === INVENTORY_MOVEMENT_SOURCE.SALE || isSupplierReturnSource_(source))||Number(row[MOVE_IDX.QTY_CHANGE])>=0) return;
+    const allocation = parsePhysicalBundleAllocationNote_(inventoryMovementInternalNotes_(row));
     if (!allocation) return;
     const state = states.find(function(item) {
       return item.deliveryId === allocation.deliveryId && (!allocation.sheetRow || item.sheetRow === allocation.sheetRow) && item.bundleNo === bundleNo;

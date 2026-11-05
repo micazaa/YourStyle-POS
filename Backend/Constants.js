@@ -300,6 +300,8 @@ function salesLogRowFromLegacyFields_(values) {
    N  Bundle No.
    O  Remaining Bundle Qty
    P  Notes
+   Q  Reserved legacy data
+   R  Return Metadata (internal)
 ========================================================== */
 
 
@@ -319,7 +321,8 @@ const MOVE_IDX = {
   REASON: 12,
   BUNDLE_NO: 13,
   REMAINING_BUNDLE_QTY: 14,
-  NOTES: 15
+  NOTES: 15,
+  RETURN_METADATA: 17
 };
 
 const MOVE_COL = {
@@ -338,10 +341,22 @@ const MOVE_COL = {
   REASON: 13,
   BUNDLE_NO: 14,
   REMAINING_BUNDLE_QTY: 15,
-  NOTES: 16
+  NOTES: 16,
+  RETURN_METADATA: 18
 };
 
-const MOVEMENT_LOG_COLUMN_COUNT = 16;
+// Q is reserved for existing legacy data; R stores internal return details.
+const MOVEMENT_LOG_COLUMN_COUNT = 18;
+
+function isSupplierReturnSource_(source) {
+  return ['RETURN', 'SUPPLIER_RETURN'].includes(String(source || '').trim().toUpperCase());
+}
+
+function inventoryMovementInternalNotes_(row) {
+  return isSupplierReturnSource_(row[MOVE_IDX.SOURCE])
+    ? String(row[MOVE_IDX.RETURN_METADATA] || row[MOVE_IDX.NOTES] || '')
+    : String(row[MOVE_IDX.NOTES] || '');
+}
 
 
 /* ==========================================================

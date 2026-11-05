@@ -57,8 +57,8 @@ function getDeliveryDetails(deliveryId) {
   });
   const movement=ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
   const soldRows=movement&&bundleCount&&movement.getLastRow()>1
-    ? movement.getRange(2,MOVE_COL.NOTES,movement.getLastRow()-1,1)
-        .createTextFinder('PHYSICAL_BUNDLE|deliveryId='+deliveryId+'|').matchEntireCell(false).findAll().map(cell=>cell.getRow())
+    ? [MOVE_COL.NOTES, MOVE_COL.RETURN_METADATA].flatMap(column => movement.getRange(2,column,movement.getLastRow()-1,1)
+        .createTextFinder('PHYSICAL_BUNDLE|deliveryId='+deliveryId+'|').matchEntireCell(false).findAll().map(cell=>cell.getRow()))
     : [];
   const movementRows=movement
     ? findDeliveryDetailRows_(movement,MOVE_COL.REFERENCE_ID,deliveryId)
@@ -110,14 +110,14 @@ function getDeliveryDetails(deliveryId) {
     }
   });
   moves.forEach(row=>{
-    if(!['SALE','SUPPLIER_RETURN'].includes(String(row[MOVE_IDX.SOURCE]).toUpperCase())||Number(row[MOVE_IDX.QTY_CHANGE])>=0)return;
-    const allocation=parsePhysicalBundleAllocationNote_(row[MOVE_IDX.NOTES]);
+    if(!(String(row[MOVE_IDX.SOURCE]).toUpperCase() === 'SALE' || isSupplierReturnSource_(row[MOVE_IDX.SOURCE]))||Number(row[MOVE_IDX.QTY_CHANGE])>=0)return;
+    const allocation=parsePhysicalBundleAllocationNote_(inventoryMovementInternalNotes_(row));
     if(!allocation||allocation.deliveryId!==deliveryId)return;
     const group=groups.find(g=>g.bundleNo===Number(row[MOVE_IDX.BUNDLE_NO])&&
       (allocation.sheetRow?g.sheetRows.includes(allocation.sheetRow):g.type===String(row[MOVE_IDX.TYPE])));
     if(!group)return;
     if(allocation.kind==='FULL')group.fullSold=true;
-    if(String(row[MOVE_IDX.SOURCE]).toUpperCase()==='SUPPLIER_RETURN')group.returned=true;
+    if(isSupplierReturnSource_(row[MOVE_IDX.SOURCE]))group.returned=true;
     if(allocation.kind==='HALF')group.soldHalves++;
   });
   groups.forEach(group=>{

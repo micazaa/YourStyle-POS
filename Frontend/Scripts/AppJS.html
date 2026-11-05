@@ -391,7 +391,7 @@
       currentShiftPettyCash,
       currentShiftReportId,
       cart,
-      activePage: localStorage.getItem("ys_pos_active_page") || "posPage",
+      activePage: localStorage.getItem("ys_pos_active_page") || (currentSessionIsCashier ? "posPage" : "inventoryPage"),
       globalDiscountType: document.getElementById("globalDiscountType").value,
       globalDiscountValue: document.getElementById("globalDiscountValue").value
     };
