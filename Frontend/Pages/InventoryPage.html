@@ -234,6 +234,7 @@ function inventoryPreparationVersion() {
   return inventoryListVersion;
 }
 function ensureInventoryPreparation() {
+  if(typeof restoreDeviceInventory==='function')restoreDeviceInventory();
   const owner=currentEmployee&&currentEmployee.dashboardToken;if(!owner)return;
   if(inventoryDownload&&inventoryDownload.owner===owner)return;
   if(inventoryDatasetReady()&&!inventoryDataset.stale){
@@ -282,6 +283,7 @@ function applyLocalInventoryPage(query) {
 }
 function finishInventoryDownload(job) {
   inventoryDataset={owner:job.owner,version:job.version,items:job.items,complete:true,stale:false,detailsReady:false,deliveryReady:job.deliveryReady};
+  if(typeof writeDeviceCache==='function')writeDeviceCache('inventory',job.items,job.version);
   inventoryDownload=null;inventoryListVersion=job.version;inventoryLocalViews.clear();inventoryListPages.clear();inventorySummaryPages.clear();
   ++inventoryListRequest;++inventorySummaryRequest;inventoryListPending=null;
   updateInventoryDatasetStatus();
@@ -366,6 +368,7 @@ function applyInventoryPatch(patch) {
     const code=String(item.code),next=updated.get(code);if(next){updated.delete(code);return next;}return item;
   });
   inventoryDataset.items.push(...updated.values());inventoryDataset.version=patch.version;inventoryListVersion=patch.version;
+  if(typeof writeDeviceCache==='function')writeDeviceCache('inventory',inventoryDataset.items,patch.version);
   inventoryItemDetailCache.forEach((entry,code)=>{
     if(removed.has(code)||changed.has(code))inventoryItemDetailCache.delete(code);
     else if(entry.owner===owner&&entry.version===previous)entry.version=patch.version;
@@ -422,6 +425,7 @@ function checkInventoryVersionInBackground() {
   inventoryVersionCheckAt=Date.now();if(typeof checkAccountSession==='function')checkAccountSession();
 }
 function invalidateLocalInventoryReads(refresh=true) {
+  if(refresh&&typeof clearDeviceInventoryCache==='function')clearDeviceInventoryCache();
   invalidateBundleDistributionDetails();
   invalidateDeliveryCatalog();
   clearTimeout(inventoryChangesTimer);inventoryChangesRead=null;
@@ -522,6 +526,7 @@ function loadInventoryPage(forceRefresh=false,keepVisible=false) {
   document.getElementById('inventoryAddProductButton').style.display=inventoryIsManager()?'inline-block':'none';
   document.getElementById('inventoryActiveHeading').style.display=inventoryIsManager()?'':'none';updateInventoryFilterButton();
   const owner=currentEmployee&&currentEmployee.dashboardToken;if(!owner)return;
+  if(!forceRefresh&&typeof restoreDeviceInventory==='function')restoreDeviceInventory();
   const query=inventoryListQuery(),key=inventoryListCacheKey(query),preparedVersion=inventoryPreparationVersion();
   const entry=inventoryListPages.get(key),cached=entry&&(!preparedVersion||entry.data.version===preparedVersion)?entry:null;
   const reminder=dashboardInventoryReminder;dashboardInventoryReminder='';

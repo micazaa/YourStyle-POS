@@ -1,619 +1,506 @@
-<div id="dashboardPage" style="display: none">
-  <div class="container-fluid p-4 dashboard-shell">
-    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
-      <div>
-        <p class="dashboard-eyebrow">YOUR STORE AT A GLANCE</p>
-        <h2 id="dashboardGreeting">Welcome to YourStyle</h2>
-        <p id="dashboardEncouragement" class="text-muted">A little progress, together.</p>
-      </div>
-      <button class="btn btn-pink" id="dashboardRefresh" onclick="loadDashboardPage()">
-        ↻ Refresh
+<div id="dashboardPage" class="container-fluid p-3 p-lg-4" style="display: none">
+  <header class="dashboard-header">
+    <div>
+      <h1 id="dashboardGreeting" class="h2 mb-1">Welcome!</h1>
+      <p id="dashboardQuote" class="mb-0"></p>
+    </div>
+    <div class="dashboard-header-period">
+      <button type="button" class="btn btn-light" aria-haspopup="dialog" onclick="openDashboardCalendar()">
+        <span class="visually-hidden">Change date range, </span><span id="dashboardPeriodLabel" aria-live="polite">Date range</span>
+        <span class="dashboard-period-chevron" aria-hidden="true"></span>
       </button>
     </div>
-    <div id="dashboardDates" class="dashboard-panel mb-3" hidden>
-      <div class="d-flex flex-wrap align-items-end gap-2">
-        <label
-          >Period<select id="dashboardPreset" class="form-select" onchange="dashboardApplyPreset()">
-            <option>Today</option>
-            <option>Yesterday</option>
-            <option>This Week</option>
-            <option>This Month</option>
-            <option>Custom</option>
-          </select></label
-        >
-        <label
-          >From<input
-            id="dashboardStart"
-            class="form-control"
-            type="date"
-            onchange="document.getElementById('dashboardPreset').value = 'Custom'"
-        /></label>
-        <label
-          >Through<input
-            id="dashboardEnd"
-            class="form-control"
-            type="date"
-            onchange="document.getElementById('dashboardPreset').value = 'Custom'"
-        /></label>
-        <label class="p-2"
-          ><input id="dashboardCompare" type="checkbox" /> Compare preceding period</label
-        ><button class="btn btn-outline-pink" onclick="loadDashboardPage(true)">Apply</button>
+  </header>
+  <section class="dashboard-overview" aria-labelledby="dashboardOverviewHeading">
+    <h2 id="dashboardOverviewHeading" class="h5 mb-3">Overview</h2>
+    <div class="dashboard-overview-grid">
+      <button type="button" class="dashboard-overview-card" onclick="openTransactionHistoryModal()">
+        <span class="dashboard-card-title">Sales <span aria-hidden="true">↗</span></span>
+        <strong id="dashboardSalesTotal">—</strong>
+        <span id="dashboardSalesScope">Net sales</span>
+        <small id="dashboardSalesDetail"></small>
+      </button>
+      <button type="button" class="dashboard-overview-card" onclick="navigateSidebar('inventoryPage')">
+        <span class="dashboard-card-title">Inventory <span aria-hidden="true">↗</span></span>
+        <strong id="dashboardStockTotal">—</strong>
+        <span>Items in stock now</span>
+        <small id="dashboardStockDetail" class="dashboard-card-attention"></small>
+      </button>
+      <button type="button" class="dashboard-overview-card" onclick="navigateSidebar('deliveriesPage')">
+        <span class="dashboard-card-title">Delivery <span aria-hidden="true">↗</span></span>
+        <strong id="dashboardDeliveryTotal">—</strong>
+        <span>Deliveries received</span>
+        <small id="dashboardDeliveryDetail" class="dashboard-card-attention"></small>
+      </button>
+      <button type="button" class="dashboard-overview-card" aria-haspopup="dialog" onclick="openDashboardReturnSummary()">
+        <span class="dashboard-card-title">Return <span aria-hidden="true">↗</span></span>
+        <strong id="dashboardReturnTotal">—</strong>
+        <span>Supplier returns</span>
+        <small id="dashboardReturnDetail"></small>
+      </button>
+    </div>
+    <p id="dashboardOverviewStatus" class="small text-muted mt-2 mb-0" role="status"></p>
+    <button id="dashboardOverviewRetry" type="button" class="btn btn-outline-pink btn-sm mt-2" onclick="loadDashboardOverview()" hidden>Retry</button>
+  </section>
+  <dialog id="dashboardReturnSummary" aria-labelledby="dashboardReturnHeading">
+    <header class="d-flex justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h2 id="dashboardReturnHeading" class="h4 mb-1">Return summary</h2>
+        <p id="dashboardReturnPeriod" class="small text-muted mb-0"></p>
       </div>
+      <div class="d-flex gap-2">
+        <button id="dashboardReturnDownload" type="button" class="btn btn-light dashboard-return-icon" title="Download Return Report Summary" aria-label="Download the Return Report Summary for the selected date range" onclick="downloadDashboardReturnSummary()" disabled>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 15v5h14v-5"/></svg>
+        </button>
+        <form method="dialog">
+          <button class="btn btn-light dashboard-return-icon" aria-label="Close return summary">×</button>
+        </form>
+      </div>
+    </header>
+    <div class="dashboard-return-totals mb-3">
+      <div><strong id="dashboardReturnReceiptCount">—</strong><span>Supplier returns</span></div>
+      <div><strong id="dashboardReturnItemCount">—</strong><span>Items returned</span></div>
     </div>
-    <p id="dashboardStatus" role="status" aria-live="polite"></p>
-    <div id="dashboardContent" hidden></div>
-  </div>
+    <p id="dashboardReturnMessage" class="small text-muted mb-2" role="status"></p>
+    <table id="dashboardReturnTable" class="table table-sm mb-0" hidden>
+      <thead><tr><th scope="col">Item description</th><th scope="col" class="text-end">Qty</th></tr></thead>
+    </table>
+    <footer class="d-flex justify-content-end border-top pt-3 mt-3">
+      <button type="button" class="btn btn-pink" onclick="viewDashboardReturns()">View returns</button>
+    </footer>
+  </dialog>
+  <dialog id="dashboardCalendar" aria-labelledby="dashboardCalendarMonth">
+    <div class="dashboard-calendar-top">
+      <button type="button" class="btn btn-light" aria-label="Previous month" onclick="moveDashboardMonth(-1)">‹</button>
+      <strong id="dashboardCalendarMonth" aria-live="polite"></strong>
+      <button type="button" class="btn btn-light" aria-label="Next month" onclick="moveDashboardMonth(1)">›</button>
+    </div>
+    <div class="dashboard-calendar-grid text-muted" aria-hidden="true">
+      <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+    </div>
+    <div id="dashboardCalendarDays" class="dashboard-calendar-grid" aria-label="Days"
+      onpointerdown="startDashboardDrag(event)" onpointermove="moveDashboardDrag(event)"
+      onpointerup="finishDashboardDrag(event)" onlostpointercapture="cancelDashboardDrag(event)"
+      onclick="if (event.detail === 0) selectDashboardDay(event)"></div>
+    <div class="dashboard-calendar-shortcuts" onclick="selectDashboardShortcut(event)">
+      <button type="button" class="btn btn-light" data-preset="today">Today</button>
+      <button type="button" class="btn btn-light" data-preset="yesterday">Yesterday</button>
+      <button type="button" class="btn btn-light" data-preset="week">This week</button>
+      <button type="button" class="btn btn-light" data-preset="month">This month</button>
+      <button type="button" class="btn btn-light" data-preset="year">This year</button>
+      <button type="button" class="btn btn-light" data-preset="last-week">Last week</button>
+      <button type="button" class="btn btn-light" data-preset="last-month">Last month</button>
+      <button type="button" class="btn btn-light" data-preset="last-year">Last year</button>
+    </div>
+    <p id="dashboardCalendarSelection" class="visually-hidden" aria-live="polite"></p>
+    <form method="dialog" class="d-flex justify-content-end gap-2 mt-3">
+      <button class="btn btn-light">Cancel</button>
+      <button type="button" class="btn btn-pink" onclick="applyDashboardCalendar()">Apply</button>
+    </form>
+  </dialog>
 </div>
-<dialog id="dashboardTaskDialog" class="dashboard-dialog">
-  <form
-    id="dashboardTaskForm"
-    onsubmit="
-      event.preventDefault();
-      dashboardSaveTask();
-    "
-  >
-    <div class="d-flex justify-content-between gap-3 mb-3">
-      <h4 id="dashboardTaskHeading">New task</h4>
-      <button
-        type="button"
-        class="btn-close"
-        aria-label="Close task editor"
-        onclick="document.getElementById('dashboardTaskDialog').close()"
-      ></button>
-    </div>
-    <label class="w-100 mb-3"
-      >Title<input id="dashboardTaskTitle" class="form-control" required maxlength="120"
-    /></label>
-    <label class="w-100 mb-3"
-      >Instructions<textarea
-        id="dashboardTaskInstructions"
-        class="form-control"
-        maxlength="2000"
-        rows="3"
-      ></textarea>
-    </label>
-    <label class="w-100 mb-3"
-      >Assigned to<select id="dashboardTaskAssignee" class="form-select"></select
-    ></label>
-    <div class="d-flex flex-wrap gap-3 mb-3">
-      <label
-        >Priority<select id="dashboardTaskPriority" class="form-select">
-          <option>Normal</option>
-          <option>High</option>
-        </select></label
-      ><label
-        >Due date (optional)<input id="dashboardTaskDue" type="date" class="form-control" /></label
-      ><label
-        >Status<select id="dashboardTaskStatus" class="form-select">
-          <option>Open</option>
-          <option>In Progress</option>
-          <option>Done</option>
-        </select></label
-      >
-    </div>
-    <p id="dashboardTaskError" role="alert" class="text-danger"></p>
-    <button id="dashboardTaskSave" class="btn btn-pink">Save task</button>
-  </form>
-</dialog>
+
 <style>
-  .dashboard-shell {
-    max-width: 1500px;
-    margin: auto;
-  }
-  .dashboard-eyebrow {
-    font-size: 0.75rem;
-    letter-spacing: 0.15em;
-    color: #975466;
-    font-weight: 700;
-    margin-bottom: 8px;
-  }
-  .dashboard-panel {
-    min-width: 0;
-    background: white;
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 22px;
-  }
-  .dashboard-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
-    margin-bottom: 18px;
-  }
-  .dashboard-metrics {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-  .dashboard-metric {
-    font-size: 1.8rem;
-    font-weight: 750;
-    color: #784451;
-  }
-  .dashboard-panel h3 {
-    font-size: 1.05rem;
-    font-weight: 700;
-    margin-bottom: 18px;
-  }
-  .dashboard-line {
+  .dashboard-header {
     display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 9px 0;
-    border-bottom: 1px solid #f5ecee;
-    overflow-wrap: anywhere;
-  }
-  .dashboard-line > span {
-    min-width: 0;
-  }
-  .dashboard-line strong {
-    flex-shrink: 0;
-  }
-  .dashboard-bar {
-    height: 6px;
-    border-radius: 8px;
-    background: #f8e9ee;
-    margin-bottom: 12px;
-    overflow: hidden;
-  }
-  .dashboard-bar span {
-    display: block;
-    height: 100%;
-    background: #d97488;
-  }
-  .dashboard-activity {
-    display: flex;
-    align-items: stretch;
-    gap: 3px;
-    height: 155px;
-    overflow-x: auto;
-    padding: 8px 0;
-  }
-  .dashboard-column {
-    flex: 1;
-    min-width: 14px;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    text-align: center;
-    font-size: 9px;
-  }
-  .dashboard-column i {
-    display: block;
-    background: #e8899b;
-    border-radius: 4px 4px 0 0;
-    min-height: 1px;
-  }
-  .dashboard-column.negative i {
-    background: #9e5365;
-  }
-  .dashboard-column span {
-    min-height: 26px;
-    writing-mode: vertical-rl;
-    margin: 4px auto 0;
-  }
-  .dashboard-task {
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 14px;
-    margin: 10px 0;
-  }
-  .dashboard-task.overdue {
-    border-left: 4px solid #bd5265;
-  }
-  .dashboard-task p {
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  .dashboard-task h4 {
-    font-size: 1rem;
-    overflow-wrap: anywhere;
-  }
-  .dashboard-dialog {
-    width: min(94vw, 580px);
-    max-height: 90vh;
-    overflow: auto;
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 24px;
-  }
-  .dashboard-dialog::backdrop {
-    background: #30212c88;
-  }
-  .dashboard-own {
-    background: #fceef2;
-    border-radius: 8px;
-    padding: 10px;
-  }
-  .dashboard-reminders {
-    display: flex;
-    gap: 12px;
     flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px 28px;
+    padding: clamp(20px, 4vw, 32px);
+    border: 1px solid #ead9de;
+    border-radius: 18px;
+    background: var(--pink-light);
+    color: #381f2c;
   }
-  .dashboard-reminders button {
-    flex: 1;
-    min-width: 180px;
+  .dashboard-header h1 {
+    font-weight: 650;
+    letter-spacing: -0.035em;
+  }
+  .dashboard-header p,
+  .dashboard-header-period span {
+    color: #684657;
+    font-size: 0.875rem;
+  }
+  .dashboard-header-period {
+    display: grid;
+    justify-items: end;
+    gap: 6px;
+  }
+  .dashboard-period-chevron {
+    display: inline-block;
+    width: 0.5em;
+    height: 0.5em;
+    margin-inline-start: 0.35em;
+    vertical-align: 0.15em;
+    border: solid currentColor;
+    border-width: 0 0.12em 0.12em 0;
+    transform: rotate(45deg);
+  }
+  .dashboard-overview { margin-top: 24px; }
+  .dashboard-overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+    gap: 12px;
+  }
+  .dashboard-overview-card {
+    display: grid;
+    align-content: start;
+    gap: 3px;
+    padding: 14px;
+    border: 1px solid #ead9de;
+    border-radius: 12px;
+    background: white;
+    color: #381f2c;
     text-align: left;
+    font-size: 0.875rem;
   }
-  .dashboard-subtitle {
-    font-size: 0.8rem;
-    color: #767a85;
+  .dashboard-overview-card:hover { background: var(--pink-light); }
+  .dashboard-card-title { display: flex; justify-content: space-between; font-weight: 650; margin-bottom: 8px; }
+  .dashboard-card-title span, .dashboard-overview-card small { color: #684657; }
+  .dashboard-overview-card strong { font-size: 1.6rem; line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .dashboard-overview-card small { margin-top: 5px; }
+  .dashboard-overview-card .dashboard-card-attention { color: #8a3e33; }
+  #dashboardReturnSummary {
+    width: min(520px, calc(100% - 24px));
+    max-height: calc(100% - 24px);
+    padding: clamp(14px, 4vw, 24px);
+    border: 1px solid #ead9de;
+    border-radius: 18px;
+    color: #381f2c;
   }
-  .dashboard-panel select {
-    max-width: 100%;
+  #dashboardReturnSummary::backdrop { background: #25131e55; }
+  .dashboard-return-icon { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; font-size: 1.35rem; }
+  .dashboard-return-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: 10px; background: var(--pink-light); }
+  .dashboard-return-totals div { display: grid; padding: 9px 13px; }
+  .dashboard-return-totals div + div { border-inline-start: 1px solid #ead9de; }
+  .dashboard-return-totals strong { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+  .dashboard-return-totals span { font-size: .875rem; }
+  #dashboardReturnTable th[scope="rowgroup"] { color: #684657; background: var(--pink-light); }
+  #dashboardCalendar {
+    width: min(390px, calc(100% - 24px));
+    max-height: calc(100% - 24px);
+    padding: 16px;
+    border: 1px solid #ead9de;
+    border-radius: 16px;
+    box-shadow: 0 14px 48px #381f2c30;
+    color: #381f2c;
   }
-  @media (max-width: 767px) {
-    .dashboard-grid {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .dashboard-metrics {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .dashboard-panel {
-      padding: 16px;
-    }
-    .dashboard-metric {
-      font-size: 1.35rem;
-    }
-    .dashboard-shell {
-      padding: 16px !important;
-    }
-    #dashboardDates label {
-      max-width: 100%;
-    }
+  #dashboardCalendar::backdrop { background: #25131e55; }
+  .dashboard-calendar-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .dashboard-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
+  .dashboard-calendar-grid button { min-height: 40px; padding: 0; border: 0; background: transparent; color: inherit; }
+  #dashboardCalendarDays { touch-action: none; user-select: none; }
+  .dashboard-calendar-grid button:hover, .dashboard-calendar-grid .in-range { background: var(--pink-light); }
+  .dashboard-calendar-grid .range-edge { background: var(--pink-main); border-radius: 20px; font-weight: 700; }
+  .dashboard-calendar-grid .range-start { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .dashboard-calendar-grid .range-end { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+  .dashboard-calendar-grid button[aria-current="date"] { text-decoration: underline; text-underline-offset: 4px; }
+  .dashboard-calendar-shortcuts { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid #ead9de; margin-top: 12px; padding-top: 12px; }
+  .dashboard-calendar-shortcuts button { font-size: .8rem; }
+  @media (max-width: 575px) {
+    .dashboard-header-period { justify-items: start; }
   }
 </style>
+
 <script>
-  var dashboardData = null,
-    dashboardGeneration = 0,
-    dashboardEditingTask = null,
-    dashboardOwner = '',
-    dashboardBusy = false;
-  var dashboardBestSort = 'units',
-    dashboardStyleCategory = 'PINS',
-    dashboardFindsGroup = 'sizes';
-  function dashboardEscape(value) {
-    return String(value == null ? '' : value).replace(
-      /[&<>"']/g,
-      (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
-    );
+  function updateDashboardHeader(now = new Date()) {
+    const manila = new Intl.DateTimeFormat('en', {
+      timeZone: 'Asia/Manila', year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', hourCycle: 'h23'
+    });
+    const parts = Object.fromEntries(manila.formatToParts(now).map(({type, value}) => [type, value]));
+    const hour = Number(parts.hour);
+    const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    const firstName = String(currentEmployee?.fullName || '').trim().split(/\s+/)[0];
+    document.getElementById('dashboardGreeting').textContent = firstName ? greeting + ', ' + firstName + '!' : greeting + '!';
+
+    const today = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
+    dashboardToday = today;
+    const quoteIndex = Math.floor(today.getTime() / 86400000) % dashboardQuotes.length;
+    document.getElementById('dashboardQuote').textContent = dashboardQuotes[quoteIndex];
+    renderDashboardPeriod();
   }
-  function dashboardMoney(value) {
-    return (Number(value) || 0).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
-  }
-  function clearDashboardState() {
-    dashboardInventoryReminder = '';
-    inventoryIncompleteOnly = false;
-    dashboardGeneration++;
-    dashboardData = null;
-    dashboardOwner = '';
-    dashboardEditingTask = null;
-    dashboardBusy = false;
-    document.getElementById('dashboardTaskSave').disabled = false;
-    document.getElementById('dashboardContent').innerHTML = '';
-    document.getElementById('dashboardContent').hidden = !dashboardData;
-    document.getElementById('dashboardDates').hidden = !dashboardData || !dashboardData.employee.manager;
-    document.getElementById('dashboardStatus').textContent = '';
-    document.getElementById('dashboardGreeting').textContent = 'Welcome to YourStyle';
-    document.getElementById('dashboardEncouragement').textContent = 'A little progress, together.';
-    document.getElementById('dashboardTaskDialog').close();
-    document.getElementById('dashboardTaskForm').reset();
-    document.getElementById('dashboardTaskAssignee').innerHTML = '';
-    document.getElementById('dashboardTaskError').textContent = '';
-    document.getElementById('dashboardCompare').checked = false;
-    document.getElementById('dashboardPreset').value = 'Today';
-    document.getElementById('dashboardStart').value = '';
-    document.getElementById('dashboardEnd').value = '';
-  }
-  function loadDashboardPage(apply) {
-    if (dashboardBusy) return;
-    const token = currentEmployee && currentEmployee.dashboardToken;
-    if (dashboardOwner !== token) {
-      clearDashboardState();
-      dashboardOwner = token;
-    }
-    const generation = ++dashboardGeneration;
-    document.getElementById('dashboardContent').hidden = true;
-    document.getElementById('dashboardDates').hidden = true;
-    const status = document.getElementById('dashboardStatus');
-    if (!dashboardData) status.innerHTML = loadingIndicator('Loading your store…');
-    if (!token) {
-      status.textContent = 'Please sign out and sign in again to access the dashboard.';
-      return;
-    }
-    const request = { token: token };
-    if (dashboardData && dashboardData.employee.manager) {
-      if (apply) {
-        request.start = document.getElementById('dashboardStart').value;
-        request.end = document.getElementById('dashboardEnd').value;
-        request.compare = document.getElementById('dashboardCompare').checked;
-      } else if (document.getElementById('dashboardPreset').value !== 'Today') {
-        request.start = dashboardData.period.start;
-        request.end = dashboardData.period.end;
-        request.compare = !!dashboardData.comparison;
-      } else request.compare = document.getElementById('dashboardCompare').checked;
-    }
-    secureScriptRun
-      .withSuccessHandler(function (data) {
-        if (
-          generation !== dashboardGeneration ||
-          !currentEmployee ||
-          token !== currentEmployee.dashboardToken
-        )
-          return;
-        dashboardData = data;
-        document.getElementById('dashboardDates').hidden = !data.employee.manager;
-        ['dashboardStart', 'dashboardEnd'].forEach(
-          (id) => (document.getElementById(id).max = data.today)
-        );
-        document.getElementById('dashboardStart').value = data.period.start;
-        document.getElementById('dashboardEnd').value = data.period.end;
-        document.getElementById('dashboardGreeting').textContent =
-          (data.hour < 12 ? 'Good morning' : data.hour < 18 ? 'Good afternoon' : 'Good evening') +
-          ', ' +
-          data.employee.firstName;
-        document.getElementById('dashboardEncouragement').textContent = data.analytics.transactions
-          ? data.analytics.transactions +
-            ' completed receipts in this period. Thank you for helping the store!'
-          : 'Ready for the next customer. Every day starts somewhere.';
-        status.textContent =
-          data.period.start +
-          ' – ' +
-          data.period.end +
-          ' · ' +
-          data.timezone +
-          ' · Refreshed ' +
-          data.refreshed;
-        renderDashboard();
-        finishWorkspacePageLoad('dashboardPage');
-      })
-      .withFailureHandler(function (error) {
-        if (
-          generation !== dashboardGeneration ||
-          !currentEmployee ||
-          token !== currentEmployee.dashboardToken
-        )
-          return;
-        status.textContent = (dashboardData ? 'Refresh failed; showing previous results. ' : '') + (error.message || String(error));
-        finishWorkspacePageLoad('dashboardPage');
-      })
-      .getDashboard(request);
-  }
-  function dashboardApplyPreset() {
-    if (!dashboardData) return;
-    const preset = document.getElementById('dashboardPreset').value,
-      today = dashboardData.today;
-    const date = new Date(today + 'T00:00:00Z');
-    let start = today,
-      end = today;
-    if (preset === 'Custom') return;
-    if (preset === 'Yesterday') {
-      date.setUTCDate(date.getUTCDate() - 1);
-      start = end = date.toISOString().slice(0, 10);
-    }
-    if (preset === 'This Week') {
-      date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
-      start = date.toISOString().slice(0, 10);
-    }
-    if (preset === 'This Month') start = today.slice(0, 8) + '01';
-    document.getElementById('dashboardStart').value = start;
-    document.getElementById('dashboardEnd').value = end;
-    loadDashboardPage(true);
-  }
-  function dashboardProductList(items) {
-    return (
-      items
-        .slice()
-        .sort((a, b) => b[dashboardBestSort] - a[dashboardBestSort] || a.name.localeCompare(b.name))
-        .slice(0, 5)
-        .map(
-          (p) =>
-            '<div class="dashboard-line"><span>' +
-            dashboardEscape(p.name) +
-            (p.category
-              ? ' <small class="text-muted">' + dashboardEscape(p.category) + '</small>'
-              : '') +
-            '</span><span>' +
-            p.units +
-            ' units · <strong>' +
-            dashboardMoney(p.sales) +
-            '</strong></span></div>'
-        )
-        .join('') || '<p class="text-muted">No completed sales in this period.</p>'
-    );
-  }
-  function renderDashboard() {
-    if (!dashboardData) return;
-    const d = dashboardData,
-      a = d.analytics,
-      esc = dashboardEscape;
-    const metrics = [
-      ['Net Sales', dashboardMoney(a.netSales)],
-      ['Units Sold', a.units],
-      ['Transactions', a.transactions],
-      ['Average Transaction Value', dashboardMoney(a.average)],
-    ];
-    const max = Math.max(1, ...a.activity.map((b) => Math.abs(b.sales)));
-    const style = a.products.filter((p) => p.category === dashboardStyleCategory),
-      finds = a.products.filter((p) => p.category === 'YOURFINDS');
-    const totals = (list) =>
-      list.reduce((s, p) => ({ sales: s.sales + p.sales, units: s.units + p.units }), {
-        sales: 0,
-        units: 0,
-      });
-    const ys = totals(style),
-      yf = totals(finds);
-    document.getElementById('dashboardContent').innerHTML = `
- <div class="dashboard-grid dashboard-metrics">${metrics.map(([label, value]) => `<section class="dashboard-panel"><div class="dashboard-subtitle">${label}</div><div class="dashboard-metric">${value}</div></section>`).join('')}</div>
- <p class="dashboard-subtitle">Units count positive sold/replacement quantities. Exchange adjustment: <strong>${dashboardMoney(a.exchangeAdjustment)}</strong> (included in Net Sales).</p>
- ${d.comparison ? `<div class="dashboard-panel mb-3">Compared with ${d.comparison.period.start} – ${d.comparison.period.end}: <strong>${dashboardMoney(d.comparison.change)}</strong> ${d.comparison.percent === null ? '· Percentage unavailable for a zero or negative baseline.' : '(' + d.comparison.percent + '%)'} · Previous net sales ${dashboardMoney(d.comparison.netSales)}</div>` : ''}
- <div class="dashboard-grid"><section class="dashboard-panel"><h3>Sales activity · ${d.period.start === d.period.end ? 'hourly' : 'daily'}</h3><div class="dashboard-activity" role="img" aria-label="Sales activity; exact amounts available in the data table below">${a.activity.map((b) => `<div class="dashboard-column ${b.sales < 0 ? 'negative' : ''}" title="${esc(b.label)}: ${dashboardMoney(b.sales)}"><i style="height:${(Math.abs(b.sales) / max) * 115}px"></i><span>${esc(b.label)}</span></div>`).join('')}</div><details><summary class="small">View amounts (negative bars are adjustments)</summary>${a.activity.map((b) => `<div class="dashboard-line"><span>${esc(b.label)}</span><strong>${dashboardMoney(b.sales)}</strong></div>`).join('')}</details></section>
- <section class="dashboard-panel"><h3>Category breakdown</h3>${a.categories.map((c) => `<div class="dashboard-line"><span>${c.name === 'YOURFINDS' ? 'YourFinds' : c.name === 'OTHERS' ? 'Others' : c.name === 'WHOLESALE' ? 'Wholesale' : 'PINS'}</span><strong>${dashboardMoney(c.sales)} · ${c.share.toFixed(1)}%</strong></div><div class="dashboard-bar"><span style="width:${c.share}%"></span></div>`).join('')}<small class="text-muted">Shares use positive category totals only; negative adjustments remain in net sales.</small></section></div>
- <section class="dashboard-panel mb-3"><div class="d-flex justify-content-between gap-2"><h3>Best sellers · top five</h3><label>Rank by <select aria-label="Best seller ranking" onchange="dashboardBestSort=this.value;renderDashboard()"><option value="units" ${dashboardBestSort === 'units' ? 'selected' : ''}>Quantity</option><option value="sales" ${dashboardBestSort === 'sales' ? 'selected' : ''}>Sales</option></select></label></div>${dashboardProductList(a.products)}</section>
- <div class="dashboard-grid"><section class="dashboard-panel"><div class="d-flex justify-content-between"><h3>YourStyle</h3><select aria-label="YourStyle category" onchange="dashboardStyleCategory=this.value;renderDashboard()"><option ${dashboardStyleCategory === 'PINS' ? 'selected' : ''}>PINS</option><option value="OTHERS" ${dashboardStyleCategory === 'OTHERS' ? 'selected' : ''}>Others</option><option value="WHOLESALE" ${dashboardStyleCategory === 'WHOLESALE' ? 'selected' : ''}>Wholesale</option></select></div><p>${dashboardMoney(ys.sales)} · ${ys.units} units</p>${dashboardProductList(style)}</section>
- <section class="dashboard-panel"><div class="d-flex justify-content-between"><h3>YourFinds</h3><select aria-label="YourFinds ranking" onchange="dashboardFindsGroup=this.value;renderDashboard()"><option value="sizes" ${dashboardFindsGroup === 'sizes' ? 'selected' : ''}>By size</option><option value="products" ${dashboardFindsGroup === 'products' ? 'selected' : ''}>By product</option></select></div><p>${dashboardMoney(yf.sales)} · ${yf.units} units</p>${dashboardProductList(dashboardFindsGroup === 'sizes' ? a.sizes : finds)}</section></div>
- <section class="dashboard-panel mb-3"><h3>Inventory reminders <small class="text-muted">· current stock</small></h3><div class="dashboard-reminders">${[
-   ['incomplete', 'YourFinds needing details'],
-   ['low', 'Low-stock groups'],
-   ['sold', 'Sold-out groups'],
- ]
-   .map(
-     ([key, label]) =>
-       `<button class="btn btn-outline-pink" onclick="openDashboardInventory('${key}')"><strong class="fs-4 d-block">${d.inventory[key]}</strong>${label} →</button>`
-   )
-   .join('')}</div></section>
- <div class="dashboard-grid"><section class="dashboard-panel"><h3>Cashier leaderboard</h3><p class="dashboard-subtitle">Ranked by net sales. Every shift has different selling opportunities.</p>${a.leaderboard.map((row) => `<div class="dashboard-line ${row.own ? 'dashboard-own' : ''}"><span>${row.rank <= 3 ? ['🥇', '🥈', '🥉'][row.rank - 1] : '#' + row.rank} ${esc(row.name)}${row.own ? ' (you)' : ''}</span><span>${row.sales === undefined ? 'Rank only' : `<strong>${dashboardMoney(row.sales)}</strong><br><small>${row.units} units · ${row.transactions} receipts</small>`}</span></div>`).join('') || '<p class="text-muted">No cashier activity yet.</p>'}</section>
- <section class="dashboard-panel"><div class="d-flex justify-content-between gap-2"><h3>Store To-Do Board</h3>${d.employee.manager ? '<button class="btn btn-sm btn-pink" onclick="dashboardEditTask()">+ New task</button>' : ''}</div><p class="dashboard-subtitle">Everyone tasks are shared and completed once. Tasks stay here across days.</p>${dashboardTaskBoard()}</section></div>`;
-    document.getElementById('dashboardContent').hidden = false;
-  }
-  function dashboardTaskBoard() {
-    const d = dashboardData,
-      order = { Open: 0, 'In Progress': 1, Done: 2 };
-    const tasks = d.tasks
-      .slice()
-      .sort(
-        (a, b) =>
-          order[a.status] - order[b.status] ||
-          (a.priority === 'High' ? -1 : 1) - (b.priority === 'High' ? -1 : 1) ||
-          (a.due || '9999').localeCompare(b.due || '9999')
-      );
-    function card(t) {
-      const index = d.tasks.indexOf(t),
-        overdue = t.due && t.due < d.today && t.status !== 'Done',
-        assignee = t.assignee
-          ? (
-              d.employees.find((e) => e.id === t.assignee) || {
-                name: t.assignee === d.employee.id ? 'You' : 'Inactive employee',
-              }
-            ).name
-          : 'Everyone';
-      return `<article class="dashboard-task ${overdue ? 'overdue' : ''}"><h4>${dashboardEscape(t.title)}</h4><p class="small mb-2">${dashboardEscape(t.instructions)}</p><p class="dashboard-subtitle">${dashboardEscape(assignee)} · ${dashboardEscape(t.priority)}${t.due ? ' · ' + (overdue ? 'Overdue: ' : 'Due ') + dashboardEscape(t.due) : ''}</p><div class="d-flex flex-wrap gap-2"><select aria-label="Status for ${dashboardEscape(t.title)}" onchange="dashboardChangeStatus(${index},this.value)" ${dashboardBusy ? 'disabled' : ''}>${['Open', 'In Progress', 'Done'].map((s) => `<option ${s === t.status ? 'selected' : ''}>${s}</option>`).join('')}</select>${d.employee.manager ? `<button class="btn btn-sm btn-outline-pink" onclick="dashboardEditTask(${index})">Edit</button><button class="btn btn-sm btn-outline-danger" onclick="dashboardDeleteTask(${index})">Delete</button>` : ''}</div>${t.completedAt ? `<p class="dashboard-subtitle mt-2 mb-0">Completed by ${dashboardEscape(t.completedBy)} · ${dashboardEscape(t.completedAt)}</p>` : ''}</article>`;
-    }
-    return (
-      (tasks
-        .filter((t) => t.status !== 'Done')
-        .map(card)
-        .join('') || '<p class="text-muted">No open tasks. Thank you, team!</p>') +
-      `<details><summary>Completed (${tasks.filter((t) => t.status === 'Done').length})</summary>${tasks
-        .filter((t) => t.status === 'Done')
-        .map(card)
-        .join('')}</details>`
-    );
-  }
-  function dashboardEditTask(index) {
-    if (!dashboardData || !dashboardData.employee.manager) return;
-    dashboardEditingTask = index === undefined ? null : dashboardData.tasks[index];
-    const t = dashboardEditingTask || {
-      title: '',
-      instructions: '',
-      assignee: '',
-      priority: 'Normal',
-      due: '',
-      status: 'Open',
+
+  const dashboardQuotes = [
+    'One customer at a time. You’ve got this.',
+    'Small wins add up. Here’s to a good shift.',
+    'Take it one step at a time. Every bit of progress counts.',
+    'A little patience goes a long way.',
+    'A warm welcome can make someone’s day.',
+    'Give yourself credit for the details you get right.',
+    'Set a pace you can keep. You’re doing fine.'
+  ];
+  const dashboardDateFormat = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric' });
+  const dashboardMonthFormat = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+  let dashboardToday, dashboardRange, dashboardDraft, dashboardMonth, dashboardDrag;
+  const dashboardNumberFormat = new Intl.NumberFormat('en-PH');
+  const dashboardMoneyFormat = new Intl.NumberFormat('en-PH', {style:'currency', currency:'PHP', minimumFractionDigits:0});
+
+  function renderDashboardOverview(data) {
+    const fields = {
+      dashboardSalesTotal: data ? dashboardMoneyFormat.format(data.sales.net) : '—',
+      dashboardSalesScope: data?.sales.own ? 'Your net sales' : 'Net sales',
+      dashboardSalesDetail: data ? dashboardNumberFormat.format(data.sales.count) + ' transactions' + (data.sales.limited ? ' · last 7 days only' : '') : '',
+      dashboardStockTotal: data ? dashboardNumberFormat.format(data.inventory.stock) : '—',
+      dashboardStockDetail: data ? dashboardNumberFormat.format(data.inventory.low) + ' low-stock products' : '',
+      dashboardDeliveryTotal: data ? dashboardNumberFormat.format(data.delivery.count) : '—',
+      dashboardDeliveryDetail: data ? dashboardNumberFormat.format(data.delivery.incomplete) + ' still incomplete' : '',
+      dashboardReturnTotal: data ? dashboardNumberFormat.format(data.returns.count) : '—',
+      dashboardReturnDetail: data ? dashboardNumberFormat.format(data.returns.items) + ' items returned' : '',
     };
-    document.getElementById('dashboardTaskHeading').textContent = dashboardEditingTask
-      ? 'Edit task'
-      : 'New task';
-    document.getElementById('dashboardTaskAssignee').innerHTML =
-      '<option value="">Everyone</option>' +
-      dashboardData.employees
-        .map(
-          (e) =>
-            '<option value="' + dashboardEscape(e.id) + '">' + dashboardEscape(e.name) + '</option>'
-        )
-        .join('');
-    if (t.assignee && !dashboardData.employees.some((e) => e.id === t.assignee)) {
-      document.getElementById('dashboardTaskAssignee').innerHTML +=
-        '<option disabled value="' +
-        dashboardEscape(t.assignee) +
-        '">Inactive employee — choose an assignee</option>';
-    }
-    ['title', 'instructions', 'assignee', 'priority', 'due', 'status'].forEach(
-      (k) =>
-        (document.getElementById('dashboardTask' + k[0].toUpperCase() + k.slice(1)).value = t[k])
-    );
-    document.getElementById('dashboardTaskError').textContent = '';
-    document.getElementById('dashboardTaskDialog').showModal();
+    Object.entries(fields).forEach(([id, value]) => { document.getElementById(id).textContent = value; });
+    if (document.getElementById('dashboardReturnSummary').open) renderDashboardReturnSummary(data?.returns);
   }
-  function dashboardSaveTask() {
-    const task = dashboardEditingTask
-      ? { id: dashboardEditingTask.id, version: dashboardEditingTask.version }
-      : {};
-    ['title', 'instructions', 'assignee', 'priority', 'due', 'status'].forEach(
-      (k) =>
-        (task[k] = document.getElementById('dashboardTask' + k[0].toUpperCase() + k.slice(1)).value)
-    );
-    dashboardMutateTask(task, false);
+
+  function loadDashboardOverview() {
+    if (!currentEmployee) return;
+    const [start, end] = dashboardRange || [dashboardToday, dashboardToday];
+    const range = {start:start.toISOString().slice(0, 10), end:end.toISOString().slice(0, 10)};
+    const key = range.start + ':' + range.end;
+    const entry = pageReadCache.get('dashboardOverview');
+    const fresh = entry?.data && Date.now() - entry.data.loadedAt < 30000;
+    const read = beginPageRead('dashboardOverview', key, !!(entry?.pending || fresh));
+    const status = document.getElementById('dashboardOverviewStatus');
+    const retry = document.getElementById('dashboardOverviewRetry');
+    const saved = read.cached?.overview || (typeof readDeviceOverview === 'function' ? readDeviceOverview(range) : null);
+    renderDashboardOverview(saved);
+    retry.hidden = true;
+    status.textContent = read.cached ? '' : saved ? 'Saved totals · refreshing…' : 'Loading overview…';
+    if (saved) finishWorkspacePageLoad('dashboardPage');
+    if (!read.shouldFetch) return;
+    secureScriptRun.withSuccessHandler(data => {
+      if (!read.current()) return;
+      read.save({overview:data, loadedAt:Date.now()});
+      if (typeof writeDeviceOverview === 'function') writeDeviceOverview(range, data);
+      renderDashboardOverview(data);
+      status.textContent = '';
+      if (!read.cached) finishWorkspacePageLoad('dashboardPage');
+    }).withFailureHandler(() => {
+      if (!read.current()) return;
+      read.fail();
+      status.textContent = saved ? 'Saved totals · couldn’t refresh.' : 'Couldn’t load the overview.';
+      if (!saved && document.getElementById('dashboardReturnSummary').open)
+        document.getElementById('dashboardReturnMessage').textContent = 'Couldn’t load the return summary.';
+      retry.hidden = false;
+      if (!read.cached) finishWorkspacePageLoad('dashboardPage');
+    }).getDashboardOverview(range);
   }
-  function dashboardChangeStatus(index, status) {
-    const t = dashboardData.tasks[index];
-    dashboardMutateTask(
-      dashboardData.employee.manager && !employeeIsOic()
-        ? { ...t, status: status }
-        : { id: t.id, version: t.version, status: status },
-      false
-    );
-  }
-  function dashboardDeleteTask(index) {
-    const t = dashboardData.tasks[index];
-    if (confirm('Delete task “' + t.title + '”?'))
-      dashboardMutateTask({ id: t.id, version: t.version }, true);
-  }
-  function dashboardMutateTask(task, remove, credential) {
-    if (dashboardBusy) return;
-    const statusOnly = task && task.id && !remove && typeof task.status === 'string' && Object.keys(task).every(key=>['id','version','status'].includes(key));
-    if (employeeIsOic() && !credential && !statusOnly) {
-      const owner = currentEmployee;
-      const dialog = document.getElementById('dashboardTaskDialog');
-      const reopen = dialog.open;
-      if (reopen) dialog.close();
-      requestManagerPin('Manager PIN to update the task board:', function(approved) {
-        if (owner !== currentEmployee) return;
-        if (reopen) dialog.showModal();
-        if (approved) dashboardMutateTask(task, remove, approved);
+
+  function renderDashboardReturnSummary(returns) {
+    const table = document.getElementById('dashboardReturnTable');
+    Array.from(table.tBodies).forEach(body => body.remove());
+    document.getElementById('dashboardReturnReceiptCount').textContent = returns ? dashboardNumberFormat.format(returns.count) : '—';
+    document.getElementById('dashboardReturnItemCount').textContent = returns ? dashboardNumberFormat.format(returns.items) : '—';
+    document.getElementById('dashboardReturnMessage').textContent = !returns ? 'Loading return summary…'
+      : returns.count === 0 ? 'No supplier returns in this date range.'
+      : returns.groups.length === 0 ? 'No item quantities recorded for these returns.' : '';
+    const download = document.getElementById('dashboardReturnDownload');
+    download.disabled = !returns?.count || download.hasAttribute('aria-busy');
+    table.hidden = !returns?.groups.length;
+    (returns?.groups || []).forEach(group => {
+      const body = table.createTBody();
+      const heading = document.createElement('th');
+      heading.scope = 'rowgroup';
+      heading.colSpan = 2;
+      heading.textContent = group.title;
+      body.insertRow().append(heading);
+      group.rows.forEach(item => {
+        const row = body.insertRow();
+        row.insertCell().textContent = item.description;
+        const qty = row.insertCell();
+        qty.className = 'text-end';
+        qty.textContent = dashboardNumberFormat.format(item.quantity);
       });
-      return;
-    }
-    const approval = typeof credential === 'object' ? credential : credential ? {managerPin:credential} : {};
-    dashboardBusy = true;
-    document.getElementById('dashboardTaskSave').disabled = true;
-    const token = currentEmployee && currentEmployee.dashboardToken,
-      generation = dashboardGeneration;
-    secureScriptRun
-      .withSuccessHandler(function () {
-        if (
-          generation !== dashboardGeneration ||
-          !currentEmployee ||
-          token !== currentEmployee.dashboardToken
-        )
-          return;
-        dashboardBusy = false;
-        document.getElementById('dashboardTaskSave').disabled = false;
-        document.getElementById('dashboardTaskDialog').close();
-        loadDashboardPage();
-      })
-      .withFailureHandler(function (error) {
-        if (
-          generation !== dashboardGeneration ||
-          !currentEmployee ||
-          token !== currentEmployee.dashboardToken
-        )
-          return;
-        dashboardBusy = false;
-        document.getElementById('dashboardTaskSave').disabled = false;
-        if (/session|account|Only managers|today only/i.test(error.message || String(error))) {
-          clearDashboardState();
-          document.getElementById('dashboardStatus').textContent = error.message || String(error);
-          return;
-        }
-        document.getElementById('dashboardTaskError').textContent = error.message || String(error);
-        document.getElementById('dashboardStatus').textContent = error.message || String(error);
-        renderDashboard();
-      })
-      .saveDashboardTask({ token: token, task: task, remove: remove, ...approval });
+    });
   }
-  function openDashboardInventory(kind) {
-    document.getElementById('inventorySearch').value = '';
-    document.getElementById('inventoryCategoryFilter').value = '';
-    dashboardInventoryReminder = kind;
-    navigateSidebar('inventoryPage');
+
+  function openDashboardReturnSummary() {
+    const [start, end] = dashboardRange || [dashboardToday, dashboardToday];
+    document.getElementById('dashboardReturnPeriod').textContent = describeDashboardRange([start, end]);
+    document.getElementById('dashboardReturnSummary').showModal();
+    loadDashboardOverview();
+  }
+
+  function viewDashboardReturns() {
+    document.getElementById('dashboardReturnSummary').close();
+    navigateSidebar('supplierReturnsPage');
+  }
+
+  function downloadDashboardReturnSummary() {
+    const button = document.getElementById('dashboardReturnDownload');
+    if (button.disabled) return;
+    const [start, end] = dashboardRange || [dashboardToday, dashboardToday];
+    const range = {start:start.toISOString().slice(0, 10), end:end.toISOString().slice(0, 10)};
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    const message = document.getElementById('dashboardReturnMessage');
+    message.textContent = 'Preparing return report…';
+    const finish = error => {
+      button.removeAttribute('aria-busy');
+      button.disabled = !pageReadCache.get('dashboardOverview')?.data?.overview?.returns?.count;
+      message.textContent = error ? error.message || String(error) : '';
+    };
+    secureScriptRun.withSuccessHandler(result => {
+      try {
+        downloadSupplierReturnPdf_(result);
+        finish();
+      } catch (error) { finish(error); }
+    }).withFailureHandler(finish).createDashboardReturnPdf(range);
+  }
+
+  function dashboardDate(year, month, day) {
+    return new Date(Date.UTC(year, month, day));
+  }
+
+  function describeDashboardRange([start, end]) {
+    return +start === +end ? dashboardDateFormat.format(start) : dashboardDateFormat.formatRange(start, end);
+  }
+
+  function renderDashboardPeriod() {
+    document.getElementById('dashboardPeriodLabel').textContent =
+      describeDashboardRange(dashboardRange || [dashboardToday, dashboardToday]);
+  }
+
+  function openDashboardCalendar() {
+    updateDashboardHeader();
+    dashboardDraft = (dashboardRange || [dashboardToday, dashboardToday]).slice();
+    const [start] = dashboardDraft;
+    dashboardMonth = dashboardDate(start.getUTCFullYear(), start.getUTCMonth(), 1);
+    renderDashboardCalendar();
+    document.getElementById('dashboardCalendar').showModal();
+  }
+
+  function moveDashboardMonth(offset) {
+    dashboardMonth = dashboardDate(dashboardMonth.getUTCFullYear(), dashboardMonth.getUTCMonth() + offset, 1);
+    renderDashboardCalendar();
+  }
+
+  function renderDashboardCalendar() {
+    const year = dashboardMonth.getUTCFullYear(), month = dashboardMonth.getUTCMonth();
+    const count = dashboardDate(year, month + 1, 0).getUTCDate();
+    const [start, end = start] = dashboardDraft;
+    document.getElementById('dashboardCalendarMonth').textContent = dashboardMonthFormat.format(dashboardMonth);
+    const days = document.getElementById('dashboardCalendarDays');
+    const focusedDay = days.contains(document.activeElement) ? document.activeElement.dataset.day : '';
+    let markup = '<span></span>'.repeat(dashboardMonth.getUTCDay());
+    for (let day = 1; day <= count; day++) {
+      const date = dashboardDate(year, month, day);
+      const inRange = date >= start && date <= end;
+      const edge = +date === +start || +date === +end;
+      let selectionClass = edge ? 'range-edge' : inRange ? 'in-range' : '';
+      if (+date === +start && start < end && date.getUTCDay() !== 6 && day < count) selectionClass += ' range-start';
+      if (+date === +end && start < end && date.getUTCDay() !== 0 && day > 1) selectionClass += ' range-end';
+      const current = +date === +dashboardToday ? ' aria-current="date"' : '';
+      markup += '<button type="button" data-day="' + day + '" aria-label="' + dashboardDateFormat.format(date) +
+        '" aria-pressed="' + inRange + '" class="' + selectionClass + '"' + current + '>' + day + '</button>';
+    }
+    days.innerHTML = markup;
+    if (focusedDay) days.querySelector('[data-day="' + focusedDay + '"]')?.focus();
+    document.getElementById('dashboardCalendarSelection').textContent = dashboardDraft.length === 1
+      ? 'Start: ' + dashboardDateFormat.format(start) + ' · Choose an end date'
+      : describeDashboardRange(dashboardDraft);
+  }
+
+  function selectDashboardDay(event) {
+    const day = Number(event.target.dataset.day);
+    if (!day) return;
+    const date = dashboardDate(dashboardMonth.getUTCFullYear(), dashboardMonth.getUTCMonth(), day);
+    dashboardDraft = dashboardDraft.length === 1 ? dashboardDraft.concat(date).sort((a, b) => a - b) : [date];
+    renderDashboardCalendar();
+  }
+
+  function startDashboardDrag(event) {
+    const day = Number(event.target.dataset.day);
+    if (!day || event.button !== 0 || dashboardDrag) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dashboardDrag = { pointerId: event.pointerId, startDay: day, lastDay: day, previousDraft: dashboardDraft, moved: false };
+  }
+
+  function moveDashboardDrag(event) {
+    if (dashboardDrag?.pointerId !== event.pointerId) return;
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    if (!target || !event.currentTarget.contains(target)) return;
+    const day = Number(target.dataset.day);
+    if (!day || day === dashboardDrag.lastDay) return;
+    dashboardDrag.lastDay = day;
+    dashboardDrag.moved = true;
+    const year = dashboardMonth.getUTCFullYear(), month = dashboardMonth.getUTCMonth();
+    dashboardDraft = [
+      dashboardDate(year, month, Math.min(dashboardDrag.startDay, day)),
+      dashboardDate(year, month, Math.max(dashboardDrag.startDay, day))
+    ];
+    renderDashboardCalendar();
+  }
+
+  function finishDashboardDrag(event) {
+    if (dashboardDrag?.pointerId !== event.pointerId) return;
+    moveDashboardDrag(event);
+    const { startDay, moved } = dashboardDrag;
+    dashboardDrag = null;
+    if (!moved) selectDashboardDay({ target: { dataset: { day: startDay } } });
+  }
+
+  function cancelDashboardDrag(event) {
+    if (dashboardDrag?.pointerId !== event.pointerId) return;
+    dashboardDraft = dashboardDrag.previousDraft;
+    dashboardDrag = null;
+    renderDashboardCalendar();
+  }
+
+  function dashboardPresetRange(preset, today) {
+    const year = today.getUTCFullYear(), month = today.getUTCMonth(), day = today.getUTCDate();
+    const offset = preset.startsWith('last-') ? -1 : 0;
+    switch (preset.replace('last-', '')) {
+      case 'week': {
+        const monday = day - (today.getUTCDay() + 6) % 7 + offset * 7;
+        return [dashboardDate(year, month, monday), dashboardDate(year, month, monday + 6)];
+      }
+      case 'month':
+        return [dashboardDate(year, month + offset, 1), dashboardDate(year, month + offset + 1, 0)];
+      case 'year':
+        return [dashboardDate(year + offset, 0, 1), dashboardDate(year + offset, 11, 31)];
+      default: {
+        const date = preset === 'yesterday' ? dashboardDate(year, month, day - 1) : today;
+        return [date, date];
+      }
+    }
+  }
+
+  function selectDashboardShortcut(event) {
+    const preset = event.target.dataset.preset;
+    if (!preset) return;
+    dashboardDraft = dashboardPresetRange(preset, dashboardToday);
+    const [start, end] = dashboardDraft;
+    const visibleDate = dashboardToday >= start && dashboardToday <= end ? dashboardToday : end;
+    dashboardMonth = dashboardDate(visibleDate.getUTCFullYear(), visibleDate.getUTCMonth(), 1);
+    renderDashboardCalendar();
+  }
+
+  function applyDashboardCalendar() {
+    const [start, end = start] = dashboardDraft;
+    dashboardRange = [start, end];
+    renderDashboardPeriod();
+    document.getElementById('dashboardCalendar').close();
+    loadDashboardOverview();
+  }
+
+  function clearDashboardState() {
+    pageReadCache.delete('dashboardOverview');
+    document.getElementById('dashboardReturnSummary').close();
+    document.getElementById('dashboardReturnDownload').removeAttribute('aria-busy');
+    renderDashboardReturnSummary();
+    document.getElementById('dashboardReturnMessage').textContent = '';
+    document.getElementById('dashboardReturnPeriod').textContent = '';
+    renderDashboardOverview();
+    document.getElementById('dashboardOverviewStatus').textContent = '';
+    document.getElementById('dashboardOverviewRetry').hidden = true;
+    document.getElementById('dashboardCalendar').close();
+    document.getElementById('dashboardGreeting').textContent = 'Welcome!';
+    document.getElementById('dashboardQuote').textContent = '';
+    document.getElementById('dashboardPeriodLabel').textContent = 'Date range';
+    document.getElementById('dashboardCalendarSelection').textContent = '';
+    document.getElementById('dashboardCalendarDays').replaceChildren();
+    dashboardToday = dashboardRange = dashboardDraft = dashboardMonth = dashboardDrag = null;
   }
 </script>

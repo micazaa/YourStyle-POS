@@ -8,6 +8,12 @@
       "direction": "Action tabs",
       "approved": "2026-11-05",
       "details": "Separate Distribute items and Split bundle panels. Center bundle navigation; use toggles up to three bundles and a dropdown for more. Put Add Item beside the item table. Keep only the selected bundle count and remove Delivery Summary cards."
+    },
+    {
+      "component": "Dashboard header",
+      "direction": "Personal greeting",
+      "approved": "2026-11-11",
+      "details": "Use a soft pink header with a time-of-day greeting, the employee’s first name, and one encouraging line. Place the Today, Yesterday, and This week selector above its date label."
     }
   ]
 }

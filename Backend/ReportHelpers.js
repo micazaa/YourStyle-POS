@@ -559,6 +559,16 @@ function collectSalesMetrics(
       ? anchor.cashier
       : String(row[2] || 'Unknown').trim();
 
+    if (options.totalsWindow) {
+      const [start, end] = options.totalsWindow;
+      if (reportingTimestamp >= start && reportingTimestamp < end &&
+          (!cashierName || reportingCashier === cashierName)) {
+        if (receiptId) receiptIds.add(receiptId);
+        metrics.totalSales += Number(row[12]) || 0;
+      }
+      continue;
+    }
+
     const reportingDate = Utilities.formatDate(
       reportingTimestamp,
       tz,

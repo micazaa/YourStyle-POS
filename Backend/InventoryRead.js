@@ -1,6 +1,8 @@
 // The list cache contains display data only. Checkout and edits always re-read authoritative stock.
 const INVENTORY_READ_SECONDS_ = 300;
 const INVENTORY_CHANGE_LIMIT_ = 1000;
+// Invalidate reads created before the Production-to-Dev data refresh.
+const INVENTORY_READ_EPOCH_ = '20261105-sync';
 let INVENTORY_EXECUTION_INDEX_ = null;
 function recordInventoryChangedCodes_(codes) {
   if(!ACCESS_REQUEST_CONTEXT_||!ACCESS_REQUEST_CONTEXT_.inventoryCodes)return;
@@ -12,7 +14,7 @@ function beginInventoryMutation_() {
   const lock=LockService.getScriptLock();lock.waitLock(10000);
   try {
     const id=SpreadsheetApp.getActiveSpreadsheet().getId(),fromVersion=inventoryReadVersion_();
-    const revision=Utilities.getUuid(),version=id+':'+revision;
+    const revision=Utilities.getUuid(),version=inventoryReadVersionFor_(id,revision);
     try {CacheService.getScriptCache().put('inventory-change:'+version,JSON.stringify({pending:true,fromVersion:fromVersion,startedAt:Date.now()}),3600);}catch(error){}
     PropertiesService.getScriptProperties().setProperty('inventory-read:'+id,revision);INVENTORY_EXECUTION_INDEX_=null;
     return {id:id,fromVersion:fromVersion,version:version};
@@ -21,7 +23,7 @@ function beginInventoryMutation_() {
 function finishInventoryMutation_(mutation,codes,success) {
   const lock=LockService.getScriptLock();lock.waitLock(10000);
   try {
-    const current=inventoryReadVersion_(),revision=Utilities.getUuid(),version=mutation.id+':'+revision;
+    const current=inventoryReadVersion_(),revision=Utilities.getUuid(),version=inventoryReadVersionFor_(mutation.id,revision);
     const changed=Array.from(new Set(codes));
     const full=!success||current!==mutation.version||!changed.length||changed.length>INVENTORY_CHANGE_LIMIT_;
     const event={fromVersion:current===mutation.version?mutation.fromVersion:current,version:version,
@@ -38,7 +40,10 @@ function invalidateInventoryRead_(spreadsheetId) {
 }
 function inventoryReadVersion_() {
   const id=SpreadsheetApp.getActiveSpreadsheet().getId();
-  return id+':'+(PropertiesService.getScriptProperties().getProperty('inventory-read:'+id)||'initial');
+  return inventoryReadVersionFor_(id,PropertiesService.getScriptProperties().getProperty('inventory-read:'+id)||'initial');
+}
+function inventoryReadVersionFor_(id,revision) {
+  return id+':'+INVENTORY_READ_EPOCH_+':'+revision;
 }
 function inventoryRowIsSoldYourFinds_(item) {
   return String(item.category).trim().toUpperCase()==='YOURFINDS' && String(item.inventoryType).toUpperCase()==='UNIQUE' &&

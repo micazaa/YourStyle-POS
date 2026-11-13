@@ -194,7 +194,7 @@ function dashboardInventory_() {
   const summary = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(POS_SUMMARY_SHEET);
   if (summary && summary.getRange('H1').getDisplayValue() === 'Category') {
     const rows = summary.getLastRow()>1 ? summary.getRange(2,8,summary.getLastRow()-1,5).getValues().filter(row=>row[0]) : [];
-    return {incomplete:rows.reduce((total,row)=>total+(Number(row[4])||0),0),low:rows.filter(row=>row[0]!=='YOURFINDS'&&Number(row[2])>0&&Number(row[3])>0&&Number(row[2])<=Number(row[3])).length,sold:rows.filter(row=>Number(row[2])===0).length};
+    return {stock:rows.reduce((total,row)=>total+(Number(row[2])||0),0),incomplete:rows.reduce((total,row)=>total+(Number(row[4])||0),0),low:rows.filter(row=>row[0]!=='YOURFINDS'&&Number(row[2])>0&&Number(row[3])>0&&Number(row[2])<=Number(row[3])).length,sold:rows.filter(row=>Number(row[2])===0).length};
   }
   const groups = new Map();
   let incomplete = 0;
@@ -226,6 +226,7 @@ function dashboardInventory_() {
   });
   const list = Array.from(groups.values());
   return {
+    stock: list.reduce((total, group) => total + group.stock, 0),
     incomplete: incomplete,
     low: list.filter(
       (g) =>
@@ -235,6 +236,137 @@ function dashboardInventory_() {
     sold: list.filter((g) => g.stock === 0).length,
   };
 }
+
+function getDashboardOverview(request) {
+  assertAppRequest_();
+  const employee = ACCESS_REQUEST_CONTEXT_.actor;
+  if (!employee || !isDevelopmentSpreadsheet_()) throw new Error('Dashboard overview is unavailable.');
+  const start = dashboardDate_(request.start);
+  const end = dashboardDate_(request.end);
+  if (start > end) throw new Error('Choose a start date before or equal to the end date.');
+  const timezone = Session.getScriptTimeZone();
+  const today = Utilities.formatDate(new Date(), timezone, 'yyyy-MM-dd');
+  const version = inventoryReadVersion_();
+  const cache = CacheService.getScriptCache();
+  const scope = employee.manager ? ['store'] : ['own', employee.id, employee.name];
+  const digest = Utilities.base64EncodeWebSafe(Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256, JSON.stringify([version, scope, today, start, end])
+  ));
+  const key = 'dashboard-overview:v2:' + digest;
+  try {
+    const cached = cache.get(key);
+    if (cached) return JSON.parse(cached);
+  } catch (error) {
+    console.warn('Dashboard overview cache read unavailable.');
+  }
+  const firstVisibleSale = employee.manager ? start : dashboardDayOffset_(today, -6);
+  const salesStart = start < firstVisibleSale ? firstVisibleSale : start;
+  const salesEnd = end > today ? today : end;
+  const salesSheet = getSalesLogSheet_();
+  if (!salesSheet) throw new Error('Sales Log sheet not found.');
+  const sales = salesStart <= salesEnd
+    ? collectSalesMetrics(salesSheet.getDataRange().getValues(), salesStart, employee.manager ? null : employee.name, null, null, {
+        totalsWindow: [
+          Utilities.parseDate(salesStart, timezone, 'yyyy-MM-dd').getTime(),
+          Utilities.parseDate(dashboardDayOffset_(salesEnd, 1), timezone, 'yyyy-MM-dd').getTime(),
+        ],
+      })
+    : {totalSales:0, transactionCount:0};
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const received = new Set(), incomplete = new Set();
+  const inPeriod = date => date >= start && date <= end;
+  readDeliveryPageRows_(ss, SHEETS.DELIVERY_LOG, DELIVERY_LOG_COLUMN_COUNT, false).forEach(row => {
+    const id = String(row[DELIVERY_IDX.DELIVERY_ID] || '').trim();
+    const type = String(row[DELIVERY_IDX.DELIVERY_TYPE] || '').trim().toUpperCase();
+    if (!id || (type !== DELIVERY_TYPE.YOURSTYLE && type !== DELIVERY_TYPE.YOURFINDS && (type || !/^YFD-/i.test(id)))) return;
+    const date = dashboardOverviewDate_(formatInventoryDateForClient(row[DELIVERY_IDX.DELIVERY_DATE]));
+    if (inPeriod(date)) received.add(id);
+    const status = String(row[DELIVERY_IDX.STATUS] || '').trim().toUpperCase();
+    if (status === DELIVERY_STATUS.PENDING || status === DELIVERY_STATUS.PARTIAL) incomplete.add(id);
+  });
+  const inventory = dashboardInventory_();
+  const overview = {
+    sales: {net: sales.totalSales, count: sales.transactionCount, own: !employee.manager, limited: salesStart > start},
+    inventory: {stock: inventory.stock, low: inventory.low},
+    delivery: {count: received.size, incomplete: incomplete.size},
+    returns: dashboardReturnSummary_(dashboardReturnRows_(start, end)),
+  };
+  try {
+    if (inventoryReadVersion_() === version) cache.put(key, JSON.stringify(overview), 30);
+  } catch (error) {
+    console.warn('Dashboard overview cache write unavailable.');
+  }
+  return overview;
+}
+
+function dashboardReturnRows_(start, end) {
+  return getSupplierReturns(false).filter(record => {
+    const date = dashboardOverviewDate_(record.returnDate || record.date);
+    return String(record.id || '').trim() && date >= start && date <= end;
+  });
+}
+
+function dashboardReturnSummary_(records) {
+  const groups = [
+    {title:'YourFinds · Size', rows:new Map()},
+    {title:'YourStyle · Pins', rows:new Map()},
+    {title:'YourStyle · Other', rows:new Map()},
+  ];
+  const ids = new Set();
+  let items = 0;
+  records.forEach(record => {
+    ids.add(String(record.id).trim());
+    const quantity = Number(record.quantity) || 0;
+    items += quantity;
+    if (quantity <= 0) return;
+    const category = String(record.category || '').trim().toUpperCase();
+    const size = String(record.size || '').trim().replace(/\s+/g, ' ').toUpperCase();
+    const name = String(record.name || record.code || '').trim().replace(/\s+/g, ' ');
+    let group, description;
+    if (category === 'YOURFINDS') {
+      group = groups[0];
+      description = dashboardYourFindsReturnSize_(size);
+    } else if (category === 'PINS') {
+      group = groups[1];
+      const variant = /\((GS|NEW|PT)\)/i.exec(name);
+      description = variant ? variant[1].toUpperCase() : ['GS', 'NEW', 'PT'].includes(size) ? size : '-';
+    } else {
+      group = groups[2];
+      const product = name + ' ' + String(record.code || '');
+      description = /\bSHOES?\b/i.test(product) ? 'Shoes' : /\bBAGS?\b/i.test(product) ? 'Bags' : name || 'Unspecified item';
+    }
+    const key = description.toUpperCase();
+    if (!group.rows.has(key)) group.rows.set(key, {description:description, quantity:0});
+    group.rows.get(key).quantity += quantity;
+  });
+  const sortOrders = [YOURFINDS_SIZE_ORDER, ['-', 'GS', 'NEW', 'PT'], ['Shoes', 'Bags']];
+  const sections = groups.map(({title, rows}, index) => {
+    const order = sortOrders[index];
+    const rank = name => order.includes(name) ? order.indexOf(name) : order.length;
+    const sorted = Array.from(rows.values()).sort((a,b) =>
+      rank(a.description) - rank(b.description) || a.description.localeCompare(b.description, undefined, {numeric:true,sensitivity:'base'})
+    );
+    return {title:title, rows:sorted};
+  }).filter(group => group.rows.length);
+  return {count:ids.size, items:items, groups:sections};
+}
+
+function dashboardYourFindsReturnSize_(size) {
+  const label = String(size || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  const normalized = normalizeYourFindsSaleSize_(label);
+  if (label === 'NO SIZE') return 'NS';
+  return normalized === 'CUSTOM' ? label || 'Unspecified size' : normalized;
+}
+
+function dashboardOverviewDate_(value) {
+  const date = String(value || '').trim();
+  const iso = /^(\d{4}-\d{2}-\d{2})(?:$|[ T])/.exec(date);
+  if (iso) return iso[1];
+  const local = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:$|\s)/.exec(date);
+  return local ? local[3] + '-' + local[1].padStart(2, '0') + '-' + local[2].padStart(2, '0') : '';
+}
+
 function getDashboard(request) {
   assertAppRequest_();
   request = request || {};

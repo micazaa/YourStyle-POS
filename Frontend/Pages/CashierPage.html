@@ -675,12 +675,17 @@ function indexCashierInventory(items) {
 function rememberCashierInventory(items) {
   const read = beginPageRead('cashierInventory', cashierInventoryCacheKey());
   masterInventory = Array.isArray(items) ? items : [];
+  if(typeof writeDeviceCache==='function')writeDeviceCache('cashier',masterInventory,'');
   read.save(masterInventory);
   populateManualDropdown(masterInventory);
   finishWorkspacePageLoad('posPage');
 }
 function refreshInventory(callback) {
   const read = beginPageRead('cashierInventory', cashierInventoryCacheKey(), true);
+  if(read.shouldFetch&&typeof readDeviceCache==='function'){
+    const saved=readDeviceCache('cashier');
+    if(saved){masterInventory=saved.items;populateManualDropdown(masterInventory);finishWorkspacePageLoad('posPage');}
+  }
   if (!read.shouldFetch) {
     if (read.cached !== undefined) {
       if (masterInventory !== read.cached) {
@@ -700,6 +705,7 @@ function refreshInventory(callback) {
   secureScriptRun.withSuccessHandler(function(data) {
     if (!read.current()) return;
     masterInventory = Array.isArray(data) ? data : data&&Array.isArray(data.inventory)?data.inventory:[];
+    if(typeof writeDeviceCache==='function')writeDeviceCache('cashier',masterInventory,data?.version||'');
     if(data&&data.bundleChoices)rememberCashierBundlePreload(data.bundleChoices,data.version);
     read.save(masterInventory);
     populateManualDropdown(masterInventory);

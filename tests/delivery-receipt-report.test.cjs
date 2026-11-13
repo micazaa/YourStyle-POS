@@ -6,6 +6,7 @@ const vm = require('node:vm');
 function loadReport(details) {
   let html;
   const context = vm.createContext({
+    assertAppRequest_() {},
     getDeliveryDetails: () => details,
     Utilities: {
       newBlob(value) {
@@ -42,6 +43,44 @@ test('delivery receipt keeps title bold and information above table regular weig
   assert.match(html, /Jeffrey &lt;Q&gt;/);
   assert.match(html, /October 3, 2026/);
   assert.match(html, /<td>SNE<\/td><td>Small non-electronic<\/td><td class="qty">40<\/td>/);
+});
+
+test('dashboard return export groups YourFinds by size and shows category totals above the items', () => {
+  const {context, getHtml} = loadReport();
+  const rows = [
+    {id:'RET-1', returnDate:'2026-11-11', category:'YOURFINDS', code:'11000123', name:'YourFinds', size:'MNE', quantity:1},
+    {id:'RET-2', returnDate:'2026-11-12', category:'YOURFINDS', code:'11000456', name:'YourFinds', size:'M', quantity:2},
+    {id:'RET-2', returnDate:'2026-11-12', category:'YOURFINDS', code:'11000789', name:'YourFinds', size:'SNE', quantity:1},
+    {id:'RET-2', returnDate:'2026-11-12', category:'PINS', code:'PIN-1', name:'Pins', quantity:4, reason:'Damaged', driver:'Driver name', receivedBy:'Receiver name'},
+    {id:'RET-3', returnDate:'2026-11-12', category:'OTHERS', code:'BAG-1', name:'Bag & pouch', quantity:2},
+    {id:'RET-4', returnDate:'2026-11-13', category:'OTHERS', code:'OUTSIDE', name:'Outside range', quantity:7},
+  ];
+  Object.assign(context, {
+    dashboardDate_: date => date,
+    dashboardYourFindsReturnSize_: size => size === 'M' ? 'MNE' : size,
+    isDevelopmentSpreadsheet_: () => true,
+    dashboardReturnRows_: (start, end) => rows.filter(row => row.returnDate >= start && row.returnDate <= end),
+    getSupplierReturns: () => rows,
+  });
+  const result = context.createDashboardReturnPdf({start:'2026-11-11',end:'2026-11-12'});
+  const summary = getHtml();
+  assert.equal(result.fileName,'Return_Report_Summary_2026-11-11_to_2026-11-12.pdf');
+  assert.match(summary, /<h1>RETURN REPORT SUMMARY<\/h1>/);
+  assert.match(summary, /November 11, 2026 – November 12, 2026/);
+  assert.match(summary, /<th>Code<\/th><th>Description<\/th><th>Size<\/th><th class="qty">Qty<\/th>/);
+  assert.match(summary, /<td>MNE<\/td><td>0123, 0456<\/td><td>MNE<\/td><td class="qty">3<\/td>/);
+  assert.match(summary, /<td>SNE<\/td><td>0789<\/td><td>SNE<\/td><td class="qty">1<\/td>/);
+  assert.match(summary, /<td>PIN-1<\/td><td>Pins<\/td><td>—<\/td><td class="qty">4<\/td>/);
+  assert.ok(summary.indexOf('<table class="totals">') < summary.indexOf('<table class="items">'));
+  assert.doesNotMatch(summary, /11000123|11000456|11000789/);
+  assert.match(summary, /Bag &amp; pouch/);
+  assert.doesNotMatch(summary, /OUTSIDE|Driver name|Receiver name|Prepared by|Damaged|Return Receipt Form/);
+  const totals = Array.from(summary.matchAll(/class="total-value">(\d+)<\/div><div class="total-label">([^<]+)/g),
+    ([, value, label]) => [label, Number(value)]);
+  assert.deepEqual(totals, [['TOTAL YF', 4], ['TOTAL PIN', 4], ['TOTAL OTHERS', 2], ['GRAND TOTAL', 10]]);
+  assert.equal(context.createSupplierReturnPdf('RET-1').success, true);
+  assert.match(getHtml(), /<h1>Return Receipt Form<\/h1>/);
+  assert.equal(context.createDashboardReturnPdf({start:'2026-11-10',end:'2026-11-10'}).success,false);
 });
 
 test('delivery receipt keeps original items and adds conversion and final-summary tables', () => {

@@ -321,16 +321,29 @@ function adjustInventoryStock(payload) {
   if (!Number.isInteger(qty) || qty < 1) throw new Error("Quantity must be a positive whole number.");
   if (allowedReasons.indexOf(reason) === -1) throw new Error("Select a valid adjustment reason.");
   if (reason === "OTHER" && !notes) throw new Error("Notes are required when reason is OTHER.");
-  const item = readInventoryStockTargets_([code])[0];
-  if (String(item.inventoryType || "").toUpperCase() === INVENTORY_TYPE.UNIQUE) throw new Error("UNIQUE YourFinds items cannot use quantity stock adjustment.");
-  const referenceId = adjustmentId_();
-  const result = changeInventoryStock({
-    code: code, qtyChange: direction === "ADD" ? qty : -qty,
-    referenceId: referenceId, employee: employee || auth.managerName,
-    item: item.name, reason: reason, source: INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,
-    notes: "Authorized by: " + auth.managerName + (notes ? " | " + notes : "")
-  });
-  return { success: true, referenceId: referenceId, manager: auth.managerName, stockAfter: result.stockAfter };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const item = readInventoryStockTargets_([code])[0];
+    if (item.inventoryType === INVENTORY_TYPE.UNIQUE) {
+      if (item.category.toUpperCase() !== 'YOURFINDS' || item.status !== INVENTORY_STATUS.ACTIVE || item.stock <= 0) {
+        throw new Error('Select an active, in-stock YourFinds item to adjust its quantity.');
+      }
+      if (direction === 'REMOVE' && qty > item.stock) {
+        throw new Error('Only ' + item.stock + ' units are available to remove.');
+      }
+    }
+    const referenceId = adjustmentId_();
+    const result = changeInventoryStock({
+      code: code, qtyChange: direction === "ADD" ? qty : -qty,
+      referenceId: referenceId, employee: employee || auth.managerName,
+      item: item.name, reason: reason, source: INVENTORY_MOVEMENT_SOURCE.ADJUSTMENT,
+      notes: "Authorized by: " + auth.managerName + (notes ? " | " + notes : "")
+    });
+    return { success: true, referenceId: referenceId, manager: auth.managerName, stockAfter: result.stockAfter };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function readInventoryStockTargets_(codes) {

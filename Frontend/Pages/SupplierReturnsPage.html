@@ -330,9 +330,26 @@ function renderSupplierReturnDetails(){
   if(list.children.length>5){list.style.maxHeight=Math.ceil(list.children[5].getBoundingClientRect().top-list.children[0].getBoundingClientRect().top)+'px';list.tabIndex=0;list.setAttribute('role','region');list.setAttribute('aria-label','Returned items');}
   const remarks=document.createElement('div');remarks.className='small text-muted mt-3';remarks.textContent='Remarks: '+(group.remarks||'—');body.appendChild(remarks);
 }
+function downloadSupplierReturnPdf_(result) {
+  if (!result?.success) throw new Error(result?.message || 'Return report failed.');
+  const bytes = Uint8Array.from(atob(result.base64), char => char.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], {type:'application/pdf'}));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = result.fileName;
+  document.body.appendChild(link);
+  try { link.click(); }
+  finally {
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+}
 function printSupplierReturnReport(id,button){
   if(!id||button.disabled)return;const original=button.innerHTML;button.disabled=true;button.setAttribute('aria-busy','true');button.innerHTML=loadingIndicator('Generating report…');
   const finish=()=>{button.disabled=false;button.removeAttribute('aria-busy');button.innerHTML=original;};const failed=error=>{finish();showNotificationToast(error.message||String(error),true);};
-  secureScriptRun.withSuccessHandler(result=>{if(!result||!result.success)return failed(new Error(result&&result.message||'Return report failed.'));try{const bytes=Uint8Array.from(atob(result.base64),char=>char.charCodeAt(0)),url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})),link=document.createElement('a');link.href=url;link.download=result.fileName;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);finish();}catch(error){failed(error);}}).withFailureHandler(failed).createSupplierReturnPdf(id);
+  secureScriptRun.withSuccessHandler(result => {
+    try { downloadSupplierReturnPdf_(result); finish(); }
+    catch (error) { failed(error); }
+  }).withFailureHandler(failed).createSupplierReturnPdf(id);
 }
 </script>
