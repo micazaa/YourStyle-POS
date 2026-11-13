@@ -4,9 +4,10 @@ const ACCESS_PERMISSION_MODES_ = {
   'inventory.view': ['allow','allow','allow','allow'],
   'inventory.create': ['allow','allow','approval','deny'],
   'inventory.complete': ['allow','allow','allow','allow'],
+  'inventory.sellingDetails': ['allow','allow','approval','approval'],
   'inventory.edit': ['allow','allow','approval','deny'],
   'inventory.delete': ['allow','allow','approval','deny'],
-  'supplierReturns.create': ['allow','allow','approval','approval'],
+  'supplierReturns.create': ['allow','allow','allow','allow'],
   'deliveries.create': ['allow','allow','allow','allow'],
   'sales.create': ['allow','allow','allow','allow'],
   'sales.exchange': ['allow','allow','approval','approval'],
@@ -22,7 +23,7 @@ const ACCESS_PERMISSION_MODES_ = {
   'reports.createManager': ['allow','allow','approval','deny'],
   'reports.correct': ['allow','allow','approval','approval'],
   'shift.manage': ['allow','allow','allow','allow'],
-  'shift.end': ['allow','allow','approval','approval'],
+  'shift.end': ['allow','allow','allow','allow'],
   'actions.approve': ['allow','allow','deny','deny'],
   'approvals.verify': ['allow','allow','allow','allow'],
   'approvals.view': ['allow','allow','deny','deny'],
@@ -86,6 +87,7 @@ function accessRegistry_() {
   "deleteUnusedInventoryItem": {permission:"inventory.delete", handler:deleteUnusedInventoryItem},
   "saveYourFindsItemDetails": {permission:"inventory.edit", handler:saveYourFindsItemDetails},
   "executeCheckoutBackend": {permission:"sales.create", handler:executeCheckoutBackend},
+  "getCashierBundleChoices": {permission:"inventory.view", handler:getCashierBundleChoices},
   "getExpectedCashForManager": {permission:"reports.view", handler:getExpectedCashForManager},
   "voidAndRefundTransactionBackend": {permission:"sales.void", handler:voidAndRefundTransactionBackend},
   "getTransactionHistory": {permission:"transactions.view", handler:getTransactionHistory},
@@ -104,6 +106,8 @@ function accessRegistry_() {
   "getDeliveryDetails": {permission:"inventory.view", handler:getDeliveryDetails},
   "getDeliverySummaryData": {permission:"inventory.view", handler:getDeliverySummaryData},
   "prepareYourFindsCustomSizes": {permission:"inventory.view", handler:prepareYourFindsCustomSizes},
+  "getSupplierReturnInventory": {permission:"inventory.view", handler:getSupplierReturnInventory},
+  "createSupplierReturnPdf": {permission:"inventory.view", handler:createSupplierReturnPdf},
   "getSupplierReturns": {permission:"inventory.view", handler:getSupplierReturns},
   "saveSupplierReturn": {permission:"supplierReturns.create", handler:saveSupplierReturn},
   "getInventoryDeliveryMetadataByCode": {permission:"inventory.view", handler:getInventoryDeliveryMetadataByCode},
@@ -174,7 +178,7 @@ function actionCodes_(operation, args) {
   else if (first && typeof first === 'object') {
     ['code','productCode','sourceCode','fromCode','toCode'].forEach(key => add(first[key]));
     if (first.item) add(first.item.code);
-    (first.items || []).forEach(item => { add(item.returnCode); add(item.replacementCode); });
+    (first.items || []).forEach(item => { add(item.code); add(item.returnCode); add(item.replacementCode); });
   } else if (operation === 'getInventoryMovementHistoryByCode') add(first);
   return Array.from(new Set(result)).slice(0, 100);
 }
@@ -289,6 +293,11 @@ function operationPermission_(operation, args, definition) {
   if (operation === 'saveYourFindsItemDetails') {
     const item = reservationInventoryItem_(args[0] && args[0].code);
     if (item.status === INVENTORY_STATUS.INCOMPLETE && args[0].costPrice === undefined) return 'inventory.complete';
+    if (item.status === INVENTORY_STATUS.ACTIVE && Number(item.stock) > 0 &&
+        String(item.category).trim().toUpperCase() === 'YOURFINDS' &&
+        item.inventoryType === INVENTORY_TYPE.UNIQUE && args[0].costPrice === undefined) {
+      return 'inventory.sellingDetails';
+    }
   }
   return definition.permission;
 }
@@ -329,12 +338,12 @@ function requireCashierAccess_(access, request) {
   if (!['sales.create','sales.exchange','sales.void'].includes(access.permission)) return;
   if (!access.actor.cashierReportId || String(request.shiftReportId || '') !== access.actor.cashierReportId)
     throw new Error('Start or resume a cashier shift before processing a transaction.');
-  const target = cashierShiftTarget_(access.actor.name, access.actor.cashierReportId, cashierReportRows_(), pettyHandoverRows_());
-  if (cashierShiftStatus_(target) !== 'OPEN') throw new Error('Start or resume a cashier shift before processing a transaction.');
+  if (cashierShiftAccessStatus_(access.actor.name, access.actor.cashierReportId) !== 'OPEN')
+    throw new Error('Start or resume a cashier shift before processing a transaction.');
 }
 function receiptVisibleToActor_(receiptId, actor) {
   if (actor.manager) return;
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
+  const sheet = getSalesLogSheet_();
   if (!sheet) throw new Error('Sales Log sheet not found.');
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   const minimum = dashboardDayOffset_(today, -6), shared = dashboardDayOffset_(today, -1);
@@ -445,11 +454,7 @@ function callPosApi(request) {
         CacheService.getScriptCache().remove(key);
       } finally {lock.releaseLock();}
     } else if (employeeCanAuthorizeManager_(access.actor) && access.operation !== 'verifyManagerPin') {
-      const ending = access.operation === 'saveCashierShiftExit' && access.args[0] && access.args[0].action === 'END';
-      const credential = accessCredential_(request, access.args);
-      access.approver = ending && access.args[0].managerName !== access.actor.name
-        ? requireManager_(credential.managerPin, credential.managerToken)
-        : {success:true, managerName:access.actor.name, employeeId:access.actor.id};
+      access.approver = {success:true, managerName:access.actor.name, employeeId:access.actor.id};
     }
     if (access.mode === 'approval' && access.operation === 'generateCashierShiftReportPDF' && access.approver.managerName !== access.args[0])
       throw new Error('Authorization must match the selected manager.');
@@ -481,7 +486,10 @@ function callPosApi(request) {
       try {
         const change=finishInventoryMutation_(inventoryMutation,Array.from(access.inventoryCodes),!!(parsed&&parsed.success));inventoryMutation=null;
         if(!change.reset&&['adjustInventoryStock','changeInventoryItem'].includes(access.operation))reuseInventoryReadMetadata_(change.fromVersion,change.version);
-        patch=parsed&&parsed.success?getInventoryChanges({version:request.inventoryVersion}):null;
+        // Confirm committed sales/bundles first; the client refreshes inventory in the background.
+        patch=parsed&&parsed.success ? ['executeCheckoutBackend','splitPhysicalBundle','distributeBulkBundle'].includes(access.operation)
+          ? {success:true,deferred:true,version:change.version}
+          : getInventoryChanges({version:request.inventoryVersion}) : null;
       }catch(cacheError){console.warn('Inventory item update unavailable; clients will refresh safely.');}
       if(parsed&&parsed.success){
         parsed.inventoryPatch=patch||{success:true,reset:true};

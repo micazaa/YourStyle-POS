@@ -275,7 +275,7 @@ function startCashierShift(employee, firstShiftPetty, handoverResolved) {
 
 function expectedCash_(cashierName, start, end) {
   const ss = SpreadsheetApp.getActiveSpreadsheet(),
-    sheet = ss.getSheetByName(SHEETS.SALES_LOG);
+    sheet = getSalesLogSheet_(ss);
   if (!sheet) return 0;
   const data = sheet.getDataRange().getValues();
   let total = 0;
@@ -309,7 +309,7 @@ function expectedCash_(cashierName, start, end) {
    Exchange RETURN/REPLACEMENT rows naturally net against each other. */
 function expectedCashForDate_(cashierName, reportDate) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
+  const sheet = getSalesLogSheet_(ss);
   if (!sheet) return 0;
   const dateStr = dateString_(reportDate);
   const metrics = collectSalesMetrics(
@@ -674,7 +674,7 @@ function generateCashierShiftReportPDF(
   assertAppRequest_();
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const salesLogSheet = ss.getSheetByName('Sales Log');
+    const salesLogSheet = getSalesLogSheet_(ss);
     if (!salesLogSheet) return { success: false, message: 'Sales log sheet not found.' };
 
     const salesData = salesLogSheet.getDataRange().getValues();
@@ -1010,7 +1010,7 @@ function correctClosedCashReport(payload) {
 
 function buildClosedCashierPdf_(report) {
   const ss = SpreadsheetApp.getActiveSpreadsheet(),
-    sales = ss.getSheetByName('Sales Log');
+    sales = getSalesLogSheet_(ss);
   if (!sales) return { success: false, message: 'Sales Log sheet not found.' };
   const tz = Session.getScriptTimeZone(),
     salesData = sales.getDataRange().getValues();
@@ -1093,7 +1093,7 @@ function generateManagerDailyReportPDF(managerName, reportDate, cashOnHandObj, c
     }
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    const salesLogSheet = ss.getSheetByName('Sales Log');
+    const salesLogSheet = getSalesLogSheet_(ss);
 
     if (!salesLogSheet) {
       return {

@@ -354,12 +354,12 @@
             <td class="ps-3">${imgTag}</td>
             <td><div class="fw-bold${isSaleItem ? " text-danger" : ""}">${escapeInventoryHtml(
               cashierItemDisplayName(item)
-            )}</div><div class="small${isSaleItem ? " text-danger" : " text-muted"}">${escapeInventoryHtml(item.code)}</div></td>
+            )}</div><div class="small${isSaleItem ? " text-danger" : " text-muted"}">${escapeInventoryHtml(item.code)}</div>${cashierBundleKind(item) ? `<select class="form-select form-select-sm mt-1 cart-bundle-select" aria-label="Bundle code for ${escapeInventoryHtml(item.name || item.code)}" data-idx="${index}" data-field="bundle"><option value="">${escapeInventoryHtml(item.bundleSelection ? item.bundleSelection.label : 'Select bundle code')}</option></select>` : ''}</td>
             <td class="text-center fw-semibold">${item.size || ""}</td>
             <td class="text-center">
               <input type="number" class="form-control form-control-sm text-center mx-auto" style="width:60px; font-weight:600;" value="${
                 item.quantity
-              }" data-idx="${index}" data-field="qty" onchange="updateQty(${index}, this.value)">
+              }" min="1" ${cashierBundleKind(item)&&!item.bundleUnlinked ? `max="${cashierBundleQuantityLimit(item,index)}"${cashierBundleKind(item) === 'FULL' ? ' readonly aria-label="One bundle per cart row"' : ''}` : ''} data-idx="${index}" data-field="qty" onchange="updateQty(${index}, this.value)">
             </td>
             <td class="text-end fw-semibold">₱${item.price.toFixed(2)}</td>
             <td>
@@ -387,6 +387,14 @@
       fragment.appendChild(tr);
     });
     tbody.appendChild(fragment);
+    tbody.querySelectorAll('.cart-bundle-select').forEach(select => {
+      const item=cart[Number(select.dataset.idx)];
+      loadCashierCartBundleOptions(select,item);
+      select.addEventListener('focus',()=>{
+        if(!select.bundleChoices||select.bundleState!==cashierCartBundleState())loadCashierCartBundleOptions(select,item);
+      });
+      select.addEventListener('change',()=>selectCashierCartBundle(select,item));
+    });
 
     const globalReduction = cartReservation() ? 0 : calculateGlobalDiscount(subtotalAccumulator);
 
@@ -473,6 +481,10 @@ document
 
   function updateQty(index, val) {
     let qty = parseInt(val) || 1;
+    if (cashierBundleKind(cart[index]) && qty > cashierBundleQuantityLimit(cart[index],index)) {
+      showNotificationToast('That quantity exceeds the selected bundle. Add another bundle separately.',true);
+      renderCart();return;
+    }
     cart[index].quantity = qty <= 0 ? 1 : qty;
     if (!cart[index].isCustom && cart[index].quantity > (Number(cart[index].stock) || 0)) {
       showNotificationToast(
@@ -511,6 +523,137 @@ document
     renderCart();
   }
 
+function cashierBundleKind(item) {
+  if (item.bundleKind) return item.bundleKind;
+  const category=String(item.category||'').trim().toUpperCase().replace(/^WHOLE\s+SALE$/,'WHOLESALE');
+  const name=String(item.name||'').trim().toUpperCase().replace(/\s+/g,' ').replace(/\s*[·-]\s*SALE$/,'');
+  if(category==='WHOLESALE'&&/ · \([1-9]\d*\) PCS$/.test(name))return 'FULL';
+  if(['PINS','OTHERS'].includes(category))return name==='BUNDLE'?'FULL':name==='HALF BUNDLE'?'HALF':'';
+  return '';
+}
+function cashierBundleKey(selection) {
+  return JSON.stringify([selection.deliveryId,Number(selection.sheetRow),Number(selection.bundleNo)]);
+}
+function cashierBundleQuantityLimit(item,index) {
+  const choice=item.bundleSelection;
+  if(!choice)return item.bundleUnlinked?Infinity:cashierBundleKind(item)==='FULL'?1:cashierBundleKind(item)==='HALF'?2:Infinity;
+  const others=cart.filter((line,i)=>i!==index&&line.bundleSelection&&cashierBundleKey(line.bundleSelection)===cashierBundleKey(choice));
+  if(others.some(line=>line.bundleSelection.kind==='FULL')||(choice.kind==='FULL'&&others.length))return 0;
+  return Math.max(0,Number(choice.capacity)||1)-others.reduce((sum,line)=>sum+(Number(line.quantity)||0),0);
+}
+
+var cashierCartBundleCache=null;
+function cashierCartBundleState() {
+  const owner=currentEmployee&&currentEmployee.dashboardToken||'';
+  const version=typeof inventoryDataset==='undefined'?'':inventoryDataset?.version||'';
+  if(cashierCartBundleCache&&cashierCartBundleCache.owner===owner&&cashierCartBundleCache.serverVersion===version)
+    cashierCartBundleCache.version=version;
+  if(!cashierCartBundleCache||cashierCartBundleCache.owner!==owner||cashierCartBundleCache.version!==version){
+    if(cashierCartBundleCache)clearTimeout(cashierCartBundleCache.timer);
+    cashierCartBundleCache={owner:owner,version:version,serverVersion:null,choices:new Map(),pending:new Map(),preloadCodes:[],preloading:false,timer:null};
+  }
+  return cashierCartBundleCache;
+}
+function rememberCashierCartBundleChoices(code,result) {
+  cashierCartBundleState().choices.set(String(code),result);
+}
+function rememberCashierBundlePreload(choices,version) {
+  const state=cashierCartBundleState();state.serverVersion=version;
+  Object.entries(choices).forEach(([code,result])=>state.choices.set(code,result));
+}
+function getCashierCartBundleChoices(code,refresh) {
+  const state=cashierCartBundleState(),key=String(code),cached=state.choices.get(key);
+  if(!refresh&&cached)return Promise.resolve(cached);
+  if(state.pending.has(key))return state.pending.get(key);
+  const promise=new Promise((resolve,reject)=>{
+    secureScriptRun.withSuccessHandler(result=>{
+      if(!result||!result.success)return reject(new Error(result&&result.message||'Unable to load bundle codes.'));
+      if(state!==cashierCartBundleState())return reject(new Error('Inventory changed. Choose a bundle again.'));
+      rememberCashierCartBundleChoices(key,result);resolve(result);
+    }).withFailureHandler(reject).getCashierBundleChoices(code);
+  });
+  state.pending.set(key,promise);
+  promise.finally(()=>{if(state.pending.get(key)===promise)state.pending.delete(key);}).catch(()=>{});
+  return promise;
+}
+function preloadCashierBundleCodes(items) {
+  if(!currentEmployee||!currentSessionIsCashier)return;
+  const state=cashierCartBundleState();
+  const codes=items.filter(item=>cashierBundleKind(item)&&Number(item.stock)>0&&Number(item.price)>0).map(item=>String(item.code));
+  state.preloadCodes=Array.from(new Set([...state.preloadCodes,...codes])).filter(code=>!state.choices.has(code));
+  if(state.preloading||!state.preloadCodes.length)return;
+  state.preloading=true;
+  function next(){
+    if(state!==cashierCartBundleState()||!currentEmployee||!currentSessionIsCashier)return;
+    if(typeof workspaceForegroundLoading==='function'&&workspaceForegroundLoading()){
+      state.timer=setTimeout(next,250);return;
+    }
+    const code=state.preloadCodes.shift();
+    if(!code){state.preloading=false;return;}
+    getCashierCartBundleChoices(code).catch(()=>{}).finally(()=>{
+      if(state===cashierCartBundleState())state.timer=setTimeout(next,75);
+    });
+  }
+  state.timer=setTimeout(next,75);
+}
+function loadCashierCartBundleOptions(select,item,refresh=false) {
+  const state=cashierCartBundleState();
+  const current=()=>select.isConnected&&cart.includes(item)&&state===cashierCartBundleState();
+  function apply(result){
+    if(!current())return;
+    const unlinked=result.managed===false;
+    if(!!item.bundleUnlinked!==unlinked){item.bundleUnlinked=unlinked;renderCart();saveSession();return;}
+    const index=cart.indexOf(item),quantity=Number(item.quantity)||1;
+    const choices=(result.choices||[]).filter(choice=>cashierBundleQuantityLimit({bundleSelection:choice},index)>=quantity);
+    select.bundleChoices=choices;select.bundleState=state;select.replaceChildren();
+    const placeholder=document.createElement('option');placeholder.value='';
+    placeholder.textContent=result.managed===false?'No linked bundle':choices.length?'Select bundle code':'No available bundle codes';
+    select.appendChild(placeholder);
+    choices.forEach(choice=>{
+      const option=document.createElement('option');option.value=cashierBundleKey(choice);option.textContent=choice.label;
+      option.title=choice.deliveryId+' · '+(choice.deliveryDate||'');select.appendChild(option);
+    });
+    const selected=item.bundleSelection&&choices.find(choice=>cashierBundleKey(choice)===cashierBundleKey(item.bundleSelection));
+    if(selected)select.value=cashierBundleKey(selected);
+    else if(item.bundleSelection)placeholder.textContent='Selected bundle unavailable';
+    select.disabled=result.managed===false||!!cartReservation();select.title='';
+  }
+  const cached=state.choices.get(String(item.code));
+  if(!refresh&&cached){apply(cached);return;}
+  getCashierCartBundleChoices(item.code,refresh).then(apply).catch(error=>{
+    if(!current())return;
+    select.title=error.message||String(error);
+    if(!select.bundleChoices){select.options[0].textContent='Unable to load bundle codes';select.value='';}
+    if(refresh)showNotificationToast(select.title,true);
+  });
+}
+function selectCashierCartBundle(select,item) {
+  const index=cart.indexOf(item),choice=(select.bundleChoices||[]).find(choice=>cashierBundleKey(choice)===select.value);
+  if(index<0||cartReservation())return;
+  if(!choice){renderCart();return;}
+  if(cashierBundleQuantityLimit({bundleSelection:choice},index)<(Number(item.quantity)||1)){
+    showNotificationToast('This bundle is already selected in the cart. Choose another bundle.',true);renderCart();return;
+  }
+  const base=item.bundleBaseVariantKey||item.variantKey||item.code;
+  Object.assign(item,{bundleSelection:{...choice},bundleKind:choice.kind,bundleBaseVariantKey:base,variantKey:base+'|BUNDLE|'+cashierBundleKey(choice)});
+  renderCart();saveSession();
+}
+function cashierCartBundlesReady() {
+  const state=cashierCartBundleState();
+  const index=cart.findIndex(item=>{
+    if(item.isCustom||!cashierBundleKind(item))return false;
+    const result=state.choices.get(String(item.code));
+    if(result&&result.managed===false)return false;
+    return !result||!item.bundleSelection||!result.choices.some(choice=>cashierBundleKey(choice)===cashierBundleKey(item.bundleSelection))||
+      (Number(item.quantity)||1)>cashierBundleQuantityLimit(item,cart.indexOf(item));
+  });
+  if(index<0)return true;
+  showNotificationToast('Choose an available bundle code in the cart for '+cart[index].name+'.',true);
+  const select=document.querySelector('#cartRows .cart-bundle-select[data-idx="'+index+'"]');
+  if(select){loadCashierCartBundleOptions(select,cart[index]);select.focus();}
+  return false;
+}
+
 var cashierSearchRows = [];
 var cashierBarcodeIndex = new Map();
 var cashierIndexedInventory = null;
@@ -521,10 +664,13 @@ function indexCashierInventory(items) {
   cashierBarcodeIndex = new Map();
   cashierSearchRows = items.map(function(item, index) {
     const code = String(item.code || '').trim();
+    const category = String(item.category || '').trim().toUpperCase().replace(/^WHOLE\s+SALE$/, 'WHOLESALE');
+    const aliases = category === 'WHOLESALE' ? 'bundle bundles wholesale whole sale' : '';
     if (!cashierBarcodeIndex.has(code)) cashierBarcodeIndex.set(code, []);
     cashierBarcodeIndex.get(code).push(item);
-    return {item:item, index:index, searchText:[item.name, item.size, item.category, code].join(' ').toLowerCase()};
+    return {item:item, index:index, searchText:[item.name, item.size, item.category, code, aliases].join(' ').toLowerCase()};
   });
+  preloadCashierBundleCodes(items);
 }
 function rememberCashierInventory(items) {
   const read = beginPageRead('cashierInventory', cashierInventoryCacheKey());
@@ -553,7 +699,8 @@ function refreshInventory(callback) {
   entry.callbacks = callback ? [callback] : [];
   secureScriptRun.withSuccessHandler(function(data) {
     if (!read.current()) return;
-    masterInventory = Array.isArray(data) ? data : [];
+    masterInventory = Array.isArray(data) ? data : data&&Array.isArray(data.inventory)?data.inventory:[];
+    if(data&&data.bundleChoices)rememberCashierBundlePreload(data.bundleChoices,data.version);
     read.save(masterInventory);
     populateManualDropdown(masterInventory);
     entry.callbacks.forEach(done => done());
@@ -566,7 +713,7 @@ function refreshInventory(callback) {
     entry.callbacks = [];
     finishWorkspacePageLoad('posPage');
     showNotificationToast(error.message || 'Failed to load inventory.', true);
-  }).getSellableInventory();
+  }).getSellableInventory({includeBundleChoices:true});
 }
 
   function populateManualDropdown(items) {
@@ -780,13 +927,12 @@ function selectManualItem(index) {
   }
 
 
+  resetManualItemSearch();
+
   addItemToCart(
     selectedItem,
     false
   );
-
-
-  resetManualItemSearch();
 
 
   // Immediately ready for another product
@@ -875,11 +1021,22 @@ function addItemToCart(
   const productCode =
     String(product.code || "").trim();
 
+  if(!isCustom&&cashierBundleKind(product)&&!product.bundleSelection&&!product.bundleUnlinked){
+    const base=String(product.bundleBaseVariantKey||product.variantKey||productCode);
+    const pending=cart.findIndex(item=>!item.isCustom&&!item.bundleSelection&&!item.bundleUnlinked&&
+      String(item.bundleBaseVariantKey||item.variantKey||item.code)===base);
+    if(pending>=0){
+      showNotificationToast('Choose a bundle code for the item already in your cart.',true);
+      const select=document.querySelector('#cartRows .cart-bundle-select[data-idx="'+pending+'"]');
+      if(select)select.focus();
+      return;
+    }
+  }
 
   let existingItem = null;
 
 
-  if (!isCustom) {
+  if (!isCustom && (!cashierBundleKind(product) || product.bundleSelection || product.bundleUnlinked)) {
 
     existingItem =
       cart.find(function(item) {
@@ -893,6 +1050,9 @@ function addItemToCart(
 
 
   if (existingItem) {
+    if(existingItem.bundleSelection&&existingItem.quantity>=cashierBundleQuantityLimit(existingItem,cart.indexOf(existingItem))){
+      showNotificationToast('This bundle is already selected. Choose another bundle.',true);return;
+    }
 
     existingItem.quantity++;
 
@@ -943,7 +1103,12 @@ function addItemToCart(
         product.priceSource || (isCustom ? "MANUAL" : "REGULAR"),
 
       saleReferenceId:
-        product.saleReferenceId || ""
+        product.saleReferenceId || "",
+
+      bundleKind:product.bundleKind || cashierBundleKind(product),
+      bundleSelection:product.bundleSelection || null,
+      bundleUnlinked:!!product.bundleUnlinked,
+      bundleBaseVariantKey:product.bundleBaseVariantKey || product.variantKey || productCode
 
     });
 

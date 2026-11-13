@@ -76,7 +76,7 @@ function deliverySummarySortValue(row,key) {
   if (key === 'categories') return Object.keys(row.quantities || {}).concat(row.bulkTypes || []).join(' ');
   if (key === 'driverName') return String(row.driverName || '') + ' ' + String(row.plateNo || '');
   if (key === 'deliveryDate') return normalizeDeliveryFilterDate(row.deliveryDate) || '';
-  if (['totalQty','quantity','bundleNo'].includes(key)) return Number(row[key]) || 0;
+  if (['totalQty','quantity','bundleNo','returns'].includes(key)) return Number(row[key]) || 0;
   return String(row[key] || '');
 }
 function sortDeliveryRows(rows, table) {

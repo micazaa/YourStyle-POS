@@ -1,39 +1,97 @@
 <div id="supplierReturnsPage" style="display:none;"><div class="container-fluid px-5 py-4">
-  <div class="d-flex justify-content-between align-items-center mb-4"><div><h4 class="fw-bold mb-1">Return to Supplier</h4><div class="small text-muted">Products returned to suppliers</div></div><div data-page-header-actions><button class="btn btn-pink" type="button" onclick="openSupplierReturn()">- Return a Product</button></div></div>
+  <div class="d-flex justify-content-between align-items-center mb-4"><div><h4 class="fw-bold mb-1">Return to Supplier</h4><div class="small text-muted">Products returned to suppliers</div></div><div data-page-header-actions><button class="btn btn-pink" type="button" onclick="openSupplierReturn()">- Return Items</button></div></div>
   <div data-page-loading="Loading returns…" class="text-center py-5" style="min-height:300px;align-content:center;" role="status" aria-live="polite" hidden></div>
   <div data-page-error class="text-center text-danger py-5" role="alert" hidden><p data-page-error-message></p><button type="button" class="btn btn-outline-secondary" onclick="loadSupplierReturnsPage()">Retry</button></div>
   <div data-page-content aria-busy="false">
   <div class="row g-3 mb-4">
-    <div class="col-sm-4"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Total Returns</div><div id="supplierReturnCount" class="fs-4 fw-bold">0</div></div></div></div>
-    <div class="col-sm-4"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Pieces Returned</div><div id="supplierReturnPieces" class="fs-4 fw-bold">0</div></div></div></div>
-    <div class="col-sm-4"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-muted">Products Returned</div><div id="supplierReturnProducts" class="fs-4 fw-bold">0</div></div></div></div>
+    <div class="col-md-6"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openSupplierReturnSummary('pieces')"><span class="card-body"><span class="small text-muted d-block">Pieces Returned</span><strong id="supplierReturnPieces" class="fs-4 d-block">0</strong></span></button></div>
+    <div class="col-md-6"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openSupplierReturnSummary('products')"><span class="card-body"><span class="small text-muted d-block">Products Returned</span><strong id="supplierReturnProducts" class="fs-4 d-block">0</strong></span></button></div>
   </div>
-  <div class="card border-0 shadow-sm mb-3"><div class="card-body d-flex flex-wrap gap-2"><select id="supplierReturnCategory" class="form-select" style="width:180px" aria-label="Return category" onchange="renderSupplierReturns()"><option value="">All</option><option>YOURFINDS</option><option>PINS</option><option>OTHERS</option></select><input id="supplierReturnSearch" type="search" class="form-control" style="flex:1;min-width:220px" placeholder="Search code, product, category, supplier..." aria-label="Search returns" oninput="renderSupplierReturns()"></div></div>
-  <div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Return</th><th>Date</th><th>Supplier / Driver / Plate</th><th>Returned By</th><th>Product</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="supplierReturnRows"></tbody></table></div></div>
+  <div class="card border-0 shadow-sm mb-3"><div class="card-body d-flex flex-wrap gap-2"><select id="supplierReturnCategory" class="form-select" style="width:180px" aria-label="Return category" onchange="renderSupplierReturns()"><option value="">All</option><option>YOURFINDS</option><option>YOURSTYLE</option></select><input id="supplierReturnSearch" type="search" class="form-control" style="flex:1;min-width:220px" placeholder="Search code, product, category, supplier..." aria-label="Search returns" oninput="renderSupplierReturns()"></div></div>
+  <div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th class="" data-return-sort="id" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','id')">Return <span class="sort-marker">↕</span></button></th><th class="" data-return-sort="type" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','type')">Type <span class="sort-marker">↕</span></button></th><th class="" data-return-sort="returnDate" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','returnDate')">Date <span class="sort-marker">↕</span></button></th><th class="" data-return-sort="driver" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','driver')">Driver / Plate <span class="sort-marker">↕</span></button></th><th class="" data-return-sort="preparedBy" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','preparedBy')">Returned By <span class="sort-marker">↕</span></button></th><th class="" data-return-sort="categories" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','categories')">Categories <span class="sort-marker">↕</span></button></th><th class="text-center" data-return-sort="quantity" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','quantity')">Total <span class="sort-marker">↕</span></button></th><th class="text-center" data-return-sort="status" aria-sort="none"><button type="button" class="btn btn-sm p-0 fw-semibold" onclick="setSupplierReturnSort('supplierReturnsMain','status')">Status <span class="sort-marker">↕</span></button></th><th class="text-start">Actions</th></tr></thead><tbody id="supplierReturnRows"></tbody></table></div></div>
 </div></div></div>
-<div id="supplierReturnModal" class="generic-overlay-blur" style="display:none"><div class="custom-popup-card delivery-modal-card">
-  <h5 class="fw-bold mb-4">Return a Product</h5>
-  <div class="row g-3">
-    <div class="col-md-9"><label class="form-label" for="supplierReturnProduct">Product</label><input id="supplierReturnProduct" class="form-control" list="supplierReturnOptions" placeholder="Search inventory code or product"><datalist id="supplierReturnOptions"></datalist></div>
-    <div class="col-md-3"><label class="form-label" for="supplierReturnQty">Quantity</label><input id="supplierReturnQty" class="form-control" type="number" min="1" step="1" value="1"></div>
-    <div class="col-md-4"><label class="form-label" for="supplierReturnDate">Return Date</label><input id="supplierReturnDate" class="form-control" type="date"></div>
-    <div class="col-md-4"><label class="form-label" for="supplierReturnOriginalDelivery">Original Delivery ID</label><input id="supplierReturnOriginalDelivery" class="form-control" placeholder="Optional"></div>
-    <div class="col-md-4"><label class="form-label" for="supplierReturnPreparedBy">Prepared By</label><input id="supplierReturnPreparedBy" class="form-control" readonly></div>
-    <div class="col-md-6"><label class="form-label" for="supplierReturnSupplier">Supplier</label><input id="supplierReturnSupplier" class="form-control"></div>
-    <div class="col-md-6"><label class="form-label" for="supplierReturnReason">Reason</label><input id="supplierReturnReason" class="form-control" placeholder="Reason for return"></div>
-    <div class="col-md-4"><label class="form-label" for="supplierReturnCondition">Item Condition</label><select id="supplierReturnCondition" class="form-select"><option value="">Select</option><option value="SEALED">Sealed</option><option value="OPENED">Opened</option><option value="DAMAGED">Damaged</option><option value="OTHER">Other</option></select></div>
-    <div class="col-md-4"><label class="form-label" for="supplierReturnStatus">Status</label><select id="supplierReturnStatus" class="form-select"><option value="RELEASED">Released</option><option value="RECEIVED">Received by Supplier</option></select></div>
-    <div class="col-md-4"><label class="form-label" for="supplierReturnReceivedBy">Received By</label><input id="supplierReturnReceivedBy" class="form-control" placeholder="Required when received"></div>
-    <div class="col-md-6"><label class="form-label" for="supplierReturnDriver">Driver</label><input id="supplierReturnDriver" class="form-control"></div>
-    <div class="col-md-6"><label class="form-label" for="supplierReturnPlate">Plate No.</label><input id="supplierReturnPlate" class="form-control"></div>
-    <div class="col-12"><label class="form-label" for="supplierReturnRemarks">Remarks</label><textarea id="supplierReturnRemarks" class="form-control" rows="2"></textarea></div>
+<div id="supplierReturnTypeModal" class="generic-overlay-blur" style="display:none;">
+  <div class="custom-popup-card" style="max-width:600px;width:95%;">
+    <div class="d-flex justify-content-between align-items-start mb-4 pb-3 border-bottom">
+      <div>
+        <h5 class="fw-bold mb-1">Return Items</h5>
+        <div class="small text-muted">Choose the type of items being returned.</div>
+      </div>
+      <button type="button" class="btn-close" aria-label="Close return type selection" onclick="closeModal('supplierReturnTypeModal')"></button>
+    </div>
+    <div class="row g-3">
+      <div class="col-md-6">
+        <button type="button" class="btn btn-light border w-100 h-100 p-4 text-start" onclick="startSupplierReturn('YOURFINDS')">
+          <div class="fs-3 mb-2" aria-hidden="true">🏷️</div>
+          <div class="fw-bold fs-5">YourFinds</div>
+          <div class="small text-muted mt-2">Unique pieces with individual codes and labels.</div>
+        </button>
+      </div>
+      <div class="col-md-6">
+        <button type="button" class="btn btn-light border w-100 h-100 p-4 text-start" onclick="startSupplierReturn('YOURSTYLE')">
+          <div class="fs-3 mb-2" aria-hidden="true">📦</div>
+          <div class="fw-bold fs-5">YourStyle</div>
+          <div class="small text-muted mt-2">Pins, Others, direct stock, and BUNDLE returns.</div>
+        </button>
+      </div>
+    </div>
+    <div class="mt-4 pt-3 border-top">
+      <button type="button" class="btn btn-outline-secondary w-100" onclick="closeModal('supplierReturnTypeModal')">Cancel</button>
+    </div>
   </div>
-  <div class="d-flex gap-2 mt-4"><button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeSupplierReturn()">Cancel</button><button id="supplierReturnSave" type="button" class="btn btn-pink flex-fill" onclick="submitSupplierReturn()">Return Product</button></div>
+</div>
+<div id="supplierReturnModal" class="generic-overlay-blur" style="display:none"><div class="custom-popup-card delivery-modal-card">
+  <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-4"><div><h5 class="fw-bold mb-1">Return Items <span id="supplierReturnBrand" class="text-muted"></span></h5><div class="small text-muted" id="supplierReturnNumber"></div></div><button type="button" class="btn-close" aria-label="Close return form" onclick="closeSupplierReturn()"></button></div>
+  <div class="fw-semibold mb-3">Return Information</div>
+  <div class="row g-3 mb-4">
+    <div class="col-md-6"><label class="form-label" for="supplierReturnDate">Date Returned <span class="text-danger">*</span></label><input id="supplierReturnDate" class="form-control" type="date" required onchange="updateSupplierReturnNumber()"></div>
+    <div class="col-md-6"><label class="form-label" for="supplierReturnPreparedBy">Prepared By <span class="text-danger">*</span></label><input id="supplierReturnPreparedBy" class="form-control" placeholder="Enter preparer's name" required></div>
+    <div class="col-md-6"><label class="form-label" for="supplierReturnDriver">Driver Name <span class="text-danger">*</span></label><input id="supplierReturnDriver" class="form-control" placeholder="Enter driver name" required oninput="updateSupplierReturnReceivedBy()"></div>
+    <div class="col-md-6"><label class="form-label" for="supplierReturnPlate">Plate No. <span class="text-danger">*</span></label><input id="supplierReturnPlate" class="form-control" placeholder="Enter plate number" required></div>
+    <div class="col-md-6"><label class="form-label" for="supplierReturnCheckedBy">Checked By <span class="text-danger">*</span></label><input id="supplierReturnCheckedBy" class="form-control" placeholder="Enter checker's name" required></div>
+    <div class="col-md-6"><label class="form-label" for="supplierReturnReceivedBy">Received By</label><input id="supplierReturnReceivedBy" class="form-control" placeholder="Same as driver" readonly></div>
+  </div>
+  <div class="d-flex justify-content-between align-items-center mb-3"><div class="fw-semibold">Items Returned</div><button type="button" id="supplierReturnAdd" class="btn btn-sm btn-outline-dark" onclick="toggleSupplierReturnPicker(true)">+ Add Items</button></div>
+  <div id="supplierReturnPicker" hidden>
+    <div class="d-flex flex-wrap gap-2 mb-2"><input id="supplierReturnPickerSearch" class="form-control" type="search" style="flex:2;min-width:180px" placeholder="Search product, barcode, size, delivery..." aria-label="Search return products" oninput="renderSupplierReturnPicker()"><select id="supplierReturnDelivery" class="form-select" style="flex:1;min-width:160px" aria-label="Filter original delivery" onchange="renderSupplierReturnPicker()"><option value="">All Deliveries</option></select></div>
+    <div class="small text-muted mb-2">Available stock only. Sold, reserved and returned items are excluded.</div>
+    <div id="supplierReturnInventoryLoading" class="text-center py-4" role="status" hidden></div>
+    <div id="supplierReturnInventoryError" class="alert alert-danger" hidden role="alert"><span></span> <button type="button" class="btn btn-sm btn-outline-secondary" onclick="loadSupplierReturnInventory()">Retry</button></div>
+    <div class="table-responsive supplier-return-picker-scroll"><table class="table align-middle mb-0"><thead class="table-light"><tr><th><input type="checkbox" id="supplierReturnSelectAll" class="form-check-input" aria-label="Select matching products" onchange="selectSupplierReturnMatches(this.checked)"></th><th>Photo</th><th>Product</th><th id="supplierReturnPickerKind">Type</th><th>Delivery</th><th class="text-center">Available</th></tr></thead><tbody id="supplierReturnOptions"></tbody></table></div>
+    <div class="d-flex justify-content-between align-items-center mt-3 mb-4 gap-2"><span id="supplierReturnPickerCount" class="small text-muted" aria-live="polite">0 selected</span><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" onclick="toggleSupplierReturnPicker(false)">Cancel</button><button type="button" id="supplierReturnAddSelected" class="btn btn-pink" onclick="addSupplierReturnSelected()">Add Selected</button></div></div>
+  </div>
+  <div id="supplierReturnSelectedView">
+    <datalist id="supplierReturnReasons"><option value="Damaged"></option><option value="Not functioning"></option><option value="Wrong item"></option><option value="Used"></option><option value="Other"></option></datalist>
+    <div class="table-responsive"><table class="table align-middle supplier-return-selected"><thead class="table-light"><tr><th>Product</th><th id="supplierReturnSelectedKind">Type</th><th class="text-center">Return Qty</th><th>Reason</th><th class="text-start">Actions</th></tr></thead><tbody id="supplierReturnSelectedRows"></tbody></table></div>
+    <div class="delivery-summary mb-3" aria-live="polite"><span id="supplierReturnSelectedCount">0 products</span><strong id="supplierReturnSelectedTotal">Total: 0 pcs</strong></div>
+    <div class="supplier-return-reason mb-4">
+      <label class="form-label" for="supplierReturnAllReason">Return reason</label>
+      <div class="supplier-return-reason-row">
+        <input id="supplierReturnAllReason" class="form-control form-control-sm" list="supplierReturnReasons" placeholder="Choose or type a reason" aria-describedby="supplierReturnReasonHint" oninput="updateSupplierReturnReasonAction()">
+        <button id="supplierReturnApplyReason" type="button" class="btn btn-sm btn-outline-secondary" onclick="applySupplierReturnReason()" disabled>Apply to all</button>
+      </div>
+      <div id="supplierReturnReasonHint" class="small text-muted mt-1">Replaces the reason for all selected items.</div>
+    </div>
+  </div>
+  <label class="form-label" for="supplierReturnRemarks">Remarks</label><textarea id="supplierReturnRemarks" class="form-control mb-3" rows="2" placeholder="Optional return notes"></textarea>
+  <div class="d-flex gap-2 mt-4"><button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeSupplierReturn()">Cancel</button><button id="supplierReturnSave" type="button" class="btn btn-pink flex-fill" onclick="submitSupplierReturn()">Return Items</button></div>
 </div></div>
-<dialog id="supplierReturnDetails" style="max-width:600px;border:1px solid #ddd;border-radius:12px"><h5>Supplier Return</h5><pre id="supplierReturnDetailsText" style="white-space:pre-wrap"></pre><button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('supplierReturnDetails').close()">Close</button> <button type="button" class="btn btn-pink" onclick="generateBlankA4Report('Return',selectedReturnReportId)">Print Return Report</button></dialog>
+<div id="supplierReturnDetails" class="generic-overlay-blur" style="display:none"><div class="custom-popup-card delivery-modal-card" style="max-width:760px">
+  <div class="d-flex justify-content-between border-bottom pb-3 mb-4"><div><h5 class="fw-bold">Return Details</h5><strong id="supplierReturnDetailsId"></strong></div><button type="button" class="btn-close" aria-label="Close return details" onclick="closeModal('supplierReturnDetails')"></button></div>
+  <div id="supplierReturnDetailsContent"></div>
+  <div class="d-flex gap-2 mt-4"><button type="button" class="btn btn-outline-secondary flex-fill" onclick="closeModal('supplierReturnDetails')">Close</button><button type="button" class="btn btn-pink flex-fill" onclick="printSupplierReturnReport(selectedReturnReportId,this)">Print Report</button></div>
+</div></div>
+<div id="supplierReturnSummary" class="generic-overlay-blur" style="display:none"><div class="custom-popup-card delivery-modal-card">
+  <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3"><h4 id="supplierReturnSummaryTitle" class="fw-bold mb-0">Return Summary</h4><button type="button" class="btn-close" aria-label="Close return summary" onclick="closeModal('supplierReturnSummary')"></button></div>
+  <div id="supplierReturnSummaryBreakdown" class="row g-3 mb-3"></div>
+  <div id="supplierReturnSummaryMessage" class="small text-muted mb-3"></div>
+  <button type="button" id="supplierReturnHistoryBack" class="btn btn-outline-secondary mb-3" onclick="closeSupplierReturnHistory()" hidden>← Back to Returned Items</button>
+  <div id="supplierReturnSummaryTable" class="table-responsive"></div>
+</div></div>
 <script>
-let selectedReturnReportId = '';
+let selectedReturnReportId = '',supplierReturnVisible=[],supplierReturnSummaryKind='returns',supplierReturnHistoryCode='',supplierReturnDetailFilter='';
 let supplierReturns = [], supplierReturnInventory = [], supplierReturnRequest = '', supplierReturnBusy = false, supplierReturnLoad = 0;
+let supplierReturnType='YOURSTYLE',supplierReturnSelected=[],supplierReturnPending=new Set(),supplierReturnOwner='',supplierReturnInventoryReady=false;
 function loadSupplierReturnsPage() {
   const read = beginPageRead('supplierReturns', '', true);
   if (read.cached !== undefined) {
@@ -45,7 +103,7 @@ function loadSupplierReturnsPage() {
     return;
   }
   setWorkspaceTableLoading('supplierReturnsPage',true);
-  document.getElementById('supplierReturnRows').innerHTML = '<tr><td colspan="8" class="text-center py-5">'+loadingIndicator('Loading returns…')+'</td></tr>';
+  document.getElementById('supplierReturnRows').innerHTML = '<tr><td colspan="9" class="text-center py-5">'+loadingIndicator('Loading returns…')+'</td></tr>';
   secureScriptRun.withSuccessHandler(rows => {
     if(!read.current())return;
     supplierReturns=rows||[];read.save(supplierReturns);renderSupplierReturns();
@@ -55,38 +113,226 @@ function loadSupplierReturnsPage() {
     read.fail();
     const message=error.message||String(error);
     setWorkspaceTableLoading('supplierReturnsPage',false,message);finishWorkspacePageLoad('supplierReturnsPage');
-    document.getElementById('supplierReturnRows').innerHTML='<tr><td colspan="8" class="text-center text-danger py-5">Unable to load returns. <button type="button" class="btn btn-outline-secondary btn-sm" onclick="loadSupplierReturnsPage()">Retry</button></td></tr>';
+    document.getElementById('supplierReturnRows').innerHTML='<tr><td colspan="9" class="text-center text-danger py-5">Unable to load returns. <button type="button" class="btn btn-outline-secondary btn-sm" onclick="loadSupplierReturnsPage()">Retry</button></td></tr>';
     showNotificationToast(message,true);
   }).getSupplierReturns();
 }
-function renderSupplierReturns() {
-  const search=document.getElementById('supplierReturnSearch').value.toLowerCase(), category=document.getElementById('supplierReturnCategory').value;
-  const rows=supplierReturns.filter(r=>(!category||r.category===category)&&[r.id,r.code,r.name,r.category,r.supplier,r.driver,r.plate,r.employee].join(' ').toLowerCase().includes(search));
-  document.getElementById('supplierReturnCount').textContent=new Set(rows.map(r=>r.id)).size;
-  document.getElementById('supplierReturnPieces').textContent=rows.reduce((sum,r)=>sum+r.quantity,0);
-  document.getElementById('supplierReturnProducts').textContent=new Set(rows.map(r=>r.code)).size;
+function supplierReturnBrand(item){return String(item.category).toUpperCase()==='YOURFINDS'||String(item.inventoryType).toUpperCase()==='UNIQUE'?'YOURFINDS':'YOURSTYLE';}
+function supplierReturnGroups(){
+  const groups=new Map();supplierReturns.forEach(item=>{
+    if(!groups.has(item.id))groups.set(item.id,{...item,returnDate:item.returnDate||String(item.date||'').slice(0,10),items:[],quantity:0,type:supplierReturnBrand(item),quantities:{}});
+    const group=groups.get(item.id);group.items.push(item);group.quantity+=Number(item.quantity)||0;
+    if(group.type!==supplierReturnBrand(item))group.type='MIXED';
+    const key=supplierReturnBrand(item)==='YOURFINDS'?deliveryDetailSizeKey_(item.size):String(item.category||'OTHERS');
+    group.quantities[key]=(group.quantities[key]||0)+(Number(item.quantity)||0);
+  });
+  return Array.from(groups.values(),group=>({...group,categories:Object.keys(group.quantities).join(' ')}));
+}
+function supplierReturnBadge(status){
+  const received=String(status).toUpperCase()==='RECEIVED';
+  return '<span class="badge '+(received?'bg-success':'bg-info text-dark')+'">'+(received?'Received by Supplier':'Returned')+'</span>';
+}
+function supplierReturnGroupQuantities(items){
+  const quantities=new Map();items.forEach(item=>{const key=supplierReturnBrand(item)==='YOURFINDS'?deliveryDetailSizeKey_(item.size):String(item.category||'OTHERS');quantities.set(key,(quantities.get(key)||0)+(Number(item.quantity)||0));});
+  return Array.from(quantities).sort(([a],[b])=>deliveryDetailSizeOrder_(a,b));
+}
+function renderSupplierReturns(){
+  const search=document.getElementById('supplierReturnSearch').value.trim().toLowerCase(),category=document.getElementById('supplierReturnCategory').value;
+  supplierReturnVisible=supplierReturnGroups().filter(group=>(!category||group.items.some(item=>supplierReturnBrand(item)===category))&&[group.id,group.supplier,group.driver,group.plate,group.employee,group.status,...group.items.flatMap(item=>[item.code,item.name,item.category,item.size,item.reason,item.originalDeliveryId])].join(' ').toLowerCase().includes(search));
+  document.getElementById('supplierReturnPieces').textContent=supplierReturnVisible.reduce((sum,row)=>sum+row.quantity,0)+' pcs';
+  document.getElementById('supplierReturnProducts').textContent=String(supplierReturnProductTotals().length);
+  const sort=deliverySummarySort.supplierReturnsMain;
+  document.querySelectorAll('[data-return-sort]').forEach(header=>{const selected=sort&&sort.key===header.dataset.returnSort;header.setAttribute('aria-sort',selected?sort.direction===1?'ascending':'descending':'none');header.querySelector('.sort-marker').textContent=selected?sort.direction===1?'↑':'↓':'↕';});
   const body=document.getElementById('supplierReturnRows');body.replaceChildren();
-  rows.forEach(r=>{const tr=document.createElement('tr');[r.id,r.date,[r.supplier,r.driver,r.plate].filter(Boolean).join(' / '),r.preparedBy||r.employee,r.name+' · '+r.category,r.quantity,r.status||'RELEASED'].forEach(value=>{const td=document.createElement('td');td.textContent=value;tr.appendChild(td);});const td=document.createElement('td'),button=document.createElement('button');button.type='button';button.className='btn btn-sm btn-outline-secondary';button.title='View return';button.setAttribute('aria-label','View return');button.innerHTML=inventoryIcon('view');button.onclick=()=>{selectedReturnReportId=r.id;document.getElementById('supplierReturnDetailsText').textContent=[r.id,'Line: '+r.lineId,r.name+' ('+r.code+')',r.size+' · '+r.category,r.quantity+' pcs','Supplier: '+r.supplier,'Original delivery: '+(r.originalDeliveryId||'—'),'Prepared by: '+(r.preparedBy||'—'),'Approved by: '+(r.approvedBy||'—'),'Received by: '+(r.receivedBy||'—'),'Condition: '+(r.condition||'—'),'Status: '+(r.status||'RELEASED'),'Reason: '+r.reason,r.remarks].join('\n');document.getElementById('supplierReturnDetails').showModal();};td.appendChild(button);tr.appendChild(td);body.appendChild(tr);});
-  if(!rows.length)body.innerHTML='<tr><td colspan="8" class="text-center py-5 text-muted">No supplier returns found.</td></tr>';
+  sortDeliveryRows(supplierReturnVisible,'supplierReturnsMain').forEach(group=>{
+    const tr=document.createElement('tr');tr.dataset.returnId=group.id;tr.tabIndex=-1;
+    const cell=(value,classes='')=>{const td=document.createElement('td');td.className=classes;td.textContent=value||'—';tr.appendChild(td);return td;};
+    const id=cell('','ps-3');const title=document.createElement('div');title.className='fw-bold';title.textContent=group.id;id.replaceChildren(title);
+    cell(group.type);cell(group.returnDate||group.date);
+    const driver=cell(''),name=document.createElement('div'),plate=document.createElement('div');name.textContent=group.driver||'—';plate.className='small text-muted';plate.textContent=group.plate||'';driver.replaceChildren(name,plate);
+    cell(group.preparedBy||group.employee);const categories=cell('');categories.textContent=supplierReturnGroupQuantities(group.items).map(([label,qty])=>label+' '+qty).join(' · ');
+    cell(String(group.quantity),'text-center fw-bold');cell('','text-center').innerHTML=supplierReturnBadge(group.status);
+    const actions=cell('','text-start'),wrap=document.createElement('div'),button=document.createElement('button');wrap.className='d-flex justify-content-start gap-1';button.type='button';button.className='btn btn-sm btn-outline-secondary';button.title='View return';button.setAttribute('aria-label','View return '+group.id);button.innerHTML=inventoryIcon('view');button.onclick=()=>openSupplierReturnDetails(group.id);wrap.appendChild(button);actions.replaceChildren(wrap);body.appendChild(tr);
+  });
+  if(!supplierReturnVisible.length)body.innerHTML='<tr><td colspan="9" class="text-center py-5 text-muted">No supplier returns found.</td></tr>';
+  if(document.getElementById('supplierReturnSummary').style.display==='flex')renderSupplierReturnSummary();
 }
-function openSupplierReturn() {
-  const request=++supplierReturnLoad;supplierReturnRequest=crypto.randomUUID();supplierReturnInventory=[];
-  ['Product','Supplier','Reason','Driver','Plate','Remarks','OriginalDelivery','ReceivedBy'].forEach(id=>document.getElementById('supplierReturn'+id).value='');document.getElementById('supplierReturnQty').value=1;
-  const now=new Date(),local=new Date(now.getTime()-now.getTimezoneOffset()*60000);document.getElementById('supplierReturnDate').value=local.toISOString().slice(0,10);document.getElementById('supplierReturnPreparedBy').value=getCurrentDeliveryEmployeeName();document.getElementById('supplierReturnCondition').value='';document.getElementById('supplierReturnStatus').value='RELEASED';
-  document.getElementById('supplierReturnModal').style.display='flex';document.getElementById('supplierReturnOptions').replaceChildren();
-  setControlLoading(document.getElementById('supplierReturnProduct'),true,'Loading inventory…');
-  secureScriptRun.withSuccessHandler(items=>{if(request!==supplierReturnLoad)return;supplierReturnInventory=(items||[]).filter(i=>Number(i.stock)>0&&String(i.status).toUpperCase()!=='RETURNED');const list=document.getElementById('supplierReturnOptions');supplierReturnInventory.forEach(i=>{const o=document.createElement('option');o.value=i.code+' — '+i.name;list.appendChild(o);});setControlLoading(document.getElementById('supplierReturnProduct'),false);}).withFailureHandler(e=>{if(request!==supplierReturnLoad)return;setControlLoading(document.getElementById('supplierReturnProduct'),false);showNotificationToast(e.message||String(e),true);}).getInventoryForManagement(inventoryManagerReadToken());
+function setSupplierReturnSort(table,key){const previous=deliverySummarySort[table];deliverySummarySort[table]={key:key,direction:previous&&previous.key===key?-previous.direction:1};if(table==='supplierReturnsMain')renderSupplierReturns();else renderSupplierReturnSummary();}
+function openSupplierReturnSummary(kind){supplierReturnSummaryKind=kind;supplierReturnHistoryCode='';document.getElementById('supplierReturnSummary').style.display='flex';renderSupplierReturnSummary();}
+function closeSupplierReturnHistory(){supplierReturnHistoryCode='';renderSupplierReturnSummary();}
+function supplierReturnProductKey(item){
+  const brand=supplierReturnBrand(item);
+  return JSON.stringify([brand,brand==='YOURFINDS'?deliveryDetailSizeKey_(item.size):String(item.code)]);
 }
-function closeSupplierReturn(){if(supplierReturnBusy)return;supplierReturnLoad++;document.getElementById('supplierReturnModal').style.display='none';}
+function supplierReturnProductTotals(){
+  const products=new Map();
+  supplierReturnVisible.forEach(group=>group.items.forEach(item=>{
+    const key=supplierReturnProductKey(item),yourFinds=supplierReturnBrand(item)==='YOURFINDS';
+    if(!products.has(key))products.set(key,{...item,key:key,name:yourFinds?deliveryDetailSizeKey_(item.size):item.name,code:yourFinds?'':item.code,quantity:0,returnIds:new Set()});
+    const total=products.get(key);total.quantity+=Number(item.quantity)||0;total.returnIds.add(group.id);
+  }));
+  return Array.from(products.values(),item=>({...item,returns:item.returnIds.size})).sort((a,b)=>{
+    const category=String(a.category).localeCompare(String(b.category));
+    return category||(supplierReturnBrand(a)==='YOURFINDS'?deliveryDetailSizeOrder_(a.name,b.name):String(a.name).localeCompare(String(b.name),undefined,{numeric:true,sensitivity:'base'}));
+  });
+}
+function renderSupplierReturnSummary(){
+  const kind=supplierReturnSummaryKind,history=supplierReturnHistoryCode;
+  const titles={returns:'Return Count',pieces:'Pieces Returned',products:'Products Returned'};
+  const products=supplierReturnProductTotals(),selected=products.find(item=>item.key===history);
+  document.getElementById('supplierReturnSummaryTitle').textContent=history?(selected&&supplierReturnBrand(selected)==='YOURFINDS'?'Size Return History':'Item Return History'):titles[kind];
+  document.getElementById('supplierReturnHistoryBack').hidden=!history;
+  const message=document.getElementById('supplierReturnSummaryMessage');message.textContent=history?'': 'Matches the Return page filters.';
+  document.getElementById('supplierReturnSummaryBreakdown').innerHTML=deliverySummaryStats(['YOURSTYLE','YOURFINDS'].map(type=>{
+    const groups=supplierReturnVisible.filter(group=>group.items.some(item=>supplierReturnBrand(item)===type)),items=groups.flatMap(group=>group.items).filter(item=>supplierReturnBrand(item)===type);
+    return [type==='YOURSTYLE'?'YourStyle':'YourFinds',kind==='returns'?groups.length+' returns':kind==='products'?products.filter(item=>supplierReturnBrand(item)===type).length+(type==='YOURFINDS'?' sizes':' products'):items.reduce((sum,item)=>sum+Number(item.quantity),0)+' pcs'];
+  }));
+  let columns,rows,table,action;
+  if(history){
+    rows=supplierReturnVisible.flatMap(group=>group.items.filter(item=>supplierReturnProductKey(item)===history).map(item=>({...item,returnDate:group.returnDate||group.date})));
+    message.textContent=(selected?.name||'Returned item')+' · '+rows.reduce((sum,item)=>sum+Number(item.quantity),0)+' pcs returned';
+    columns=[['returnDate','Date'],['id','Return'],['name','Product'],['code','Barcode'],['reason','Reason'],['quantity','Returned pcs']];table='supplierReturnHistory';
+    action=row=>deliverySummaryAction('data-return-jump',row.id,'Go to return','jump');
+  }else if(kind==='returns'){
+    rows=supplierReturnVisible;columns=[['id','Return'],['returnDate','Date'],['type','Type'],['quantity','Returned pcs']];table='supplierReturnCounts';
+    action=row=>deliverySummaryAction('data-return-jump',row.id,'Go to return','jump');
+  }else if(kind==='pieces'){
+    rows=['YOURSTYLE','YOURFINDS'].map(type=>{
+      const groups=supplierReturnVisible.filter(group=>group.items.some(item=>supplierReturnBrand(item)===type));
+      return {type:type==='YOURSTYLE'?'YourStyle':'YourFinds',quantity:groups.reduce((sum,group)=>sum+group.items.filter(item=>supplierReturnBrand(item)===type).reduce((total,item)=>total+(Number(item.quantity)||0),0),0),returns:groups.length};
+    });
+    columns=[['type','Type'],['quantity','Returned pcs'],['returns','Returns']];table='supplierReturnPieces';
+  }else{
+    rows=products;columns=[['category','Category'],['name','Product / Size'],['quantity','Returned pcs'],['returns','Returns']];table='supplierReturnItems';
+    action=row=>deliverySummaryAction('data-return-history',row.key,'View return history','history');
+  }
+  document.getElementById('supplierReturnSummaryTable').innerHTML=deliverySummaryTable(table,columns,rows,action);
+}
+function jumpToSupplierReturnRow(id){
+  closeModal('supplierReturnSummary');document.getElementById('supplierReturnCategory').value='';document.getElementById('supplierReturnSearch').value='';showPage('supplierReturnsPage');renderSupplierReturns();
+  document.querySelectorAll('#supplierReturnRows [data-return-id]').forEach(row=>{const chosen=row.dataset.returnId===id;row.classList.toggle('delivery-row-highlight',chosen);if(chosen){row.scrollIntoView({block:'center'});row.focus({preventScroll:true});}});
+}
+document.getElementById('supplierReturnSummary').addEventListener('click',event=>{
+  const button=event.target.closest('button');if(!button)return;
+  if(button.dataset.summaryKey)setSupplierReturnSort(button.dataset.summaryTable,button.dataset.summaryKey);
+  else if(button.dataset.returnJump)jumpToSupplierReturnRow(button.dataset.returnJump);
+  else if(button.dataset.returnHistory){supplierReturnHistoryCode=button.dataset.returnHistory;renderSupplierReturnSummary();}
+});
+function resetSupplierReturnSession(){
+  ++supplierReturnLoad;supplierReturnVisible=[];supplierReturnHistoryCode='';supplierReturnDetailFilter='';supplierReturnBusy=false;supplierReturns=[];supplierReturnInventory=[];supplierReturnSelected=[];supplierReturnPending=new Set();supplierReturnOwner='';supplierReturnInventoryReady=false;selectedReturnReportId='';supplierReturnRequest='';
+  const modal=document.getElementById('supplierReturnModal');modal.querySelectorAll('[data-return-disabled]').forEach(control=>{control.disabled=control.dataset.returnDisabled==='true';delete control.dataset.returnDisabled;});modal.removeAttribute('aria-busy');document.getElementById('supplierReturnSave').textContent='Return Items';
+}
+function openSupplierReturn(){if(supplierReturnBusy)return;document.getElementById('supplierReturnTypeModal').style.display='flex';}
+function startSupplierReturn(type){
+  if(supplierReturnBusy)return;closeModal('supplierReturnTypeModal');supplierReturnType=type;supplierReturnRequest=crypto.randomUUID();supplierReturnSelected=[];supplierReturnPending=new Set();supplierReturnInventory=[];supplierReturnInventoryReady=false;supplierReturnOwner=currentEmployee.dashboardToken;
+  ['Driver','Plate','CheckedBy','ReceivedBy','Remarks','AllReason','PickerSearch'].forEach(id=>document.getElementById('supplierReturn'+id).value='');
+  const now=new Date(),local=new Date(now.getTime()-now.getTimezoneOffset()*60000);document.getElementById('supplierReturnDate').value=local.toISOString().slice(0,10);
+  document.getElementById('supplierReturnPreparedBy').value=getCurrentDeliveryEmployeeName();
+  document.getElementById('supplierReturnBrand').textContent='· '+(type==='YOURFINDS'?'YourFinds':'YourStyle');updateSupplierReturnNumber();
+  document.getElementById('supplierReturnModal').style.display='flex';renderSupplierReturnSelected();toggleSupplierReturnPicker(true);loadSupplierReturnInventory();
+}
+function updateSupplierReturnNumber(){
+  const date=document.getElementById('supplierReturnDate').value;let hash=0;for(const letter of supplierReturnRequest.toUpperCase())hash=(hash*31+letter.charCodeAt(0))%1000;
+  document.getElementById('supplierReturnNumber').textContent='Return ID: '+(supplierReturnType==='YOURFINDS'?'YFR':'YSR')+'-'+date.replace(/-/g,'')+'-'+String(hash).padStart(3,'0');
+}
+function updateSupplierReturnReceivedBy(){document.getElementById('supplierReturnReceivedBy').value=document.getElementById('supplierReturnDriver').value;}
+function closeSupplierReturn(){if(supplierReturnBusy)return;++supplierReturnLoad;document.getElementById('supplierReturnModal').style.display='none';}
+function loadSupplierReturnInventory(){
+  const request=++supplierReturnLoad,owner=supplierReturnOwner;
+  const current=()=>request===supplierReturnLoad&&currentEmployee&&currentEmployee.dashboardToken===owner;
+  document.getElementById('supplierReturnInventoryError').hidden=true;
+  const loaded=items=>{if(!current())return;supplierReturnInventoryReady=true;
+    const unique=new Map();(items||[]).forEach(item=>{if(supplierReturnBrand(item)===supplierReturnType&&Number(item.stock)>0&&!['RESERVED','RETURNED','CONVERTED'].includes(String(item.status).toUpperCase()))unique.set(String(item.code),item);});supplierReturnInventory=Array.from(unique.values());
+    const select=document.getElementById('supplierReturnDelivery'),previous=select.value;select.replaceChildren(new Option('All Deliveries',''));
+    [...new Set(supplierReturnInventory.map(item=>item.deliveryId).filter(Boolean))].sort().reverse().forEach(id=>select.add(new Option(id,id)));if(Array.from(select.options).some(option=>option.value===previous))select.value=previous;
+    document.getElementById('supplierReturnInventoryLoading').hidden=true;renderSupplierReturnPicker();
+  };
+  if(inventoryDatasetReady()&&!inventoryDataset.stale){loaded(inventoryDataset.items);return;}
+  document.getElementById('supplierReturnInventoryLoading').hidden=false;document.getElementById('supplierReturnInventoryLoading').innerHTML=loadingIndicator('Loading available inventory…');
+  secureScriptRun.withSuccessHandler(loaded).withFailureHandler(error=>{if(!current())return;document.getElementById('supplierReturnInventoryLoading').hidden=true;const notice=document.getElementById('supplierReturnInventoryError');notice.hidden=false;notice.querySelector('span').textContent=error.message||String(error);}).getSupplierReturnInventory();
+}
+function supplierReturnMatches(){
+  const query=document.getElementById('supplierReturnPickerSearch').value.trim().toLowerCase(),delivery=document.getElementById('supplierReturnDelivery').value,selected=new Set(supplierReturnSelected.map(item=>String(item.code)));
+  return supplierReturnInventory.filter(item=>!selected.has(String(item.code))&&(!delivery||item.deliveryId===delivery)&&[item.code,item.name,item.size,item.category,item.deliveryId].join(' ').toLowerCase().includes(query));
+}
+function toggleSupplierReturnPicker(open){if(supplierReturnBusy)return;document.getElementById('supplierReturnPicker').hidden=!open;document.getElementById('supplierReturnSelectedView').hidden=open;document.getElementById('supplierReturnAdd').hidden=open;if(open){supplierReturnPending=new Set();renderSupplierReturnPicker();}}
+function renderSupplierReturnPicker(){
+  const rows=supplierReturnMatches(),body=document.getElementById('supplierReturnOptions');body.replaceChildren();document.getElementById('supplierReturnPickerKind').textContent=supplierReturnType==='YOURFINDS'?'Size':'Type';
+  rows.forEach(item=>{
+    const tr=document.createElement('tr'),checkCell=document.createElement('td'),checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.className='form-check-input';checkbox.checked=supplierReturnPending.has(String(item.code));checkbox.setAttribute('aria-label','Select '+item.name);checkbox.onchange=()=>{if(checkbox.checked)supplierReturnPending.add(String(item.code));else supplierReturnPending.delete(String(item.code));updateSupplierReturnPickerCount();};checkCell.appendChild(checkbox);tr.appendChild(checkCell);
+    const photoCell=document.createElement('td');photoCell.className='supplier-return-photo';
+    if(item.imageUrl){const button=document.createElement('button'),image=document.createElement('img');button.type='button';button.className='btn p-0';button.setAttribute('aria-label','View photo of '+item.name);image.src=inventoryThumbnailUrl(item.imageUrl);image.alt=item.name;image.loading='lazy';image.decoding='async';image.width=44;image.height=44;image.onerror=()=>{button.replaceChildren(document.createTextNode('No Image'));};button.appendChild(image);button.onclick=()=>openInventoryImageViewer(item);photoCell.appendChild(button);}else{const noPhoto=document.createElement('span');noPhoto.className='small text-muted';noPhoto.textContent='No Image';photoCell.appendChild(noPhoto);}tr.appendChild(photoCell);
+    const nameCell=document.createElement('td'),name=document.createElement('strong'),code=document.createElement('div');name.textContent=item.baseName||item.name;code.className='small text-muted font-monospace';code.textContent=item.code;nameCell.append(name,code);tr.appendChild(nameCell);
+    [supplierReturnType==='YOURFINDS'?item.size:item.category,item.deliveryId||'—',Number(item.stock)].forEach((value,index)=>{const cell=document.createElement('td');cell.textContent=value;if(index===2)cell.className='text-center';tr.appendChild(cell);});body.appendChild(tr);
+  });
+  if(!rows.length&&supplierReturnInventoryReady)body.innerHTML='<tr><td colspan="6" class="text-center text-muted py-4">No matching available items.</td></tr>';
+  updateSupplierReturnPickerCount();
+}
+function updateSupplierReturnPickerCount(){document.getElementById('supplierReturnPickerCount').textContent=supplierReturnPending.size+' selected';document.getElementById('supplierReturnAddSelected').disabled=!supplierReturnPending.size;const rows=supplierReturnMatches(),select=document.getElementById('supplierReturnSelectAll');select.checked=rows.length>0&&rows.every(item=>supplierReturnPending.has(String(item.code)));select.indeterminate=rows.some(item=>supplierReturnPending.has(String(item.code)))&&!select.checked;}
+function selectSupplierReturnMatches(checked){supplierReturnMatches().forEach(item=>{if(checked)supplierReturnPending.add(String(item.code));else supplierReturnPending.delete(String(item.code));});renderSupplierReturnPicker();}
+function addSupplierReturnSelected(){if(supplierReturnBusy)return;const chosen=supplierReturnInventory.filter(item=>supplierReturnPending.has(String(item.code)));if(chosen.length+supplierReturnSelected.length>100)return showNotificationToast('Return up to 100 products at a time.',true);chosen.forEach(item=>supplierReturnSelected.push({...item,quantity:1,reason:document.getElementById('supplierReturnAllReason').value.trim()}));renderSupplierReturnSelected();toggleSupplierReturnPicker(false);}
+function renderSupplierReturnSelected(){
+  const body=document.getElementById('supplierReturnSelectedRows');body.replaceChildren();document.getElementById('supplierReturnSelectedKind').textContent=supplierReturnType==='YOURFINDS'?'Size':'Type';
+  supplierReturnSelected.forEach(item=>{
+    const tr=document.createElement('tr'),product=document.createElement('td'),name=document.createElement('strong'),code=document.createElement('div');name.textContent=item.baseName||item.name;code.textContent=item.code;code.className='small text-muted font-monospace';product.append(name,code);tr.appendChild(product);
+    const kind=document.createElement('td');kind.textContent=supplierReturnType==='YOURFINDS'?item.size:item.category;tr.appendChild(kind);
+    const qty=document.createElement('td');qty.className='text-center';if(supplierReturnType==='YOURFINDS'){qty.textContent='1';}else{const input=document.createElement('input');input.type='number';input.min='1';input.max=item.stock;input.step='1';input.value=item.quantity;input.className='form-control form-control-sm supplier-return-qty text-end';input.setAttribute('aria-label','Return quantity for '+item.name);input.oninput=()=>{item.quantity=Number(input.value);input.setCustomValidity(Number.isSafeInteger(item.quantity)&&item.quantity>0&&item.quantity<=Number(item.stock)?'':'Enter a whole quantity up to '+item.stock);updateSupplierReturnTotal();};qty.appendChild(input);}tr.appendChild(qty);
+    const reason=document.createElement('td'),input=document.createElement('input');input.className='form-control form-control-sm';input.setAttribute('list','supplierReturnReasons');input.setAttribute('aria-label','Reason for '+item.name);input.placeholder='Choose or type reason';input.value=item.reason;input.oninput=()=>item.reason=input.value.trim();reason.appendChild(input);tr.appendChild(reason);
+    const action=document.createElement('td'),remove=document.createElement('button');action.className='text-start';remove.type='button';remove.className='btn btn-sm btn-outline-danger';remove.title='Remove item';remove.setAttribute('aria-label','Remove '+item.name);remove.textContent='×';remove.onclick=()=>{supplierReturnSelected=supplierReturnSelected.filter(other=>other.code!==item.code);renderSupplierReturnSelected();};action.appendChild(remove);tr.appendChild(action);body.appendChild(tr);
+  });if(!supplierReturnSelected.length)body.innerHTML='<tr><td colspan="5" class="text-center text-muted py-4">No items selected. Add items to begin.</td></tr>';updateSupplierReturnTotal();
+}
+function updateSupplierReturnTotal(){document.getElementById('supplierReturnSelectedCount').textContent=supplierReturnSelected.length+' products';document.getElementById('supplierReturnSelectedTotal').textContent='Total: '+supplierReturnSelected.reduce((sum,item)=>sum+(Number.isSafeInteger(item.quantity)&&item.quantity>0?item.quantity:0),0)+' pcs';document.getElementById('supplierReturnSave').disabled=supplierReturnBusy||!supplierReturnSelected.length;updateSupplierReturnReasonAction();}
+function updateSupplierReturnReasonAction(){document.getElementById('supplierReturnApplyReason').disabled=supplierReturnBusy||!supplierReturnSelected.length||!document.getElementById('supplierReturnAllReason').value.trim();}
+function applySupplierReturnReason(){const reason=document.getElementById('supplierReturnAllReason').value.trim();if(reason){supplierReturnSelected.forEach(item=>item.reason=reason);renderSupplierReturnSelected();}}
+function setSupplierReturnBusy(busy){supplierReturnBusy=busy;const modal=document.getElementById('supplierReturnModal');modal.setAttribute('aria-busy',String(busy));modal.querySelectorAll('button,input,select,textarea,summary').forEach(control=>{if(busy){control.dataset.returnDisabled=String(!!control.disabled);control.disabled=true;}else{control.disabled=control.dataset.returnDisabled==='true';delete control.dataset.returnDisabled;}});document.getElementById('supplierReturnSave').innerHTML=busy?loadingIndicator('Returning items…'):'Return Items';if(!busy)updateSupplierReturnTotal();}
 function submitSupplierReturn(){
-  if(supplierReturnBusy)return;
-  const value=id=>document.getElementById('supplierReturn'+id).value.trim();
-  const product=supplierReturnInventory.find(i=>i.code+' — '+i.name===value('Product')||String(i.code)===value('Product'));
-  const quantity=Number(value('Qty')),status=value('Status');if(!product||!Number.isInteger(quantity)||quantity<1||quantity>Number(product.stock)||!value('Date')||!value('Supplier')||!value('Reason')||!value('Condition')||!value('PreparedBy'))return showNotificationToast('Complete product, date, quantity, supplier, reason, condition and prepared by.',true);
-  if(status==='RECEIVED'&&!value('ReceivedBy'))return showNotificationToast('Received By is required when supplier received return.',true);
-  const auth=managerCredentials('Manager authorization for supplier return:');if(!auth)return;
-  supplierReturnBusy=true;const button=document.getElementById('supplierReturnSave');button.disabled=true;button.innerHTML=loadingIndicator('Returning…');
-  const finish=()=>{supplierReturnBusy=false;button.disabled=false;button.textContent='Return Product';};
-  secureScriptRun.withSuccessHandler(result=>{finish();if(!result||!result.success)return showNotificationToast(result&&result.message||'Return failed.',true);closeSupplierReturn();pageReadCache.delete('inventory');pageReadCache.delete('cashierInventory');pageReadCache.delete('supplierReturns');loadSupplierReturnsPage();loadInventoryPage();showNotificationToast('Supplier return saved.');}).withFailureHandler(e=>{finish();showNotificationToast(e.message||String(e),true);}).saveSupplierReturn({...auth,requestId:supplierReturnRequest,returnDate:value('Date'),code:product.code,quantity:quantity,supplier:value('Supplier'),reason:value('Reason'),condition:value('Condition'),status:status,originalDeliveryId:value('OriginalDelivery'),receivedBy:value('ReceivedBy'),driver:value('Driver'),plate:value('Plate'),remarks:value('Remarks'),preparedBy:value('PreparedBy'),employee:getCurrentDeliveryEmployeeName()});
+  if(supplierReturnBusy)return;const value=id=>document.getElementById('supplierReturn'+id).value.trim();
+  for(const id of ['Date','PreparedBy','Driver','Plate','CheckedBy']){const field=document.getElementById('supplierReturn'+id);if(!field.value.trim()||!field.checkValidity()){field.reportValidity();return showNotificationToast('Complete return date, prepared by, checked by, driver and plate number.',true);}}
+  if(!supplierReturnSelected.length)return showNotificationToast('Add at least one item.',true);
+  if(supplierReturnSelected.some(item=>!Number.isSafeInteger(item.quantity)||item.quantity<1||item.quantity>Number(item.stock)||!item.reason))return showNotificationToast('Each item needs a reason and a whole quantity within available stock.',true);
+  const owner=supplierReturnOwner;setSupplierReturnBusy(true);
+  const failed=error=>{if(!currentEmployee||currentEmployee.dashboardToken!==owner)return;setSupplierReturnBusy(false);showNotificationToast(error.message||String(error),true);};
+  secureScriptRun.withSuccessHandler(result=>{if(!currentEmployee||currentEmployee.dashboardToken!==owner)return;if(!result||!result.success)return failed(new Error(result&&result.message||'Return failed.'));setSupplierReturnBusy(false);closeSupplierReturn();pageReadCache.delete('supplierReturns');pageReadCache.delete('cashierInventory');invalidateDeliveryItemCaches();if(typeof invalidateDeliveriesCache==='function')invalidateDeliveriesCache(true);loadSupplierReturnsPage();showNotificationToast('Return '+result.id+' saved.');}).withFailureHandler(failed).saveSupplierReturn({requestId:supplierReturnRequest,returnType:supplierReturnType,returnDate:value('Date'),preparedBy:value('PreparedBy'),checkedBy:value('CheckedBy'),driver:value('Driver'),plate:value('Plate'),remarks:value('Remarks'),items:supplierReturnSelected.map(item=>({code:String(item.code),quantity:item.quantity,reason:item.reason,condition:/damaged/i.test(item.reason)?'DAMAGED':/used/i.test(item.reason)?'OPENED':'OTHER'}))});
+}
+function openSupplierReturnDetails(id){
+  if(!supplierReturnGroups().some(group=>group.id===id))return;
+  selectedReturnReportId=id;supplierReturnDetailFilter='';document.getElementById('supplierReturnDetailsId').textContent=id;
+  document.getElementById('supplierReturnDetails').style.display='flex';renderSupplierReturnDetails();
+}
+function renderSupplierReturnDetails(){
+  const group=supplierReturnGroups().find(item=>item.id===selectedReturnReportId);if(!group)return;
+  const body=document.getElementById('supplierReturnDetailsContent');body.replaceChildren();
+  const meta=document.createElement('div');meta.className='row g-3 mb-4';
+  [['Return Date',group.returnDate||group.date],['Status',group.status],['Driver',group.driver],['Plate No.',group.plate],['Prepared By',group.preparedBy||group.employee],['Checked By',group.checkedBy||group.approvedBy],['Received By',group.receivedBy||group.driver],['Category',group.type==='YOURFINDS'?'YourFinds':group.type==='YOURSTYLE'?'YourStyle':group.type]].forEach(([label,value])=>{
+    const field=document.createElement('div'),caption=document.createElement('div'),text=document.createElement('div');field.className='col-6';caption.className='small text-muted';caption.textContent=label;text.className='fw-semibold';text.textContent=value||'—';if(label==='Status')text.innerHTML=supplierReturnBadge(value);field.append(caption,text);meta.appendChild(field);
+  });body.appendChild(meta);
+  const summary=document.createElement('div');summary.className='bg-light rounded p-3 mb-4';
+  const heading=document.createElement('div');heading.className='d-flex justify-content-between mb-3 fw-semibold';const label=document.createElement('span'),total=document.createElement('span');label.textContent='Quantity Returned';total.textContent='Total: '+group.quantity+' pcs';heading.append(label,total);summary.appendChild(heading);
+  const cards=document.createElement('div');cards.className='d-flex gap-3 flex-wrap';
+  supplierReturnGroupQuantities(group.items).forEach(([key,quantity])=>{
+    const button=document.createElement('button'),name=document.createElement('span'),count=document.createElement('strong');button.type='button';button.className='btn delivery-count-filter px-3 py-2';button.setAttribute('aria-pressed',String(supplierReturnDetailFilter===key));button.setAttribute('aria-label','Filter '+key+' · '+quantity+' pcs');name.className='small d-block';name.textContent=key;count.className='fs-4 d-block';count.textContent=quantity;button.append(name,count);button.onclick=()=>{supplierReturnDetailFilter=supplierReturnDetailFilter===key?'':key;renderSupplierReturnDetails();};cards.appendChild(button);
+  });summary.appendChild(cards);body.appendChild(summary);
+  const toolbar=document.createElement('div'),title=document.createElement('h6');toolbar.className='d-flex align-items-center justify-content-between gap-2 mb-2';title.className='fw-bold mb-0';title.textContent='Returned Items';toolbar.appendChild(title);
+  if(supplierReturnDetailFilter){const clear=document.createElement('button');clear.type='button';clear.className='btn btn-sm btn-outline-secondary';clear.textContent='Clear filter';clear.onclick=()=>{supplierReturnDetailFilter='';renderSupplierReturnDetails();};toolbar.appendChild(clear);}body.appendChild(toolbar);
+  const items=group.items.filter(item=>!supplierReturnDetailFilter||(supplierReturnBrand(item)==='YOURFINDS'?deliveryDetailSizeKey_(item.size):String(item.category||'OTHERS'))===supplierReturnDetailFilter);
+  if(group.type==='YOURFINDS')items.sort((a,b)=>deliveryDetailSizeOrder_(a.size,b.size)||a.name.localeCompare(b.name));
+  const list=document.createElement('div');list.className='delivery-detail-item-list';body.appendChild(list);
+  items.forEach(item=>{
+    const row=document.createElement('div');row.className='d-flex align-items-center gap-3 border rounded p-2 mb-2';
+    const cached=inventoryDatasetReady()?inventoryDataset.items.find(product=>String(product.code)===String(item.code)):null;
+    const imageUrl=item.imageUrl||cached?.imageUrl;
+    if(imageUrl&&/^https?:\/\//i.test(imageUrl)){
+      const photo=document.createElement('button'),image=document.createElement('img');photo.type='button';photo.className='btn p-0 flex-shrink-0';photo.setAttribute('aria-label','View '+item.name+' image');image.loading='lazy';image.decoding='async';image.width=56;image.height=56;image.className='supplier-return-detail-photo';image.src=inventoryThumbnailUrl(imageUrl);image.alt=item.name;image.onerror=()=>{photo.textContent='No Image';};photo.appendChild(image);photo.onclick=()=>openInventoryImageViewer({...item,imageUrl:imageUrl});row.appendChild(photo);
+    }else{const placeholder=document.createElement('span');placeholder.className='small text-muted bg-light rounded p-2 supplier-return-detail-placeholder';placeholder.textContent='No Image';row.appendChild(placeholder);}
+    const info=document.createElement('div');info.className='flex-grow-1';info.style.minWidth='0';const name=document.createElement('strong'),code=document.createElement('div'),reason=document.createElement('div');name.textContent=item.name;code.className='small text-muted';code.textContent=item.code+(item.size?' · '+item.size:'');reason.className='small text-muted';reason.textContent='Reason: '+(item.reason||'—');info.append(name,code,reason);row.appendChild(info);
+    const qty=document.createElement('div');qty.className='text-end flex-shrink-0';qty.textContent=item.quantity+' pcs';const badge=document.createElement('div');badge.className='mt-1';badge.innerHTML='<span class="badge bg-secondary">Returned</span>';qty.appendChild(badge);row.appendChild(qty);list.appendChild(row);
+  });
+  if(list.children.length>5){list.style.maxHeight=Math.ceil(list.children[5].getBoundingClientRect().top-list.children[0].getBoundingClientRect().top)+'px';list.tabIndex=0;list.setAttribute('role','region');list.setAttribute('aria-label','Returned items');}
+  const remarks=document.createElement('div');remarks.className='small text-muted mt-3';remarks.textContent='Remarks: '+(group.remarks||'—');body.appendChild(remarks);
+}
+function printSupplierReturnReport(id,button){
+  if(!id||button.disabled)return;const original=button.innerHTML;button.disabled=true;button.setAttribute('aria-busy','true');button.innerHTML=loadingIndicator('Generating report…');
+  const finish=()=>{button.disabled=false;button.removeAttribute('aria-busy');button.innerHTML=original;};const failed=error=>{finish();showNotificationToast(error.message||String(error),true);};
+  secureScriptRun.withSuccessHandler(result=>{if(!result||!result.success)return failed(new Error(result&&result.message||'Return report failed.'));try{const bytes=Uint8Array.from(atob(result.base64),char=>char.charCodeAt(0)),url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})),link=document.createElement('a');link.href=url;link.download=result.fileName;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);finish();}catch(error){failed(error);}}).withFailureHandler(failed).createSupplierReturnPdf(id);
 }
 </script>

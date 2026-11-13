@@ -746,10 +746,8 @@
     document.getElementById('cashierExitError').hidden = true;
     setCashierExitBusy(true);
     const owner = currentEmployee.dashboardToken;
-    function send(credential) {
-      if (credential === null) { setCashierExitBusy(false); return; }
+    function send() {
       if (!currentEmployee || currentEmployee.dashboardToken !== owner) return;
-      payload.managerCredential = credential;
       clearCashierReportCache();
       secureScriptRun.withSuccessHandler(result => {
         if (!currentEmployee || currentEmployee.dashboardToken !== owner) return;
@@ -764,8 +762,7 @@
         cashierExitError(error.message || String(error));
       }).saveCashierShiftExit(payload);
     }
-    if (payload.action === 'END') requestManagerPin('Enter ' + managerName + "'s Manager PIN to end this shift:", send, managerName !== currentCashier);
-    else send(undefined);
+    send();
   }
 
   function showSavedCashierShift(result) {

@@ -127,28 +127,29 @@ const INVENTORY_DELIVERY_COLUMN_COUNT = 20;
    M  Net Total
    N  Payment Method
    O  Reference
-   P  Status
-   Q  Cash Received
-   R  Change
-   S  Authorized By
-   T  Reason / Void Reason
-   U  Original Receipt ID
-   V  Sales Line ID
-   W  Entry Source
-   X  Sync Status
-   Y  Processed At
-   Z  Sync Error
-   AA Price Source
-   AB Sale Reference ID
-   AC Payment 1 Method
-   AD Payment 1 Amount
-   AE Payment 1 Reference
-   AF Payment 2 Method
-   AG Payment 2 Amount
-   AH Payment 2 Reference
+   P  Payment 1 Method
+   Q  Payment 1 Amount
+   R  Payment 1 Reference
+   S  Payment 2 Method
+   T  Payment 2 Amount
+   U  Payment 2 Reference
+   V  Cash Received
+   W  Change
+   X  Status
+   Y  Authorized By
+   Z  Reason / Void Reason
+   AA Original Receipt ID
+   AB Sales Line ID
+   AC Entry Source
+   AD Sync Status
+   AE Processed At
+   AF Sync Error
+   AG Price Source
+   AH Sale Reference ID
 ========================================================== */
 
 
+// Legacy defaults are resolved against the live headers by getSalesLogSheet_.
 const SALES_IDX = {
 
   TIMESTAMP: 0,
@@ -235,6 +236,50 @@ const SALES_COL = {
 
 const SALES_LOG_COLUMN_COUNT = 34;
 
+// Read the live header before using sales indexes. Both layouts remain supported
+// while Production and Dev are migrated, and if a backup is restored.
+const SALES_LEGACY_FIELDS_ = [
+  'TIMESTAMP','RECEIPT_ID','CASHIER','CODE','ITEM_NAME','SIZE','CATEGORY','QUANTITY',
+  'PRICE','DISCOUNT','FEE_CHARGED','FEE_ABSORBED','NET_TOTAL','PAYMENT_METHOD','REFERENCE',
+  'STATUS','CASH_RECEIVED','CHANGE','AUTHORIZED_BY','VOID_REASON','ORIGINAL_RECEIPT_ID',
+  'SALES_LINE_ID','ENTRY_SOURCE','SYNC_STATUS','PROCESSED_AT','SYNC_ERROR','PRICE_SOURCE','SALE_REFERENCE_ID',
+  'PAYMENT_1_METHOD','PAYMENT_1_AMOUNT','PAYMENT_1_REFERENCE','PAYMENT_2_METHOD','PAYMENT_2_AMOUNT','PAYMENT_2_REFERENCE'
+];
+const SALES_GROUPED_PAYMENT_FIELDS_ = SALES_LEGACY_FIELDS_.slice(0,15)
+  .concat(SALES_LEGACY_FIELDS_.slice(28), ['CASH_RECEIVED','CHANGE','STATUS'], SALES_LEGACY_FIELDS_.slice(18,28));
+
+function configureSalesLogColumnsFromHeaders_(headers) {
+  const grouped = String(headers[15] || '').trim() === 'Payment 1 Method' && String(headers[23] || '').trim() === 'Status';
+  const legacy = String(headers[15] || '').trim() === 'Status';
+  if (!grouped && !legacy) throw new Error('Sales Log column layout is not recognized. Restore the expected headers before processing sales.');
+  (grouped ? SALES_GROUPED_PAYMENT_FIELDS_ : SALES_LEGACY_FIELDS_).forEach(function(field,index) {
+    SALES_IDX[field] = index;
+    SALES_COL[field] = index + 1;
+  });
+  SALES_IDX.REASON = SALES_IDX.VOID_REASON;
+  SALES_COL.REASON = SALES_COL.VOID_REASON;
+}
+
+function configureSalesLogColumns_(sheet) {
+  if (!sheet) return;
+  const headerRange = sheet.getRange(1,1,1,24);
+  // Some internal readers provide a values-only sheet view.
+  if (typeof headerRange.getDisplayValues !== 'function') return;
+  configureSalesLogColumnsFromHeaders_(headerRange.getDisplayValues()[0]);
+}
+
+function getSalesLogSheet_(spreadsheet) {
+  const sheet = (spreadsheet || SpreadsheetApp.getActiveSpreadsheet()).getSheetByName(SHEETS.SALES_LOG);
+  configureSalesLogColumns_(sheet);
+  return sheet;
+}
+
+function salesLogRowFromLegacyFields_(values) {
+  const row = Array(SALES_LOG_COLUMN_COUNT).fill('');
+  SALES_LEGACY_FIELDS_.forEach(function(field,index) { row[SALES_IDX[field]] = values[index] === undefined ? '' : values[index]; });
+  return row;
+}
+
 
 /* ==========================================================
    INVENTORY MOVEMENT LOG
@@ -255,6 +300,8 @@ const SALES_LOG_COLUMN_COUNT = 34;
    N  Bundle No.
    O  Remaining Bundle Qty
    P  Notes
+   Q  Reserved legacy data
+   R  Return Metadata (internal)
 ========================================================== */
 
 
@@ -274,7 +321,8 @@ const MOVE_IDX = {
   REASON: 12,
   BUNDLE_NO: 13,
   REMAINING_BUNDLE_QTY: 14,
-  NOTES: 15
+  NOTES: 15,
+  RETURN_METADATA: 17
 };
 
 const MOVE_COL = {
@@ -293,10 +341,22 @@ const MOVE_COL = {
   REASON: 13,
   BUNDLE_NO: 14,
   REMAINING_BUNDLE_QTY: 15,
-  NOTES: 16
+  NOTES: 16,
+  RETURN_METADATA: 18
 };
 
-const MOVEMENT_LOG_COLUMN_COUNT = 16;
+// Q is reserved for existing legacy data; R stores internal return details.
+const MOVEMENT_LOG_COLUMN_COUNT = 18;
+
+function isSupplierReturnSource_(source) {
+  return ['RETURN', 'SUPPLIER_RETURN'].includes(String(source || '').trim().toUpperCase());
+}
+
+function inventoryMovementInternalNotes_(row) {
+  return isSupplierReturnSource_(row[MOVE_IDX.SOURCE])
+    ? String(row[MOVE_IDX.RETURN_METADATA] || row[MOVE_IDX.NOTES] || '')
+    : String(row[MOVE_IDX.NOTES] || '');
+}
 
 
 /* ==========================================================

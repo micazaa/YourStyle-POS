@@ -12,7 +12,7 @@ const EXCHANGE_REASON = {
 function generateExchangeId() {
   assertAppRequest_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
+  const sheet = getSalesLogSheet_(ss);
   const today = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), "MMdd");
   const prefix = "EX-" + today;
   const used = new Set();
@@ -58,7 +58,7 @@ function getExchangeableReceipt(receiptId) {
     if (!receiptId) throw new Error("Receipt ID is required.");
     if (receiptId.startsWith("EX-")) throw new Error("Enter the original sales receipt, not an exchange receipt.");
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
+    const sheet = getSalesLogSheet_(ss);
     if (!sheet || sheet.getLastRow() < 2) throw new Error("Sales transactions were not found.");
     const reservation = findReservation_(receiptId);
     if (reservation && reservation.status === 'EXCHANGED') throw new Error('This deposit was already used on ' + reservation.exchangeId + '.');
@@ -224,9 +224,9 @@ function completeCustomerExchange(payload) {
     if (!Number.isFinite(cashReceived) || cashReceived < 0 || (cashPart && cashReceived < cashDue)) throw new Error("Cash received is less than the amount due.");
     const changeGiven = cashPart ? roundToTwo(Math.max(0,cashReceived-cashDue)) : 0;
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sales = ss.getSheetByName(SHEETS.SALES_LOG), movement = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
+    const sales = getSalesLogSheet_(ss), movement = ss.getSheetByName(SHEETS.INVENTORY_MOVEMENT_LOG);
     if (!sales || !movement) throw new Error("Required Sales/Inventory sheets are missing.");
-    ensureSalesLogSplitPaymentColumns_(sales);
+    ensureSalesLogSplitPaymentColumns_(sales, returnLines.length + replacementLines.length);
     const exchangeId = generateExchangeId(), now = new Date();
     const lines = returnLines.concat(replacementLines);
     let chargedLeft = feeCharged, absorbedLeft = feeAbsorbed;

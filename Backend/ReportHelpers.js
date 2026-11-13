@@ -463,6 +463,9 @@ function collectSalesMetrics(
 ) {
   const tz = Session.getScriptTimeZone();
   options = options || {};
+  if (salesData[0] && (salesData[0][15] === 'Status' || salesData[0][15] === 'Payment 1 Method')) {
+    configureSalesLogColumnsFromHeaders_(salesData[0]);
+  }
 
   const metrics = {
     items: {},
@@ -496,11 +499,11 @@ function collectSalesMetrics(
   }
 
   function reasonOf(row) {
-    return String(row[19] || '').trim().toUpperCase();
+    return String(row[SALES_IDX.REASON] || '').trim().toUpperCase();
   }
 
   function completed(row) {
-    return String(row[15] || '').trim().toUpperCase() === 'COMPLETED';
+    return String(row[SALES_IDX.STATUS] || '').trim().toUpperCase() === 'COMPLETED';
   }
 
   /*
@@ -656,8 +659,8 @@ function collectSalesMetrics(
 
     metrics.totalSales += netTotal;
     metrics.totalDiscount += discount;
-    metrics.totalCashReceived += Number(row[16]) || 0;
-    metrics.totalChangeGiven += Number(row[17]) || 0;
+    metrics.totalCashReceived += Number(row[SALES_IDX.CASH_RECEIVED]) || 0;
+    metrics.totalChangeGiven += Number(row[SALES_IDX.CHANGE]) || 0;
 
     const countedQty =
       reason !== 'EXCHANGE RETURN' && qty > 0 ? qty : 0;
@@ -668,15 +671,15 @@ function collectSalesMetrics(
       name: name, size: size, units: countedQty, sales: netTotal, exchange: exchange
     });
 
-    const paymentOneMethod = String(row[28] || '').trim();
-    const paymentTwoMethod = String(row[31] || '').trim();
+    const paymentOneMethod = String(row[SALES_IDX.PAYMENT_1_METHOD] || '').trim();
+    const paymentTwoMethod = String(row[SALES_IDX.PAYMENT_2_METHOD] || '').trim();
     const isSplitPayment = paymentOneMethod && paymentTwoMethod;
     if (isSplitPayment) {
       const paymentKey = salesPaymentKey_(row);
       if (!splitPaymentReceipts.has(paymentKey)) {
         splitPaymentReceipts.add(paymentKey);
-        addPayment(paymentOneMethod, row[29], row[30]);
-        addPayment(paymentTwoMethod, row[32], row[33]);
+        addPayment(paymentOneMethod, row[SALES_IDX.PAYMENT_1_AMOUNT], row[SALES_IDX.PAYMENT_1_REFERENCE]);
+        addPayment(paymentTwoMethod, row[SALES_IDX.PAYMENT_2_AMOUNT], row[SALES_IDX.PAYMENT_2_REFERENCE]);
       }
     } else {
       addPayment(paymentMethod, netTotal, reference);

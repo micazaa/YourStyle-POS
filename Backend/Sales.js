@@ -10,7 +10,7 @@ const SALES_LOG_SPLIT_PAYMENT_HEADERS_ = [
   "Payment 2 Method", "Payment 2 Amount", "Payment 2 Reference"
 ];
 
-function ensureSalesLogSplitPaymentColumns_(sheet) {
+function ensureSalesLogSplitPaymentColumns_(sheet, rowCount) {
   const firstColumn = SALES_COL.PAYMENT_1_METHOD;
   const lastColumn = SALES_COL.PAYMENT_2_REFERENCE;
   if (sheet.getMaxColumns() < lastColumn) {
@@ -23,19 +23,19 @@ function ensureSalesLogSplitPaymentColumns_(sheet) {
     if (actual && actual !== expected) throw new Error("Sales Log column " + (firstColumn + index) + " must be \"" + expected + "\".");
     return expected;
   });
-  sheet.getRange(1, firstColumn, 1, values.length).setValues([values]);
+  if (existing.some((value,index) => String(value || '').trim() !== values[index])) {
+    sheet.getRange(1, firstColumn, 1, values.length).setValues([values]);
+  }
   const allowedPaymentMethods = ["Cash", "GCash", "QR Code", "Credit Card", "Cash + GCash", "Cash + Credit Card", "GCash + Credit Card"];
   const paymentRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(allowedPaymentMethods, true)
     .setAllowInvalid(false)
     .build();
-  const dataRows = Math.max(1, sheet.getMaxRows() - 1);
-  sheet.getRange(2, SALES_COL.PAYMENT_METHOD, dataRows, 1).setDataValidation(paymentRule);
-  if (typeof SALES_SYNC_BUTTON_TITLE !== "undefined") {
-    sheet.getImages().forEach(function(image) {
-      if (image.getAltTextTitle() === SALES_SYNC_BUTTON_TITLE) image.setAnchorCell(sheet.getRange("AJ2"));
-    });
-  }
+  const startRow = Math.max(2, sheet.getLastRow() + 1);
+  const dataRows = Math.max(1, Math.floor(Number(rowCount) || 1));
+  const lastRow = startRow + dataRows - 1;
+  if (sheet.getMaxRows() < lastRow) sheet.insertRowsAfter(sheet.getMaxRows(), lastRow - sheet.getMaxRows());
+  sheet.getRange(startRow, SALES_COL.PAYMENT_METHOD, dataRows, 1).setDataValidation(paymentRule);
 }
 
 function normalizeCheckoutPaymentParts_(paymentMethod, paymentParts, baseTotal) {
@@ -115,7 +115,7 @@ function executeCheckoutBackend(
     assertInventoryNotReserved_((cart || []).map(item => item.code));
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    const salesLogSheet = ss.getSheetByName(SHEETS.SALES_LOG);
+    const salesLogSheet = getSalesLogSheet_(ss);
  
     if (!salesLogSheet) {
       return JSON.stringify({
@@ -136,7 +136,7 @@ function executeCheckoutBackend(
       throw new Error("Receipt number already exists. Reopen checkout before submitting again.");
     }
 
-    ensureSalesLogSplitPaymentColumns_(salesLogSheet);
+    ensureSalesLogSplitPaymentColumns_(salesLogSheet, cart.length);
 
     // 1) Per-line raw total and item-level discount
     let lines = cart.map((item) => {
@@ -155,7 +155,7 @@ function executeCheckoutBackend(
         lineAfterItemDiscount: roundToTwo(lineRaw - lineDiscount),
       });
     });
-    const productSnapshot = getProductMaster_();
+    const productSnapshot = getProductMaster_({compactRead:true});
     lines = validateSalePricing_(lines, productSnapshot);
 
     const subtotalAfterItemDiscounts = lines.reduce(
@@ -216,10 +216,15 @@ function executeCheckoutBackend(
       l.salesLineId = generateSalesLineId();
     });
 
+    // Validate selected physical bundles under the checkout lock before saving sales.
+    // Reuse this plan at commit so bundle history is read only once.
+    const bundleStockPlan = lines.some(line => line.bundleSelection)
+      ? deductInventoryStock(lines,receiptId,cashierName,productSnapshot,true) : null;
+
     // 4) Write Sales Log rows (A–AB), repeating Cash Received/Change on every line.
     // POS writes are already inventory-synchronized, so mark them PROCESSED.
     const timestamp = new Date();
-    const rows = lines.map((l) => [
+    const rows = lines.map((l) => salesLogRowFromLegacyFields_([
       timestamp, // A Timestamp
       receiptId, // B Receipt ID
       cashierName, // C Cashier
@@ -257,7 +262,7 @@ function executeCheckoutBackend(
       normalizedPaymentParts[1] ? normalizedPaymentParts[1].method : "", // AF Payment 2 Method
       normalizedPaymentParts[1] ? normalizedPaymentParts[1].amount : "", // AG Payment 2 Amount
       normalizedPaymentParts[1] ? normalizedPaymentParts[1].reference : "", // AH Payment 2 Reference
-    ]);
+    ]));
     salesLogSheet
       .getRange(
         salesLogSheet.getLastRow() + 1,
@@ -268,13 +273,13 @@ function executeCheckoutBackend(
       .setValues(rows);
 
     // 5) Decrement inventory stock for non-custom items
-    deductInventoryStock(lines, receiptId, cashierName);
+    if (bundleStockPlan) changeInventoryStockBatch_(bundleStockPlan);
+    else deductInventoryStock(lines, receiptId, cashierName, productSnapshot);
     consumeSaleAllocations_(lines, cashierName, productSnapshot);
 
     return JSON.stringify({
       success: true,
       message: "Transaction completed.",
-      updatedInventory: getSellableInventory(),
     });
   } catch (err) {
     return JSON.stringify({ success: false, message: err.toString() });
@@ -382,7 +387,7 @@ function consumeSaleAllocations_(lines, employee, productSnapshot) {
 function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart) {
   assertAppRequest_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
+  const sheet = getSalesLogSheet_(ss);
   if (!sheet) return 0;
 
   const data = sheet.getDataRange().getValues();
@@ -424,7 +429,7 @@ function getExpectedCashForCurrentCashier(cashierName, pettyReceived, shiftStart
 function getExpectedCashForManager(reportDate) {
   assertAppRequest_();
   const reviewers = employeeIsOic_(ACCESS_REQUEST_CONTEXT_.actor) ? {reviewers: getManagerReportReviewers_()} : {};
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
+  const sheet = getSalesLogSheet_();
   const lastRow = sheet && sheet.getLastRow();
   if (!sheet || lastRow < 2) return { expectedCashDrawer: 0, ...reviewers };
 
@@ -572,10 +577,7 @@ function voidAndRefundTransactionBackend(
       SpreadsheetApp.getActiveSpreadsheet();
 
 
-    const salesLogSheet =
-      ss.getSheetByName(
-        SHEETS.SALES_LOG
-      );
+    const salesLogSheet = getSalesLogSheet_(ss);
 
 
     if (!salesLogSheet) {
@@ -915,7 +917,7 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
+    const sheet = getSalesLogSheet_(ss);
 
     if (!sheet) {
       return {
@@ -1142,7 +1144,7 @@ function getTransactionDetails(receiptId) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    const sheet = ss.getSheetByName(SHEETS.SALES_LOG);
+    const sheet = getSalesLogSheet_(ss);
 
     if (!sheet) {
       return {

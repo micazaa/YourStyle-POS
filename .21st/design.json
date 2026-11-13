@@ -1,0 +1,13 @@
+{
+  "project": "YourStyle POS",
+  "stack": "Google Apps Script HTML with Bootstrap 5.3 and existing POS CSS tokens",
+  "tokens": "Frontend/Styles/CSS.html",
+  "decisions": [
+    {
+      "component": "Bundle actions modal",
+      "direction": "Action tabs",
+      "approved": "2026-11-05",
+      "details": "Separate Distribute items and Split bundle panels. Center bundle navigation; use toggles up to three bundles and a dropdown for more. Put Add Item beside the item table. Keep only the selected bundle count and remove Delivery Summary cards."
+    }
+  ]
+}

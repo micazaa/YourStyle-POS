@@ -5,6 +5,26 @@
    Phase 7 stock engine + Phase 8 inventory management.
 ========================================================== */
 
+// Preserve return retry/report metadata outside the visible reason and notes.
+function cleanInventoryMovementRow_(row) {
+  while (row.length < MOVEMENT_LOG_COLUMN_COUNT) row.push('');
+  if (isSupplierReturnSource_(row[MOVE_IDX.SOURCE])) {
+    row[MOVE_IDX.SOURCE] = 'RETURN';
+    const notes = String(row[MOVE_IDX.NOTES] || '').trim();
+    if (notes.startsWith('{')) {
+      const details = JSON.parse(notes);
+      if (!details || Array.isArray(details)) throw new Error('Invalid return metadata.');
+      if (row[MOVE_IDX.RETURN_METADATA] && row[MOVE_IDX.RETURN_METADATA] !== notes) throw new Error('Conflicting return metadata.');
+      row[MOVE_IDX.RETURN_METADATA] = notes;
+      row[MOVE_IDX.NOTES] = '';
+    }
+  } else if (row[MOVE_IDX.SOURCE] === 'DELIVERY' && row[MOVE_IDX.REFERENCE_ID] &&
+      row[MOVE_IDX.NOTES] === 'Delivery ID: ' + row[MOVE_IDX.REFERENCE_ID]) {
+    row[MOVE_IDX.NOTES] = '';
+  }
+  return row;
+}
+
 function changeInventoryStock(options) {
   assertAppRequest_();
   if (!options) throw new Error("Stock movement options are required.");
@@ -83,12 +103,13 @@ function changeInventoryStock(options) {
   return { success: true, code: code, rowNumber: inventoryRow, qtyChange: qtyChange, stockBefore: stockBefore, stockAfter: stockAfter };
 }
 
-function changeInventoryStockBatch_(movements) {
+function changeInventoryStockBatch_(movements, options) {
   if (!Array.isArray(movements) || !movements.length) return [];
+  options = options || {};
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const inventorySheet = ss.getSheetByName(SHEETS.INVENTORY);
   if (!inventorySheet || inventorySheet.getLastRow() < 2) throw new Error("Inventory is empty.");
-  const inventoryRows = inventorySheet.getRange(2, 1, inventorySheet.getLastRow() - 1, INVENTORY_COLUMN_COUNT).getValues();
+  const inventoryRows = options.inventoryRows || inventorySheet.getRange(2, 1, inventorySheet.getLastRow() - 1, INVENTORY_COLUMN_COUNT).getValues();
   const byCode = {};
   inventoryRows.forEach(function(row, index) {
     const code = String(row[INV_IDX.CODE] || "").trim();
@@ -101,7 +122,7 @@ function changeInventoryStockBatch_(movements) {
     movementSheet.getRange(1, 1, 1, MOVEMENT_LOG_COLUMN_COUNT).setValues([[
       "Movement ID", "Timestamp", "Movement Source", "Reference ID", "Source Line ID",
       "Product Code", "Item Name", "Category", "Quantity Change", "Stock Before",
-      "Stock After", "Employee", "Reason", "Bundle No.", "Remaining Bundle Qty", "Notes"
+      "Stock After", "Employee", "Reason", "Bundle No.", "Remaining Bundle Qty", "Notes", "", "Return Metadata"
     ]]);
   }
 
@@ -120,6 +141,7 @@ function changeInventoryStockBatch_(movements) {
     if (!source) throw new Error("Inventory movement Source is required.");
     const target = byCode[code];
     if (!target) throw new Error("Inventory Code " + code + " was not found.");
+    if (options.expectedStatus && String(target.row[INV_IDX.STATUS]).toUpperCase() !== options.expectedStatus) throw new Error('Selected bundle is no longer active. Refresh Cashier.');
     if (String(target.row[INV_IDX.STATUS]).toUpperCase() === INVENTORY_STATUS.RESERVED) throw new Error("Reserved stock can only be changed by completing or exchanging its reservation.");
     if(source===INVENTORY_MOVEMENT_SOURCE.SALE && qtyChange<0 && String(target.row[INV_IDX.CATEGORY]).toUpperCase()==='YOURFINDS' &&
       String(target.row[INV_IDX.INVENTORY_TYPE]).toUpperCase()==='UNIQUE' &&
@@ -129,26 +151,30 @@ function changeInventoryStockBatch_(movements) {
     const stockAfter = stockBefore + qtyChange;
     target.stock = stockAfter;
     const type = getInventoryMovementType(target.row[INV_IDX.CATEGORY], target.row[INV_IDX.INVENTORY_TYPE]);
-    rows.push([
+    rows.push(cleanInventoryMovementRow_([
       generateInventoryMovementId(), now, source, String(options.referenceId || "").trim(),
       String(options.sourceLineId || "").trim(), code, String(options.item || "").trim(), type,
       qtyChange, stockBefore, stockAfter, String(options.employee || "").trim(),
       String(options.reason || "").trim(), options.bundleNo === "" || options.bundleNo == null ? "" : options.bundleNo,
       options.remainingBundleQty === "" || options.remainingBundleQty == null ? "" : Number(options.remainingBundleQty),
       String(options.notes || "").trim()
-    ]);
+    ]));
     touchedRows[target.rowNumber] = true;
     soldYourFinds.push({rowNumber:target.rowNumber,category:target.row[INV_IDX.CATEGORY],inventoryType:target.row[INV_IDX.INVENTORY_TYPE],
       status:target.row[INV_IDX.STATUS],stockAfter:stockAfter,source:source,qtyChange:qtyChange});
     results.push({success:true, code:code, rowNumber:target.rowNumber, qtyChange:qtyChange, stockBefore:stockBefore, stockAfter:stockAfter});
   });
+  // Virtual bundle estimates have no Inventory row, but commit with the counted stock.
+  const additionalRows = (options.additionalMovements || []).map(inventoryMovementRow_);
+  rows.unshift(...additionalRows);
   movementSheet.getRange(movementSheet.getLastRow() + 1, 1, rows.length, MOVEMENT_LOG_COLUMN_COUNT).setValues(rows);
-  recordInventoryChangedCodes_(results.map(result=>result.code));
+  recordInventoryChangedCodes_(results.map(result=>result.code).concat(additionalRows.map(row=>row[MOVE_IDX.CODE])));
   syncSoldYourFindsStatus_(inventorySheet,soldYourFinds);
   const addresses = Object.keys(touchedRows).map(function(rowNumber) { return "Q" + rowNumber; });
   if (addresses.length && inventorySheet.getRangeList) inventorySheet.getRangeList(addresses).setValue(now);
   else Object.keys(touchedRows).forEach(function(rowNumber) { inventorySheet.getRange(Number(rowNumber), INV_COL.UPDATED_AT).setValue(now); });
   SpreadsheetApp.flush();
+  if (options.appendedRows) options.appendedRows.push(...rows);
   return results;
 }
 
@@ -186,7 +212,7 @@ function logInventoryMovement(movement) {
       "Movement ID", "Timestamp", "Movement Source", "Reference ID", "Source Line ID",
       "Product Code", "Item Name", "Category", "Quantity Change",
       "Stock Before", "Stock After", "Employee", "Reason", "Bundle No.",
-      "Remaining Bundle Qty", "Notes"
+      "Remaining Bundle Qty", "Notes", "", "Return Metadata"
     ]]);
   }
   sheet.appendRow(row);
@@ -216,8 +242,8 @@ function inventoryMovementRow_(movement) {
   if (!Number.isFinite(qtyChange) || qtyChange === 0) throw new Error("Inventory movement quantity must be non-zero.");
   if (!source) throw new Error("Inventory movement Source is required.");
 
-  const row = [movementId, new Date(), source, referenceId, sourceLineId, code, item, type, qtyChange, stockBefore, stockAfter, employee, reason, bundleNo, remainingBundleQty, notes];
-  if (row.length !== MOVEMENT_LOG_COLUMN_COUNT) throw new Error("Inventory Movement row does not match A:P mapping.");
+  const row = cleanInventoryMovementRow_([movementId, new Date(), source, referenceId, sourceLineId, code, item, type, qtyChange, stockBefore, stockAfter, employee, reason, bundleNo, remainingBundleQty, notes]);
+  if (row.length !== MOVEMENT_LOG_COLUMN_COUNT) throw new Error("Inventory Movement row does not match A:R mapping.");
   return row;
 }
 
@@ -258,14 +284,21 @@ function getInventoryMovementHistoryByCode(code) {
   const movements = [];
   display.forEach(function(d) {
     if (String(d[MOVE_IDX.CODE] || "").trim() !== code) return;
+    const source = String(d[MOVE_IDX.SOURCE] || '').trim();
+    const returned = [INVENTORY_MOVEMENT_SOURCE.SUPPLIER_RETURN, 'RETURN'].includes(source.toUpperCase());
+    const referenceId = String(d[MOVE_IDX.REFERENCE_ID] || '').trim();
+    const storedNotes = String(d[MOVE_IDX.NOTES] || '').trim();
+    const repeatedDeliveryId = source.toUpperCase() === INVENTORY_MOVEMENT_SOURCE.DELIVERY &&
+      referenceId && storedNotes === 'Delivery ID: ' + referenceId;
     movements.push({
       movementId: String(d[MOVE_IDX.MOVEMENT_ID] || ""), timestamp: String(d[MOVE_IDX.TIMESTAMP] || ""), code: code,
       type: String(d[MOVE_IDX.TYPE] || ""), qtyChange: Number(String(d[MOVE_IDX.QTY_CHANGE] || "").replace(/,/g, "")) || 0,
       stockBefore: Number(String(d[MOVE_IDX.STOCK_BEFORE] || "").replace(/,/g, "")) || 0, stockAfter: Number(String(d[MOVE_IDX.STOCK_AFTER] || "").replace(/,/g, "")) || 0,
-      referenceId: String(d[MOVE_IDX.REFERENCE_ID] || ""), sourceLineId: String(d[MOVE_IDX.SOURCE_LINE_ID] || ""), employee: String(d[MOVE_IDX.EMPLOYEE] || ""),
+      referenceId: referenceId, sourceLineId: String(d[MOVE_IDX.SOURCE_LINE_ID] || ""), employee: String(d[MOVE_IDX.EMPLOYEE] || ""),
       item: String(d[MOVE_IDX.ITEM] || ""), reason: String(d[MOVE_IDX.REASON] || ""),
-      source: String(d[MOVE_IDX.SOURCE] || ""), bundleNo: String(d[MOVE_IDX.BUNDLE_NO] || ""),
-      remainingBundleQty: String(d[MOVE_IDX.REMAINING_BUNDLE_QTY] || ""), notes: String(d[MOVE_IDX.NOTES] || "")
+      source: returned ? 'RETURN' : source, bundleNo: String(d[MOVE_IDX.BUNDLE_NO] || ""),
+      // Return metadata supports retry/report recovery; only its human reason belongs in item history.
+      remainingBundleQty: String(d[MOVE_IDX.REMAINING_BUNDLE_QTY] || ""), notes: returned || repeatedDeliveryId ? '' : storedNotes
     });
   });
   movements.reverse();

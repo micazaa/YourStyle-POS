@@ -243,7 +243,7 @@ function getDashboard(request) {
     tz = Session.getScriptTimeZone();
   const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd'),
     period = dashboardPeriod_(request, employee, today);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.SALES_LOG);
+  const sheet = getSalesLogSheet_();
   if (!sheet) throw new Error('Sales Log sheet not found.');
   const rows = sheet.getDataRange().getValues();
   const analytics = dashboardAnalytics_(rows, period, employee);
