@@ -22,6 +22,7 @@ function loadReport(details) {
     }
   });
   vm.runInContext(fs.readFileSync('Backend/Constants.js', 'utf8'), context);
+  vm.runInContext(fs.readFileSync('Backend/Dashboard.js', 'utf8'), context);
   vm.runInContext(fs.readFileSync('Backend/DeliveryReceiptReport.js', 'utf8'), context);
   return { context, getHtml: () => html };
 }
@@ -270,19 +271,45 @@ test('dashboard inventory snapshot groups YourFinds and keeps bundle units separ
     normalizeYourFindsSaleSize_: size => size === 'M' ? 'MNE' : size,
   });
   context.Utilities.formatDate = (_now, _timezone, format) => format === 'yyyy-MM-dd' ? '2026-11-13' : 'November 13, 2026 3:45 PM';
-  vm.runInContext(fs.readFileSync('Backend/Dashboard.js', 'utf8'), context);
   const summary = context.getDashboardInventoryReport(false);
   assert.deepEqual({...summary.totals}, {YOURFINDS:2,PINS:2,OTHERS:0,WHOLESALE:1});
-  assert.deepEqual(Array.from(summary.items, row => row.description), ['MNE','YELLOW NEW','YELLOW PIN','YELLOW PT','BAGS','PURE TOPS']);
-  assert.equal(summary.items.find(row => row.description === 'BAGS').status, 'Sold out');
+  assert.deepEqual(Array.from(summary.items, row => row.description), ['MNE','YELLOW NEW','YELLOW PIN','YELLOW PT','BAG','PURE TOPS']);
+  assert.equal(summary.items.find(row => row.description === 'BAG').status, 'Sold out');
   assert.equal(summary.items.find(row => row.description === 'YELLOW PIN').status, 'Low stock');
   assert.equal(context.getDashboardInventoryReport(true).fileName, 'Inventory_Report_Summary_2026-11-13.pdf');
   assert.match(getHtml(), /Prepared By<\/strong>Bea &lt;Manager&gt;/);
   assert.match(getHtml(), /<td>MNE<\/td><td>Medium Non-Electronic<\/td><td class="qty">2 pcs/);
   assert.match(getHtml(), /<tr style="color:#175cd3"><td>MNE/);
-  assert.match(getHtml(), /<td>B1, B2<\/td><td>BAGS<\/td>/);
+  assert.match(getHtml(), /<td>B1, B2<\/td><td>BAG<\/td>/);
   assert.match(getHtml(), /<strong>Legend<\/strong>/);
   assert.match(getHtml(), /<th colspan="3">Other items<\/th>/);
   assert.match(getHtml(), /GRAND TOTAL<\/td><td class="qty">4 pcs · 1 bundle/);
   assert.doesNotMatch(getHtml(), /Sold item|Disabled pin|Inactive item/);
+});
+
+test('dashboard YourFinds sizes follow the requested electronic and non-electronic order', () => {
+  const {context} = loadReport();
+  const order = ['SE','ME','LE','XLE','SNE','MNE','LNE','XLNE','BNE','NO SIZE'];
+  assert.deepEqual([...order].reverse().sort(context.compareDashboardYourFindsSizes_), order);
+  assert.deepEqual(['NS','BNE','SE'].sort(context.compareDashboardYourFindsSizes_), ['SE','BNE','NS']);
+});
+
+test('Other items keep catalog variants together in the requested order', () => {
+  const {context} = loadReport();
+  const expected = ['FLOWERS','FREEBIES','SUNGLASSES','SUNGLASSES 2 FOR 100','ACCESSORIES','ACCESSORIES 1 SET',
+    'BAG','SHOES KIDS','BLACK SHOES','FLAT SHOES','RUBBER','BOOTS','HEELS','SLIPPERS',
+    'WHITE TIES','WHITE TIES (NEW)','WHITE TIES (GS)','WHITE TIES (PT)','BLACK TIES','GREEN TIES'];
+  assert.deepEqual([...expected].reverse().sort(context.compareDashboardOtherItems_), expected);
+  const summary = context.dashboardReturnSummary_(expected.map(name => ({name, category:'OTHERS', quantity:1})));
+  assert.deepEqual(Array.from(summary.groups[0].rows, row => row.description), expected);
+});
+
+test('Pins sort by color, keeping variants together and tags last', () => {
+  const {context} = loadReport();
+  const expected = ['GREEN','YELLOW','YELLOW NEW','YELLOW PT','BLACK','BLUE','RED','GRAY','WHITE','GREEN SPECIAL','TAG - 999','TAG - 1500'];
+  assert.deepEqual([...expected].reverse().sort(context.compareDashboardPins_), expected);
+  const records = [{name:'Yellow (PT)'},{name:'Yellow',size:'PT'},{name:'Yellow (NEW)'},{name:'Black'}]
+    .map(record => ({...record, category:'PINS', quantity:1}));
+  const [pins] = context.dashboardReturnSummary_(records).groups;
+  assert.deepEqual(Array.from(pins.rows, row => [row.description,row.quantity]), [['YELLOW NEW',1],['YELLOW PT',2],['BLACK',1]]);
 });

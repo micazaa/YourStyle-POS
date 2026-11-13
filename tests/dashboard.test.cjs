@@ -510,7 +510,7 @@ test('overview groups delivery and return lines without reading sales', () => {
   assert.equal(overview.delivery.items, 7);
   assert.equal(overview.returns.count, 3);
   assert.equal(overview.returns.items, 11);
-  assert.deepEqual(Array.from(overview.returns.groups, group => group.rows[0].description), ['SNE','GS','Shoes']);
+  assert.deepEqual(Array.from(overview.returns.groups, group => group.rows[0].description), ['SNE','YELLOW GS','MEN SHOES']);
   assert.equal(overview.returns.groups[0].rows[0].quantity, 5);
   c.getDashboardOverview(range);
   version = 'v2';

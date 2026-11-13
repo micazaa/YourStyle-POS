@@ -249,7 +249,7 @@ function getDashboardOverview(request) {
   const digest = Utilities.base64EncodeWebSafe(Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256, JSON.stringify([version, start, end])
   ));
-  const key = 'dashboard-overview:v8:' + digest;
+  const key = 'dashboard-overview:v13:' + digest;
   try {
     const cached = cache.get(key);
     if (cached) return JSON.parse(cached);
@@ -264,8 +264,16 @@ function getDashboardOverview(request) {
     if (status === DELIVERY_STATUS.PENDING || status === DELIVERY_STATUS.PARTIAL) incomplete.add(id);
   });
   const inventory = shared.inventory;
+  const undistributed = shared.deliveryItems.filter(row => row.awaitingDistribution);
+  const reminders = {
+    incomplete:inventory.items.filter(item => item.status === 'Incomplete').length,
+    sold:inventory.items.filter(item => item.status === 'Sold out').length,
+    low:inventory.low,
+    undistributed:undistributed.reduce((count, row) => count + row.quantity, 0),
+  };
   const overview = {
     inventory,
+    reminders,
     delivery: {...dashboardReturnSummary_(shared.deliveryItems.filter(record => received.has(record.id)), true), count: received.size, incomplete: incomplete.size},
     returns: dashboardReturnSummary_(shared.returns.filter(record => record.date >= start && record.date <= end)),
   };
@@ -278,7 +286,7 @@ function getDashboardOverview(request) {
 }
 
 function dashboardOverviewShared_(version, cache) {
-  const key = 'dashboard-overview-shared:v6:' + version;
+  const key = 'dashboard-overview-shared:v11:' + version;
   try {
     const cached = cache.get(key);
     if (cached) return JSON.parse(cached);
@@ -332,30 +340,85 @@ function dashboardReturnSummary_(records, separateWholesale = false) {
       description = dashboardYourFindsReturnSize_(size);
     } else if (category === 'PINS') {
       group = groups[1];
-      const variant = /\((GS|NEW|PT)\)/i.exec(name);
-      description = variant ? variant[1].toUpperCase() : ['GS', 'NEW', 'PT'].includes(size) ? size : '-';
+      description = dashboardPinName_(name, size);
     } else if (separateWholesale && category === 'WHOLESALE') {
       group = groups[3];
       description = name || 'Wholesale';
     } else {
       group = groups[2];
-      const product = name + ' ' + String(record.code || '');
-      description = /\bSHOES?\b/i.test(product) ? 'Shoes' : /\bBAGS?\b/i.test(product) ? 'Bags' : name || 'Unspecified item';
+      description = dashboardOtherItemName_(name);
     }
     const key = JSON.stringify([description.toUpperCase(), record.unit || '']);
     if (!group.rows.has(key)) group.rows.set(key, {description:description, quantity:0, ...(record.unit ? {unit:record.unit} : {})});
     group.rows.get(key).quantity += quantity;
   });
-  const sortOrders = [YOURFINDS_SIZE_ORDER, ['-', 'GS', 'NEW', 'PT'], ['Shoes', 'Bags'], []];
+  const comparators = [compareDashboardYourFindsSizes_, compareDashboardPins_, compareDashboardOtherItems_];
   const sections = groups.map(({title, rows}, index) => {
-    const order = sortOrders[index];
-    const rank = name => order.includes(name) ? order.indexOf(name) : order.length;
-    const sorted = Array.from(rows.values()).sort((a,b) =>
-      rank(a.description) - rank(b.description) || a.description.localeCompare(b.description, undefined, {numeric:true,sensitivity:'base'})
-    );
+    const compare = comparators[index] || ((a,b) => a.localeCompare(b, undefined, {numeric:true,sensitivity:'base'}));
+    const sorted = Array.from(rows.values()).sort((a,b) => compare(a.description, b.description));
     return {title:title, rows:sorted};
   }).filter(group => group.rows.length);
   return {count:ids.size, items:items, groups:sections};
+}
+
+function dashboardPinName_(name, size) {
+  const label = String(name || '').trim().toUpperCase().replace(/\((GS|NEW|PT)\)/g, '$1').replace(/\s+/g, ' ');
+  const variant = String(size || '').trim().toUpperCase();
+  return ['GS', 'NEW', 'PT'].includes(variant) && !/\b(GS|NEW|PT)\b/.test(label) ? label + ' ' + variant : label;
+}
+
+function compareDashboardPins_(a, b) {
+  const order = ['GREEN', 'YELLOW', 'BLACK', 'BLUE', 'RED', 'GRAY', 'WHITE', 'GREEN SPECIAL'];
+  const rank = name => {
+    const label = dashboardPinName_(name);
+    const first = /^GREEN SPECIAL\b/.test(label) ? 'GREEN SPECIAL' : label.split(/[^A-Z]+/)[0];
+    if (first === 'TAG' || first === 'TAGS') return order.length + 1;
+    const index = order.indexOf(first);
+    return index < 0 ? order.length : index;
+  };
+  return rank(a) - rank(b) || a.localeCompare(b, undefined, {numeric:true,sensitivity:'base'});
+}
+
+const DASHBOARD_OTHER_ITEM_ORDER = [
+  'FLOWERS', 'FREEBIES', 'SUNGLASSES', 'SUNGLASSES 2 FOR 100',
+  'ACCESSORIES', 'ACCESSORIES 1 SET', 'ACCESSORIES 3 FOR 100',
+  'BAG', 'MYSTERY BAG (A)', 'MYSTERY BAG (B)', 'MYSTERY BAG (C)', 'PAPERBAG',
+  'SHOES KIDS', 'BLACK SHOES', 'FLAT SHOES', 'MEN SHOES', 'RUBBER', 'BOOTS', 'HEELS', 'SLIPPERS',
+  'WHITE TIES', 'WHITE TIES (NEW)', 'WHITE TIES (GS)',
+  'BLACK TIES', 'BLACK TIES (NEW)', 'BLACK TIES (GS)',
+  'GREEN TIES', 'GREEN TIES (NEW)', 'GREEN TIES (GS)',
+];
+
+function dashboardOtherItemName_(name) {
+  const label = String(name || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  const ties = /^((?:WHITE|BLACK|GREEN) TIES)\s+\(?(NEW|GS|PT)\)?$/.exec(label);
+  if (ties) return ties[1] + ' (' + ties[2] + ')';
+  if (DASHBOARD_OTHER_ITEM_ORDER.includes(label)) return label;
+  if (/\bBAGS?\b/.test(label)) return 'BAG';
+  if (/\bSHOES?\b/.test(label)) return 'SHOES';
+  if (/\bACCESSOR(?:Y|IES)\b/.test(label)) return 'ACCESSORIES';
+  return label || 'Unspecified item';
+}
+
+function compareDashboardOtherItems_(a, b) {
+  const rank = name => {
+    const label = dashboardOtherItemName_(name);
+    const index = DASHBOARD_OTHER_ITEM_ORDER.indexOf(label);
+    if (index >= 0) return index;
+    const tie = /^(.* TIES) \(.*\)$/.exec(label);
+    const base = tie ? DASHBOARD_OTHER_ITEM_ORDER.indexOf(tie[1]) : -1;
+    return base < 0 ? DASHBOARD_OTHER_ITEM_ORDER.length : base + 2.5;
+  };
+  return rank(a) - rank(b) || a.localeCompare(b, undefined, {numeric:true,sensitivity:'base'});
+}
+
+function compareDashboardYourFindsSizes_(a, b) {
+  const order = ['SE', 'ME', 'LE', 'XLE', 'SNE', 'MNE', 'LNE', 'XLNE', 'BNE', 'NO SIZE'];
+  const rank = size => {
+    const index = order.indexOf(size === 'NS' ? 'NO SIZE' : size);
+    return index < 0 ? order.length : index;
+  };
+  return rank(a) - rank(b) || a.localeCompare(b, undefined, {numeric:true,sensitivity:'base'});
 }
 
 function dashboardYourFindsReturnSize_(size) {
@@ -602,10 +665,8 @@ function buildDashboardInventoryReport_(version) {
     const category = Object.prototype.hasOwnProperty.call(totals, item.category) ? item.category : 'OTHERS';
     const size = category === 'YOURFINDS' ? dashboardYourFindsReturnSize_(item.size) : '';
     const name = String(item.name || item.code || 'Unspecified item').trim().replace(/\s+/g, ' ').toUpperCase();
-    const product = name + ' ' + item.code;
-    const other = /\bSHOES?\b/i.test(product) ? 'SHOES' : /\bBAGS?\b/i.test(product) ? 'BAGS'
-      : /\bACCESSOR(?:Y|IES)\b/i.test(product) ? 'ACCESSORIES' : name;
-    const description = size || (category === 'OTHERS' ? other : category === 'PINS' ? name.replace(/\((GS|NEW|PT)\)/g, '$1') : name);
+    const description = size || (category === 'OTHERS' ? dashboardOtherItemName_(name)
+      : category === 'PINS' ? dashboardPinName_(name, item.size) : name);
     const key = JSON.stringify([category, description]);
     if (!rows.has(key)) rows.set(key, {category, codes:new Set(), description, stock:0, threshold:0, incomplete:false});
     const row = rows.get(key);
@@ -620,6 +681,9 @@ function buildDashboardInventoryReport_(version) {
       : row.threshold > 0 && row.stock <= row.threshold ? 'Low stock' : row.incomplete ? 'Incomplete' : '';
     return {category:row.category, code:Array.from(row.codes).join(', ') || '—', description:row.description, stock:row.stock, status};
   }).sort((a,b) => Object.keys(totals).indexOf(a.category) - Object.keys(totals).indexOf(b.category) ||
-    a.description.localeCompare(b.description, undefined, {numeric:true}));
+    (a.category === 'YOURFINDS' ? compareDashboardYourFindsSizes_(a.description, b.description)
+      : a.category === 'PINS' ? compareDashboardPins_(a.description, b.description)
+      : a.category === 'OTHERS' ? compareDashboardOtherItems_(a.description, b.description)
+      : a.description.localeCompare(b.description, undefined, {numeric:true})));
   return {snapshot, totals, items};
 }

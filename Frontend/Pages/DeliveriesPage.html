@@ -73,6 +73,7 @@
     <div class="card-body d-flex flex-wrap gap-2">
       <select id="deliveriesCategoryFilter" class="form-select" style="width:180px;" aria-label="Delivery type" onchange="filterDeliveriesPage()"><option value="">All</option><option value="YOURFINDS">YOURFINDS</option><option value="YOURSTYLE">YOURSTYLE</option></select>
       <input type="search" id="deliveriesSearch" class="form-control" style="flex:1;min-width:220px;" aria-label="Search deliveries" placeholder="Search code, product, category, size..." oninput="filterDeliveriesPage()">
+      <label class="form-check align-self-center mb-0"><input type="checkbox" class="form-check-input" id="deliveriesUndistributedFilter" onchange="filterDeliveriesPage()"> Awaiting distribution</label>
     </div>
   </div>
 
@@ -987,6 +988,9 @@ function escapeDeliveriesHtml(
 ========================================================== */
 
 function filterDeliveriesPage() {
+  const undistributedOnly = document.getElementById('deliveriesUndistributedFilter')?.checked;
+  const summary = undistributedOnly ? deliverySummaryData() : null;
+  const awaiting = summary && new Set(summary.bundles.filter(bundle => bundle.available).map(bundle => bundle.deliveryId));
   const category = document.getElementById("deliveriesCategoryFilter")?.value || "";
 
   const search =
@@ -1103,7 +1107,9 @@ function filterDeliveriesPage() {
           matchesSearch &&
           matchesFrom &&
           matchesTo &&
-          matchesStatus
+          matchesStatus &&
+          (!undistributedOnly || (awaiting ? awaiting.has(delivery.deliveryId) :
+            delivery.hasBulk && ['PENDING','PARTIAL'].includes(deliveryStatus)))
         );
 
       }
@@ -1217,12 +1223,14 @@ function normalizeDeliveryFilterDate(
    CLEAR FILTERS
 ========================================================== */
 
-function clearDeliveriesFilters() {
+function clearDeliveriesFilters(render = true) {
+  const undistributed = document.getElementById('deliveriesUndistributedFilter');
+  if (undistributed) undistributed.checked = false;
   ['deliveriesCategoryFilter','deliveriesSearch','deliveriesFromDate','deliveriesToDate','deliveriesStatusFilter'].forEach(id=>{
     const input=document.getElementById(id);
     if(input)input.value='';
   });
-  filterDeliveriesPage();
+  if (render) filterDeliveriesPage();
 }
 
 /* ==========================================================

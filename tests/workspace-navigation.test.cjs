@@ -9,7 +9,7 @@ function fixture({cashier=false,manager=false,dev=false,saved}={}) {
   const c=vm.createContext({clearTimeout,currentEmployee:{fullName:'Test User',role:manager?'MANAGER':'CASHIER'},currentSessionIsCashier:cashier,
     currentCashier:'',currentShiftPettyCash:0,currentShiftReportId:'',loginAttempt:0,pageReadCache:new Map(),
     localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},
-    document:{addEventListener(){},body:{dataset:{dashboardEnabled:String(dev)},classList:{toggle(){}}},getElementById:element,querySelector:selector=>selector==='.sidebar-menu'?element('sidebarMenu'):null,querySelectorAll:()=>[]},
+    document:{addEventListener(){},removeEventListener(){},body:{dataset:{dashboardEnabled:String(dev)},classList:{toggle(){}}},getElementById:element,querySelector:selector=>selector==='.sidebar-menu'?element('sidebarMenu'):null,querySelectorAll:()=>[]},
     window:{addEventListener(){},matchMedia:()=>({matches:true})},
     hasManagerViewAccess:()=>manager,canAuthorizeManagerActions:()=>manager,
     prioritizeWorkspacePage(){},finishWorkspacePageLoad(){},
@@ -157,7 +157,8 @@ test('UAT restores Dashboard first and waits for its totals before other workspa
 test('saved Dashboard totals render before the server responds and refresh without blocking navigation',()=>{
  const f=fixture({dev:true});
  f.c.currentEmployee.dashboardToken='session';
- const totals={sales:{net:500,count:2,own:true},inventory:{stock:10,low:1},delivery:{count:1,incomplete:0,items:0,groups:[]},returns:{count:0,items:0,groups:[]}};
+ const totals={inventory:{stock:10,low:1},delivery:{count:1,incomplete:0,items:0,groups:[]},returns:{count:0,items:0,groups:[]},
+  reminders:{incomplete:2,sold:0,low:1,undistributed:4}};
  let released=0,saved;
  f.c.readDeviceOverview=()=>totals;
  f.c.writeDeviceOverview=(range,data)=>{saved=data;};
@@ -166,13 +167,17 @@ test('saved Dashboard totals render before the server responds and refresh witho
  assert.equal(f.element('dashboardStockTotal').textContent,'10');
  assert.equal(f.element('dashboardOverviewStatus').textContent,'Saved totals · refreshing…');
  assert.equal(released,1);assert.equal(f.overviewRequests.length,1);
+ f.c.toggleDashboardInventoryReminders(true);
+ assert.deepEqual(['incomplete','sold','low','undistributed'].map(kind=>f.element('dashboardReminder-'+kind).textContent),['2','0','1','4']);
+ assert.equal(f.overviewRequests.length,1);
  f.c.openDashboardDeliverySummary();
  assert.equal(f.element('dashboardDeliveryReceiptCount').textContent,'1');
  assert.equal(f.element('dashboardDeliveryMessage').textContent,'No received items in this date range.');
  assert.equal(f.overviewRequests.length,1);
- const fresh={...totals,inventory:{...totals.inventory,stock:600}};
+ const fresh={...totals,inventory:{...totals.inventory,stock:600},reminders:{...totals.reminders,undistributed:3}};
  f.overviewRequests[0].success(fresh);
  assert.equal(f.element('dashboardStockTotal').textContent,'600');assert.equal(saved,fresh);
+ assert.equal(f.element('dashboardReminder-undistributed').textContent,'3');
  assert.equal(f.element('dashboardOverviewStatus').textContent,'');
 });
 test('switching A to B to A reuses pending requests and retains both date results',()=>{
@@ -246,4 +251,24 @@ test('saving a session without a remembered page uses the correct session defaul
   const saved=JSON.parse(f.storage.get('ys_pos_session'));
   assert.equal(saved.activePage,cashier?'posPage':'inventoryPage');assert.equal(saved.isCashierSession,cashier);
  }
+});
+
+test('dashboard reminders open the matching inventory or delivery filter',()=>{
+ const f=fixture({dev:true});
+ f.c.dashboardInventoryReminder='';
+ f.c.clearDeliveriesFilters=render=>assert.equal(render,false);
+ f.c.renderDashboardOverview({inventory:{stock:12,low:2},delivery:{count:1,incomplete:1},returns:{count:0,items:0},
+  reminders:{incomplete:1,sold:3,low:2,undistributed:4}});
+ assert.equal(f.element('dashboardReminder-undistributed').textContent,'4');
+ f.c.toggleDashboardInventoryReminders(true);
+ assert.equal(f.element('dashboardInventoryReminders').hidden,false);
+ for(const [kind, filter] of [['incomplete','INCOMPLETE'],['sold','SOLD OUT'],['low','LOW STOCK']]){
+  f.c.openDashboardReminder(kind);
+  assert.equal(f.c.dashboardInventoryReminder,filter);
+  assert.equal(f.storage.get('ys_pos_active_page'),'inventoryPage');
+ }
+ f.c.openDashboardReminder('undistributed');
+ assert.equal(f.c.dashboardInventoryReminder,'WHOLESALE');
+ assert.equal(f.storage.get('ys_pos_active_page'),'inventoryPage');
+ assert.equal(f.element('dashboardInventoryReminders').hidden,true);
 });

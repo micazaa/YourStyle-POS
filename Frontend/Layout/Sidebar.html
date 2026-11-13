@@ -135,6 +135,9 @@ function openInventoryWorkspace(){
       });
       document.querySelectorAll('dialog[open]').forEach(function(dialog) { dialog.close(); });
       if (typeof resetCustomerExchangeSession === 'function') resetCustomerExchangeSession();
+      const undistributedFilter=document.getElementById('deliveriesUndistributedFilter');
+      if(undistributedFilter)undistributedFilter.checked=false;
+      dashboardInventoryReminder='';
       clearSession();
       if(typeof resetAccessManagement==='function')resetAccessManagement();
       document.getElementById('accessManagementNav').hidden=true;

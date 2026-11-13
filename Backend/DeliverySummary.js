@@ -148,7 +148,7 @@ function dashboardDeliveryItemRows_(ss, deliveries, selected = new Set(deliverie
         String(row[DELIVERY_IDX.DESCRIPTION] || '').trim() || bundle.label;
       // Product Master adds a piece-count suffix that older Delivery Log labels lack.
       const bundleName = String(name).trim().replace(/\s*·\s*\(\d+\)\s*pcs$/i, '');
-      rows.push({id, category:'WHOLESALE', name:bundleName, code, size:'', quantity:1, unit:'bundle'});
+      rows.push({id, category:'WHOLESALE', name:bundleName, code, size:'', quantity:1, unit:'bundle', awaitingDistribution:!bundle.fullSold && !bundle.returned && Number(bundle.soldHalves || 0) < 2});
     });
   });
   return rows;

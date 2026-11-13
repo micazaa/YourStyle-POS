@@ -189,14 +189,20 @@ function buildDashboardMovementReportHtml_(rows, start, end, title, details, sep
     const displayName = separateWholesale && row.unit === 'bundle' ? description + ' (bundle)' : description;
     const key = yourFinds ? JSON.stringify(['YOURFINDS', size])
       : JSON.stringify([total, row.unit || '', description ? ['description', description.replace(/\s+/g, ' ').toUpperCase()] : ['code', code]]);
-    if (!items.has(key)) items.set(key, {code:yourFinds ? size : code, description:displayName, yourFinds, quantity:0, codes:new Set()});
+    if (!items.has(key)) items.set(key, {code:yourFinds ? size : code, description:displayName, total, yourFinds, quantity:0, codes:new Set()});
     const item = items.get(key);
     item.quantity += quantity;
     if (code) item.codes.add(code);
   });
 
   const safe = escapeDeliveryReceiptHtml_;
-  const lines = Array.from(items.values()).map(item => {
+  const lines = Array.from(items.values()).sort((a,b) => {
+    if (a.yourFinds && b.yourFinds) return compareDashboardYourFindsSizes_(a.code, b.code);
+    const categoryOrder = ['TOTAL YF','TOTAL PIN','TOTAL OTHERS','TOTAL WHOLESALE'];
+    return categoryOrder.indexOf(a.total) - categoryOrder.indexOf(b.total) ||
+      (a.total === 'TOTAL PIN' ? compareDashboardPins_(a.description, b.description)
+        : a.total === 'TOTAL OTHERS' ? compareDashboardOtherItems_(a.description, b.description) : 0);
+  }).map(item => {
     const description = item.yourFinds
       ? Array.from(item.codes, code => code.replace(/\D/g, '').slice(-4)).filter(Boolean).join(', ') || '—'
       : item.description;

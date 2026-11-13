@@ -521,7 +521,12 @@ function loadInventoryPage(forceRefresh=false,keepVisible=false) {
   if(forceRefresh){invalidateLocalInventoryReads();pageReadCache.delete('inventory');pageReadCache.delete('standardDeliveryDetails');}
   if(dashboardInventoryReminder){
     inventoryIncompleteOnly=false;
-    document.querySelectorAll('[data-inventory-stock]').forEach(input=>{input.checked=dashboardInventoryReminder==='incomplete'&&input.value==='INCOMPLETE';});
+    inventoryListPage=1;
+    ['inventorySearch','inventoryCategoryFilter'].forEach(id=>{document.getElementById(id).value='';});
+    document.querySelectorAll('[data-inventory-status]').forEach(input=>{input.checked=input.value==='ACTIVE'||input.value==='ON SALE';});
+    if(dashboardInventoryReminder==='WHOLESALE')document.getElementById('inventoryCategoryFilter').value='WHOLESALE';
+    document.querySelectorAll('[data-inventory-stock]').forEach(input=>{input.checked=input.value===(dashboardInventoryReminder==='WHOLESALE'?'IN STOCK':dashboardInventoryReminder);});
+    dashboardInventoryReminder='';
   }
   document.getElementById('inventoryAddProductButton').style.display=inventoryIsManager()?'inline-block':'none';
   document.getElementById('inventoryActiveHeading').style.display=inventoryIsManager()?'':'none';updateInventoryFilterButton();
@@ -529,15 +534,13 @@ function loadInventoryPage(forceRefresh=false,keepVisible=false) {
   if(!forceRefresh&&typeof restoreDeviceInventory==='function')restoreDeviceInventory();
   const query=inventoryListQuery(),key=inventoryListCacheKey(query),preparedVersion=inventoryPreparationVersion();
   const entry=inventoryListPages.get(key),cached=entry&&(!preparedVersion||entry.data.version===preparedVersion)?entry:null;
-  const reminder=dashboardInventoryReminder;dashboardInventoryReminder='';
-  const showReminder=()=>{if(reminder==='low'||reminder==='sold')openInventorySummary(reminder);};
   if(inventoryDatasetCanAnswer(query)){
-    ++inventoryListRequest;inventoryListPending=null;applyLocalInventoryPage(query);showReminder();
+    ++inventoryListRequest;inventoryListPending=null;applyLocalInventoryPage(query);
     ensureInventoryPreparation();checkInventoryVersionInBackground();return;
   }
   if(inventoryListPending&&(inventoryListPending.key!==key||inventoryListPending.owner!==owner)){++inventoryListRequest;inventoryListPending=null;}
   if(inventoryListPending&&inventoryListPending.key===key&&inventoryListPending.owner===owner){inventoryListBusy(true);return;}
-  if(cached){applyInventoryPage(cached.data);showReminder();ensureInventoryPreparation();checkInventoryVersionInBackground();return;}
+  if(cached){applyInventoryPage(cached.data);ensureInventoryPreparation();checkInventoryVersionInBackground();return;}
   const request=++inventoryListRequest,started=performance.now(),epoch=inventoryDataEpoch;
   inventoryListPending={key:key,owner:owner,request:request};inventoryListBusy(true);
   const current=()=>request===inventoryListRequest&&currentEmployee&&currentEmployee.dashboardToken===owner;
@@ -557,7 +560,7 @@ function loadInventoryPage(forceRefresh=false,keepVisible=false) {
       if(!current())return;
     }
     rememberInventoryListPage(query,result);const responseMs=performance.now()-started,renderStarted=performance.now();
-    applyInventoryPage(result);showReminder();ensureInventoryPreparation();
+    applyInventoryPage(result);ensureInventoryPreparation();
     console.info('Inventory load',{responseMs:Math.round(responseMs),renderMs:Math.round(performance.now()-renderStarted),rows:inventoryPageData.length});
   }).withFailureHandler(failed).getInventoryPage(query);
 }

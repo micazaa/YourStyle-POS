@@ -27,7 +27,8 @@ function loadDeliverySummaryData() {
     if (!result || !result.success) { read.fail(); deliverySummaryFailure(); return; }
     read.save(result);
     inventoryBundleSummaryFailed = false;
-    renderDeliverySummaryCards();
+    if (document.getElementById('deliveriesUndistributedFilter')?.checked) filterDeliveriesPage();
+    else renderDeliverySummaryCards();
     if (document.getElementById('deliverySummaryModal').style.display === 'flex') renderDeliverySummary();
   }).withFailureHandler(() => { if (read.current()) { read.fail(); deliverySummaryFailure(); } }).getDeliverySummaryData();
 }
@@ -149,7 +150,7 @@ function renderDeliverySummary() {
 function closeDeliveryReceiptHistory() { deliveryReceiptKey='';renderDeliverySummary(); }
 function jumpToDeliveryRow(deliveryId) {
   closeModal('deliverySummaryModal');
-  ['deliveriesCategoryFilter','deliveriesSearch','deliveriesFromDate','deliveriesToDate','deliveriesStatusFilter'].forEach(id=>{const input=document.getElementById(id);if(input)input.value='';});
+  clearDeliveriesFilters(false);
   showPage('deliveriesPage');
   filterDeliveriesPage();
   document.querySelectorAll('#deliveriesTableBody tr[data-delivery-id]').forEach(row=>{

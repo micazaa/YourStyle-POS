@@ -14,24 +14,42 @@
   <section class="dashboard-overview" aria-labelledby="dashboardOverviewHeading">
     <h2 id="dashboardOverviewHeading" class="h5 mb-3">Overview</h2>
     <div class="dashboard-overview-grid">
+      <div class="dashboard-inventory-card">
       <button type="button" class="dashboard-overview-card" aria-haspopup="dialog" onclick="openDashboardInventoryReport()">
-        <span class="dashboard-card-title">Inventory <span aria-hidden="true">↗</span></span>
+        <span class="dashboard-card-title">Inventory</span>
         <strong id="dashboardStockTotal">—</strong>
         <span>Items in stock now</span>
         <small id="dashboardStockDetail" class="dashboard-card-attention"></small>
       </button>
-      <button type="button" class="dashboard-overview-card" aria-haspopup="dialog" onclick="openDashboardDeliverySummary()">
-        <span class="dashboard-card-title">Delivery <span aria-hidden="true">↗</span></span>
-        <strong id="dashboardDeliveryTotal">—</strong>
-        <span>Deliveries received</span>
-        <small id="dashboardDeliveryDetail" class="dashboard-card-attention"></small>
-      </button>
-      <button type="button" class="dashboard-overview-card" aria-haspopup="dialog" onclick="openDashboardReturnSummary()">
-        <span class="dashboard-card-title">Return <span aria-hidden="true">↗</span></span>
-        <strong id="dashboardReturnTotal">—</strong>
-        <span>Supplier returns</span>
-        <small id="dashboardReturnDetail"></small>
-      </button>
+        <button id="dashboardInventoryBell" type="button" class="btn btn-light dashboard-inventory-bell" aria-label="Inventory reminders" aria-expanded="false" aria-controls="dashboardInventoryReminders" onclick="toggleDashboardInventoryReminders()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
+        </button>
+        <aside id="dashboardInventoryReminders" aria-label="Inventory reminders" hidden>
+          <strong>Needs attention</strong>
+          <button type="button" onclick="openDashboardReminder('incomplete')">Incomplete<b id="dashboardReminder-incomplete">—</b></button>
+          <button type="button" onclick="openDashboardReminder('sold')">Sold out<b id="dashboardReminder-sold">—</b></button>
+          <button type="button" onclick="openDashboardReminder('low')">Low stock<b id="dashboardReminder-low">—</b></button>
+          <button type="button" onclick="openDashboardReminder('undistributed')">Undistributed<b id="dashboardReminder-undistributed">—</b></button>
+        </aside>
+      </div>
+      <div class="dashboard-link-card">
+        <button type="button" class="dashboard-overview-card" aria-haspopup="dialog" onclick="openDashboardDeliverySummary()">
+          <span class="dashboard-card-title">Delivery</span>
+          <strong id="dashboardDeliveryTotal">—</strong>
+          <span>Deliveries received</span>
+          <small id="dashboardDeliveryDetail" class="dashboard-card-attention"></small>
+        </button>
+        <button type="button" class="btn btn-light dashboard-card-link" aria-label="Open Delivery page" onclick="navigateSidebar('deliveriesPage')">↗</button>
+      </div>
+      <div class="dashboard-link-card">
+        <button type="button" class="dashboard-overview-card" aria-haspopup="dialog" onclick="openDashboardReturnSummary()">
+          <span class="dashboard-card-title">Return</span>
+          <strong id="dashboardReturnTotal">—</strong>
+          <span>Supplier returns</span>
+          <small id="dashboardReturnDetail"></small>
+        </button>
+        <button type="button" class="btn btn-light dashboard-card-link" aria-label="Open Return page" onclick="navigateSidebar('supplierReturnsPage')">↗</button>
+      </div>
     </div>
     <p id="dashboardOverviewStatus" class="small text-muted mt-2 mb-0" role="status"></p>
     <button id="dashboardOverviewRetry" type="button" class="btn btn-outline-pink btn-sm mt-2" onclick="loadDashboardOverview()" hidden>Retry</button>
@@ -196,6 +214,23 @@
     text-align: left;
     font-size: 0.875rem;
   }
+  .dashboard-overview-grid { align-items: start; }
+  .dashboard-link-card { position: relative; min-width: 0; }
+  .dashboard-link-card .dashboard-overview-card { width: 100%; }
+  .dashboard-card-link { position: absolute; right: 8px; top: 7px; min-width: 36px; }
+  .dashboard-inventory-card { position: relative; min-width: 0; }
+  .dashboard-inventory-card .dashboard-overview-card { width: 100%; }
+  .dashboard-inventory-bell { position: absolute; right: 8px; top: 7px; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; }
+  #dashboardInventoryReminders { position: absolute; z-index: 10; top: 56px; right: 8px; width: min(240px, calc(100% - 16px)); background: white; border: 1px solid #ead9de; border-radius: 10px; box-shadow: 0 8px 24px #381f2c26; }
+  #dashboardInventoryReminders::before { content: ''; position: absolute; top: -6px; right: 15px; width: 10px; height: 10px; background: var(--pink-light); border-top: 1px solid #ead9de; border-left: 1px solid #ead9de; transform: rotate(45deg); }
+  #dashboardInventoryReminders strong, #dashboardInventoryReminders button { display: block; padding: 8px 12px; }
+  #dashboardInventoryReminders strong { background: var(--pink-light); border-radius: 9px 9px 0 0; }
+  #dashboardInventoryReminders button { display: flex; justify-content: space-between; gap: 6px; width: 100%; min-height: 44px; background: none; border: 0; border-top: 1px solid #ead9de; color: inherit; text-align: left; }
+  #dashboardInventoryReminders button:hover { background: var(--pink-light); }
+  #dashboardReminder-incomplete { color: #175cd3; }
+  #dashboardReminder-sold { color: #b42318; }
+  #dashboardReminder-low { color: #8a6100; }
+  #dashboardReminder-undistributed { color: #7044a0; }
   .dashboard-overview-card:hover { background: var(--pink-light); }
   .dashboard-card-title { display: flex; justify-content: space-between; font-weight: 650; margin-bottom: 8px; }
   .dashboard-card-title span, .dashboard-overview-card small { color: #684657; }
@@ -288,7 +323,43 @@
   let dashboardReturnPdfRequest = null;
   const dashboardNumberFormat = new Intl.NumberFormat('en-PH');
 
+  function toggleDashboardInventoryReminders(open = document.getElementById('dashboardInventoryReminders').hidden) {
+    const panel = document.getElementById('dashboardInventoryReminders');
+    const bell = document.getElementById('dashboardInventoryBell');
+    panel.hidden = !open;
+    bell.setAttribute('aria-expanded', String(open));
+    document.removeEventListener('pointerdown', dismissDashboardInventoryReminders);
+    document.removeEventListener('keydown', dismissDashboardInventoryReminders);
+    if (open) {
+      document.addEventListener('pointerdown', dismissDashboardInventoryReminders);
+      document.addEventListener('keydown', dismissDashboardInventoryReminders);
+    }
+  }
+
+  function dismissDashboardInventoryReminders(event) {
+    const bell = document.getElementById('dashboardInventoryBell');
+    if (event.type === 'keydown') {
+      if (event.key !== 'Escape') return;
+      toggleDashboardInventoryReminders(false);
+      bell.focus();
+    } else if (!bell.contains(event.target) &&
+        !document.getElementById('dashboardInventoryReminders').contains(event.target)) {
+      toggleDashboardInventoryReminders(false);
+    }
+  }
+
+  function openDashboardReminder(kind) {
+    toggleDashboardInventoryReminders(false);
+    dashboardInventoryReminder = {incomplete:'INCOMPLETE', sold:'SOLD OUT', low:'LOW STOCK', undistributed:'WHOLESALE'}[kind];
+    navigateSidebar('inventoryPage');
+  }
+
   function renderDashboardOverview(data) {
+    const dashboardReminders = data?.reminders;
+    ['incomplete','sold','low','undistributed'].forEach(kind => {
+      const count = dashboardReminders?.[kind];
+      document.getElementById('dashboardReminder-' + kind).textContent = count == null ? '—' : dashboardNumberFormat.format(count);
+    });
     const fields = {
       dashboardStockTotal: data ? dashboardNumberFormat.format(data.inventory.stock) : '—',
       dashboardStockDetail: data ? dashboardNumberFormat.format(data.inventory.low) + ' low-stock products' : '',
@@ -693,6 +764,7 @@
   }
 
   function clearDashboardState() {
+    toggleDashboardInventoryReminders(false);
     Array.from(pageReadCache.keys()).filter(key => key.startsWith('dashboardOverview')).forEach(key => pageReadCache.delete(key));
     document.getElementById('dashboardInventoryReport').close();
     dashboardInventoryPdfRequest = null;
