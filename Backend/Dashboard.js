@@ -273,24 +273,19 @@ function getDashboardOverview(request) {
       })
     : {totalSales:0, transactionCount:0};
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shared = dashboardOverviewShared_(version, cache);
   const received = new Set(), incomplete = new Set();
   const inPeriod = date => date >= start && date <= end;
-  readDeliveryPageRows_(ss, SHEETS.DELIVERY_LOG, DELIVERY_LOG_COLUMN_COUNT, false).forEach(row => {
-    const id = String(row[DELIVERY_IDX.DELIVERY_ID] || '').trim();
-    const type = String(row[DELIVERY_IDX.DELIVERY_TYPE] || '').trim().toUpperCase();
-    if (!id || (type !== DELIVERY_TYPE.YOURSTYLE && type !== DELIVERY_TYPE.YOURFINDS && (type || !/^YFD-/i.test(id)))) return;
-    const date = dashboardOverviewDate_(formatInventoryDateForClient(row[DELIVERY_IDX.DELIVERY_DATE]));
+  shared.deliveries.forEach(({id,date,status}) => {
     if (inPeriod(date)) received.add(id);
-    const status = String(row[DELIVERY_IDX.STATUS] || '').trim().toUpperCase();
     if (status === DELIVERY_STATUS.PENDING || status === DELIVERY_STATUS.PARTIAL) incomplete.add(id);
   });
-  const inventory = dashboardInventory_();
+  const inventory = shared.inventory;
   const overview = {
     sales: {net: sales.totalSales, count: sales.transactionCount, own: !employee.manager, limited: salesStart > start},
     inventory: {stock: inventory.stock, low: inventory.low},
     delivery: {count: received.size, incomplete: incomplete.size},
-    returns: dashboardReturnSummary_(dashboardReturnRows_(start, end)),
+    returns: dashboardReturnSummary_(shared.returns.filter(record => record.date >= start && record.date <= end)),
   };
   try {
     if (inventoryReadVersion_() === version) cache.put(key, JSON.stringify(overview), 30);
@@ -298,6 +293,30 @@ function getDashboardOverview(request) {
     console.warn('Dashboard overview cache write unavailable.');
   }
   return overview;
+}
+
+function dashboardOverviewShared_(version, cache) {
+  const key = 'dashboard-overview-shared:v1:' + version;
+  try {
+    const cached = cache.get(key);
+    if (cached) return JSON.parse(cached);
+  } catch (error) { console.warn('Dashboard shared cache read unavailable.'); }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const deliveries = readDeliveryPageRows_(ss, SHEETS.DELIVERY_LOG, DELIVERY_LOG_COLUMN_COUNT, false).flatMap(row => {
+    const id = String(row[DELIVERY_IDX.DELIVERY_ID] || '').trim();
+    const type = String(row[DELIVERY_IDX.DELIVERY_TYPE] || '').trim().toUpperCase();
+    if (!id || (type !== DELIVERY_TYPE.YOURSTYLE && type !== DELIVERY_TYPE.YOURFINDS && (type || !/^YFD-/i.test(id)))) return [];
+    return [{id,date:dashboardOverviewDate_(formatInventoryDateForClient(row[DELIVERY_IDX.DELIVERY_DATE])),
+      status:String(row[DELIVERY_IDX.STATUS] || '').trim().toUpperCase()}];
+  });
+  const returns = getSupplierReturns(false).map(record => ({id:String(record.id || '').trim(),
+    date:dashboardOverviewDate_(record.returnDate || record.date),quantity:record.quantity,
+    category:record.category,size:record.size,name:record.name,code:record.code})).filter(record => record.id);
+  const result = {deliveries,returns,inventory:dashboardInventory_()};
+  try {
+    if (inventoryReadVersion_() === version) cache.put(key, JSON.stringify(result), 30);
+  } catch (error) { console.warn('Dashboard shared cache write unavailable.'); }
+  return result;
 }
 
 function dashboardReturnRows_(start, end) {

@@ -265,7 +265,7 @@
             'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle','splitPhysicalBundle',
             'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(operation)){
             if(typeof clearDeviceInventoryCache==='function')clearDeviceInventoryCache();
-            pageReadCache.delete('dashboardOverview');
+            Array.from(pageReadCache.keys()).filter(key => key.startsWith('dashboardOverview')).forEach(key => pageReadCache.delete(key));
             if (workspacePreloadState?.page === 'dashboardPage') loadDashboardOverview();
             if(typeof handleInventoryMutationResult==='function')handleInventoryMutationResult(parsed);
             else {pageReadCache.delete('inventory');if(typeof invalidateLocalInventoryReads==='function')invalidateLocalInventoryReads();}

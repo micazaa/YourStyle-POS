@@ -50,7 +50,9 @@ function readDeviceOverview(range) {
   if (!account) return null;
   try {
     const saved = JSON.parse(localStorage.getItem('ys_uat_daily_overview_v1_' + account));
-    if (saved?.day === deviceCacheDay() && saved.start === range.start && saved.end === range.end) return saved.overview;
+    if (saved?.day !== deviceCacheDay()) return null;
+    return saved.ranges?.[range.start + ':' + range.end] ||
+      (saved.start === range.start && saved.end === range.end ? saved.overview : null);
   } catch (error) { /* Use the authenticated live read when storage is unavailable. */ }
   return null;
 }
@@ -58,8 +60,14 @@ function writeDeviceOverview(range, overview) {
   const account = deviceOverviewAccount();
   if (!account) return;
   try {
-    localStorage.setItem('ys_uat_daily_overview_v1_' + account,
-      JSON.stringify({day:deviceCacheDay(),start:range.start,end:range.end,overview}));
+    const key = 'ys_uat_daily_overview_v1_' + account;
+    const previous = JSON.parse(localStorage.getItem(key));
+    const ranges = previous?.day === deviceCacheDay() ? {...previous.ranges} : {};
+    const rangeKey = range.start + ':' + range.end;
+    delete ranges[rangeKey];
+    ranges[rangeKey] = overview;
+    while (Object.keys(ranges).length > 12) delete ranges[Object.keys(ranges)[0]];
+    localStorage.setItem(key, JSON.stringify({day:deviceCacheDay(),ranges}));
   } catch (error) { /* A full device cache must not interrupt live totals. */ }
 }
 </script>

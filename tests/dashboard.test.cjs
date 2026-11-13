@@ -464,7 +464,7 @@ test('overview scopes cashier sales and groups delivery and return lines', () =>
   ];
   const actor = {name: 'Ana Cashier', manager: false};
   const cache = new Map();
-  let version = 'v1', salesReads = 0;
+  let version = 'v1', salesReads = 0, inventoryReads = 0;
   const c = vm.createContext({
     ACCESS_REQUEST_CONTEXT_: {actor},
     assertAppRequest_() {},
@@ -506,7 +506,7 @@ test('overview scopes cashier sales and groups delivery and return lines', () =>
     ],
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'Backend/Dashboard.js'), 'utf8'), c);
-  c.dashboardInventory_ = () => ({stock:1248,low:12});
+  c.dashboardInventory_ = () => {inventoryReads++;return {stock:1248,low:12};};
   const range = {start:'2026-11-01',end:'2026-11-30'};
   const overview = c.getDashboardOverview(range);
   assert.equal(overview.sales.own, true);
@@ -526,6 +526,11 @@ test('overview scopes cashier sales and groups delivery and return lines', () =>
   actor.manager = true;
   assert.equal(c.getDashboardOverview(range).sales.own, false);
   assert.equal(salesReads, 3);
+  assert.equal(inventoryReads, 2, 'same stock revision reuses the inventory totals across different scopes');
+  actor.manager = false;
+  c.getDashboardOverview({...range,start:'2026-11-02'});
+  assert.equal(salesReads, 4);
+  assert.equal(inventoryReads, 2, 'changing dates reuses shared inventory and delivery data');
   assert.throws(() => c.getDashboardOverview({start:range.end,end:range.start}), /start date/);
 });
 

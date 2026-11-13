@@ -65,7 +65,11 @@ test('dashboard snapshots are isolated by employee, permissions, date range and 
   c.writeDeviceOverview(range,{sales:{net:500}});
   c.currentEmployee={...account,dashboardToken:'next'};
   assert.equal(c.readDeviceOverview(range).sales.net,500);
-  assert.equal(c.readDeviceOverview({...range,start:'2026-11-12'}),null);
+  const other={...range,start:'2026-11-12'};
+  assert.equal(c.readDeviceOverview(other),null);
+  c.writeDeviceOverview(other,{sales:{net:900}});
+  assert.equal(c.readDeviceOverview(range).sales.net,500);
+  assert.equal(c.readDeviceOverview(other).sales.net,900);
   c.currentEmployee={...account,employeeId:'EMP2'};assert.equal(c.readDeviceOverview(range),null);
   c.currentEmployee={...account,permissions:{'dashboard.view':'deny'}};assert.equal(c.readDeviceOverview(range),null);
   c.currentEmployee=account;c.deviceCacheDay=()=>'tomorrow';assert.equal(c.readDeviceOverview(range),null);

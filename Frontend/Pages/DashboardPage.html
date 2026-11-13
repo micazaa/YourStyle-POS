@@ -49,24 +49,22 @@
         <p id="dashboardReturnPeriod" class="small text-muted mb-0"></p>
       </div>
       <div class="d-flex gap-2">
-        <button id="dashboardReturnDownload" type="button" class="btn btn-light dashboard-return-icon" title="Download Return Report Summary" aria-label="Download the Return Report Summary for the selected date range" onclick="downloadDashboardReturnSummary()" disabled>
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 15v5h14v-5"/></svg>
-        </button>
         <form method="dialog">
           <button class="btn btn-light dashboard-return-icon" aria-label="Close return summary">×</button>
         </form>
       </div>
     </header>
-    <div class="dashboard-return-totals mb-3">
-      <div><strong id="dashboardReturnReceiptCount">—</strong><span>Supplier returns</span></div>
-      <div><strong id="dashboardReturnItemCount">—</strong><span>Items returned</span></div>
-    </div>
+    <p class="visually-hidden"><span id="dashboardReturnReceiptCount">—</span> supplier returns</p>
     <p id="dashboardReturnMessage" class="small text-muted mb-2" role="status"></p>
     <table id="dashboardReturnTable" class="table table-sm mb-0" hidden>
-      <thead><tr><th scope="col">Item description</th><th scope="col" class="text-end">Qty</th></tr></thead>
+      <thead class="visually-hidden"><tr><th scope="col">Item description</th><th scope="col" class="text-end">Qty</th></tr></thead>
+      <tfoot><tr><th scope="row">Grand total</th><td class="text-end"><strong id="dashboardReturnItemCount">—</strong> <small>pcs</small></td></tr></tfoot>
     </table>
-    <footer class="d-flex justify-content-end border-top pt-3 mt-3">
-      <button type="button" class="btn btn-pink" onclick="viewDashboardReturns()">View returns</button>
+    <footer class="d-flex justify-content-between gap-2 pt-3 mt-2">
+      <button type="button" class="btn btn-light" onclick="viewDashboardReturns()">View returns</button>
+      <button id="dashboardReturnDownload" type="button" class="btn btn-pink dashboard-return-icon" title="Download PDF" aria-label="Download Return Report Summary PDF" onclick="downloadDashboardReturnSummary()" disabled>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 15v5h14v-5"/></svg>
+      </button>
     </footer>
   </dialog>
   <dialog id="dashboardCalendar" aria-labelledby="dashboardCalendarMonth">
@@ -162,7 +160,7 @@
   .dashboard-overview-card small { margin-top: 5px; }
   .dashboard-overview-card .dashboard-card-attention { color: #8a3e33; }
   #dashboardReturnSummary {
-    width: min(520px, calc(100% - 24px));
+    width: min(580px, calc(100% - 24px));
     max-height: calc(100% - 24px);
     padding: clamp(14px, 4vw, 24px);
     border: 1px solid #ead9de;
@@ -171,12 +169,16 @@
   }
   #dashboardReturnSummary::backdrop { background: #25131e55; }
   .dashboard-return-icon { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; font-size: 1.35rem; }
-  .dashboard-return-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: 10px; background: var(--pink-light); }
-  .dashboard-return-totals div { display: grid; padding: 9px 13px; }
-  .dashboard-return-totals div + div { border-inline-start: 1px solid #ead9de; }
-  .dashboard-return-totals strong { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
-  .dashboard-return-totals span { font-size: .875rem; }
-  #dashboardReturnTable th[scope="rowgroup"] { color: #684657; background: var(--pink-light); }
+  #dashboardReturnTable { font-size: .875rem; --bs-table-bg: transparent; }
+  #dashboardReturnTable thead th { background: transparent; color: #736970; font-size: .75rem; font-weight: 500; padding: 0 12px 10px; border: 0; }
+  #dashboardReturnTable tbody td { padding: 10px 12px; background: transparent; border-color: #eee6e9; }
+  #dashboardReturnTable .dashboard-return-group th { padding: 10px 12px; border-bottom: 0; border-top: 10px solid white; background: var(--pink-light); color: #88475d; }
+  .dashboard-return-group-label { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .dashboard-return-group-label small { font-size: .75rem; white-space: nowrap; font-weight: 500; font-variant-numeric: tabular-nums; }
+  #dashboardReturnTable tbody td:last-child { font-variant-numeric: tabular-nums; font-weight: 500; }
+  #dashboardReturnTable tfoot th, #dashboardReturnTable tfoot td { padding: 16px 12px 2px; border-top: 2px solid #eee6e9; border-bottom: 0; background: transparent; vertical-align: middle; }
+  #dashboardReturnItemCount { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+  #dashboardReturnTable tfoot small { color: #736970; font-weight: 400; }
   #dashboardCalendar {
     width: min(390px, calc(100% - 24px));
     max-height: calc(100% - 24px);
@@ -234,6 +236,7 @@
   const dashboardDateFormat = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric' });
   const dashboardMonthFormat = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' });
   let dashboardToday, dashboardRange, dashboardDraft, dashboardMonth, dashboardDrag;
+  let dashboardReturnPdfRequest = null;
   const dashboardNumberFormat = new Intl.NumberFormat('en-PH');
   const dashboardMoneyFormat = new Intl.NumberFormat('en-PH', {style:'currency', currency:'PHP', minimumFractionDigits:0});
 
@@ -258,9 +261,12 @@
     const [start, end] = dashboardRange || [dashboardToday, dashboardToday];
     const range = {start:start.toISOString().slice(0, 10), end:end.toISOString().slice(0, 10)};
     const key = range.start + ':' + range.end;
-    const entry = pageReadCache.get('dashboardOverview');
+    const cacheKey = 'dashboardOverview:' + key;
+    const entry = pageReadCache.get(cacheKey);
     const fresh = entry?.data && Date.now() - entry.data.loadedAt < 30000;
-    const read = beginPageRead('dashboardOverview', key, !!(entry?.pending || fresh));
+    const read = beginPageRead(cacheKey, key, !!(entry?.pending || fresh));
+    const selectedEntry = pageReadCache.get(cacheKey);
+    pageReadCache.set('dashboardOverview', selectedEntry);
     const status = document.getElementById('dashboardOverviewStatus');
     const retry = document.getElementById('dashboardOverviewRetry');
     const saved = read.cached?.overview || (typeof readDeviceOverview === 'function' ? readDeviceOverview(range) : null);
@@ -273,12 +279,19 @@
       if (!read.current()) return;
       read.save({overview:data, loadedAt:Date.now()});
       if (typeof writeDeviceOverview === 'function') writeDeviceOverview(range, data);
+      const ranges = Array.from(pageReadCache.keys()).filter(value => value.startsWith('dashboardOverview:'));
+      if (ranges.length > 24) {
+        const oldest = ranges.find(value => value !== cacheKey && !pageReadCache.get(value)?.pending);
+        if (oldest) pageReadCache.delete(oldest);
+      }
+      if (pageReadCache.get('dashboardOverview') !== selectedEntry) return;
       renderDashboardOverview(data);
       status.textContent = '';
       if (!read.cached) finishWorkspacePageLoad('dashboardPage');
     }).withFailureHandler(() => {
       if (!read.current()) return;
       read.fail();
+      if (pageReadCache.get('dashboardOverview') !== selectedEntry) return;
       status.textContent = saved ? 'Saved totals · couldn’t refresh.' : 'Couldn’t load the overview.';
       if (!saved && document.getElementById('dashboardReturnSummary').open)
         document.getElementById('dashboardReturnMessage').textContent = 'Couldn’t load the return summary.';
@@ -296,18 +309,31 @@
       : returns.count === 0 ? 'No supplier returns in this date range.'
       : returns.groups.length === 0 ? 'No item quantities recorded for these returns.' : '';
     const download = document.getElementById('dashboardReturnDownload');
-    download.disabled = !returns?.count || download.hasAttribute('aria-busy');
+    download.disabled = !returns?.count || !!dashboardReturnPdfRequest;
     table.hidden = !returns?.groups.length;
     (returns?.groups || []).forEach(group => {
       const body = table.createTBody();
       const heading = document.createElement('th');
       heading.scope = 'rowgroup';
       heading.colSpan = 2;
-      heading.textContent = group.title;
-      body.insertRow().append(heading);
+      const label = document.createElement('div');
+      label.className = 'dashboard-return-group-label';
+      const title = document.createElement('span');
+      title.textContent = group.title === 'YourStyle · Other' ? 'YourStyle · Others' : group.title;
+      const subtotal = document.createElement('small');
+      subtotal.textContent = dashboardNumberFormat.format(group.rows.reduce((sum,item) => sum + Number(item.quantity || 0),0)) + ' pcs';
+      label.append(title, subtotal);
+      heading.append(label);
+      const groupRow = body.insertRow();
+      groupRow.className = 'category dashboard-return-group';
+      groupRow.append(heading);
       group.rows.forEach(item => {
         const row = body.insertRow();
-        row.insertCell().textContent = item.description;
+        let description = group.title === 'YourStyle · Pins' && item.description === '-' ? 'Standard' : item.description;
+        if (group.title === 'YourStyle · Other' && /^(shoes|bags)$/i.test(item.description)) {
+          description = item.description.toUpperCase();
+        }
+        row.insertCell().textContent = description;
         const qty = row.insertCell();
         qty.className = 'text-end';
         qty.textContent = dashboardNumberFormat.format(item.quantity);
@@ -329,24 +355,28 @@
 
   function downloadDashboardReturnSummary() {
     const button = document.getElementById('dashboardReturnDownload');
-    if (button.disabled) return;
+    if (button.disabled || dashboardReturnPdfRequest) return;
     const [start, end] = dashboardRange || [dashboardToday, dashboardToday];
-    const range = {start:start.toISOString().slice(0, 10), end:end.toISOString().slice(0, 10)};
+    const request = {start:start.toISOString().slice(0, 10), end:end.toISOString().slice(0, 10)};
+    dashboardReturnPdfRequest = request;
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
     const message = document.getElementById('dashboardReturnMessage');
     message.textContent = 'Preparing return report…';
     const finish = error => {
+      if (dashboardReturnPdfRequest !== request) return;
+      dashboardReturnPdfRequest = null;
       button.removeAttribute('aria-busy');
       button.disabled = !pageReadCache.get('dashboardOverview')?.data?.overview?.returns?.count;
       message.textContent = error ? error.message || String(error) : '';
     };
     secureScriptRun.withSuccessHandler(result => {
+      if (dashboardReturnPdfRequest !== request) return;
       try {
         downloadSupplierReturnPdf_(result);
         finish();
       } catch (error) { finish(error); }
-    }).withFailureHandler(finish).createDashboardReturnPdf(range);
+    }).withFailureHandler(finish).createDashboardReturnPdf(request);
   }
 
   function dashboardDate(year, month, day) {
@@ -486,8 +516,9 @@
   }
 
   function clearDashboardState() {
-    pageReadCache.delete('dashboardOverview');
+    Array.from(pageReadCache.keys()).filter(key => key.startsWith('dashboardOverview')).forEach(key => pageReadCache.delete(key));
     document.getElementById('dashboardReturnSummary').close();
+    dashboardReturnPdfRequest = null;
     document.getElementById('dashboardReturnDownload').removeAttribute('aria-busy');
     renderDashboardReturnSummary();
     document.getElementById('dashboardReturnMessage').textContent = '';

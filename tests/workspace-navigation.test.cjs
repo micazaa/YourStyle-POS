@@ -3,7 +3,7 @@ const html=path=>fs.readFileSync('Frontend/'+path+'.html','utf8');
 const script=path=>html(path).match(/<script>([\s\S]*?)<\/script>/)[1];
 function fixture({cashier=false,manager=false,dev=false,saved}={}) {
   const storage=new Map(),elements={},loads=[],calls=[];
-  const overviewRequests=[],returnDownloads=[];
+  const overviewRequests=[],returnDownloads=[],returnResponses=[];
   if(saved)storage.set('ys_pos_active_page',saved);
   const element=id=>elements[id]||=({style:{display:'none'},tBodies:[],addEventListener(){},contains(){return false;},showModal(){this.open=true;},close(){this.open=false;},replaceChildren(){this.innerHTML='';},value:'',checked:false,disabled:false,setAttribute(){},removeAttribute(){},hasAttribute(){return false;},classList:{toggle(){},remove(){}},querySelectorAll:()=>[]});
   const c=vm.createContext({clearTimeout,currentEmployee:{fullName:'Test User',role:manager?'MANAGER':'CASHIER'},currentSessionIsCashier:cashier,
@@ -17,7 +17,7 @@ function fixture({cashier=false,manager=false,dev=false,saved}={}) {
       withSuccessHandler(success){this.success=success;return this;},
       withFailureHandler(failure){this.failure=failure;return this;},
       getDashboardOverview(range){overviewRequests.push({range,success:this.success,failure:this.failure});},
-      createDashboardReturnPdf(range){returnDownloads.push(range);}
+      createDashboardReturnPdf(range){returnDownloads.push(range);returnResponses.push({success:this.success,failure:this.failure});}
     },
     loadInventoryPage:()=>loads.push('inventoryPage'),loadDeliveriesPage:()=>loads.push('deliveriesPage'),
     loadSupplierReturnsPage:()=>loads.push('supplierReturnsPage'),loadDashboardPage:()=>loads.push('dashboardPage'),refreshInventory:()=>loads.push('posPage'),
@@ -26,7 +26,7 @@ function fixture({cashier=false,manager=false,dev=false,saved}={}) {
   const app=script('Scripts/AppJS');
   vm.runInContext(app.slice(app.indexOf('  function beginPageRead('),app.indexOf('  var workspacePreloadState')),c);
   vm.runInContext(script('Pages/DashboardPage'),c);
-  return {c,storage,elements,loads,calls,element,overviewRequests,returnDownloads};
+  return {c,storage,elements,loads,calls,element,overviewRequests,returnDownloads,returnResponses};
 }
 test('non-cashier sessions default to Inventory, including managers; cashier sessions default to POS',()=>{
  for(const manager of [false,true])for(const cashier of [false,true]){
@@ -108,6 +108,28 @@ test('dev restores the dashboard header with daily quotes and selectable ranges'
  assert.equal(quote.textContent,'');
  assert.equal(vm.runInContext('dashboardRange',f.c),null);
 });
+test('return PDF downloads directly, prevents duplicate clicks, retries errors, and ignores logged-out requests',()=>{
+ const f=fixture({dev:true}),downloaded=[];
+ f.c.downloadSupplierReturnPdf_=result=>downloaded.push(result);
+ f.c.updateDashboardHeader(new Date('2026-11-13T04:00:00Z'));
+ assert.doesNotMatch(html('Pages/DashboardPage'), /dashboardReturnPrintDialog|dashboardReturnPreparedBy|dashboardReturnDriver|dashboardReturnPlate/);
+ f.c.pageReadCache.set('dashboardOverview',{data:{overview:{returns:{count:2}}}});
+ f.c.downloadDashboardReturnSummary();
+ assert.deepEqual({...f.returnDownloads[0]},{start:'2026-11-13',end:'2026-11-13'});
+ vm.runInContext('dashboardRange = [dashboardDate(2026,10,1),dashboardDate(2026,10,30)]',f.c);
+ f.c.downloadDashboardReturnSummary();assert.equal(f.returnDownloads.length,1);
+ f.returnResponses[0].failure(new Error('Try again'));
+ assert.equal(f.element('dashboardReturnMessage').textContent,'Try again');
+ assert.equal(f.element('dashboardReturnDownload').disabled,false);
+ f.c.downloadDashboardReturnSummary();
+ assert.deepEqual({...f.returnDownloads[1]},{start:'2026-11-01',end:'2026-11-30'});
+ f.returnResponses[1].success({success:true,base64:'PDF'});
+ assert.equal(downloaded.length,1);assert.equal(f.element('dashboardReturnDownload').disabled,false);
+ f.c.downloadDashboardReturnSummary();
+ f.c.clearDashboardState();
+ f.returnResponses[2].success({success:true,base64:'CANCELLED'});
+ assert.equal(downloaded.length,1);
+});
 test('clicking the sidebar Inventory button opens Inventory from Delivery',()=>{
  const f=fixture({saved:'deliveriesPage'});f.c.restoreActivePage();
  const handler=html('Layout/Sidebar').match(/id="inventorySidebarButton"[^>]*onclick="([^"]+)"/)[1];
@@ -149,6 +171,44 @@ test('saved Dashboard totals render before the server responds and refresh witho
  f.overviewRequests[0].success(fresh);
  assert.equal(f.element('dashboardSalesTotal').textContent,'₱600');assert.equal(saved,fresh);
  assert.equal(f.element('dashboardOverviewStatus').textContent,'');
+});
+test('switching A to B to A reuses pending requests and retains both date results',()=>{
+ const f=fixture({dev:true});f.c.currentEmployee.dashboardToken='session';
+ const totals=net=>({sales:{net,count:1,own:true},inventory:{stock:10,low:0},delivery:{count:1,incomplete:0},returns:{count:0,items:0,groups:[]}});
+ const select=day=>{vm.runInContext(`dashboardRange=[new Date('2026-11-${day}T00:00:00Z'),new Date('2026-11-${day}T00:00:00Z')];`,f.c);f.c.loadDashboardOverview();};
+ select('10');select('11');select('10');
+ assert.equal(f.overviewRequests.length,2);
+ f.overviewRequests[1].success(totals(200));
+ assert.equal(f.element('dashboardSalesTotal').textContent,'—');
+ f.overviewRequests[0].success(totals(100));
+ assert.equal(f.element('dashboardSalesTotal').textContent,'₱100');
+ select('11');assert.equal(f.element('dashboardSalesTotal').textContent,'₱200');
+ select('10');assert.equal(f.element('dashboardSalesTotal').textContent,'₱100');
+ assert.equal(f.overviewRequests.length,2);
+ f.c.clearDashboardState();assert.equal(Array.from(f.c.pageReadCache.keys()).filter(key=>key.startsWith('dashboardOverview')).length,0);
+});
+test('compact Return Summary shows category subtotals and grand total, replacing previous rows',()=>{
+ const f=fixture({dev:true});
+ const node=()=>({children:[],textContent:'',append(...items){this.children.push(...items);},insertCell(){const cell=node();this.children.push(cell);return cell;},insertRow(){const row=node();this.children.push(row);return row;}});
+ f.c.document.createElement=node;
+ const table=f.element('dashboardReturnTable');
+ table.createTBody=()=>{const body=node();body.remove=()=>table.tBodies.splice(table.tBodies.indexOf(body),1);table.tBodies.push(body);return body;};
+ const groups=[{title:'YourFinds · Size',rows:[{description:'SNE',quantity:4},{description:'XLNE',quantity:1}]},
+  {title:'YourStyle · Pins',rows:[{description:'-',quantity:98}]},
+  {title:'YourStyle · Other',rows:[{description:'Shoes',quantity:1},{description:'Bags',quantity:2}]}];
+ f.c.renderDashboardReturnSummary({count:5,items:106,groups});
+ const heading=body=>body.children[0].children[0].children[0].children;
+ assert.equal(heading(table.tBodies[0])[1].textContent,'5 pcs');
+ assert.equal(heading(table.tBodies[1])[1].textContent,'98 pcs');
+ assert.equal(heading(table.tBodies[2])[0].textContent,'YourStyle · Others');
+ assert.equal(table.tBodies[1].children[1].children[0].textContent,'Standard');
+ assert.equal(table.tBodies[2].children[1].children[0].textContent,'SHOES');
+ assert.equal(table.tBodies[2].children[2].children[0].textContent,'BAGS');
+ assert.equal(f.element('dashboardReturnItemCount').textContent,'106');
+ assert.equal(f.element('dashboardReturnDownload').disabled,false);
+ f.c.renderDashboardReturnSummary({count:0,items:0,groups:[]});
+ assert.equal(table.tBodies.length,0);assert.equal(table.hidden,true);
+ assert.equal(f.element('dashboardReturnItemCount').textContent,'0');assert.equal(f.element('dashboardReturnDownload').disabled,true);
 });
 test('staff cannot restore a POS page without cashier access; valid inventory workspace tabs still restore',()=>{
  const f=fixture({saved:'posPage'});f.c.restoreActivePage();assert.equal(f.storage.get('ys_pos_active_page'),'inventoryPage');

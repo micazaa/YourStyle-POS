@@ -121,19 +121,51 @@ function buildSupplierReturnReceiptDetails_(id, rows) {
 
 function createDashboardReturnPdf(request) {
   assertAppRequest_();
-  if (!isDevelopmentSpreadsheet_()) throw new Error('Dashboard return reports are unavailable.');
+  const employee = ACCESS_REQUEST_CONTEXT_.actor;
+  if (!employee || !isDevelopmentSpreadsheet_()) throw new Error('Dashboard return reports are unavailable.');
   const start = dashboardDate_(request.start);
   const end = dashboardDate_(request.end);
   if (start > end) throw new Error('Choose a start date before or equal to the end date.');
   const rows = dashboardReturnRows_(start, end);
   if (!rows.length) return {success:false, message:'No supplier returns in this date range.'};
-  const html = buildDashboardReturnReportHtml_(rows, start, end);
+  const details = dashboardReturnReportDetails_(start, end, employee.name);
+  const html = buildDashboardReturnReportHtml_(rows, start, end, details);
   const pdf = Utilities.newBlob(html, 'text/html', 'return-report-summary.html').getAs('application/pdf');
   const period = start === end ? start : start + '_to_' + end;
   return {success:true, fileName:'Return_Report_Summary_' + period + '.pdf', base64:Utilities.base64Encode(pdf.getBytes())};
 }
 
-function buildDashboardReturnReportHtml_(rows, start, end) {
+function dashboardReturnReportDetails_(start, end, preparedBy) {
+  const drivers = new Map(), plates = new Map();
+  // Only the first five delivery columns are needed for date, driver and plate.
+  readDeliveryPageRows_(SpreadsheetApp.getActiveSpreadsheet(), SHEETS.DELIVERY_LOG, DELIVERY_COL.PLATE_NO, false).forEach(row => {
+    if (!/^YFD-/i.test(String(row[DELIVERY_IDX.DELIVERY_ID] || '').trim())) return;
+    const date = dashboardOverviewDate_(formatInventoryDateForClient(row[DELIVERY_IDX.DELIVERY_DATE]));
+    if (!date || date < start || date > end) return;
+    [[drivers, row[DELIVERY_IDX.DRIVER_NAME]], [plates, row[DELIVERY_IDX.PLATE_NO]]].forEach(([values, raw]) => {
+      const value = String(raw || '').trim().replace(/\s+/g, ' ');
+      const key = value.toUpperCase();
+      if (value && !values.has(key)) values.set(key, value);
+    });
+  });
+  return {preparedBy, driver:Array.from(drivers.values()).join(', ') || '—', plate:Array.from(plates.values()).join(', ') || '—'};
+}
+
+function buildDashboardReturnReportHtml_(rows, start, end, details) {
+  return buildDashboardMovementReportHtml_(rows, start, end, 'RETURN REPORT SUMMARY', details);
+}
+
+function createDashboardDeliveryPdf(request) {
+  const {start, end} = dashboardDeliveryRange_(request);
+  const {rows} = dashboardDeliveryRows_(start, end);
+  if (!rows.length) return {success:false, message:'No received items in this date range.'};
+  const html = buildDashboardMovementReportHtml_(rows, start, end, 'DELIVERY REPORT SUMMARY');
+  const pdf = Utilities.newBlob(html, 'text/html', 'delivery-report-summary.html').getAs('application/pdf');
+  const period = start === end ? start : start + '_to_' + end;
+  return {success:true, fileName:'Delivery_Report_Summary_' + period + '.pdf', base64:Utilities.base64Encode(pdf.getBytes())};
+}
+
+function buildDashboardMovementReportHtml_(rows, start, end, title, details) {
   const totals = {'TOTAL YF':0, 'TOTAL PIN':0, 'TOTAL OTHERS':0, 'GRAND TOTAL':0};
   const items = new Map();
   rows.forEach(row => {
@@ -147,22 +179,23 @@ function buildDashboardReturnReportHtml_(rows, start, end) {
     totals[total] += quantity;
     totals['GRAND TOTAL'] += quantity;
     const key = yourFinds ? JSON.stringify(['YOURFINDS', size])
-      : JSON.stringify([code, code ? '' : description.toUpperCase(), size.toUpperCase()]);
-    if (!items.has(key)) items.set(key, {code:yourFinds ? size : code, description, size, quantity:0, codes:yourFinds ? new Set() : null});
+      : JSON.stringify([total, description ? ['description', description.replace(/\s+/g, ' ').toUpperCase()] : ['code', code]]);
+    if (!items.has(key)) items.set(key, {code:yourFinds ? size : code, description, yourFinds, quantity:0, codes:new Set()});
     const item = items.get(key);
     item.quantity += quantity;
-    if (yourFinds && code) item.codes.add(code);
+    if (code) item.codes.add(code);
   });
 
   const safe = escapeDeliveryReceiptHtml_;
   const lines = Array.from(items.values()).map(item => {
-    const description = item.codes
+    const description = item.yourFinds
       ? Array.from(item.codes, code => code.replace(/\D/g, '').slice(-4)).filter(Boolean).join(', ') || '—'
       : item.description;
-    return '<tr><td>' + safe(item.code) + '</td><td>' + safe(description) + '</td><td>' + safe(item.size || '—') +
+    const code = item.yourFinds ? item.code : Array.from(item.codes).join(', ');
+    return '<tr><td>' + safe(code) + '</td><td>' + safe(description) +
       '</td><td class="qty">' + safe(item.quantity) + '</td></tr>';
   }).join('');
-  const totalCells = Object.entries(totals).map(([label, quantity]) =>
+  const totalCells = Object.entries(totals).filter(([label]) => label !== 'GRAND TOTAL').map(([label, quantity]) =>
     '<td><div class="total-value">' + safe(quantity) + '</div><div class="total-label">' + label + '</div></td>'
   ).join('');
   const date = formatDeliveryReceiptDate_(start) + (start === end ? '' : ' – ' + formatDeliveryReceiptDate_(end));
@@ -170,14 +203,19 @@ function buildDashboardReturnReportHtml_(rows, start, end) {
   return '<!doctype html><html><head><meta charset="utf-8"><style>' +
     '@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;color:#333;font:11.5px/1.45 Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
     'h1{margin:0 0 4px;color:#b76e79;font-size:20px}.report-date{margin:0 0 16px;color:#65454b}' +
+    '.report-details{width:100%;margin:0 0 16px;border-collapse:collapse;table-layout:fixed;page-break-inside:avoid}' +
+    '.report-details td{padding:4px 10px 4px 0;vertical-align:top;overflow-wrap:break-word}.report-details strong{display:block;color:#65454b;font-size:10px}' +
     '.items{width:100%;border-collapse:collapse;table-layout:fixed}.items thead{display:table-header-group}.items tr{page-break-inside:avoid}' +
     '.items th,.items td{border:1px solid #e3c6c6;padding:6px 7px;text-align:left;overflow-wrap:break-word}' +
-    '.items th{background:#f2dede;color:#65454b}.items .qty{text-align:right}' +
+    '.items th{background:#f2dede;color:#65454b}.items .qty{text-align:right}.items .grand-total{font-weight:bold;background:#fbf2f4}.items .grand-total td{text-align:right}' +
     '.totals{width:100%;margin:0 0 16px;border-collapse:collapse;table-layout:fixed;page-break-inside:avoid}' +
-    '.totals td{width:25%;padding:7px 5px;border:1px solid #e3c6c6;text-align:center;background:#fbf2f4}' +
+    '.totals td{width:33.333%;padding:7px 5px;border:1px solid #e3c6c6;text-align:center;background:#fbf2f4}' +
     '.total-value{font-size:15px;font-weight:bold}.total-label{font-size:10px;color:#65454b;font-weight:bold}' +
-    '</style></head><body><h1>RETURN REPORT SUMMARY</h1><p class="report-date">' + safe(date) + '</p>' +
+    '</style></head><body><h1>' + safe(title) + '</h1><p class="report-date">' + safe(date) + '</p>' +
+    (details ? '<table class="report-details"><tbody><tr><td><strong>Prepared By</strong>' + safe(details.preparedBy) +
+    '</td><td><strong>Driver Name</strong>' + safe(details.driver) + '</td><td><strong>Plate No.</strong>' + safe(details.plate) + '</td></tr></tbody></table>' : '') +
     '<table class="totals"><tbody><tr>' + totalCells + '</tr></tbody></table>' +
-    '<table class="items"><colgroup><col style="width:22%"><col style="width:48%"><col style="width:18%"><col style="width:12%"></colgroup>' +
-    '<thead><tr><th>Code</th><th>Description</th><th>Size</th><th class="qty">Qty</th></tr></thead><tbody>' + lines + '</tbody></table></body></html>';
+    '<table class="items"><colgroup><col style="width:22%"><col style="width:66%"><col style="width:12%"></colgroup>' +
+    '<thead><tr><th>Code</th><th>Description</th><th class="qty">Qty</th></tr></thead><tbody>' + lines +
+    '<tr class="grand-total"><td colspan="2">GRAND TOTAL</td><td class="qty">' + safe(totals['GRAND TOTAL']) + '</td></tr></tbody></table></body></html>';
 }
