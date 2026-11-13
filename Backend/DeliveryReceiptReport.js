@@ -136,12 +136,18 @@ function createDashboardReturnPdf(request) {
 }
 
 function dashboardReturnReportDetails_(start, end, preparedBy) {
-  const drivers = new Map(), plates = new Map();
   // Only the first five delivery columns are needed for date, driver and plate.
-  readDeliveryPageRows_(SpreadsheetApp.getActiveSpreadsheet(), SHEETS.DELIVERY_LOG, DELIVERY_COL.PLATE_NO, false).forEach(row => {
-    if (!/^YFD-/i.test(String(row[DELIVERY_IDX.DELIVERY_ID] || '').trim())) return;
+  const rows = readDeliveryPageRows_(SpreadsheetApp.getActiveSpreadsheet(), SHEETS.DELIVERY_LOG, DELIVERY_COL.PLATE_NO, false).filter(row => {
+    if (!/^YFD-/i.test(String(row[DELIVERY_IDX.DELIVERY_ID] || '').trim())) return false;
     const date = dashboardOverviewDate_(formatInventoryDateForClient(row[DELIVERY_IDX.DELIVERY_DATE]));
-    if (!date || date < start || date > end) return;
+    return date && date >= start && date <= end;
+  });
+  return dashboardReportDetails_(rows, preparedBy);
+}
+
+function dashboardReportDetails_(rows, preparedBy) {
+  const drivers = new Map(), plates = new Map();
+  rows.forEach(row => {
     [[drivers, row[DELIVERY_IDX.DRIVER_NAME]], [plates, row[DELIVERY_IDX.PLATE_NO]]].forEach(([values, raw]) => {
       const value = String(raw || '').trim().replace(/\s+/g, ' ');
       const key = value.toUpperCase();
@@ -157,16 +163,18 @@ function buildDashboardReturnReportHtml_(rows, start, end, details) {
 
 function createDashboardDeliveryPdf(request) {
   const {start, end} = dashboardDeliveryRange_(request);
-  const {rows} = dashboardDeliveryRows_(start, end);
+  const {rows, deliveries} = dashboardDeliveryRows_(start, end);
   if (!rows.length) return {success:false, message:'No received items in this date range.'};
-  const html = buildDashboardMovementReportHtml_(rows, start, end, 'DELIVERY REPORT SUMMARY');
+  const details = dashboardReportDetails_(deliveries, ACCESS_REQUEST_CONTEXT_.actor.name);
+  const html = buildDashboardMovementReportHtml_(rows, start, end, 'DELIVERY REPORT SUMMARY', details, true);
   const pdf = Utilities.newBlob(html, 'text/html', 'delivery-report-summary.html').getAs('application/pdf');
   const period = start === end ? start : start + '_to_' + end;
   return {success:true, fileName:'Delivery_Report_Summary_' + period + '.pdf', base64:Utilities.base64Encode(pdf.getBytes())};
 }
 
-function buildDashboardMovementReportHtml_(rows, start, end, title, details) {
+function buildDashboardMovementReportHtml_(rows, start, end, title, details, separateWholesale = false) {
   const totals = {'TOTAL YF':0, 'TOTAL PIN':0, 'TOTAL OTHERS':0, 'GRAND TOTAL':0};
+  if (separateWholesale) totals['TOTAL WHOLESALE'] = 0;
   const items = new Map();
   rows.forEach(row => {
     const category = String(row.category || '').trim().toUpperCase();
@@ -175,12 +183,13 @@ function buildDashboardMovementReportHtml_(rows, start, end, title, details) {
     const yourFinds = category === 'YOURFINDS';
     const size = yourFinds ? dashboardYourFindsReturnSize_(row.size) : String(row.size || '').trim();
     const quantity = Number(row.quantity) || 0;
-    const total = yourFinds ? 'TOTAL YF' : category === 'PINS' ? 'TOTAL PIN' : 'TOTAL OTHERS';
+    const total = yourFinds ? 'TOTAL YF' : category === 'PINS' ? 'TOTAL PIN' : separateWholesale && category === 'WHOLESALE' ? 'TOTAL WHOLESALE' : 'TOTAL OTHERS';
     totals[total] += quantity;
     totals['GRAND TOTAL'] += quantity;
+    const displayName = separateWholesale && row.unit === 'bundle' ? description + ' (bundle)' : description;
     const key = yourFinds ? JSON.stringify(['YOURFINDS', size])
-      : JSON.stringify([total, description ? ['description', description.replace(/\s+/g, ' ').toUpperCase()] : ['code', code]]);
-    if (!items.has(key)) items.set(key, {code:yourFinds ? size : code, description, yourFinds, quantity:0, codes:new Set()});
+      : JSON.stringify([total, row.unit || '', description ? ['description', description.replace(/\s+/g, ' ').toUpperCase()] : ['code', code]]);
+    if (!items.has(key)) items.set(key, {code:yourFinds ? size : code, description:displayName, yourFinds, quantity:0, codes:new Set()});
     const item = items.get(key);
     item.quantity += quantity;
     if (code) item.codes.add(code);
@@ -209,7 +218,7 @@ function buildDashboardMovementReportHtml_(rows, start, end, title, details) {
     '.items th,.items td{border:1px solid #e3c6c6;padding:6px 7px;text-align:left;overflow-wrap:break-word}' +
     '.items th{background:#f2dede;color:#65454b}.items .qty{text-align:right}.items .grand-total{font-weight:bold;background:#fbf2f4}.items .grand-total td{text-align:right}' +
     '.totals{width:100%;margin:0 0 16px;border-collapse:collapse;table-layout:fixed;page-break-inside:avoid}' +
-    '.totals td{width:33.333%;padding:7px 5px;border:1px solid #e3c6c6;text-align:center;background:#fbf2f4}' +
+    '.totals td{padding:7px 5px;border:1px solid #e3c6c6;text-align:center;background:#fbf2f4}' +
     '.total-value{font-size:15px;font-weight:bold}.total-label{font-size:10px;color:#65454b;font-weight:bold}' +
     '</style></head><body><h1>' + safe(title) + '</h1><p class="report-date">' + safe(date) + '</p>' +
     (details ? '<table class="report-details"><tbody><tr><td><strong>Prepared By</strong>' + safe(details.preparedBy) +

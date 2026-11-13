@@ -252,7 +252,7 @@ function getDashboardOverview(request) {
   const digest = Utilities.base64EncodeWebSafe(Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256, JSON.stringify([version, scope, today, start, end])
   ));
-  const key = 'dashboard-overview:v2:' + digest;
+  const key = 'dashboard-overview:v5:' + digest;
   try {
     const cached = cache.get(key);
     if (cached) return JSON.parse(cached);
@@ -284,7 +284,7 @@ function getDashboardOverview(request) {
   const overview = {
     sales: {net: sales.totalSales, count: sales.transactionCount, own: !employee.manager, limited: salesStart > start},
     inventory: {stock: inventory.stock, low: inventory.low},
-    delivery: {count: received.size, incomplete: incomplete.size},
+    delivery: {...dashboardReturnSummary_(shared.deliveryItems.filter(record => received.has(record.id)), true), count: received.size, incomplete: incomplete.size},
     returns: dashboardReturnSummary_(shared.returns.filter(record => record.date >= start && record.date <= end)),
   };
   try {
@@ -296,13 +296,14 @@ function getDashboardOverview(request) {
 }
 
 function dashboardOverviewShared_(version, cache) {
-  const key = 'dashboard-overview-shared:v1:' + version;
+  const key = 'dashboard-overview-shared:v4:' + version;
   try {
     const cached = cache.get(key);
     if (cached) return JSON.parse(cached);
   } catch (error) { console.warn('Dashboard shared cache read unavailable.'); }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const deliveries = readDeliveryPageRows_(ss, SHEETS.DELIVERY_LOG, DELIVERY_LOG_COLUMN_COUNT, false).flatMap(row => {
+  const deliveryRows = readDeliveryPageRows_(ss, SHEETS.DELIVERY_LOG, DELIVERY_LOG_COLUMN_COUNT, false);
+  const deliveries = deliveryRows.flatMap(row => {
     const id = String(row[DELIVERY_IDX.DELIVERY_ID] || '').trim();
     const type = String(row[DELIVERY_IDX.DELIVERY_TYPE] || '').trim().toUpperCase();
     if (!id || (type !== DELIVERY_TYPE.YOURSTYLE && type !== DELIVERY_TYPE.YOURFINDS && (type || !/^YFD-/i.test(id)))) return [];
@@ -312,7 +313,7 @@ function dashboardOverviewShared_(version, cache) {
   const returns = getSupplierReturns(false).map(record => ({id:String(record.id || '').trim(),
     date:dashboardOverviewDate_(record.returnDate || record.date),quantity:record.quantity,
     category:record.category,size:record.size,name:record.name,code:record.code})).filter(record => record.id);
-  const result = {deliveries,returns,inventory:dashboardInventory_()};
+  const result = {deliveries,returns,deliveryItems:dashboardDeliveryItemRows_(ss, deliveryRows),inventory:dashboardInventory_()};
   try {
     if (inventoryReadVersion_() === version) cache.put(key, JSON.stringify(result), 30);
   } catch (error) { console.warn('Dashboard shared cache write unavailable.'); }
@@ -326,11 +327,12 @@ function dashboardReturnRows_(start, end) {
   });
 }
 
-function dashboardReturnSummary_(records) {
+function dashboardReturnSummary_(records, separateWholesale = false) {
   const groups = [
     {title:'YourFinds · Size', rows:new Map()},
     {title:'YourStyle · Pins', rows:new Map()},
     {title:'YourStyle · Other', rows:new Map()},
+    {title:'Wholesale', rows:new Map()},
   ];
   const ids = new Set();
   let items = 0;
@@ -350,16 +352,19 @@ function dashboardReturnSummary_(records) {
       group = groups[1];
       const variant = /\((GS|NEW|PT)\)/i.exec(name);
       description = variant ? variant[1].toUpperCase() : ['GS', 'NEW', 'PT'].includes(size) ? size : '-';
+    } else if (separateWholesale && category === 'WHOLESALE') {
+      group = groups[3];
+      description = name || 'Wholesale';
     } else {
       group = groups[2];
       const product = name + ' ' + String(record.code || '');
       description = /\bSHOES?\b/i.test(product) ? 'Shoes' : /\bBAGS?\b/i.test(product) ? 'Bags' : name || 'Unspecified item';
     }
-    const key = description.toUpperCase();
-    if (!group.rows.has(key)) group.rows.set(key, {description:description, quantity:0});
+    const key = JSON.stringify([description.toUpperCase(), record.unit || '']);
+    if (!group.rows.has(key)) group.rows.set(key, {description:description, quantity:0, ...(record.unit ? {unit:record.unit} : {})});
     group.rows.get(key).quantity += quantity;
   });
-  const sortOrders = [YOURFINDS_SIZE_ORDER, ['-', 'GS', 'NEW', 'PT'], ['Shoes', 'Bags']];
+  const sortOrders = [YOURFINDS_SIZE_ORDER, ['-', 'GS', 'NEW', 'PT'], ['Shoes', 'Bags'], []];
   const sections = groups.map(({title, rows}, index) => {
     const order = sortOrders[index];
     const rank = name => order.includes(name) ? order.indexOf(name) : order.length;

@@ -496,6 +496,7 @@ test('overview scopes cashier sales and groups delivery and return lines', () =>
     YOURFINDS_SIZE_ORDER: ['SNE','MNE'],
     normalizeYourFindsSaleSize_: size => ({S:'SNE',SNE:'SNE'})[size] || 'CUSTOM',
     readDeliveryPageRows_: () => rows,
+    dashboardDeliveryItemRows_: () => [{id:'YSD-NEW',category:'WHOLESALE',name:'Undistributed estimate',quantity:7}],
     formatInventoryDateForClient: date => date,
     getSupplierReturns: () => [
       {id:'RET-1', returnDate:'2026-11-09', category:'YOURFINDS', size:'S', quantity:2},
@@ -514,6 +515,8 @@ test('overview scopes cashier sales and groups delivery and return lines', () =>
   assert.equal(overview.inventory.stock, 1248);
   assert.equal(overview.delivery.count, 2);
   assert.equal(overview.delivery.incomplete, 1);
+  assert.equal(overview.delivery.groups[0].title, 'Wholesale');
+  assert.equal(overview.delivery.items, 7);
   assert.equal(overview.returns.count, 3);
   assert.equal(overview.returns.items, 11);
   assert.deepEqual(Array.from(overview.returns.groups, group => group.rows[0].description), ['SNE','GS','Shoes']);

@@ -158,7 +158,7 @@ test('UAT restores Dashboard first and waits for its totals before other workspa
 test('saved Dashboard totals render before the server responds and refresh without blocking navigation',()=>{
  const f=fixture({dev:true});
  f.c.currentEmployee.dashboardToken='session';
- const totals={sales:{net:500,count:2,own:true},inventory:{stock:10,low:1},delivery:{count:1,incomplete:0},returns:{count:0,items:0,groups:[]}};
+ const totals={sales:{net:500,count:2,own:true},inventory:{stock:10,low:1},delivery:{count:1,incomplete:0,items:0,groups:[]},returns:{count:0,items:0,groups:[]}};
  let released=0,saved;
  f.c.readDeviceOverview=()=>totals;
  f.c.writeDeviceOverview=(range,data)=>{saved=data;};
@@ -167,6 +167,10 @@ test('saved Dashboard totals render before the server responds and refresh witho
  assert.equal(f.element('dashboardSalesTotal').textContent,'₱500');
  assert.equal(f.element('dashboardOverviewStatus').textContent,'Saved totals · refreshing…');
  assert.equal(released,1);assert.equal(f.overviewRequests.length,1);
+ f.c.openDashboardDeliverySummary();
+ assert.equal(f.element('dashboardDeliveryReceiptCount').textContent,'1');
+ assert.equal(f.element('dashboardDeliveryMessage').textContent,'No received items in this date range.');
+ assert.equal(f.overviewRequests.length,1);
  const fresh={...totals,sales:{...totals.sales,net:600}};
  f.overviewRequests[0].success(fresh);
  assert.equal(f.element('dashboardSalesTotal').textContent,'₱600');assert.equal(saved,fresh);

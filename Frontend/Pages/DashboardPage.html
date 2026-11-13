@@ -26,7 +26,7 @@
         <span>Items in stock now</span>
         <small id="dashboardStockDetail" class="dashboard-card-attention"></small>
       </button>
-      <button type="button" class="dashboard-overview-card" onclick="navigateSidebar('deliveriesPage')">
+      <button type="button" class="dashboard-overview-card" aria-haspopup="dialog" onclick="openDashboardDeliverySummary()">
         <span class="dashboard-card-title">Delivery <span aria-hidden="true">↗</span></span>
         <strong id="dashboardDeliveryTotal">—</strong>
         <span>Deliveries received</span>
@@ -63,6 +63,33 @@
     <footer class="d-flex justify-content-between gap-2 pt-3 mt-2">
       <button type="button" class="btn btn-light" onclick="viewDashboardReturns()">View returns</button>
       <button id="dashboardReturnDownload" type="button" class="btn btn-pink dashboard-return-icon" title="Download PDF" aria-label="Download Return Report Summary PDF" onclick="downloadDashboardReturnSummary()" disabled>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 15v5h14v-5"/></svg>
+      </button>
+    </footer>
+  </dialog>
+  <dialog id="dashboardDeliverySummary" aria-labelledby="dashboardDeliveryHeading">
+    <header class="d-flex justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h2 id="dashboardDeliveryHeading" class="h4 mb-1">Delivery summary</h2>
+        <p id="dashboardDeliveryPeriod" class="small text-muted mb-0"></p>
+      </div>
+      <div class="d-flex gap-2">
+        <form method="dialog">
+          <button class="btn btn-light dashboard-return-icon" aria-label="Close delivery summary">×</button>
+        </form>
+      </div>
+    </header>
+    <p class="visually-hidden"><span id="dashboardDeliveryReceiptCount">—</span> deliveries</p>
+    <p id="dashboardDeliveryMessage" class="small text-muted mb-2" role="status"></p>
+    <div class="dashboard-delivery-scroll" tabindex="0" role="region" aria-label="Delivery items">
+      <table id="dashboardDeliveryTable" class="table table-sm mb-0" hidden>
+        <thead class="visually-hidden"><tr><th scope="col">Item description</th><th scope="col" class="text-end">Qty</th></tr></thead>
+        <tfoot><tr><th scope="row">Grand total</th><td class="text-end"><strong id="dashboardDeliveryItemCount">—</strong> <small>units</small></td></tr></tfoot>
+      </table>
+    </div>
+    <footer class="d-flex justify-content-between gap-2 pt-3 mt-2">
+      <button type="button" class="btn btn-light" onclick="viewDashboardDeliveries()">View deliveries</button>
+      <button id="dashboardDeliveryDownload" type="button" class="btn btn-pink dashboard-return-icon" title="Download PDF" aria-label="Download Delivery Report Summary PDF" onclick="downloadDashboardDeliverySummary()" disabled>
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 15v5h14v-5"/></svg>
       </button>
     </footer>
@@ -159,7 +186,7 @@
   .dashboard-overview-card strong { font-size: 1.6rem; line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   .dashboard-overview-card small { margin-top: 5px; }
   .dashboard-overview-card .dashboard-card-attention { color: #8a3e33; }
-  #dashboardReturnSummary {
+  :is(#dashboardReturnSummary, #dashboardDeliverySummary) {
     width: min(580px, calc(100% - 24px));
     max-height: calc(100% - 24px);
     padding: clamp(14px, 4vw, 24px);
@@ -167,18 +194,21 @@
     border-radius: 18px;
     color: #381f2c;
   }
-  #dashboardReturnSummary::backdrop { background: #25131e55; }
+  :is(#dashboardReturnSummary, #dashboardDeliverySummary)::backdrop { background: #25131e55; }
+  #dashboardDeliverySummary[open] { display: flex; flex-direction: column; max-height: min(680px, 80vh); overflow: hidden; }
+  #dashboardDeliverySummary > header, #dashboardDeliverySummary > footer { flex-shrink: 0; }
+  .dashboard-delivery-scroll { min-height: 0; overflow: auto; }
   .dashboard-return-icon { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; font-size: 1.35rem; }
-  #dashboardReturnTable { font-size: .875rem; --bs-table-bg: transparent; }
-  #dashboardReturnTable thead th { background: transparent; color: #736970; font-size: .75rem; font-weight: 500; padding: 0 12px 10px; border: 0; }
-  #dashboardReturnTable tbody td { padding: 10px 12px; background: transparent; border-color: #eee6e9; }
-  #dashboardReturnTable .dashboard-return-group th { padding: 10px 12px; border-bottom: 0; border-top: 10px solid white; background: var(--pink-light); color: #88475d; }
+  :is(#dashboardReturnTable, #dashboardDeliveryTable) { font-size: .875rem; --bs-table-bg: transparent; }
+  :is(#dashboardReturnTable, #dashboardDeliveryTable) thead th { background: transparent; color: #736970; font-size: .75rem; font-weight: 500; padding: 0 12px 10px; border: 0; }
+  :is(#dashboardReturnTable, #dashboardDeliveryTable) tbody td { padding: 10px 12px; background: transparent; border-color: #eee6e9; }
+  :is(#dashboardReturnTable, #dashboardDeliveryTable) .dashboard-return-group th { padding: 10px 12px; border-bottom: 0; border-top: 10px solid white; background: var(--pink-light); color: #88475d; }
   .dashboard-return-group-label { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
   .dashboard-return-group-label small { font-size: .75rem; white-space: nowrap; font-weight: 500; font-variant-numeric: tabular-nums; }
-  #dashboardReturnTable tbody td:last-child { font-variant-numeric: tabular-nums; font-weight: 500; }
-  #dashboardReturnTable tfoot th, #dashboardReturnTable tfoot td { padding: 16px 12px 2px; border-top: 2px solid #eee6e9; border-bottom: 0; background: transparent; vertical-align: middle; }
-  #dashboardReturnItemCount { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
-  #dashboardReturnTable tfoot small { color: #736970; font-weight: 400; }
+  :is(#dashboardReturnTable, #dashboardDeliveryTable) tbody td:last-child { font-variant-numeric: tabular-nums; font-weight: 500; }
+  :is(#dashboardReturnTable, #dashboardDeliveryTable) tfoot th, :is(#dashboardReturnTable, #dashboardDeliveryTable) tfoot td { padding: 16px 12px 2px; border-top: 2px solid #eee6e9; border-bottom: 0; background: transparent; vertical-align: middle; }
+  :is(#dashboardReturnItemCount, #dashboardDeliveryItemCount) { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+  :is(#dashboardReturnTable, #dashboardDeliveryTable) tfoot small { color: #736970; font-weight: 400; }
   #dashboardCalendar {
     width: min(390px, calc(100% - 24px));
     max-height: calc(100% - 24px);
@@ -254,6 +284,7 @@
     };
     Object.entries(fields).forEach(([id, value]) => { document.getElementById(id).textContent = value; });
     if (document.getElementById('dashboardReturnSummary').open) renderDashboardReturnSummary(data?.returns);
+    if (document.getElementById('dashboardDeliverySummary').open) renderDashboardDeliverySummary(data?.delivery);
   }
 
   function loadDashboardOverview() {
@@ -295,6 +326,8 @@
       status.textContent = saved ? 'Saved totals · couldn’t refresh.' : 'Couldn’t load the overview.';
       if (!saved && document.getElementById('dashboardReturnSummary').open)
         document.getElementById('dashboardReturnMessage').textContent = 'Couldn’t load the return summary.';
+      if ((!saved?.delivery?.groups) && document.getElementById('dashboardDeliverySummary').open)
+        document.getElementById('dashboardDeliveryMessage').textContent = 'Couldn’t load the delivery summary. Close and reopen it to retry.';
       retry.hidden = false;
       if (!read.cached) finishWorkspacePageLoad('dashboardPage');
     }).getDashboardOverview(range);
@@ -311,7 +344,11 @@
     const download = document.getElementById('dashboardReturnDownload');
     download.disabled = !returns?.count || !!dashboardReturnPdfRequest;
     table.hidden = !returns?.groups.length;
-    (returns?.groups || []).forEach(group => {
+    renderDashboardSummaryGroups(table, returns?.groups || []);
+  }
+
+  function renderDashboardSummaryGroups(table, groups) {
+    groups.forEach(group => {
       const body = table.createTBody();
       const heading = document.createElement('th');
       heading.scope = 'rowgroup';
@@ -321,7 +358,12 @@
       const title = document.createElement('span');
       title.textContent = group.title === 'YourStyle · Other' ? 'YourStyle · Others' : group.title;
       const subtotal = document.createElement('small');
-      subtotal.textContent = dashboardNumberFormat.format(group.rows.reduce((sum,item) => sum + Number(item.quantity || 0),0)) + ' pcs';
+      const bundles = group.rows.reduce((sum, item) => sum + (item.unit === 'bundle' ? Number(item.quantity) : 0), 0);
+      const pieces = group.rows.reduce((sum, item) => sum + (item.unit === 'bundle' ? 0 : Number(item.quantity || 0)), 0);
+      subtotal.textContent = [
+        pieces ? dashboardNumberFormat.format(pieces) + ' pcs' : '',
+        bundles ? dashboardNumberFormat.format(bundles) + (bundles === 1 ? ' bundle' : ' bundles') : '',
+      ].filter(Boolean).join(' · ');
       label.append(title, subtotal);
       heading.append(label);
       const groupRow = body.insertRow();
@@ -336,7 +378,7 @@
         row.insertCell().textContent = description;
         const qty = row.insertCell();
         qty.className = 'text-end';
-        qty.textContent = dashboardNumberFormat.format(item.quantity);
+        qty.textContent = dashboardNumberFormat.format(item.quantity) + (item.unit === 'bundle' ? (item.quantity === 1 ? ' bundle' : ' bundles') : '');
       });
     });
   }
@@ -377,6 +419,59 @@
         finish();
       } catch (error) { finish(error); }
     }).withFailureHandler(finish).createDashboardReturnPdf(request);
+  }
+
+  let dashboardDeliverySummaryRequest = null;
+  let dashboardDeliveryPdfRequest = null;
+
+  function openDashboardDeliverySummary() {
+    const [start, end] = dashboardRange || [dashboardToday, dashboardToday];
+    const request = {start:start.toISOString().slice(0, 10), end:end.toISOString().slice(0, 10)};
+    dashboardDeliverySummaryRequest = request;
+    document.getElementById('dashboardDeliveryPeriod').textContent = describeDashboardRange([start, end]);
+    document.getElementById('dashboardDeliverySummary').showModal();
+    loadDashboardOverview();
+  }
+
+  function renderDashboardDeliverySummary(data) {
+    const table = document.getElementById('dashboardDeliveryTable');
+    const groups = data?.groups;
+    Array.from(table.tBodies).forEach(body => body.remove());
+    table.hidden = !groups?.length;
+    document.getElementById('dashboardDeliveryDownload').disabled = !groups?.length || !!dashboardDeliveryPdfRequest;
+    document.getElementById('dashboardDeliveryReceiptCount').textContent = groups ? dashboardNumberFormat.format(data.count) : '—';
+    document.getElementById('dashboardDeliveryItemCount').textContent = groups ? dashboardNumberFormat.format(data.items) : '—';
+    document.getElementById('dashboardDeliveryMessage').textContent = !groups ? 'Loading delivery summary…'
+      : !groups.length ? 'No received items in this date range.' : '';
+    renderDashboardSummaryGroups(table, groups || []);
+  }
+
+  function viewDashboardDeliveries() {
+    document.getElementById('dashboardDeliverySummary').close();
+    navigateSidebar('deliveriesPage');
+  }
+
+  function downloadDashboardDeliverySummary() {
+    const button = document.getElementById('dashboardDeliveryDownload');
+    if (button.disabled || dashboardDeliveryPdfRequest) return;
+    const request = dashboardDeliverySummaryRequest;
+    dashboardDeliveryPdfRequest = request;
+    const message = document.getElementById('dashboardDeliveryMessage');
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    message.textContent = 'Preparing delivery report…';
+    const finish = error => {
+      if (dashboardDeliveryPdfRequest !== request) return;
+      dashboardDeliveryPdfRequest = null;
+      button.removeAttribute('aria-busy');
+      button.disabled = document.getElementById('dashboardDeliveryTable').hidden;
+      if (dashboardDeliverySummaryRequest === request) message.textContent = error ? error.message || String(error) : '';
+    };
+    secureScriptRun.withSuccessHandler(result => {
+      if (dashboardDeliveryPdfRequest !== request) return;
+      try { downloadSupplierReturnPdf_(result); finish(); }
+      catch (error) { finish(error); }
+    }).withFailureHandler(finish).createDashboardDeliveryPdf(request);
   }
 
   function dashboardDate(year, month, day) {
@@ -517,6 +612,16 @@
 
   function clearDashboardState() {
     Array.from(pageReadCache.keys()).filter(key => key.startsWith('dashboardOverview')).forEach(key => pageReadCache.delete(key));
+    const deliveryDialog = document.getElementById('dashboardDeliverySummary');
+    deliveryDialog.close();
+    dashboardDeliverySummaryRequest = dashboardDeliveryPdfRequest = null;
+    const deliveryTable = document.getElementById('dashboardDeliveryTable');
+    Array.from(deliveryTable.tBodies).forEach(body => body.remove());
+    deliveryTable.hidden = true;
+    document.getElementById('dashboardDeliveryDownload').disabled = true;
+    document.getElementById('dashboardDeliveryDownload').removeAttribute('aria-busy');
+    ['dashboardDeliveryPeriod', 'dashboardDeliveryMessage', 'dashboardDeliveryReceiptCount', 'dashboardDeliveryItemCount']
+      .forEach(id => { document.getElementById(id).textContent = ''; });
     document.getElementById('dashboardReturnSummary').close();
     dashboardReturnPdfRequest = null;
     document.getElementById('dashboardReturnDownload').removeAttribute('aria-busy');

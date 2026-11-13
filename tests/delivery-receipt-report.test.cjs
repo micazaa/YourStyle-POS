@@ -184,3 +184,63 @@ test('delivery receipt keeps original items and adds conversion and final-summar
   assert.match(html, /<h2>Final Items Received<\/h2>/);
   assert.match(html, /Final inventory units<\/td><td class="qty">5<\/td>/);
 });
+
+test('Delivery dashboard report uses received movements from the selected receipts', () => {
+  const {context, getHtml} = loadReport();
+  const sheetRows = {
+    Delivery: [['YFD-1', '2026-11-11', 'YOURFINDS'], ['YSD-2', '2026-11-12', 'YOURSTYLE', 'PARTIAL', 'BULK', 12, 5, 'PINS', 2, 'Driver & Co.', 'ABC 123'], ['YSD-3', '2026-11-13', 'YOURSTYLE', '', '', 0, 0, '', 0, 'Outside range', 'ZZZ 999']],
+    Inventory: [['11000123', 'YourFinds', 'MNE', 'YOURFINDS'], ['PIN-1', 'Yellow (GS)', '', 'PINS'], ['BUNDLE-1', 'Yellow bundle · (150) pcs', '', 'WHOLESALE']],
+    Movements: [
+      ['YFD-1', 'DELIVERY', 1, 'YOURFINDS', '', '11000123', 'YourFinds'],
+      ['YSD-2', 'DELIVERY', 2, 'WHOLESALE', 'PHYSICAL_BUNDLE_RECEIPT', 'BUNDLE-1', 'Yellow bundle', 'YSD-2-B01'],
+      ['YSD-2', 'DISTRIBUTION', 5, 'PINS', '', 'PIN-1', 'Yellow (GS)', 'BUNDLE_ROW:3', 1],
+      ['YSD-2', 'SALE', -1, 'PINS', '', 'PIN-1', 'Yellow (GS)'],
+      ['YSD-3', 'DELIVERY', 10, 'PINS', '', 'PIN-1', 'Yellow (GS)'],
+    ],
+  };
+  Object.assign(context, {
+    ACCESS_REQUEST_CONTEXT_: {actor:{name:'Employee'}},
+    isDevelopmentSpreadsheet_: () => true,
+    dashboardDate_: date => date,
+    dashboardOverviewDate_: date => date,
+    dashboardYourFindsReturnSize_: size => size,
+    formatInventoryDateForClient: date => date,
+    SpreadsheetApp: {getActiveSpreadsheet: () => ({})},
+    readDeliveryPageRows_: (_ss, name) => sheetRows[{
+      'Delivery Log':'Delivery', Inventory:'Inventory', 'Inventory Movement Log':'Movements',
+    }[name]],
+    dashboardReturnSummary_: rows => ({items:rows.reduce((sum, row) => sum + row.quantity, 0), groups:[]}),
+  });
+  const expand = (rows, indexName, fields) => {
+    const indexes = vm.runInContext(indexName, context);
+    return rows.map(values => {
+      const row = [];
+      fields.forEach((field, index) => { row[indexes[field]] = values[index]; });
+      return row;
+    });
+  };
+  sheetRows.Delivery = expand(sheetRows.Delivery, 'DELIVERY_IDX', ['DELIVERY_ID','DELIVERY_DATE','DELIVERY_TYPE','STATUS','RECEIVE_MODE','ESTIMATED_QTY','ACTUAL_QTY','TYPE','BUNDLE_QTY','DRIVER_NAME','PLATE_NO']);
+  sheetRows.Movements = expand(sheetRows.Movements, 'MOVE_IDX', ['REFERENCE_ID','SOURCE','QTY_CHANGE','TYPE','NOTES','CODE','ITEM','SOURCE_LINE_ID','BUNDLE_NO']);
+  context.isSupplierReturnSource_ = () => false;
+  vm.runInContext(fs.readFileSync('Backend/GeneralDelivery.js', 'utf8'), context);
+  vm.runInContext(fs.readFileSync('Backend/DeliverySummary.js', 'utf8'), context);
+  const range = {start:'2026-11-11', end:'2026-11-12'};
+  const summary = context.dashboardDeliveryRows_(range.start, range.end);
+  assert.equal(summary.count, 2);
+  const wholesale = summary.rows.filter(row => row.category === 'WHOLESALE');
+  assert.equal(wholesale.length, 1);
+  assert.equal(wholesale[0].quantity, 1);
+  assert.equal(wholesale[0].unit, 'bundle');
+  assert.equal(wholesale[0].name, 'Yellow bundle');
+  assert.equal(context.createDashboardDeliveryPdf(range).fileName, 'Delivery_Report_Summary_2026-11-11_to_2026-11-12.pdf');
+  assert.match(getHtml(), /<h1>DELIVERY REPORT SUMMARY<\/h1>/);
+  assert.match(getHtml(), /<td>MNE<\/td><td>0123<\/td><td class="qty">1<\/td>/);
+  assert.match(getHtml(), /<td>PIN-1<\/td><td>Yellow \(GS\)<\/td><td class="qty">5<\/td>/);
+  assert.match(getHtml(), /GRAND TOTAL<\/td><td class="qty">7<\/td>/);
+  assert.match(getHtml(), /TOTAL WHOLESALE/);
+  assert.match(getHtml(), /BUNDLE-1<\/td><td>Yellow bundle \(bundle\)/);
+  assert.match(getHtml(), /<strong>Prepared By<\/strong>Employee/);
+  assert.match(getHtml(), /<strong>Driver Name<\/strong>Driver &amp; Co\./);
+  assert.match(getHtml(), /<strong>Plate No\.<\/strong>ABC 123/);
+  assert.doesNotMatch(getHtml(), /Holder|Outside range|ZZZ 999/);
+});

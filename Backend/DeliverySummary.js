@@ -99,15 +99,59 @@ function deliveryReceivedLines_(deliveries, inventory, movements) {
 
 function dashboardDeliveryRows_(start, end) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const deliveries = readDeliveryPageRows_(ss, SHEETS.DELIVERY_LOG, DELIVERY_LOG_COLUMN_COUNT, false).filter(row => {
+  const all = readDeliveryPageRows_(ss, SHEETS.DELIVERY_LOG, DELIVERY_LOG_COLUMN_COUNT, false);
+  const deliveries = all.filter(row => {
     const date = dashboardOverviewDate_(formatInventoryDateForClient(row[DELIVERY_IDX.DELIVERY_DATE]));
     return date >= start && date <= end && String(row[DELIVERY_IDX.DELIVERY_ID] || '').trim();
   });
-  if (!deliveries.length) return {count:0, rows:[]};
-  const rows = deliveryReceivedLines_(deliveries,
-    readDeliveryPageRows_(ss, SHEETS.INVENTORY, INV_COL.CATEGORY, true),
-    readDeliveryPageRows_(ss, SHEETS.INVENTORY_MOVEMENT_LOG, MOVEMENT_LOG_COLUMN_COUNT, false));
-  return {count:new Set(deliveries.map(row => String(row[DELIVERY_IDX.DELIVERY_ID]).trim())).size, rows};
+  return {deliveries, count:new Set(deliveries.map(row => String(row[DELIVERY_IDX.DELIVERY_ID]).trim())).size,
+    rows: dashboardDeliveryItemRows_(ss, all, new Set(deliveries))};
+}
+
+function dashboardDeliveryItemRows_(ss, deliveries, selected = new Set(deliveries)) {
+  if (!deliveries.length) return [];
+  const inventory = readDeliveryPageRows_(ss, SHEETS.INVENTORY, INV_COL.CATEGORY, true);
+  const movements = readDeliveryPageRows_(ss, SHEETS.INVENTORY_MOVEMENT_LOG, MOVEMENT_LOG_COLUMN_COUNT, false);
+  const scoped = deliveries.filter(row => selected.has(row));
+  const rows = deliveryReceivedLines_(scoped, inventory, movements)
+    .map(({id, category, name, code, size, quantity, source, type}) => ({
+      id, category:source === 'DISTRIBUTION' && type === 'PINS' ? 'PINS' : category, name, code, size, quantity,
+    }));
+  const products = new Map(inventory.map(row => [String(row[INV_IDX.CODE]).trim(), row[INV_IDX.DESCRIPTION]]));
+  const movementsById = new Map();
+  movements.forEach(row => {
+    const id = String(row[MOVE_IDX.REFERENCE_ID] || '').trim();
+    if (!movementsById.has(id)) movementsById.set(id, []);
+    movementsById.get(id).push(row);
+  });
+  const sequences = new Map();
+  deliveries.forEach((row, index) => {
+    if (String(row[DELIVERY_IDX.RECEIVE_MODE] || '').trim().toUpperCase() !== 'BULK') return;
+    const id = String(row[DELIVERY_IDX.DELIVERY_ID] || '').trim();
+    if (!id) return;
+    const sequence = (sequences.get(id) || 0) + 1;
+    sequences.set(id, sequence);
+    if (!selected.has(row)) return;
+    const holder = id + '-B' + String(sequence).padStart(2, '0');
+    const related = movementsById.get(id) || [];
+    const type = String(row[DELIVERY_IDX.TYPE] || '').trim().toUpperCase();
+    const status = String(row[DELIVERY_IDX.STATUS] || '').trim().toUpperCase();
+    const progress = getBulkBundleProgress_(id, index + 2, type, Math.floor(Number(row[DELIVERY_IDX.BUNDLE_QTY]) || 0), related);
+    const receiptCode = progress.physicalProducts[holder];
+    const receipt = related.find(move => String(move[MOVE_IDX.SOURCE_LINE_ID] || '').trim() === holder &&
+      String(move[MOVE_IDX.NOTES] || '').trim() === 'PHYSICAL_BUNDLE_RECEIPT');
+    if (!receiptCode && status === DELIVERY_STATUS.COMPLETED) return;
+    progress.bundles.forEach(bundle => {
+      if (bundle.split || bundle.actualQuantity > 0) return;
+      const code = bundle.productCode || receiptCode || '';
+      const name = bundle.description || products.get(code) || receipt?.[MOVE_IDX.ITEM] ||
+        String(row[DELIVERY_IDX.DESCRIPTION] || '').trim() || bundle.label;
+      // Product Master adds a piece-count suffix that older Delivery Log labels lack.
+      const bundleName = String(name).trim().replace(/\s*·\s*\(\d+\)\s*pcs$/i, '');
+      rows.push({id, category:'WHOLESALE', name:bundleName, code, size:'', quantity:1, unit:'bundle'});
+    });
+  });
+  return rows;
 }
 
 function dashboardDeliveryRange_(request) {
@@ -116,11 +160,4 @@ function dashboardDeliveryRange_(request) {
   const start = dashboardDate_(request.start), end = dashboardDate_(request.end);
   if (start > end) throw new Error('Choose a start date before or equal to the end date.');
   return {start, end};
-}
-
-function getDashboardDeliverySummary(request) {
-  const {start, end} = dashboardDeliveryRange_(request);
-  const {count, rows} = dashboardDeliveryRows_(start, end);
-  const summary = dashboardReturnSummary_(rows);
-  return {count, items:summary.items, groups:summary.groups};
 }
