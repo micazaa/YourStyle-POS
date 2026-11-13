@@ -122,7 +122,7 @@ function buildSupplierReturnReceiptDetails_(id, rows) {
 function createDashboardReturnPdf(request) {
   assertAppRequest_();
   const employee = ACCESS_REQUEST_CONTEXT_.actor;
-  if (!employee || !isDevelopmentSpreadsheet_()) throw new Error('Dashboard return reports are unavailable.');
+  if (!employee || !isDashboardEnabled_()) throw new Error('Dashboard return reports are unavailable.');
   const start = dashboardDate_(request.start);
   const end = dashboardDate_(request.end);
   if (start > end) throw new Error('Choose a start date before or equal to the end date.');
@@ -209,6 +209,13 @@ function buildDashboardMovementReportHtml_(rows, start, end, title, details, sep
   ).join('');
   const date = formatDeliveryReceiptDate_(start) + (start === end ? '' : ' – ' + formatDeliveryReceiptDate_(end));
 
+  const metadata = details ? '<table class="report-details"><tbody><tr><td><strong>Prepared By</strong>' + safe(details.preparedBy) +
+    '</td><td><strong>Driver Name</strong>' + safe(details.driver) + '</td><td><strong>Plate No.</strong>' + safe(details.plate) + '</td></tr></tbody></table>' : '';
+  return buildDashboardSummaryHtml_(title, date, metadata, totalCells, lines, totals['GRAND TOTAL']);
+}
+
+function buildDashboardSummaryHtml_(title, date, metadata, totalCells, lines, grandTotal) {
+  const safe = escapeDeliveryReceiptHtml_;
   return '<!doctype html><html><head><meta charset="utf-8"><style>' +
     '@page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;color:#333;font:11.5px/1.45 Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
     'h1{margin:0 0 4px;color:#b76e79;font-size:20px}.report-date{margin:0 0 16px;color:#65454b}' +
@@ -221,10 +228,46 @@ function buildDashboardMovementReportHtml_(rows, start, end, title, details, sep
     '.totals td{padding:7px 5px;border:1px solid #e3c6c6;text-align:center;background:#fbf2f4}' +
     '.total-value{font-size:15px;font-weight:bold}.total-label{font-size:10px;color:#65454b;font-weight:bold}' +
     '</style></head><body><h1>' + safe(title) + '</h1><p class="report-date">' + safe(date) + '</p>' +
-    (details ? '<table class="report-details"><tbody><tr><td><strong>Prepared By</strong>' + safe(details.preparedBy) +
-    '</td><td><strong>Driver Name</strong>' + safe(details.driver) + '</td><td><strong>Plate No.</strong>' + safe(details.plate) + '</td></tr></tbody></table>' : '') +
+    metadata +
     '<table class="totals"><tbody><tr>' + totalCells + '</tr></tbody></table>' +
     '<table class="items"><colgroup><col style="width:22%"><col style="width:66%"><col style="width:12%"></colgroup>' +
     '<thead><tr><th>Code</th><th>Description</th><th class="qty">Qty</th></tr></thead><tbody>' + lines +
-    '<tr class="grand-total"><td colspan="2">GRAND TOTAL</td><td class="qty">' + safe(totals['GRAND TOTAL']) + '</td></tr></tbody></table></body></html>';
+    '<tr class="grand-total"><td colspan="2">GRAND TOTAL</td><td class="qty">' + safe(grandTotal) + '</td></tr></tbody></table></body></html>';
+}
+
+function createDashboardInventoryPdf_(report, date) {
+  const safe = escapeDeliveryReceiptHtml_;
+  const labels = {YOURFINDS:'TOTAL YF', PINS:'TOTAL PIN', OTHERS:'TOTAL OTHERS', WHOLESALE:'TOTAL WHOLESALE'};
+  const units = (category, stock) => category === 'WHOLESALE' ? (stock === 1 ? ' bundle' : ' bundles') : ' pcs';
+  const totalCells = Object.entries(report.totals).map(([category, stock]) =>
+    '<td><div class="total-value">' + safe(stock) + units(category, stock) +
+    '</div><div class="total-label">' + labels[category] + '</div></td>'
+  ).join('');
+  const categories = {YOURFINDS:'YourFinds', PINS:'Pins', OTHERS:'Other items', WHOLESALE:'Wholesale'};
+  const sizes = {SE:'Small Electronic', ME:'Medium Electronic', LE:'Large Electronic', XLE:'Extra Large Electronic',
+    SNE:'Small Non-Electronic', MNE:'Medium Non-Electronic', LNE:'Large Non-Electronic', XLNE:'Extra Large Non-Electronic',
+    BNE:'Bulky Non-Electronic', NS:'No Size'};
+  const colors = {'Sold out':'#b42318', 'Low stock':'#8a6100', 'Incomplete':'#175cd3'};
+  const lines = Object.entries(categories).map(([category, label]) => {
+    const items = report.items.filter(item => item.category === category);
+    if (!items.length) return '';
+    return '<tr style="page-break-after:avoid"><th colspan="3">' + label + '</th></tr>' + items.map(item => {
+      const color = colors[item.status];
+      const description = category === 'YOURFINDS' ? sizes[item.description] || item.description : item.description;
+      return '<tr' + (color ? ' style="color:' + color + '"' : '') + '><td>' + safe(item.code) +
+        '</td><td>' + safe(description) + '</td><td class="qty">' +
+        safe(item.stock) + units(category, item.stock) + '</td></tr>';
+    }).join('');
+  }).join('');
+  const legend = '<p><strong>Legend</strong> · ' + Object.entries(colors).map(([label, color]) =>
+    '<span style="color:' + color + '">' + label + '</span>'
+  ).join(' · ') + '</p>';
+  const pieces = report.totals.YOURFINDS + report.totals.PINS + report.totals.OTHERS;
+  const grandTotal = pieces + ' pcs · ' + report.totals.WHOLESALE + units('WHOLESALE', report.totals.WHOLESALE);
+  const metadata = '<table class="report-details"><tbody><tr><td><strong>Prepared By</strong>' +
+    safe(report.preparedBy) + '</td></tr></tbody></table>' + legend;
+  const html = buildDashboardSummaryHtml_('INVENTORY REPORT SUMMARY', report.snapshot, metadata, totalCells,
+    lines || '<tr><td colspan="3">No stock records.</td></tr>', grandTotal);
+  const pdf = Utilities.newBlob(html, 'text/html', 'inventory-report-summary.html').getAs('application/pdf');
+  return {success:true, fileName:'Inventory_Report_Summary_' + date + '.pdf', base64:Utilities.base64Encode(pdf.getBytes())};
 }

@@ -156,7 +156,7 @@ function dashboardDeliveryItemRows_(ss, deliveries, selected = new Set(deliverie
 
 function dashboardDeliveryRange_(request) {
   assertAppRequest_();
-  if (!ACCESS_REQUEST_CONTEXT_.actor || !isDevelopmentSpreadsheet_()) throw new Error('Dashboard delivery reports are unavailable.');
+  if (!ACCESS_REQUEST_CONTEXT_.actor || !isDashboardEnabled_()) throw new Error('Dashboard delivery reports are unavailable.');
   const start = dashboardDate_(request.start), end = dashboardDate_(request.end);
   if (start > end) throw new Error('Choose a start date before or equal to the end date.');
   return {start, end};

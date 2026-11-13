@@ -240,39 +240,22 @@ function dashboardInventory_() {
 function getDashboardOverview(request) {
   assertAppRequest_();
   const employee = ACCESS_REQUEST_CONTEXT_.actor;
-  if (!employee || !isDevelopmentSpreadsheet_()) throw new Error('Dashboard overview is unavailable.');
+  if (!employee || !isDashboardEnabled_()) throw new Error('Dashboard overview is unavailable.');
   const start = dashboardDate_(request.start);
   const end = dashboardDate_(request.end);
   if (start > end) throw new Error('Choose a start date before or equal to the end date.');
-  const timezone = Session.getScriptTimeZone();
-  const today = Utilities.formatDate(new Date(), timezone, 'yyyy-MM-dd');
   const version = inventoryReadVersion_();
   const cache = CacheService.getScriptCache();
-  const scope = employee.manager ? ['store'] : ['own', employee.id, employee.name];
   const digest = Utilities.base64EncodeWebSafe(Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256, JSON.stringify([version, scope, today, start, end])
+    Utilities.DigestAlgorithm.SHA_256, JSON.stringify([version, start, end])
   ));
-  const key = 'dashboard-overview:v5:' + digest;
+  const key = 'dashboard-overview:v8:' + digest;
   try {
     const cached = cache.get(key);
     if (cached) return JSON.parse(cached);
   } catch (error) {
     console.warn('Dashboard overview cache read unavailable.');
   }
-  const firstVisibleSale = employee.manager ? start : dashboardDayOffset_(today, -6);
-  const salesStart = start < firstVisibleSale ? firstVisibleSale : start;
-  const salesEnd = end > today ? today : end;
-  const salesSheet = getSalesLogSheet_();
-  if (!salesSheet) throw new Error('Sales Log sheet not found.');
-  const sales = salesStart <= salesEnd
-    ? collectSalesMetrics(salesSheet.getDataRange().getValues(), salesStart, employee.manager ? null : employee.name, null, null, {
-        totalsWindow: [
-          Utilities.parseDate(salesStart, timezone, 'yyyy-MM-dd').getTime(),
-          Utilities.parseDate(dashboardDayOffset_(salesEnd, 1), timezone, 'yyyy-MM-dd').getTime(),
-        ],
-      })
-    : {totalSales:0, transactionCount:0};
-
   const shared = dashboardOverviewShared_(version, cache);
   const received = new Set(), incomplete = new Set();
   const inPeriod = date => date >= start && date <= end;
@@ -282,8 +265,7 @@ function getDashboardOverview(request) {
   });
   const inventory = shared.inventory;
   const overview = {
-    sales: {net: sales.totalSales, count: sales.transactionCount, own: !employee.manager, limited: salesStart > start},
-    inventory: {stock: inventory.stock, low: inventory.low},
+    inventory,
     delivery: {...dashboardReturnSummary_(shared.deliveryItems.filter(record => received.has(record.id)), true), count: received.size, incomplete: incomplete.size},
     returns: dashboardReturnSummary_(shared.returns.filter(record => record.date >= start && record.date <= end)),
   };
@@ -296,7 +278,7 @@ function getDashboardOverview(request) {
 }
 
 function dashboardOverviewShared_(version, cache) {
-  const key = 'dashboard-overview-shared:v4:' + version;
+  const key = 'dashboard-overview-shared:v6:' + version;
   try {
     const cached = cache.get(key);
     if (cached) return JSON.parse(cached);
@@ -313,7 +295,7 @@ function dashboardOverviewShared_(version, cache) {
   const returns = getSupplierReturns(false).map(record => ({id:String(record.id || '').trim(),
     date:dashboardOverviewDate_(record.returnDate || record.date),quantity:record.quantity,
     category:record.category,size:record.size,name:record.name,code:record.code})).filter(record => record.id);
-  const result = {deliveries,returns,deliveryItems:dashboardDeliveryItemRows_(ss, deliveryRows),inventory:dashboardInventory_()};
+  const result = {deliveries,returns,deliveryItems:dashboardDeliveryItemRows_(ss, deliveryRows),inventory:dashboardInventorySummary_(buildDashboardInventoryReport_(version))};
   try {
     if (inventoryReadVersion_() === version) cache.put(key, JSON.stringify(result), 30);
   } catch (error) { console.warn('Dashboard shared cache write unavailable.'); }
@@ -588,4 +570,56 @@ function saveDashboardTask(request) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function getDashboardInventoryReport(download) {
+  assertAppRequest_();
+  const actor = ACCESS_REQUEST_CONTEXT_.actor;
+  if (!actor || !isDashboardEnabled_()) throw new Error('Dashboard inventory reports are unavailable.');
+  const report = buildDashboardInventoryReport_(inventoryReadVersion_());
+  if (download === true) return createDashboardInventoryPdf_({...report, preparedBy:actor.name},
+    Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+  return dashboardInventorySummary_(report);
+}
+
+function dashboardInventorySummary_(report) {
+  return {
+    snapshot:report.snapshot,
+    totals:report.totals,
+    stock:Object.values(report.totals).reduce((total, stock) => total + stock, 0),
+    low:report.items.filter(item => item.status === 'Low stock').length,
+    items:report.items,
+  };
+}
+
+function buildDashboardInventoryReport_(version) {
+  const snapshot = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'MMMM d, yyyy h:mm a');
+  const totals = {YOURFINDS:0, PINS:0, OTHERS:0, WHOLESALE:0};
+  const rows = new Map();
+  inventoryListIndex_(version).forEach(item => {
+    if (['RETURNED','CONVERTED','INACTIVE','DISABLED','DEACTIVATED'].includes(item.status) ||
+        ['INACTIVE','DISABLED','DEACTIVATED'].includes(item.productStatus)) return;
+    const category = Object.prototype.hasOwnProperty.call(totals, item.category) ? item.category : 'OTHERS';
+    const size = category === 'YOURFINDS' ? dashboardYourFindsReturnSize_(item.size) : '';
+    const name = String(item.name || item.code || 'Unspecified item').trim().replace(/\s+/g, ' ').toUpperCase();
+    const product = name + ' ' + item.code;
+    const other = /\bSHOES?\b/i.test(product) ? 'SHOES' : /\bBAGS?\b/i.test(product) ? 'BAGS'
+      : /\bACCESSOR(?:Y|IES)\b/i.test(product) ? 'ACCESSORIES' : name;
+    const description = size || (category === 'OTHERS' ? other : category === 'PINS' ? name.replace(/\((GS|NEW|PT)\)/g, '$1') : name);
+    const key = JSON.stringify([category, description]);
+    if (!rows.has(key)) rows.set(key, {category, codes:new Set(), description, stock:0, threshold:0, incomplete:false});
+    const row = rows.get(key);
+    if (size || item.code) row.codes.add(size || item.code);
+    row.stock += item.stock;
+    row.threshold = Math.max(row.threshold, item.lowStockAt);
+    row.incomplete = row.incomplete || item.status === 'INCOMPLETE';
+  });
+  const items = Array.from(rows.values()).map(row => {
+    totals[row.category] += row.stock;
+    const status = row.stock < 0 ? 'Negative stock' : row.stock === 0 ? 'Sold out'
+      : row.threshold > 0 && row.stock <= row.threshold ? 'Low stock' : row.incomplete ? 'Incomplete' : '';
+    return {category:row.category, code:Array.from(row.codes).join(', ') || '—', description:row.description, stock:row.stock, status};
+  }).sort((a,b) => Object.keys(totals).indexOf(a.category) - Object.keys(totals).indexOf(b.category) ||
+    a.description.localeCompare(b.description, undefined, {numeric:true}));
+  return {snapshot, totals, items};
 }

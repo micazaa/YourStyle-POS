@@ -456,7 +456,7 @@ test('public analytics uses store today, zero comparison baseline is null, cashi
   assert.equal(cashier.period.start, cashier.today);
 });
 
-test('overview scopes cashier sales and groups delivery and return lines', () => {
+test('overview groups delivery and return lines without reading sales', () => {
   const rows = [
     ['YFD-OLD', '2026-11-01', 'YOURFINDS', 'PENDING'],
     ['YSD-NEW', '2026-11-10', 'YOURSTYLE', 'ACCEPTED'],
@@ -464,11 +464,11 @@ test('overview scopes cashier sales and groups delivery and return lines', () =>
   ];
   const actor = {name: 'Ana Cashier', manager: false};
   const cache = new Map();
-  let version = 'v1', salesReads = 0, inventoryReads = 0;
+  let version = 'v1', inventoryReads = 0;
   const c = vm.createContext({
     ACCESS_REQUEST_CONTEXT_: {actor},
     assertAppRequest_() {},
-    isDevelopmentSpreadsheet_: () => true,
+    isDashboardEnabled_: () => true,
     Utilities: {
       formatDate: () => '2026-11-11',
       parseDate: date => new Date(date + 'T00:00:00+08:00'),
@@ -479,14 +479,7 @@ test('overview scopes cashier sales and groups delivery and return lines', () =>
     CacheService: {getScriptCache: () => ({get: key => cache.get(key), put: (key, value) => cache.set(key, value)})},
     inventoryReadVersion_: () => version,
     Session: {getScriptTimeZone: () => 'Asia/Manila'},
-    getSalesLogSheet_: () => ({getDataRange: () => ({getValues: () => []})}),
-    collectSalesMetrics(_rows, start, cashier, _shiftStart, _shiftEnd, {totalsWindow}) {
-      salesReads++;
-      assert.equal(start, actor.manager ? '2026-11-01' : '2026-11-05');
-      assert.equal(cashier, actor.manager ? null : actor.name);
-      assert.equal(totalsWindow[1], Date.parse('2026-11-12T00:00:00+08:00'));
-      return {totalSales:24580, transactionCount:86};
-    },
+    getSalesLogSheet_: () => { throw new Error('Overview should not read sales'); },
     SpreadsheetApp: {getActiveSpreadsheet: () => ({})},
     SHEETS: {DELIVERY_LOG:'Delivery Log'},
     DELIVERY_LOG_COLUMN_COUNT: 4,
@@ -507,11 +500,9 @@ test('overview scopes cashier sales and groups delivery and return lines', () =>
     ],
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'Backend/Dashboard.js'), 'utf8'), c);
-  c.dashboardInventory_ = () => {inventoryReads++;return {stock:1248,low:12};};
+  c.buildDashboardInventoryReport_ = () => {inventoryReads++;return {snapshot:'Today',totals:{PINS:1248},items:[]};};
   const range = {start:'2026-11-01',end:'2026-11-30'};
   const overview = c.getDashboardOverview(range);
-  assert.equal(overview.sales.own, true);
-  assert.equal(overview.sales.limited, true);
   assert.equal(overview.inventory.stock, 1248);
   assert.equal(overview.delivery.count, 2);
   assert.equal(overview.delivery.incomplete, 1);
@@ -522,17 +513,13 @@ test('overview scopes cashier sales and groups delivery and return lines', () =>
   assert.deepEqual(Array.from(overview.returns.groups, group => group.rows[0].description), ['SNE','GS','Shoes']);
   assert.equal(overview.returns.groups[0].rows[0].quantity, 5);
   c.getDashboardOverview(range);
-  assert.equal(salesReads, 1);
   version = 'v2';
   c.getDashboardOverview(range);
-  assert.equal(salesReads, 2);
   actor.manager = true;
-  assert.equal(c.getDashboardOverview(range).sales.own, false);
-  assert.equal(salesReads, 3);
+  assert.equal(c.getDashboardOverview(range).inventory.stock, 1248);
   assert.equal(inventoryReads, 2, 'same stock revision reuses the inventory totals across different scopes');
   actor.manager = false;
   c.getDashboardOverview({...range,start:'2026-11-02'});
-  assert.equal(salesReads, 4);
   assert.equal(inventoryReads, 2, 'changing dates reuses shared inventory and delivery data');
   assert.throws(() => c.getDashboardOverview({start:range.end,end:range.start}), /start date/);
 });

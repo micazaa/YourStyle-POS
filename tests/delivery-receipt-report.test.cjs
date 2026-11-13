@@ -64,7 +64,7 @@ test('dashboard return export groups YourFinds by size and shows category totals
   Object.assign(context, {
     dashboardDate_: date => date,
     dashboardYourFindsReturnSize_: size => size === 'M' ? 'MNE' : size,
-    isDevelopmentSpreadsheet_: () => true,
+    isDashboardEnabled_: () => true,
     dashboardReturnRows_: (start, end) => rows.filter(row => row.returnDate >= start && row.returnDate <= end),
     getSupplierReturns: () => rows,
   });
@@ -200,7 +200,7 @@ test('Delivery dashboard report uses received movements from the selected receip
   };
   Object.assign(context, {
     ACCESS_REQUEST_CONTEXT_: {actor:{name:'Employee'}},
-    isDevelopmentSpreadsheet_: () => true,
+    isDashboardEnabled_: () => true,
     dashboardDate_: date => date,
     dashboardOverviewDate_: date => date,
     dashboardYourFindsReturnSize_: size => size,
@@ -243,4 +243,46 @@ test('Delivery dashboard report uses received movements from the selected receip
   assert.match(getHtml(), /<strong>Driver Name<\/strong>Driver &amp; Co\./);
   assert.match(getHtml(), /<strong>Plate No\.<\/strong>ABC 123/);
   assert.doesNotMatch(getHtml(), /Holder|Outside range|ZZZ 999/);
+});
+
+test('dashboard inventory snapshot groups YourFinds and keeps bundle units separate in the PDF', () => {
+  const {context, getHtml} = loadReport();
+  const item = (category, code, name, stock, extra = {}) => ({
+    category, code, name, stock, size:'', lowStockAt:0, status:'ACTIVE', inventoryType:'STOCK', ...extra,
+  });
+  Object.assign(context, {
+    isDashboardEnabled_: () => true,
+    Session: {getScriptTimeZone: () => 'Asia/Manila'},
+    inventoryReadVersion_: () => 'test',
+    inventoryListIndex_: () => [
+      item('YOURFINDS','1','Item 1',1,{size:'M',inventoryType:'UNIQUE'}),
+      item('YOURFINDS','2','Item 2',1,{size:'MNE',inventoryType:'UNIQUE',status:'INCOMPLETE'}),
+      item('YOURFINDS','3','Sold item',0,{size:'SNE',inventoryType:'UNIQUE',status:'INACTIVE'}),
+      item('PINS','P1','Yellow Pin',2,{lowStockAt:3}),
+      item('PINS','OFF','Disabled pin',50,{productStatus:'DEACTIVATED'}),
+      item('OTHERS','OFF2','Inactive item',20,{status:'INACTIVE'}),
+      item('OTHERS','B1','Canvas Bag',0),
+      item('OTHERS','B2','Leather Bags',0),
+      item('PINS','P2','Yellow (PT)',0),
+      item('PINS','P3','Yellow (NEW)',0),
+      item('WHOLESALE','BOX','Pure Tops',1),
+    ],
+    normalizeYourFindsSaleSize_: size => size === 'M' ? 'MNE' : size,
+  });
+  context.Utilities.formatDate = (_now, _timezone, format) => format === 'yyyy-MM-dd' ? '2026-11-13' : 'November 13, 2026 3:45 PM';
+  vm.runInContext(fs.readFileSync('Backend/Dashboard.js', 'utf8'), context);
+  const summary = context.getDashboardInventoryReport(false);
+  assert.deepEqual({...summary.totals}, {YOURFINDS:2,PINS:2,OTHERS:0,WHOLESALE:1});
+  assert.deepEqual(Array.from(summary.items, row => row.description), ['MNE','YELLOW NEW','YELLOW PIN','YELLOW PT','BAGS','PURE TOPS']);
+  assert.equal(summary.items.find(row => row.description === 'BAGS').status, 'Sold out');
+  assert.equal(summary.items.find(row => row.description === 'YELLOW PIN').status, 'Low stock');
+  assert.equal(context.getDashboardInventoryReport(true).fileName, 'Inventory_Report_Summary_2026-11-13.pdf');
+  assert.match(getHtml(), /Prepared By<\/strong>Bea &lt;Manager&gt;/);
+  assert.match(getHtml(), /<td>MNE<\/td><td>Medium Non-Electronic<\/td><td class="qty">2 pcs/);
+  assert.match(getHtml(), /<tr style="color:#175cd3"><td>MNE/);
+  assert.match(getHtml(), /<td>B1, B2<\/td><td>BAGS<\/td>/);
+  assert.match(getHtml(), /<strong>Legend<\/strong>/);
+  assert.match(getHtml(), /<th colspan="3">Other items<\/th>/);
+  assert.match(getHtml(), /GRAND TOTAL<\/td><td class="qty">4 pcs · 1 bundle/);
+  assert.doesNotMatch(getHtml(), /Sold item|Disabled pin|Inactive item/);
 });
