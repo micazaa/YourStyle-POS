@@ -45,7 +45,8 @@ document.querySelector('.sidebar-menu').addEventListener('scroll',closeInventory
 function restoreSidebarLayout(){
  document.body.classList.toggle('pos-session-active',!!currentEmployee);
  document.body.classList.toggle('sidebar-collapsed',localStorage.getItem('ys_pos_sidebar_collapsed')==='true');
- document.getElementById('menuToggleBtn').setAttribute('aria-expanded',localStorage.getItem('ys_pos_sidebar_collapsed')!=='true');
+ const expanded=window.matchMedia('(min-width: 992px)').matches ? !document.body.classList.contains('sidebar-collapsed') : document.getElementById('appSidebar').classList.contains('show');
+ document.getElementById('menuToggleBtn').setAttribute('aria-expanded',String(expanded));
 }
 function updateSidebarProfile(employee){
  if(!employee)return;
@@ -92,6 +93,8 @@ function navigateSidebar(page){closeInventoryFlyout();showPage(page);toggleSideb
 function showPage(pageId){
  const pages=['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'];if(!pages.includes(pageId)||(pageId==='dashboardPage'&&!dashboardPageIsAvailable()))return;
  if(pageId==='posPage'&&!cashierPageIsAvailable()){showNotificationToast('Start a cashier shift to open the POS.',true);return;}
+ const mobileTitle=document.getElementById('mobilePageTitle');
+ if(mobileTitle)mobileTitle.textContent={posPage:'Cashier',inventoryPage:'Inventory',deliveriesPage:'Delivery',supplierReturnsPage:'Return',dashboardPage:'Dashboard'}[pageId];
  prioritizeWorkspacePage(pageId);
  pages.forEach(id=>{const page=document.getElementById(id);if(page)page.style.display=id===pageId?'block':'none';});
  localStorage.setItem('ys_pos_active_page',pageId);
@@ -126,6 +129,7 @@ function openInventoryWorkspace(){
   }
 
   function completeCleanLogout() {
+    setCashierPhonePane('items');
       if(typeof closeManagerPinModal==='function')closeManagerPinModal(false);
       if(typeof setYourFindsSaving==='function')setYourFindsSaving(false);
       // The sidebar backdrop sits above login; always dismiss it first.

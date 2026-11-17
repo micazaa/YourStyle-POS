@@ -45,29 +45,42 @@ function deviceOverviewAccount() {
   if (!deviceCacheEnabled() || !employee?.dashboardToken || !employee.employeeId) return '';
   return JSON.stringify([employee.employeeId,employee.fullName,employee.role,employee.accessLevel,employee.permissions]);
 }
-function readDeviceOverview(range) {
+function readDeviceDashboard(kind, range) {
   const account = deviceOverviewAccount();
   if (!account) return null;
   try {
-    const saved = JSON.parse(localStorage.getItem('ys_uat_daily_overview_v1_' + account));
+    const saved = JSON.parse(localStorage.getItem('ys_uat_daily_' + kind + '_v1_' + account));
     if (saved?.day !== deviceCacheDay()) return null;
     return saved.ranges?.[range.start + ':' + range.end] ||
       (saved.start === range.start && saved.end === range.end ? saved.overview : null);
   } catch (error) { /* Use the authenticated live read when storage is unavailable. */ }
   return null;
 }
-function writeDeviceOverview(range, overview) {
+function writeDeviceDashboard(kind, range, data) {
   const account = deviceOverviewAccount();
   if (!account) return;
   try {
-    const key = 'ys_uat_daily_overview_v1_' + account;
+    const key = 'ys_uat_daily_' + kind + '_v1_' + account;
     const previous = JSON.parse(localStorage.getItem(key));
     const ranges = previous?.day === deviceCacheDay() ? {...previous.ranges} : {};
     const rangeKey = range.start + ':' + range.end;
     delete ranges[rangeKey];
-    ranges[rangeKey] = overview;
+    ranges[rangeKey] = data;
     while (Object.keys(ranges).length > 12) delete ranges[Object.keys(ranges)[0]];
-    localStorage.setItem(key, JSON.stringify({day:deviceCacheDay(),ranges}));
+    let serialized = JSON.stringify({day:deviceCacheDay(),ranges});
+    while (serialized.length > 1000000 && Object.keys(ranges).length > 1) {
+      delete ranges[Object.keys(ranges)[0]];
+      serialized = JSON.stringify({day:deviceCacheDay(),ranges});
+    }
+    localStorage.setItem(key, serialized);
   } catch (error) { /* A full device cache must not interrupt live totals. */ }
+}
+function readDeviceOverview(range) { return readDeviceDashboard('overview', range); }
+function writeDeviceOverview(range, data) { writeDeviceDashboard('overview', range, data); }
+function clearDeviceDashboard(kind) {
+  const account = deviceOverviewAccount();
+  if (!account) return;
+  try { localStorage.removeItem('ys_uat_daily_' + kind + '_v1_' + account); }
+  catch (error) { /* Live loading remains available when storage is disabled. */ }
 }
 </script>

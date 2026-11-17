@@ -456,6 +456,102 @@ test('public analytics uses store today, zero comparison baseline is null, cashi
   assert.equal(cashier.period.start, cashier.today);
 });
 
+test('sales cards, activity, ranking groups and payments match the selected reporting period', () => {
+  const rows = [Array(28).fill(''),
+    sale({date:'2026-09-23T10:00:00Z', receipt:'PRIOR', qty:3, net:80}),
+    sale({date:'2026-09-24T02:00:00Z', receipt:'CURRENT', code:'001', name:'Yellow (GS)', qty:2, net:100}),
+    sale({date:'2026-09-24T02:00:00Z', receipt:'CURRENT', code:'002', name:'Green', qty:1, net:20}),
+    sale({date:'2026-09-24T02:00:00Z', receipt:'CURRENT', code:'YF-003', name:'Top', size:'SNE', category:'YOURFINDS', net:50}),
+    sale({date:'2026-09-24T02:00:00Z', receipt:'VOID', status:'VOIDED', qty:8, net:200}),
+  ];
+  rows[0][15] = 'Status';
+  rows[2][11] = 2.24;
+  rows.slice(2,5).forEach(row => row.push('Cash', 100, '', 'Credit Card', 70, 'sample-ref'));
+  const actor = {manager:true};
+  let reads = 0, enabled = true, version = 'v1';
+  const cache = new Map();
+  const c = vm.createContext({
+    console,
+    Date: class extends Date {
+      constructor(...args) { super(...(args.length ? args : ['2026-09-24T03:00:00Z'])); }
+    },
+    ACCESS_REQUEST_CONTEXT_: {actor},
+    assertAppRequest_() { if (!c.ACCESS_REQUEST_CONTEXT_) throw new Error('Sign in'); },
+    isDashboardEnabled_: () => enabled,
+    Session: {getScriptTimeZone: () => 'Asia/Manila'},
+    Utilities: {getUuid:randomUUID, parseDate: date => new Date(date + 'T00:00:00+08:00'), formatDate(date, zone, format) {
+      if (format === 'HH') return String((date.getUTCHours() + 8) % 24).padStart(2,'0');
+      const day = new Date(date.getTime() + 8 * 3600000).toISOString().slice(0,10);
+      return format === 'yyyy-MM-dd' ? day : day.replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3/$1');
+    }},
+    inventoryReadVersion_: () => version,
+    inventoryListIndex_: () => [{code:'001',imageUrl:'https://example.test/001.png'}],
+    inventoryResponseCacheKey_: (revision, kind, query) => JSON.stringify([revision, kind, actor.manager, query]),
+    CacheService: {getScriptCache: () => ({
+      get: key => cache.get(key),
+      put: (key, value) => cache.set(key,value),
+      getAll: keys => Object.fromEntries(keys.filter(key => cache.has(key)).map(key => [key,cache.get(key)])),
+      putAll: entries => Object.entries(entries).forEach(([key,value]) => cache.set(key,value)),
+    })},
+    SpreadsheetApp: {getActiveSpreadsheet: () => ({getSheetByName: () => ({
+      getRange: () => ({getDisplayValues: () => [rows[0]]}),
+      getDataRange: () => ({getValues() { reads++; return rows; }}),
+    })})},
+    toProperCase: String,
+    normalizeYourFindsSaleSize_: size => size === 'SNE' ? size : 'CUSTOM',
+  });
+  for (const file of ['Constants.js','Utils.js','Reservations.js','ReportHelpers.js','Dashboard.js'])
+    vm.runInContext(fs.readFileSync(path.join(root, 'Backend', file), 'utf8'), c);
+
+  const result = c.getDashboardSales(period);
+  assert.deepEqual([result.netSales,result.units,result.transactions], [170,4,1]);
+  assert.deepEqual({...result.previous}, {start:'2026-09-23',end:'2026-09-23',netSales:80,units:3,transactions:1});
+  assert.deepEqual(Array.from(result.activity[10].units), [1,3,0,0]);
+  assert.deepEqual(Array.from(result.activity[10].sales), [50,120,0,0]);
+  assert.deepEqual(Array.from(result.items, item => [item.code,item.group,item.units]), [['001','GS',2],['002','Standard',1],['YF-003','SNE',1]]);
+  assert.deepEqual(Array.from(result.payments, payment => [payment.method,payment.amount]), [['Cash',100],['Credit Card',70]]);
+  assert.equal(result.absorbedCardFees,2.24);
+  assert.equal(result.items[0].imageUrl,'https://example.test/001.png');
+  assert.equal(result.items[0].sales,100);
+  c.getDashboardOverview = () => ({inventory:{stock:3}});
+  const page = c.getDashboardPage(period);
+  assert.equal(page.overview.inventory.stock,3);
+  assert.equal(page.sales.netSales,170);
+  c.getDashboardSales(period);
+  assert.equal(reads,1);
+  version = 'v2';
+  c.getDashboardSales(period);
+  assert.equal(reads,2);
+  const range = c.getDashboardSales({start:'2026-09-23',end:'2026-09-24'});
+  assert.equal(range.hourly,false);
+  assert.deepEqual(Array.from(range.activity, bucket => bucket.start), ['2026-09-23','2026-09-24']);
+  assert.deepEqual([range.previous.start, range.previous.end], ['2026-09-21','2026-09-22']);
+  const long = c.getDashboardSales({start:'2026-07-01',end:'2026-09-24'});
+  assert.equal(long.activity.length,86);
+  assert.equal(long.activity.at(-1).start,'2026-09-24');
+  assert.equal(long.activity.at(-1).end,'2026-09-24');
+  assert.equal(reads,2,'Selecting any warm range reuses the Sales Log read for that inventory revision');
+  const cacheService = c.CacheService.getScriptCache();
+  const source = c.readDashboardCache_(cacheService,'dashboard-sales-rows:v1:v2');
+  assert.equal(source.rows.length,5,'The cached source contains the header and completed sales only');
+  assert.equal(typeof source.rows[1][0],'number');
+  assert.equal(source.rows[2][30],'','Payment references are excluded from the dashboard cache');
+  const large = {activity:'ñ'.repeat(30000) + '🎉'};
+  c.cacheDashboardResponse_(cacheService,'long-test',large,version);
+  assert.equal(c.readDashboardCache_(cacheService,'long-test').activity,large.activity);
+  const missing = JSON.parse(cache.get('long-test')).dashboardChunks[0];
+  cache.delete(missing);
+  assert.equal(c.readDashboardCache_(cacheService,'long-test'),null);
+  assert.match(c.getDashboardSales({start:'2024-01-01',end:'2026-09-24'}).unavailable,/366 days/);
+  actor.manager = false;
+  assert.equal(c.getDashboardSales(period).previous, undefined);
+  assert.match(c.getDashboardSales({start:'2026-09-23',end:'2026-09-23'}).unavailable, /managers and OICs/);
+  enabled = false;
+  assert.throws(() => c.getDashboardSales(period), /unavailable/);
+  c.ACCESS_REQUEST_CONTEXT_ = null;
+  assert.throws(() => c.getDashboardSales(period), /Sign in/);
+});
+
 test('overview groups delivery and return lines without reading sales', () => {
   const rows = [
     ['YFD-OLD', '2026-11-01', 'YOURFINDS', 'PENDING'],
@@ -555,4 +651,5 @@ test('dashboard totals match full sales metrics at Manila date boundaries and fo
   const totals = c.collectSalesMetrics(rows, day, 'Ana Cashier', null, null, {totalsWindow});
   assert.equal(totals.totalSales, full.totalSales);
   assert.equal(totals.transactionCount, full.transactionCount);
+  assert.equal(totals.itemsCount, full.itemsCount);
 });

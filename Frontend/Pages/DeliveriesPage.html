@@ -16,7 +16,7 @@
     ====================================================== -->
 
     <div
-      class="d-flex justify-content-between align-items-center mb-4"
+      class="workspace-heading d-flex justify-content-between align-items-center mb-4"
     >
 
       <div>
@@ -59,7 +59,7 @@
      OPERATIONAL SUMMARY
 ====================================================== -->
 
-<div class="row g-3 mb-4">
+<div class="workspace-metrics row g-3 mb-4">
   <div class="col-md-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openDeliverySummary('deliveries')"><span class="card-body"><span class="small text-muted d-block">Delivery Count</span><strong id="deliveryCountValue" class="fs-4 d-block">0</strong><span id="deliveryCountHint" class="small text-muted">Accepted deliveries</span></span></button></div>
   <div class="col-md-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openDeliverySummary('bundles')"><span class="card-body"><span class="small text-muted d-block">Bundles to Open</span><strong id="deliveryBundlesValue" class="fs-4 d-block">—</strong><span id="deliveryBundlesHint" class="small text-muted">Unopened bundles</span></span></button></div>
   <div class="col-md-4"><button type="button" class="card border-0 shadow-sm h-100 w-100 text-start" onclick="openDeliverySummary('items')"><span class="card-body"><span class="small text-muted d-block">Items Received</span><strong id="deliveryItemsValue" class="fs-4 d-block">—</strong><span class="small text-muted">Actual pieces</span></span></button></div>
@@ -70,7 +70,7 @@
   ====================================================== -->
 
   <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body d-flex flex-wrap gap-2">
+    <div class="workspace-filters card-body d-flex flex-wrap gap-2">
       <select id="deliveriesCategoryFilter" class="form-select" style="width:180px;" aria-label="Delivery type" onchange="filterDeliveriesPage()"><option value="">All</option><option value="YOURFINDS">YOURFINDS</option><option value="YOURSTYLE">YOURSTYLE</option></select>
       <input type="search" id="deliveriesSearch" class="form-control" style="flex:1;min-width:220px;" aria-label="Search deliveries" placeholder="Search code, product, category, size..." oninput="filterDeliveriesPage()">
       <label class="form-check align-self-center mb-0"><input type="checkbox" class="form-check-input" id="deliveriesUndistributedFilter" onchange="filterDeliveriesPage()"> Awaiting distribution</label>
@@ -85,7 +85,7 @@
 
       <div class="card-body p-0">
 
-        <div class="table-responsive">
+        <div class="workspace-table table-responsive" role="region" aria-label="Deliveries table" tabindex="0">
 
           <table
             class="table table-hover align-middle mb-0"

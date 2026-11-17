@@ -422,9 +422,9 @@ function addYourFindsDeliveryLine() {
   const line = document.createElement("div");
   line.className = "yourfinds-delivery-line delivery-line yourfinds";
   line.innerHTML = '<div class="delivery-line-number yourfinds-line-number">' + yourFindsDeliveryLineCounter + '</div>' +
-    '<select class="form-select form-select-sm yourfinds-line-type" aria-label="Type" onchange="updateYourFindsDeliveryLineType(this)"><option value="NON_ELECTRONIC">Non-electronic</option><option value="ELECTRONIC">Electronic</option><option value="CUSTOM">Custom</option></select>' +
-    '<div class="yourfinds-line-size"></div>' +
-    '<input type="number" class="form-control form-control-sm yourfinds-line-qty" min="1" max="999" step="1" value="1" aria-label="Actual quantity" oninput="updateDeliveryTotalQty()">' +
+    '<label class="delivery-entry-field"><span class="phone-field-label">Type</span><select class="form-select form-select-sm yourfinds-line-type" aria-label="Type" onchange="updateYourFindsDeliveryLineType(this)"><option value="NON_ELECTRONIC">Non-electronic</option><option value="ELECTRONIC">Electronic</option><option value="CUSTOM">Custom</option></select></label>' +
+    '<div class="delivery-entry-field delivery-entry-wide"><span class="phone-field-label">Size</span><div class="yourfinds-line-size"></div></div>' +
+    '<label class="delivery-entry-field"><span class="phone-field-label">Actual qty</span><input type="number" class="form-control form-control-sm yourfinds-line-qty" min="1" max="999" step="1" value="1" aria-label="Actual quantity" oninput="updateDeliveryTotalQty()"></label>' +
     '<button type="button" class="btn btn-sm btn-outline-danger" aria-label="Remove item" title="Remove item" onclick="removeYourFindsDeliveryLine(this)">×</button>';
   document.getElementById("yourFindsDeliveryLines").appendChild(line);
   renderYourFindsDeliverySize(line);

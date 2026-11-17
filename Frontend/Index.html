@@ -26,9 +26,12 @@
 
     <!-- Layout -->
     <?!= include("Frontend/Layout/Sidebar"); ?>
-    <button id="menuToggleBtn" type="button" class="btn btn-light mobile-menu-toggle"
+    <div class="workspace-mobile-bar">
+      <button id="menuToggleBtn" type="button" class="btn btn-light mobile-menu-toggle"
       aria-label="Toggle navigation" aria-controls="appSidebar" aria-expanded="false"
       onclick="toggleSidebar()">☰</button>
+      <strong id="mobilePageTitle">Cashier</strong>
+    </div>
 
     <!-- Modals -->
     <?!= include("Frontend/Modals/LoginModal"); ?>
@@ -70,6 +73,7 @@
     <?!= include("Frontend/Pages/SupplierReturnsPage"); ?>
 
     </main>
+    <?!= include("Frontend/Styles/Phone"); ?>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
   </body>

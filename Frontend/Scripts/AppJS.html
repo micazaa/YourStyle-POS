@@ -265,7 +265,15 @@
             'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle','splitPhysicalBundle',
             'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(operation)){
             if(typeof clearDeviceInventoryCache==='function')clearDeviceInventoryCache();
+            if(typeof clearDeviceDashboard==='function'){
+              clearDeviceDashboard('overview');
+              clearDeviceDashboard('page');
+            }
             Array.from(pageReadCache.keys()).filter(key => key.startsWith('dashboardOverview')).forEach(key => pageReadCache.delete(key));
+            if (['executeCheckoutBackend','voidAndRefundTransactionBackend','completeCustomerExchange','processReservationPayment',
+              'saveYourFindsItemDetails','saveProductMaster','deleteUnusedInventoryItem','setInventoryAdministrativeStatus'].includes(operation)) {
+              if(typeof clearDeviceDashboard==='function')clearDeviceDashboard('sales');
+            }
             if (workspacePreloadState?.page === 'dashboardPage') loadDashboardOverview();
             if(typeof handleInventoryMutationResult==='function')handleInventoryMutationResult(parsed);
             else {pageReadCache.delete('inventory');if(typeof invalidateLocalInventoryReads==='function')invalidateLocalInventoryReads();}
@@ -582,6 +590,8 @@
        - user is using a contenteditable element
     ======================================================== */
 
+    // Touch users choose when to open the keyboard by tapping the scan field.
+    if (window.matchMedia('(pointer: coarse)').matches) return;
     setInterval(() => {
 
       const loginOverlay = document.getElementById("loginOverlay");

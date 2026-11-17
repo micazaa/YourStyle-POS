@@ -1,0 +1,189 @@
+<style>
+  .workspace-mobile-bar, .cashier-pane-switch, .phone-field-label { display: none; }
+  .delivery-entry-field { display: block; min-width: 0; }
+
+  @media screen and (max-width: 991.98px) {
+    .pos-session-active .workspace-mobile-bar {
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: 920;
+      height: 52px;
+      padding-inline: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--card-bg);
+    }
+    .workspace-mobile-bar .mobile-menu-toggle { position: static; min-width: 44px; height: 44px; }
+    .pos-session-active #appMain { padding-top: 52px; }
+    .inventory-workspace-nav { top: 52px; padding: 6px 12px; }
+    .pos-session-active .app-sidebar:not(.show) { visibility: hidden; }
+    body:has(#appSidebar.show) { overflow: hidden; }
+    .app-sidebar { height: 100dvh; max-width: calc(100vw - 48px); }
+  }
+
+  @media screen and (max-width: 767.98px), screen and (max-width: 991.98px) and (max-height: 500px) {
+    #appMain { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+    #appMain .container-fluid.px-5, #terminalWorkspace.container-fluid {
+      padding: 12px !important;
+    }
+    .inventory-workspace-nav .btn-group { display: flex; }
+    .inventory-workspace-nav .btn { flex: 1; }
+    .workspace-heading { flex-wrap: wrap; gap: 12px; margin-bottom: 14px !important; }
+    .workspace-heading > div { min-width: 0; }
+    .workspace-heading :is(#inventoryHeaderActions, [data-page-header-actions]) { flex-wrap: wrap; }
+    .workspace-metrics.row {
+      display: grid;
+      grid-auto-columns: minmax(0, 1fr);
+      grid-auto-flow: column;
+      gap: 6px;
+      margin: 0 0 12px !important;
+    }
+    .workspace-metrics.row > div { width: auto; margin: 0; padding: 0; }
+    .workspace-metrics .card-body { padding: 9px; overflow-wrap: anywhere; }
+    .workspace-filters.card-body {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      padding: 10px;
+      align-items: center;
+    }
+    .workspace-filters > * { width: 100% !important; min-width: 0 !important; }
+    .workspace-filters > input[type="search"], .workspace-filters > div:has(> input[type="search"]) { grid-column: 1 / -1; }
+    .workspace-filters > .form-check { grid-column: 1 / -1; }
+    .workspace-table, .custom-popup-card .table-responsive {
+      max-width: 100%;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+    }
+    .workspace-table > table { min-width: 52rem; }
+    .workspace-table .btn, .inventory-actions .btn { min-height: 40px; min-width: 40px; }
+
+    .cashier-pane-switch { display: flex; }
+    .cashier-pane-switch .btn { flex: 1; min-height: 44px; }
+    .cashier-pane-switch [aria-pressed="true"] { color: var(--text-dark); background: var(--pink-light); font-weight: 700; }
+    #cashierCartQuantity { font-variant-numeric: tabular-nums; }
+    #terminalWorkspace.container-fluid { height: auto !important; }
+    #cashierWorkspaceControls > div { width: 100%; height: auto !important; }
+    #cashierWorkspaceControls { --bs-gutter-x: 0; --bs-gutter-y: 0; }
+    #cashierWorkspaceControls[data-phone-pane="cart"] #cashierItemsPane,
+    #cashierWorkspaceControls[data-phone-pane="items"] #cashierCartPane { display: none !important; }
+    #cashierWorkspaceControls .pane-body { min-width: 0; overflow: visible; }
+    #cashierWorkspaceControls :is(.pane-header, .pane-body:not(.p-0), .summary-box) { padding: 14px; }
+    .cashier-petty-cash { margin-left: 0 !important; }
+    .summary-flex { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .summary-totals { min-width: 0; }
+    .summary-totals .row { --bs-gutter-x: .5rem; }
+    .cart-global-discount > :first-child { width: 100%; margin-bottom: 4px; }
+    .cart-global-discount > :nth-child(2) { width: 62%; }
+    .cart-global-discount > :last-child { width: 38%; }
+    .summary-totals .row > :first-child { text-align: left !important; }
+
+    #cashierCartPane table, #cartRows, .exchange-item-table, .exchange-item-table tbody { display: block; width: 100%; }
+    #cashierCartPane thead, .exchange-item-table thead {
+      position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden;
+    }
+    #cartRows > tr, .exchange-item-table tbody > tr {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-template-areas: "photo product product product product remove" "qty qty discount discount discount discount" "size size price price total total";
+      align-items: start;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    #cartRows td, .exchange-item-table tbody td {
+      min-width: 0; height: auto; padding: 0 !important; border: 0; overflow-wrap: anywhere;
+    }
+    #cartRows td:first-child, .exchange-item-table td:first-child { grid-area: photo; }
+    #cartRows td:nth-child(2), .exchange-item-table td:nth-child(2) { grid-area: product; }
+    #cartRows td:nth-child(3), .exchange-item-table td:nth-child(3) { grid-area: size; text-align: left !important; }
+    #cartRows td:nth-child(4), .exchange-item-table td:nth-child(4) { grid-area: qty; text-align: left !important; }
+    #cartRows td:nth-child(5), .exchange-item-table td:nth-child(5) { grid-area: price; }
+    #cartRows td:nth-child(6) { grid-area: discount; }
+    #cartRows td:nth-child(7) { grid-area: total; }
+    #cartRows td:nth-child(8), .exchange-item-table td:nth-child(6) { grid-area: remove; justify-self: end; }
+    #cartRows td[data-phone-label]::before, .exchange-item-table td[data-phone-label]::before,
+    .phone-field-label {
+      display: block; color: var(--text-gray); font-size: .75rem; font-weight: 600; margin-bottom: 3px;
+    }
+    td[data-phone-label]::before { content: attr(data-phone-label); }
+    #cartRows td[data-phone-label]:empty::before { content: none; }
+    #cartRows .cart-img { width: 100%; max-width: 44px; height: 44px; }
+    #cartRows .input-group, #cartRows input[data-field="qty"] { width: 100% !important; }
+    #cartRows .cart-photo, #cartRows button[onclick^="removeItem"] { min-height: 44px; min-width: 40px; }
+
+    .generic-overlay-blur {
+      padding: 8px; height: 100dvh;
+      background-color: rgba(51, 51, 61, .45);
+      backdrop-filter: none;
+    }
+    .generic-overlay-blur > .custom-popup-card {
+      width: 100% !important;
+      max-height: calc(100dvh - 24px) !important;
+      overscroll-behavior: contain;
+    }
+    .generic-overlay-blur > .custom-popup-card:not(.p-0) { padding: 16px !important; }
+    .generic-overlay-blur .btn-close { flex-shrink: 0; min-width: 32px; min-height: 32px; }
+    .toast-container-custom { inset: 8px 8px auto auto; max-width: calc(100vw - 16px); }
+    .toast-container-custom .toast { max-width: 100%; }
+    :is(#appMain, .generic-overlay-blur) :is(input.form-control, select.form-select, textarea.form-control) { font-size: 16px; }
+    #cartRows :is(input, select) { font-size: 16px !important; }
+    .custom-popup-card .row { --bs-gutter-x: .8rem; }
+    .custom-popup-card .form-control, .custom-popup-card .form-select { min-width: 0; }
+    .custom-popup-card :is(.form-control, .form-select, button.btn:not(.btn-link)),
+    #appMain :is(input.form-control, select.form-select, .workspace-heading .btn) { min-height: 42px; }
+    #yourFindsReprintControls .col-md-3 { width: 50%; }
+
+    #yourStyleDeliveryHead, #acceptDeliveryModal .delivery-line-head.yourfinds { display: none; }
+    #productMasterModal .custom-popup-card { display: flex; flex-direction: column; }
+    #productMasterModal .table-responsive { flex: 1; min-height: 0; height: auto !important; }
+    #productMasterModal .col-md-3, #transactionHistorySummary .col-md-2 { width: 50%; }
+    #transactionHistorySummary > .col { flex: 1 0 100%; }
+    #accessManagementModal [role="group"], #transactionDetailsModal .transaction-detail-actions { flex-wrap: wrap; }
+    #transactionDetailsModal .transaction-detail-actions > .btn { flex: 1 1 8rem !important; }
+    :is(#yourStyleDeliveryLines, #yourFindsDeliveryLines) .delivery-line {
+      min-width: 0;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: end;
+      gap: 8px;
+      padding: 12px 0;
+    }
+    :is(#yourStyleDeliveryLines, #yourFindsDeliveryLines) .delivery-line-number {
+      grid-column: 1; grid-row: 1; align-self: center; text-align: left; font-weight: 650;
+    }
+    :is(#yourStyleDeliveryLines, #yourFindsDeliveryLines) .delivery-line-number::before { content: "Item "; }
+    :is(#yourStyleDeliveryLines, #yourFindsDeliveryLines) .delivery-line > button {
+      grid-column: 2; grid-row: 1; justify-self: end; min-width: 42px;
+    }
+    .delivery-entry-wide { grid-column: 1 / -1; }
+    #yourStyleDeliveryLines .change-item-results {
+      position: static !important;
+      width: 100% !important;
+      max-height: min(14rem, 36dvh);
+    }
+    .delivery-line.direct .delivery-entry-field:has(.yourstyle-line-qty),
+    .delivery-line.yourfinds .delivery-entry-field:has(.yourfinds-line-qty) { grid-column: 2; grid-row: 2; }
+    .delivery-line.bundle .delivery-line-total { grid-column: 1 / -1; text-align: right; }
+
+    .exchange-comparison .exchange-items { min-width: 0; }
+    .exchange-item-table tbody > tr {
+      grid-template-areas: "photo product product product product remove" "size size qty qty price price";
+    }
+    .exchange-item-table td[colspan] { grid-column: 1 / -1; }
+    .exchange-item-table td[colspan]:has(+ td) { grid-area: 1 / 1 / 2 / 6; }
+    .exchange-item-table td[colspan] + td { grid-area: remove; }
+    .exchange-item-table .exchange-product-results {
+      position: static; min-width: 0; width: 100%; max-width: 100%;
+    }
+    .exchange-item-table .exchange-product-option { flex-wrap: wrap; gap: 2px; }
+  }
+
+  @media screen and (max-height: 500px) and (max-width: 991.98px) {
+    .inventory-workspace-nav { position: static; }
+    #yourFindsReprintModal .custom-popup-card, #yourFindsReprintControls {
+      display: block !important; overflow-y: auto !important;
+    }
+    #yourFindsReprintControls .table-responsive { max-height: 60dvh; }
+  }
+</style>

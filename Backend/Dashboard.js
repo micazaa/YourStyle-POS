@@ -237,6 +237,48 @@ function dashboardInventory_() {
   };
 }
 
+function readDashboardCache_(cache, key) {
+  try {
+    const raw = cache.get(key);
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    if (!entry.dashboardChunks) return entry;
+    const chunks = cache.getAll(entry.dashboardChunks);
+    return entry.dashboardChunks.every(name => chunks[name] != null)
+      ? JSON.parse(entry.dashboardChunks.map(name => chunks[name]).join('')) : null;
+  } catch (error) { return null; }
+}
+
+const DASHBOARD_CACHE_SECONDS_ = 120;
+
+function cacheDashboardResponse_(cache, key, data, version, seconds = DASHBOARD_CACHE_SECONDS_) {
+  try {
+    if (inventoryReadVersion_() !== version) return;
+    const raw = JSON.stringify(data);
+    if (raw.length <= 20000) {
+      cache.put(key, raw, seconds);
+      return;
+    }
+    const prefix = key + ':' + Utilities.getUuid() + ':';
+    const chunks = raw.match(/[\s\S]{1,20000}/gu);
+    if (chunks.length > 100) return;
+    const keys = chunks.map((_, index) => prefix + index);
+    cache.putAll(Object.fromEntries(keys.map((name, index) => [name,chunks[index]])), seconds);
+    cache.put(key, JSON.stringify({dashboardChunks:keys}), seconds);
+  } catch (error) { console.warn('Dashboard cache write unavailable.'); }
+}
+
+function getDashboardPage(request) {
+  assertAppRequest_();
+  const overview = getDashboardOverview(request);
+  try {
+    return {overview,sales:getDashboardSales(request)};
+  } catch (error) {
+    console.warn('Dashboard sales read unavailable.');
+    return {overview,sales:{unavailable:'Couldn’t load sales.',retryable:true}};
+  }
+}
+
 function getDashboardOverview(request) {
   assertAppRequest_();
   const employee = ACCESS_REQUEST_CONTEXT_.actor;
@@ -250,12 +292,8 @@ function getDashboardOverview(request) {
     Utilities.DigestAlgorithm.SHA_256, JSON.stringify([version, start, end])
   ));
   const key = 'dashboard-overview:v13:' + digest;
-  try {
-    const cached = cache.get(key);
-    if (cached) return JSON.parse(cached);
-  } catch (error) {
-    console.warn('Dashboard overview cache read unavailable.');
-  }
+  const cached = readDashboardCache_(cache,key);
+  if (cached) return cached;
   const shared = dashboardOverviewShared_(version, cache);
   const received = new Set(), incomplete = new Set();
   const inPeriod = date => date >= start && date <= end;
@@ -277,20 +315,14 @@ function getDashboardOverview(request) {
     delivery: {...dashboardReturnSummary_(shared.deliveryItems.filter(record => received.has(record.id)), true), count: received.size, incomplete: incomplete.size},
     returns: dashboardReturnSummary_(shared.returns.filter(record => record.date >= start && record.date <= end)),
   };
-  try {
-    if (inventoryReadVersion_() === version) cache.put(key, JSON.stringify(overview), 30);
-  } catch (error) {
-    console.warn('Dashboard overview cache write unavailable.');
-  }
+  cacheDashboardResponse_(cache,key,overview,version);
   return overview;
 }
 
 function dashboardOverviewShared_(version, cache) {
   const key = 'dashboard-overview-shared:v11:' + version;
-  try {
-    const cached = cache.get(key);
-    if (cached) return JSON.parse(cached);
-  } catch (error) { console.warn('Dashboard shared cache read unavailable.'); }
+  const cached = readDashboardCache_(cache,key);
+  if (cached) return cached;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const deliveryRows = readDeliveryPageRows_(ss, SHEETS.DELIVERY_LOG, DELIVERY_LOG_COLUMN_COUNT, false);
   const deliveries = deliveryRows.flatMap(row => {
@@ -304,10 +336,148 @@ function dashboardOverviewShared_(version, cache) {
     date:dashboardOverviewDate_(record.returnDate || record.date),quantity:record.quantity,
     category:record.category,size:record.size,name:record.name,code:record.code})).filter(record => record.id);
   const result = {deliveries,returns,deliveryItems:dashboardDeliveryItemRows_(ss, deliveryRows),inventory:dashboardInventorySummary_(buildDashboardInventoryReport_(version))};
-  try {
-    if (inventoryReadVersion_() === version) cache.put(key, JSON.stringify(result), 30);
-  } catch (error) { console.warn('Dashboard shared cache write unavailable.'); }
+  cacheDashboardResponse_(cache,key,result,version);
   return result;
+}
+
+function getDashboardSales(request) {
+  assertAppRequest_();
+  const employee = ACCESS_REQUEST_CONTEXT_.actor;
+  if (!employee || !isDashboardEnabled_()) throw new Error('Dashboard sales are unavailable.');
+  const now = new Date(), timezone = Session.getScriptTimeZone();
+  const today = Utilities.formatDate(now, timezone, 'yyyy-MM-dd');
+  const hour = Number(Utilities.formatDate(now, timezone, 'HH'));
+  const start = dashboardDate_(request.start), end = dashboardDate_(request.end);
+  if (start > end) throw new Error('Choose a start date before or equal to the end date.');
+  if (!employee.manager && (start !== today || end !== today)) return { unavailable: 'Sales history is available to managers and OICs.' };
+  if (start > today) return { unavailable: 'Sales will appear when this period begins.' };
+  const effectiveEnd = end > today ? today : end;
+  if (Date.parse(effectiveEnd) - Date.parse(start) >= 366 * 86400000)
+    return {unavailable:'Choose a range of up to 366 days to view sales.'};
+  const period = dashboardPeriod_({start, end:effectiveEnd}, employee, today);
+  const version = inventoryReadVersion_();
+  const key = inventoryResponseCacheKey_(version, 'dashboard-sales-v2', [
+    period.start, period.end, period.days === 1 && period.end === today ? hour : null
+  ]);
+  const cache = CacheService.getScriptCache();
+  const cached = readDashboardCache_(cache,key);
+  if (cached) return cached;
+
+  const {rows, readAt} = dashboardSalesRows_(version, cache);
+  const result = dashboardSalesBreakdown_(rows, period, timezone, period.end === today ? hour + 1 : 24);
+  try {
+    if (result.items.length) {
+      const images = new Map(inventoryListIndex_(version).filter(item => item.code && item.imageUrl)
+        .map(item => [item.code.toUpperCase(), item.imageUrl]));
+      result.items.forEach(item => {
+        const url = images.get(item.code.toUpperCase());
+        if (url) item.imageUrl = url;
+      });
+    }
+  } catch (error) { console.warn('Dashboard item photos unavailable.'); }
+  if (employee.manager) {
+    const priorEnd = dashboardDayOffset_(period.start, -1);
+    const priorStart = dashboardDayOffset_(period.start, -period.days);
+    const prior = collectSalesMetrics(rows, priorStart, null, null, null, {
+      totalsWindow:dashboardSalesWindow_(priorStart, priorEnd, timezone),
+    });
+    result.previous = {
+      start:priorStart, end:priorEnd,
+      netSales:prior.totalSales, units:prior.itemsCount, transactions:prior.transactionCount,
+    };
+  }
+  const remaining = DASHBOARD_CACHE_SECONDS_ - Math.floor((Date.now() - readAt) / 1000);
+  if (remaining > 0) cacheDashboardResponse_(cache,key,result,version,remaining);
+  return result;
+}
+
+function dashboardSalesRows_(version, cache) {
+  const key = 'dashboard-sales-rows:v1:' + version;
+  const saved = readDashboardCache_(cache,key);
+  if (saved?.rows) {
+    configureSalesLogColumnsFromHeaders_(saved.rows[0]);
+    return saved;
+  }
+
+  const sheet = getSalesLogSheet_();
+  if (!sheet) throw new Error('Sales Log sheet not found.');
+  const readAt = Date.now();
+  const [header,...source] = sheet.getDataRange().getValues();
+  // Keep the live column layout and only the cells used by dashboard reports.
+  const fields = [
+    'TIMESTAMP','RECEIPT_ID','CODE','ITEM_NAME','SIZE','CATEGORY','QUANTITY',
+    'PRICE','DISCOUNT','FEE_ABSORBED','NET_TOTAL','PAYMENT_METHOD','STATUS','REASON',
+    'PRICE_SOURCE','PAYMENT_1_METHOD','PAYMENT_1_AMOUNT','PAYMENT_2_METHOD','PAYMENT_2_AMOUNT',
+  ].map(field => SALES_IDX[field]);
+  const end = Math.max(...fields) + 1;
+  const rows = [header];
+  for (const row of source) {
+    if (String(row[SALES_IDX.STATUS] || '').trim().toUpperCase() !== 'COMPLETED') continue;
+    const timestamp = new Date(row[SALES_IDX.TIMESTAMP]).getTime();
+    if (!Number.isFinite(timestamp)) continue;
+    const compact = Array(end).fill('');
+    for (const index of fields) compact[index] = row[index] ?? '';
+    compact[SALES_IDX.TIMESTAMP] = timestamp;
+    rows.push(compact);
+  }
+  const snapshot = {rows,readAt};
+  cacheDashboardResponse_(cache,key,snapshot,version);
+  return snapshot;
+}
+
+function dashboardSalesWindow_(start, end, timezone) {
+  return [start, dashboardDayOffset_(end, 1)].map(date => Utilities.parseDate(date, timezone, 'yyyy-MM-dd'));
+}
+
+function dashboardSalesBreakdown_(rows, period, timezone, hours) {
+  const categories = ['YOURFINDS', 'PINS', 'OTHERS', 'WHOLESALE'];
+  const hourly = period.days === 1;
+  const count = hourly ? hours : period.days;
+  const activity = Array.from({length:count}, (_, index) => ({
+    start: hourly ? String(index).padStart(2, '0') + ':00' : dashboardDayOffset_(period.start, index),
+    end: hourly ? '' : dashboardDayOffset_(period.start, index),
+    sales: [0,0,0,0],
+    units: [0,0,0,0],
+  }));
+  const items = new Map();
+  const startMs = Date.parse(period.start);
+  let absorbedCardFees = 0;
+  const metrics = collectSalesMetrics(rows, period.start, null, null, null, {
+    endDate: period.end,
+    reportingWindow: dashboardSalesWindow_(period.start, period.end, timezone),
+    onIncludedRow(row) {
+      const category = String(normalizeInventoryCategoryValue_(row.category)).toUpperCase();
+      const categoryIndex = categories.indexOf(category);
+      const index = categoryIndex < 0 ? 2 : categoryIndex;
+      const bucketIndex = hourly
+        ? Number(Utilities.formatDate(row.timestamp, timezone, 'HH'))
+        : Math.floor((Date.parse(row.date) - startMs) / 86400000);
+      const bucket = activity[bucketIndex];
+      if (bucket) {
+        bucket.sales[index] += row.sales;
+        bucket.units[index] += row.units;
+      }
+      absorbedCardFees += row.feeAbsorbed;
+      const code = String(row.code ?? '').trim();
+      const label = row.name.replace(/ · SALE$/i, '').trim();
+      const itemCategory = categories[index];
+      const name = (itemCategory === 'PINS' ? dashboardPinName_(label, row.size) : label) || code || 'Unnamed item';
+      const group = itemCategory === 'YOURFINDS' ? dashboardYourFindsReturnSize_(row.size)
+        : itemCategory === 'PINS' ? name.match(/\b(NEW|GS|PT)\b/i)?.[0].toUpperCase() || 'Standard' : '';
+      const key = JSON.stringify([itemCategory, code.toUpperCase() || name.toUpperCase(), group]);
+      if (!items.has(key)) items.set(key, {category:itemCategory, code, name, group, units:0, sales:0});
+      const item = items.get(key);
+      item.units += row.units;
+      item.sales += row.sales;
+    },
+  });
+  activity.forEach(bucket => { bucket.sales = bucket.sales.map(roundToTwo); });
+  const payments = Object.entries(metrics.payments).map(([method, value]) => ({method, amount:roundToTwo(value.gross)}));
+  return {
+    period, hourly, activity, payments, absorbedCardFees:roundToTwo(absorbedCardFees),
+    items: Array.from(items.values()).filter(item => item.units > 0).map(item => ({...item,sales:roundToTwo(item.sales)})),
+    netSales: metrics.totalSales, units: metrics.itemsCount, transactions: metrics.transactionCount,
+  };
 }
 
 function dashboardReturnRows_(start, end) {

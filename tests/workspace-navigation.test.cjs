@@ -3,20 +3,21 @@ const html=path=>fs.readFileSync('Frontend/'+path+'.html','utf8');
 const script=path=>html(path).match(/<script>([\s\S]*?)<\/script>/)[1];
 function fixture({cashier=false,manager=false,dev=false,saved}={}) {
   const storage=new Map(),elements={},loads=[],calls=[];
-  const overviewRequests=[],returnDownloads=[],returnResponses=[];
+  const dashboardRequests=[],returnDownloads=[],returnResponses=[];
+  const salesChecks=Array.from({length:5},()=>({checked:false,addEventListener(){}}));
   if(saved)storage.set('ys_pos_active_page',saved);
   const element=id=>elements[id]||=({style:{display:'none'},tBodies:[],addEventListener(){},contains(){return false;},showModal(){this.open=true;},close(){this.open=false;},replaceChildren(){this.innerHTML='';},value:'',checked:false,disabled:false,setAttribute(){},removeAttribute(){},hasAttribute(){return false;},classList:{toggle(){},remove(){}},querySelectorAll:()=>[]});
   const c=vm.createContext({clearTimeout,currentEmployee:{fullName:'Test User',role:manager?'MANAGER':'CASHIER'},currentSessionIsCashier:cashier,
     currentCashier:'',currentShiftPettyCash:0,currentShiftReportId:'',loginAttempt:0,pageReadCache:new Map(),
     localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},
-    document:{addEventListener(){},removeEventListener(){},body:{dataset:{dashboardEnabled:String(dev)},classList:{toggle(){}}},getElementById:element,querySelector:selector=>selector==='.sidebar-menu'?element('sidebarMenu'):null,querySelectorAll:()=>[]},
+    document:{addEventListener(){},removeEventListener(){},body:{dataset:{dashboardEnabled:String(dev)},classList:{toggle(){}}},getElementById:element,querySelector:selector=>selector==='.sidebar-menu'?element('sidebarMenu'):null,querySelectorAll:selector=>selector==='[data-sales-chart-category]'?salesChecks:[]},
     window:{addEventListener(){},matchMedia:()=>({matches:true})},
     hasManagerViewAccess:()=>manager,canAuthorizeManagerActions:()=>manager,
     prioritizeWorkspacePage(){},finishWorkspacePageLoad(){},
     secureScriptRun:{
       withSuccessHandler(success){this.success=success;return this;},
       withFailureHandler(failure){this.failure=failure;return this;},
-      getDashboardOverview(range){overviewRequests.push({range,success:this.success,failure:this.failure});},
+      getDashboardPage(range){dashboardRequests.push({range,success:this.success,failure:this.failure});},
       createDashboardReturnPdf(range){returnDownloads.push(range);returnResponses.push({success:this.success,failure:this.failure});}
     },
     loadInventoryPage:()=>loads.push('inventoryPage'),loadDeliveriesPage:()=>loads.push('deliveriesPage'),
@@ -26,8 +27,118 @@ function fixture({cashier=false,manager=false,dev=false,saved}={}) {
   const app=script('Scripts/AppJS');
   vm.runInContext(app.slice(app.indexOf('  function beginPageRead('),app.indexOf('  var workspacePreloadState')),c);
   vm.runInContext(script('Pages/DashboardPage'),c);
-  return {c,storage,elements,loads,calls,element,overviewRequests,returnDownloads,returnResponses};
+  c.loadDashboardChartLibrary=()=>null;
+  return {c,storage,elements,loads,calls,element,dashboardRequests,returnDownloads,returnResponses};
 }
+
+const emptyDashboardOverview={inventory:{stock:0,low:0},delivery:{count:0,incomplete:0},returns:{count:0,items:0}};
+const emptyDashboardSales={activity:[],items:[],payments:[],hourly:true,netSales:0,units:0,transactions:0};
+const packet=(overview=emptyDashboardOverview,sales=emptyDashboardSales)=>({overview,sales});
+
+test('sales comparisons follow the selected period and ignore late responses from another date or sign-in',()=>{
+ const f=fixture({dev:true,manager:true});
+ f.c.updateDashboardHeader(new Date('2026-11-13T04:00:00Z'));
+ f.c.loadDashboardOverview();
+ const today=f.dashboardRequests.at(-1);
+ assert.deepEqual({...today.range},{start:'2026-11-13',end:'2026-11-13'});
+ vm.runInContext('dashboardRange = [dashboardDate(2026,10,12),dashboardDate(2026,10,12)]',f.c);
+ f.c.loadDashboardOverview();
+ const yesterday=f.dashboardRequests.at(-1);
+ const sales={activity:[],items:[],payments:[],hourly:true,netSales:4000,units:4,transactions:2};
+ const warnings=new Map();
+ f.element('dashboardSalesTransactionsComparison').classList.toggle=(name,on)=>warnings.set(name,on);
+ yesterday.success(packet(undefined,{...sales,previous:{start:'2026-11-11',end:'2026-11-11',netSales:2000,units:4,transactions:3}}));
+ assert.equal(f.element('dashboardSalesNetComparison').textContent,'₱2,000 more than Nov 11');
+ assert.equal(f.element('dashboardSalesTransactionsComparison').textContent,'1 fewer than Nov 11');
+ assert.equal(warnings.get('dashboard-card-attention'),true);
+ today.success(packet(undefined,{...sales,netSales:8000}));
+ assert.equal(f.element('dashboardSalesNet').textContent,'₱4,000');
+ f.c.currentEmployee=null;
+ f.c.clearDashboardState();
+ yesterday.success(packet(undefined,sales));
+ assert.equal(f.element('dashboardSalesNet').textContent,'—');
+});
+
+test('a cold dashboard shows one loader under the header until snapshot and chart are ready',async()=>{
+ const f=fixture({dev:true,manager:true});
+ const source=html('Pages/DashboardPage');
+ assert(source.indexOf('</header>') < source.indexOf('id="dashboardOverviewStatus"'));
+ assert(source.indexOf('id="dashboardOverviewStatus"') < source.indexOf('id="dashboardContent"'));
+ let resolveChart;
+ const chartReady=new Promise(resolve=>{resolveChart=resolve;});
+ f.c.loadDashboardChartLibrary=()=>chartReady;
+ f.c.updateDashboardHeader(new Date('2026-11-13T04:00:00Z'));
+ f.c.loadDashboardOverview();
+ assert.equal(f.element('dashboardContent').hidden,true);
+ assert.equal(f.element('dashboardOverviewStatus').textContent,'Loading dashboard…');
+ f.c.loadDashboardOverview();
+ assert.equal(f.dashboardRequests.length,1);
+ f.dashboardRequests[0].success(packet({...emptyDashboardOverview,inventory:{stock:25,low:1}},{...emptyDashboardSales,netSales:5500}));
+ assert.equal(f.element('dashboardContent').hidden,true);
+ resolveChart();
+ await chartReady;
+ assert.equal(f.element('dashboardContent').hidden,false);
+ assert.equal(f.element('dashboardOverviewStatus').textContent,'');
+ assert.equal(f.element('dashboardStockTotal').textContent,'25');
+ assert.equal(f.element('dashboardSalesNet').textContent,'₱5,500');
+});
+
+test('cached dashboard panels display together and stay visible during one background refresh',()=>{
+ const f=fixture({dev:true,manager:true});
+ f.c.updateDashboardHeader(new Date('2026-11-13T04:00:00Z'));
+ const saved=packet({...emptyDashboardOverview,inventory:{stock:12,low:1}},{...emptyDashboardSales,netSales:4000});
+ let persisted;
+ f.c.readDeviceDashboard=(kind,range)=>{assert.equal(kind,'page');assert.equal(range.end,'2026-11-13');return saved;};
+ f.c.writeDeviceDashboard=(kind,range,data)=>{persisted={kind,range,data};};
+ f.c.loadDashboardOverview();
+ assert.equal(f.element('dashboardContent').hidden,false);
+ assert.equal(f.element('dashboardStockTotal').textContent,'12');
+ assert.equal(f.element('dashboardSalesNet').textContent,'₱4,000');
+ assert.equal(f.element('dashboardOverviewStatus').textContent,'');
+ f.c.loadDashboardOverview();
+ assert.equal(f.dashboardRequests.length,1);
+ f.dashboardRequests[0].success(packet({...saved.overview,inventory:{stock:9,low:1}},{...saved.sales,netSales:5500}));
+ assert.equal(f.element('dashboardStockTotal').textContent,'9');
+ assert.equal(f.element('dashboardSalesNet').textContent,'₱5,500');
+ assert.equal(persisted.kind,'page');
+ assert.equal(persisted.data.sales.netSales,5500);
+});
+
+test('sales graph uses the preview palette, rounded stacks, shadowed white line and separate axes',()=>{
+ const f=fixture({dev:true,manager:true});
+ const source=html('Pages/DashboardPage');
+ assert.match(source,/scrollbar-color: [^;]+ transparent/);
+ let config;
+ f.c.Chart=function(canvas,options){config=options;};
+ f.c.matchMedia=()=>({matches:false});
+ vm.runInContext('dashboardSalesChecks.forEach(input => {input.checked=true;});',f.c);
+ f.c.renderDashboardSales({...emptyDashboardSales,activity:[
+  {start:'08:00',sales:[0,0,0,0],units:[0,0,0,0]},
+  {start:'09:00',sales:[400,200,0,0],units:[3,2,0,0]},
+  {start:'10:00',sales:[500,120,0,0],units:[4,2,0,0]},
+ ]});
+ assert.deepEqual(Array.from(config.data.labels),['9 AM','10 AM']);
+ const [line,finds,pins,others,wholesale]=config.data.datasets;
+ assert.equal(line.borderColor,'#fff');assert.equal(line.borderWidth,2);
+ assert.equal(line.tension,.2);assert.equal(line.type,'line');
+ assert.equal(typeof config.plugins[0].beforeDatasetDraw,'function');
+ assert.deepEqual([finds,pins,others,wholesale].map(entry=>entry.backgroundColor),['#e77ca3','#a18ad7','#e4a173','#69ae9a']);
+ assert.equal(finds.borderRadius,4);
+ assert.equal(config.options.scales.sales.title.text,'Net sales (₱)');
+ assert.equal(config.options.scales.units.title.text,'Units sold');
+ assert.equal(config.options.scales.units.stacked,true);
+});
+
+test('weekly chart buckets preserve totals and respect Monday boundaries within the selected range',()=>{
+ const {c}=fixture();
+ const points=['2026-11-07','2026-11-08','2026-11-09'].map((date,index)=>({
+  start:date,end:date,units:[index+1,0,0,0],sales:[100,10,0,0]
+ }));
+ const weeks=c.dashboardWeeklyActivity(points);
+ assert.deepEqual(Array.from(weeks,row=>[row.start,row.end,row.units[0],row.sales[0]]),[
+  ['2026-11-07','2026-11-08',3,200],['2026-11-09','2026-11-09',3,100]
+ ]);
+});
 test('non-cashier sessions default to Inventory, including managers; cashier sessions default to POS',()=>{
  for(const manager of [false,true])for(const cashier of [false,true]){
   const f=fixture({manager,cashier});f.c.restoreActivePage();
@@ -81,14 +192,14 @@ test('dev restores the dashboard header with daily quotes and selectable ranges'
  f.c.finishDashboardDrag(pointer);
  f.c.applyDashboardCalendar();
  assert.match(label.textContent,/November 24\s*–\s*28, 2026/);
- const latest=f.overviewRequests.at(-1);
+ const latest=f.dashboardRequests.at(-1);
  assert.equal(latest.range.start,'2026-11-24');
  assert.equal(latest.range.end,'2026-11-28');
  const totals={sales:{net:24580,count:86,own:true},inventory:{stock:1248,low:12},delivery:{count:6,incomplete:2},returns:{count:3,items:14,groups:[]}};
- latest.success(totals);
- const requestCount=f.overviewRequests.length;
+ latest.success(packet(totals));
+ const requestCount=f.dashboardRequests.length;
  f.c.loadDashboardOverview();
- assert.equal(f.overviewRequests.length,requestCount);
+ assert.equal(f.dashboardRequests.length,requestCount);
  assert.equal(f.element('dashboardStockTotal').textContent,'1,248');
  assert.equal(f.element('dashboardDeliveryDetail').textContent,'2 still incomplete');
  f.c.openDashboardReturnSummary();
@@ -101,7 +212,7 @@ test('dev restores the dashboard header with daily quotes and selectable ranges'
  assert.equal(f.returnDownloads[0].end,'2026-11-28');
  f.c.clearDashboardState();
  assert.equal(f.element('dashboardReturnSummary').open,false);
- latest.success(totals);
+ latest.success(packet(totals));
  assert.equal(f.element('dashboardStockTotal').textContent,'—');
  assert.equal(label.textContent,'Date range');
  assert.equal(quote.textContent,'');
@@ -146,10 +257,10 @@ test('UAT restores Dashboard first and waits for its totals before other workspa
  assert.equal(f.storage.get('ys_pos_active_page'),'dashboardPage');
  assert.equal(queued.length,0);
  assert.deepEqual(f.loads,[]);
- assert.equal(f.overviewRequests.length,1);
+ assert.equal(f.dashboardRequests.length,1);
  f.c.showPage('dashboardPage');
- assert.equal(f.overviewRequests.length,1);
- f.overviewRequests[0].failure();
+ assert.equal(f.dashboardRequests.length,1);
+ f.dashboardRequests[0].failure();
  assert.equal(queued.length,1);
  queued[0]();
  assert.deepEqual(f.loads,['inventoryPage','deliveriesPage','supplierReturnsPage']);
@@ -160,22 +271,22 @@ test('saved Dashboard totals render before the server responds and refresh witho
  const totals={inventory:{stock:10,low:1},delivery:{count:1,incomplete:0,items:0,groups:[]},returns:{count:0,items:0,groups:[]},
   reminders:{incomplete:2,sold:0,low:1,undistributed:4}};
  let released=0,saved;
- f.c.readDeviceOverview=()=>totals;
- f.c.writeDeviceOverview=(range,data)=>{saved=data;};
+ f.c.readDeviceDashboard=()=>packet(totals);
+ f.c.writeDeviceDashboard=(kind,range,data)=>{saved=data.overview;};
  f.c.finishWorkspacePageLoad=()=>released++;
  f.c.restoreActivePage();
  assert.equal(f.element('dashboardStockTotal').textContent,'10');
- assert.equal(f.element('dashboardOverviewStatus').textContent,'Saved totals · refreshing…');
- assert.equal(released,1);assert.equal(f.overviewRequests.length,1);
+ assert.equal(f.element('dashboardOverviewStatus').textContent,'');
+ assert.equal(released,1);assert.equal(f.dashboardRequests.length,1);
  f.c.toggleDashboardInventoryReminders(true);
  assert.deepEqual(['incomplete','sold','low','undistributed'].map(kind=>f.element('dashboardReminder-'+kind).textContent),['2','0','1','4']);
- assert.equal(f.overviewRequests.length,1);
+ assert.equal(f.dashboardRequests.length,1);
  f.c.openDashboardDeliverySummary();
  assert.equal(f.element('dashboardDeliveryReceiptCount').textContent,'1');
  assert.equal(f.element('dashboardDeliveryMessage').textContent,'No received items in this date range.');
- assert.equal(f.overviewRequests.length,1);
+ assert.equal(f.dashboardRequests.length,1);
  const fresh={...totals,inventory:{...totals.inventory,stock:600},reminders:{...totals.reminders,undistributed:3}};
- f.overviewRequests[0].success(fresh);
+ f.dashboardRequests[0].success(packet(fresh));
  assert.equal(f.element('dashboardStockTotal').textContent,'600');assert.equal(saved,fresh);
  assert.equal(f.element('dashboardReminder-undistributed').textContent,'3');
  assert.equal(f.element('dashboardOverviewStatus').textContent,'');
@@ -185,15 +296,31 @@ test('switching A to B to A reuses pending requests and retains both date result
  const totals=net=>({sales:{net,count:1,own:true},inventory:{stock:net,low:0},delivery:{count:1,incomplete:0},returns:{count:0,items:0,groups:[]}});
  const select=day=>{vm.runInContext(`dashboardRange=[new Date('2026-11-${day}T00:00:00Z'),new Date('2026-11-${day}T00:00:00Z')];`,f.c);f.c.loadDashboardOverview();};
  select('10');select('11');select('10');
- assert.equal(f.overviewRequests.length,2);
- f.overviewRequests[1].success(totals(200));
- assert.equal(f.element('dashboardStockTotal').textContent,'—');
- f.overviewRequests[0].success(totals(100));
+ assert.equal(f.dashboardRequests.length,2);
+ f.dashboardRequests[1].success(packet(totals(200)));
+ assert.equal(f.element('dashboardContent').hidden,true);
+ assert.equal(f.element('dashboardOverviewStatus').textContent,'Loading dashboard…');
+ f.dashboardRequests[0].success(packet(totals(100)));
  assert.equal(f.element('dashboardStockTotal').textContent,'100');
  select('11');assert.equal(f.element('dashboardStockTotal').textContent,'200');
  select('10');assert.equal(f.element('dashboardStockTotal').textContent,'100');
- assert.equal(f.overviewRequests.length,2);
+ assert.equal(f.dashboardRequests.length,2);
  f.c.clearDashboardState();assert.equal(Array.from(f.c.pageReadCache.keys()).filter(key=>key.startsWith('dashboardOverview')).length,0);
+});
+test('a sales read failure preserves a complete saved dashboard and allows retry',()=>{
+ const f=fixture({dev:true,manager:true});
+ f.c.updateDashboardHeader(new Date('2026-11-13T04:00:00Z'));
+ f.c.readDeviceDashboard=kind=>kind==='page'?packet(undefined,{...emptyDashboardSales,netSales:4500}):null;
+ f.c.loadDashboardOverview();
+ f.dashboardRequests[0].success(packet(undefined,{unavailable:'Couldn’t load sales.',retryable:true}));
+ assert.equal(f.element('dashboardContent').hidden,false);
+ assert.equal(f.element('dashboardSalesNet').textContent,'₱4,500');
+ assert.equal(f.element('dashboardOverviewRetry').hidden,false);
+ f.c.loadDashboardOverview();
+ assert.equal(f.dashboardRequests.length,2);
+ f.dashboardRequests[1].success(packet(undefined,{...emptyDashboardSales,netSales:5200}));
+ assert.equal(f.element('dashboardSalesNet').textContent,'₱5,200');
+ assert.equal(f.element('dashboardOverviewRetry').hidden,true);
 });
 test('compact Return Summary shows category subtotals and grand total, replacing previous rows',()=>{
  const f=fixture({dev:true});
@@ -235,7 +362,7 @@ test('UAT sign-in lands on Dashboard for staff and cashiers, with existing defau
   f.element('cashierSelect').value='test1@ys.sys';f.element('cashierPin').value='password';
   f.element('startingPettyCashInput').value='0';f.element('confirmPettyHandover').checked=true;
   const runner={withSuccessHandler(fn){this.success=fn;return this;},withFailureHandler(){return this;},
-    getDashboardOverview(){},
+    getDashboardPage(){},
     verifyEmployee(){this.success({success:true,employee:f.c.currentEmployee});},
     loginAndStartShift(){this.success({success:true,employee:f.c.currentEmployee,shift:{success:true,reportId:'CR-1',pettyReceived:0}});}};
   f.c.secureScriptRun=runner;f.c.unlockTerminalSession();

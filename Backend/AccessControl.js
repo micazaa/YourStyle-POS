@@ -129,6 +129,8 @@ function accessRegistry_() {
   "getCashReportByDate": {permission:"reports.own", handler:getCashReportByDate},
   "getDashboard": {permission:"dashboard.view", handler:getDashboard},
   "getDashboardOverview": {permission:"dashboard.view", handler:getDashboardOverview},
+  "getDashboardSales": {permission:"dashboard.view", handler:getDashboardSales},
+  "getDashboardPage": {permission:"dashboard.view", handler:getDashboardPage},
   "saveDashboardTask": {permission:"dashboard.edit", handler:saveDashboardTask},
   "verifyManagerPin": {permission:"approvals.verify", handler:verifyManagerPin},
   "createYourFindsLabelPDFByCodes": {permission:"inventory.view", handler:createYourFindsLabelPDFByCodes},
