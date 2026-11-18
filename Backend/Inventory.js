@@ -466,8 +466,8 @@ function getFullInventory(options) {
 
       lowStockAt: inventoryType === INVENTORY_TYPE.UNIQUE ? 0 : Number(productByCode[code] && productByCode[code].lowStockAt) || 0,
 
-      productStatus: inventoryType===INVENTORY_TYPE.UNIQUE || status===INVENTORY_STATUS.INACTIVE
-        ? (status===INVENTORY_STATUS.INACTIVE?PRODUCT_STATUS.DEACTIVATED:PRODUCT_STATUS.ACTIVE)
+      productStatus: status===INVENTORY_STATUS.INACTIVE
+        ? PRODUCT_STATUS.DEACTIVATED
         : productByCode[code] ? productByCode[code].status : PRODUCT_STATUS.ACTIVE,
 
       productRowNumber: productByCode[code] ? productByCode[code].rowNumber : 0,

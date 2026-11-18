@@ -752,7 +752,7 @@ function unlockTerminalSession() {
     document.getElementById('appSidebar').style.display='flex';
     button.disabled=false;button.textContent=cashierMode?'Start cashier shift':'Sign in';document.getElementById('cashierPin').value='';
     updateCashierNavigationAvailability();
-    showPage(cashierMode?'posPage':'inventoryPage');saveSession();
+    showPage(defaultWorkspacePage());saveSession();
   };
   const runner=secureScriptRun.withSuccessHandler(onLoginSuccess).withFailureHandler(failed);
   if(cashierMode)runner.loginAndStartShift(name,pin,petty,loginPettyHandover&&loginPettyHandover.version);

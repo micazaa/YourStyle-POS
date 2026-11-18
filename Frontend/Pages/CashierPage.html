@@ -8,9 +8,13 @@
         <span>Petty Cash</span> <strong id="cashierPettyCash">₱0.00</strong>
       </div>
     </div>
-    <div id="cashierWorkspaceControls" class="row g-4" aria-label="Cashier transactions">
+    <div class="cashier-pane-switch btn-group" role="group" aria-label="Cashier view">
+      <button type="button" class="btn btn-outline-pink" data-cashier-pane="items" aria-controls="cashierItemsPane" aria-pressed="true" onclick="setCashierPhonePane('items')">Add items</button>
+      <button type="button" class="btn btn-outline-pink" data-cashier-pane="cart" aria-controls="cashierCartPane" aria-pressed="false" onclick="setCashierPhonePane('cart')">Cart <span id="cashierCartQuantity">0</span></button>
+    </div>
+    <div data-phone-pane="items" id="cashierWorkspaceControls" class="row g-4" aria-label="Cashier transactions">
 
-      <div class="col-md-4 h-100 d-flex flex-column">
+      <div id="cashierItemsPane" class="col-md-4 h-100 d-flex flex-column">
         <div class="card-pane">
           <div class="pane-header">
             <h6>Add Items</h6>
@@ -28,12 +32,12 @@
 
 
             <div class="mb-4">
-              <label class="form-label">Scan Barcode Here</label>
+              <label class="form-label" for="codeInput">Scan Barcode Here</label>
               <input type="text" class="form-control" id="codeInput" placeholder="Ready to scan..." autocomplete="off">
             </div>
 
             <div class="mb-4">
-              <label class="form-label">Or Search Item Manually</label>
+              <label class="form-label" for="manualItemSearch">Or Search Item Manually</label>
               <div class="item-search-wrapper">
                 <input type="text" class="form-control" id="manualItemSearch" placeholder="Type item name, size, or category..." autocomplete="off" oninput="filterManualItemList()" onfocus="filterManualItemList()" onkeydown="handleManualSearchKeydown(event)">
                 <div id="manualItemResults" class="list-group position-absolute w-100"
@@ -91,7 +95,7 @@
         </div>
       </div>
 
-      <div class="col-md-8 h-100">
+      <div id="cashierCartPane" class="col-md-8 h-100">
         <fieldset class="card-pane" data-cashier-controls aria-label="Shopping cart and checkout" disabled>
           <div class="pane-header">
             <h6>Shopping Cart</h6>
@@ -140,8 +144,8 @@
                   <div class="col-4 text-end fw-bold text-muted">₱<span id="vatBreakdownOut">0.00</span></div>
                 </div>
 
-                <div class="row align-items-center mt-2">
-                  <div class="col-4 text-end small text-muted">Global Discount:</div>
+                <div class="row align-items-center mt-2 cart-global-discount">
+                  <label for="globalDiscountType" class="col-4 text-end small text-muted">Global Discount:</label>
                   <div class="col-4">
                     <select class="form-select form-select-sm text-center" id="globalDiscountType" onchange="updateCashierCartTotals();scheduleCashierSessionSave()">
                         <option value="percentage">% Percentage</option>
@@ -149,7 +153,7 @@
                       </select>
                   </div>
                   <div class="col-4">
-                    <input type="number" class="form-control form-control-sm text-end fw-bold" id="globalDiscountValue" placeholder="0" min="0" oninput="updateCashierCartTotals();scheduleCashierSessionSave()">
+                    <input type="number" class="form-control form-control-sm text-end fw-bold" id="globalDiscountValue" aria-label="Global discount value" placeholder="0" min="0" oninput="updateCashierCartTotals();scheduleCashierSessionSave()">
                   </div>
                 </div>
               </div>
@@ -234,12 +238,21 @@
     return value;
   }
 
+  function setCashierPhonePane(pane) {
+    document.getElementById('cashierWorkspaceControls').dataset.phonePane = pane;
+    document.querySelectorAll('[data-cashier-pane]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.cashierPane === pane));
+    });
+  }
+
   function updateCartSummary(items, subtotal){
-    calculatedBaseTotalDue = Math.max(0, subtotal - calculateGlobalDiscount(subtotal));
+    const discount = cartReservation() ? 0 : calculateGlobalDiscount(subtotal);
+    calculatedBaseTotalDue = Math.max(0, subtotal - discount);
 
     const vat = calculatedBaseTotalDue - (calculatedBaseTotalDue / 1.12);
 
     document.getElementById("totalItemsCountOut").textContent = items;
+    document.getElementById("cashierCartQuantity").textContent = items;
     document.getElementById("subTotalOut").textContent = subtotal.toFixed(2);
     document.getElementById("vatBreakdownOut").textContent = vat.toFixed(2);
     document.getElementById("grandTotal").textContent = calculatedBaseTotalDue.toFixed(2);
@@ -283,11 +296,7 @@
       subtotal += net; quantity += Number(item.quantity) || 0;
       if (rows[index]) rows[index].cells[6].textContent = '₱' + net.toFixed(2);
     });
-    calculatedBaseTotalDue = Math.max(0, subtotal - (cartReservation() ? 0 : calculateGlobalDiscount(subtotal)));
-    document.getElementById('totalItemsCountOut').textContent = quantity;
-    document.getElementById('subTotalOut').textContent = subtotal.toFixed(2);
-    document.getElementById('vatBreakdownOut').textContent = (calculatedBaseTotalDue - calculatedBaseTotalDue / 1.12).toFixed(2);
-    document.getElementById('grandTotal').textContent = calculatedBaseTotalDue.toFixed(2);
+    updateCartSummary(quantity, subtotal);
   }
 
   function renderCart() {
@@ -355,16 +364,16 @@
             <td><div class="fw-bold${isSaleItem ? " text-danger" : ""}">${escapeInventoryHtml(
               cashierItemDisplayName(item)
             )}</div><div class="small${isSaleItem ? " text-danger" : " text-muted"}">${escapeInventoryHtml(item.code)}</div>${cashierBundleKind(item) ? `<select class="form-select form-select-sm mt-1 cart-bundle-select" aria-label="Bundle code for ${escapeInventoryHtml(item.name || item.code)}" data-idx="${index}" data-field="bundle"><option value="">${escapeInventoryHtml(item.bundleSelection ? item.bundleSelection.label : 'Select bundle code')}</option></select>` : ''}</td>
-            <td class="text-center fw-semibold">${item.size || ""}</td>
-            <td class="text-center">
+            <td data-phone-label="Size" class="text-center fw-semibold">${escapeInventoryHtml(item.size || "")}</td>
+            <td data-phone-label="Qty" class="text-center">
               <input type="number" class="form-control form-control-sm text-center mx-auto" style="width:60px; font-weight:600;" value="${
                 item.quantity
-              }" min="1" ${cashierBundleKind(item)&&!item.bundleUnlinked ? `max="${cashierBundleQuantityLimit(item,index)}"${cashierBundleKind(item) === 'FULL' ? ' readonly aria-label="One bundle per cart row"' : ''}` : ''} data-idx="${index}" data-field="qty" onchange="updateQty(${index}, this.value)">
+              }" min="1" ${cashierBundleKind(item)&&!item.bundleUnlinked ? `max="${cashierBundleQuantityLimit(item,index)}"${cashierBundleKind(item) === 'FULL' ? ' readonly' : ''}` : ''} data-idx="${index}" data-field="qty" aria-label="Quantity for ${escapeInventoryHtml(item.name || item.code)}" onchange="updateQty(${index}, this.value)">
             </td>
-            <td class="text-end fw-semibold">₱${item.price.toFixed(2)}</td>
-            <td>
+            <td data-phone-label="Price" class="text-end fw-semibold">₱${item.price.toFixed(2)}</td>
+            <td data-phone-label="Discount">
               <div class="input-group input-group-sm mx-auto" style="width:130px;">
-                <select class="form-select p-1 text-center" style="font-size:11px;" data-idx="${index}" data-field="discountType" onchange="changeDiscountType(${index}, this.value)">
+                <select class="form-select p-1 text-center" style="font-size:11px;" data-idx="${index}" data-field="discountType" aria-label="Discount type" onchange="changeDiscountType(${index}, this.value)">
                   <option value="percentage" ${
                     item.discountType === "percentage" ? "selected" : ""
                   }>%</option>
@@ -374,11 +383,11 @@
                 </select>
                 <input type="text" inputmode="decimal" class="form-control text-end p-1 fw-bold" style="font-size:12px;" value="${
                   item.discountValue || ""
-                }" placeholder="0" data-idx="${index}" data-field="discount" oninput="updateDiscountValue(${index}, this.value)">
+                }" placeholder="0" data-idx="${index}" data-field="discount" aria-label="Discount value" oninput="updateDiscountValue(${index}, this.value)">
               </div>
             </td>
-            <td class="text-end fw-bold pe-3">₱${lineNetValue.toFixed(2)}</td>
-            <td><button class="btn btn-sm text-danger p-0 border-0 bg-transparent fw-bold" onclick="removeItem(${index})">✕</button></td>
+            <td data-phone-label="Total" class="text-end fw-bold pe-3">₱${lineNetValue.toFixed(2)}</td>
+            <td><button type="button" aria-label="Remove ${escapeInventoryHtml(item.name || item.code)}" class="btn btn-sm text-danger p-0 border-0 bg-transparent fw-bold" onclick="removeItem(${index})">✕</button></td>
           `;
       const photo = tr.querySelector('.cart-photo');
       if (photo) {
@@ -396,20 +405,7 @@
       select.addEventListener('change',()=>selectCashierCartBundle(select,item));
     });
 
-    const globalReduction = cartReservation() ? 0 : calculateGlobalDiscount(subtotalAccumulator);
-
-    calculatedBaseTotalDue = Math.max(0, subtotalAccumulator - globalReduction);
-    let includedVatAmount =
-      calculatedBaseTotalDue - calculatedBaseTotalDue / 1.12;
-
-    document.getElementById("totalItemsCountOut").textContent =
-      itemQuantityAccumulator;
-    document.getElementById("subTotalOut").textContent =
-      subtotalAccumulator.toFixed(2);
-    document.getElementById("vatBreakdownOut").textContent =
-      includedVatAmount.toFixed(2);
-    document.getElementById("grandTotal").textContent =
-      calculatedBaseTotalDue.toFixed(2);
+    updateCartSummary(itemQuantityAccumulator, subtotalAccumulator);
 
     if (cartReservation()) tbody.querySelectorAll('input,select').forEach(input => input.disabled = true);
     restoreCartFocus(
@@ -675,12 +671,17 @@ function indexCashierInventory(items) {
 function rememberCashierInventory(items) {
   const read = beginPageRead('cashierInventory', cashierInventoryCacheKey());
   masterInventory = Array.isArray(items) ? items : [];
+  if(typeof writeDeviceCache==='function')writeDeviceCache('cashier',masterInventory,'');
   read.save(masterInventory);
   populateManualDropdown(masterInventory);
   finishWorkspacePageLoad('posPage');
 }
 function refreshInventory(callback) {
   const read = beginPageRead('cashierInventory', cashierInventoryCacheKey(), true);
+  if(read.shouldFetch&&typeof readDeviceCache==='function'){
+    const saved=readDeviceCache('cashier');
+    if(saved){masterInventory=saved.items;populateManualDropdown(masterInventory);finishWorkspacePageLoad('posPage');}
+  }
   if (!read.shouldFetch) {
     if (read.cached !== undefined) {
       if (masterInventory !== read.cached) {
@@ -700,6 +701,7 @@ function refreshInventory(callback) {
   secureScriptRun.withSuccessHandler(function(data) {
     if (!read.current()) return;
     masterInventory = Array.isArray(data) ? data : data&&Array.isArray(data.inventory)?data.inventory:[];
+    if(typeof writeDeviceCache==='function')writeDeviceCache('cashier',masterInventory,data?.version||'');
     if(data&&data.bundleChoices)rememberCashierBundlePreload(data.bundleChoices,data.version);
     read.save(masterInventory);
     populateManualDropdown(masterInventory);
@@ -1028,7 +1030,10 @@ function addItemToCart(
     if(pending>=0){
       showNotificationToast('Choose a bundle code for the item already in your cart.',true);
       const select=document.querySelector('#cartRows .cart-bundle-select[data-idx="'+pending+'"]');
-      if(select)select.focus();
+      if(select) {
+        setCashierPhonePane('cart');
+        select.focus();
+      }
       return;
     }
   }

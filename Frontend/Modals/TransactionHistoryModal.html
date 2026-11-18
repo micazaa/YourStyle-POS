@@ -331,7 +331,7 @@ var transactionHistorySort = {
    OPEN
 ========================================================== */
 
-function openTransactionHistoryModal() {
+function openTransactionHistoryModal(period) {
 
   if (!currentEmployee) {
 
@@ -378,8 +378,8 @@ function openTransactionHistoryModal() {
     );
 
 
-  fromDateInput.value = today;
-  toDateInput.value = today;
+  fromDateInput.value = period?.start || today;
+  toDateInput.value = period?.end || today;
 
   fromDateInput.min = accessibleStartDate;
   toDateInput.min = accessibleStartDate;

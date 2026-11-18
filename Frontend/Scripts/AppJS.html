@@ -1,6 +1,14 @@
 <script>
 
   var pageReadCache = new Map();
+  function markDashboardReadsStale(prefix) {
+    pageReadCache.forEach((entry, key) => {
+      if (!key.startsWith(prefix)) return;
+      // Replace the entry so an older in-flight response cannot overwrite it.
+      if (entry.data) pageReadCache.set(key, {...entry, pending:false, data:{...entry.data, loadedAt:0}});
+      else pageReadCache.delete(key);
+    });
+  }
   function invalidateDeliveryItemCaches() {
     invalidateBundleDistributionDetails();
     ['standardDeliveryDetails', 'deliveryItems', 'deliveryDetails', 'deliveryLabels', 'exchangeProducts', 'cashierInventory'].forEach(key => pageReadCache.delete(key));
@@ -134,32 +142,25 @@
     const state = workspacePreloadState;
     if (!state || !currentEmployee || state.owner !== currentEmployee.dashboardToken || state.page !== pageId) return;
     state.waiting = false;
-    warmDeliveryCatalog();
-    if (state.started) {preloadHistoryAndReports();return;}
+    if (state.started) return;
     scheduleWorkspacePreload();
   }
 
   function scheduleWorkspacePreload() {
     const state = workspacePreloadState;
-    if (!state || state.started) return;
+    if (!state || state.started || (state.page === 'dashboardPage' && state.waiting)) return;
     clearTimeout(state.timer);
     state.timer = setTimeout(() => {
       if (workspacePreloadState !== state || !currentEmployee || state.owner !== currentEmployee.dashboardToken || state.started) return;
       state.started = true;
-      const pages = {
-        posPage: () => {if (currentSessionIsCashier) refreshInventory();},
-        inventoryPage: () => loadInventoryPage(false, true),
-        deliveriesPage: () => loadDeliveriesPage(false, true),
-        supplierReturnsPage: () => loadSupplierReturnsPage()
-      };
-      Object.keys(pages).forEach(page => {if (page !== state.page) pages[page]();});
-      warmDeliveryCatalog();
-    }, 75);
+      // Pages and modal catalogs load on first use. Starting every workspace
+      // here made background reads compete with the page the user selected.
+    }, 1500);
   }
 
   function preloadHistoryAndReports() {
     const delivery = pageReadCache.get('deliveries');
-    if (!currentEmployee || workspaceForegroundLoading() || !inventoryDatasetReady() || inventoryDataset.stale || !inventoryDataset.detailsReady ||
+    if (!currentEmployee || workspaceForegroundLoading() || !inventoryDatasetReady() || inventoryDataset.stale ||
         !delivery || delivery.data === undefined || delivery.owner !== JSON.stringify([currentEmployee, currentCashier])) return;
     warmTransactionHistory();
     warmCashierReport();
@@ -250,17 +251,27 @@
         const fail = error=>{
           releaseApproval();
           if(!POS_LOGIN_OPERATIONS.has(operation) && (!currentEmployee || currentEmployee.dashboardToken!==sessionToken))return;
-          if (/Dashboard session expired|Your manager session expired|Authenticated app request required/i.test(error && error.message || '')) logoutEndedAccount(sessionToken);
+          if (/Dashboard session expired|Your manager session expired|Authenticated app request required|No active cashier shift found/i.test(error && error.message || '')) logoutEndedAccount(sessionToken);
           if (handlers.failure) handlers.failure(error,handlers.userObject);
           else showNotificationToast(error && error.message || 'Unable to complete this action.',true);
         };
         const succeed = value=>{
           releaseApproval();if(!POS_LOGIN_OPERATIONS.has(operation)&&(!currentEmployee||currentEmployee.dashboardToken!==sessionToken))return;
           let parsed=value;if(typeof value==='string'){try{parsed=JSON.parse(value);}catch(ignored){parsed=null;}}
+          if(parsed && parsed.success === false && /No active cashier shift found/i.test(parsed.message || '')) {
+            fail(new Error(parsed.message));return;
+          }
           if(parsed&&parsed.success&&['adjustInventoryStock','changeInventoryItem','convertYourFindsDeliveryItem','saveProductMaster',
             'setInventoryAdministrativeStatus','deleteUnusedInventoryItem','saveYourFindsItemDetails','executeCheckoutBackend',
             'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle','splitPhysicalBundle',
             'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(operation)){
+            if(typeof clearDeviceInventoryCache==='function')clearDeviceInventoryCache();
+            markDashboardReadsStale('dashboardOverview:');
+            if (['executeCheckoutBackend','voidAndRefundTransactionBackend','completeCustomerExchange','processReservationPayment',
+              'saveYourFindsItemDetails','saveProductMaster','deleteUnusedInventoryItem','setInventoryAdministrativeStatus'].includes(operation)) {
+              markDashboardReadsStale('dashboardSales:');
+            }
+            if (workspacePreloadState?.page === 'dashboardPage') loadDashboardOverview();
             if(typeof handleInventoryMutationResult==='function')handleInventoryMutationResult(parsed);
             else {pageReadCache.delete('inventory');if(typeof invalidateLocalInventoryReads==='function')invalidateLocalInventoryReads();}
           }
@@ -391,7 +402,7 @@
       currentShiftPettyCash,
       currentShiftReportId,
       cart,
-      activePage: localStorage.getItem("ys_pos_active_page") || (currentSessionIsCashier ? "posPage" : "inventoryPage"),
+      activePage: localStorage.getItem("ys_pos_active_page") || defaultWorkspacePage(),
       globalDiscountType: document.getElementById("globalDiscountType").value,
       globalDiscountValue: document.getElementById("globalDiscountValue").value
     };
@@ -456,10 +467,10 @@
 
 
   function clearSession() {
+    if (typeof clearDashboardState === 'function') clearDashboardState();
     resetWorkspacePreload();
     posApprovalRequest=null;
     stopAccountSessionMonitor();
-    clearDashboardState();
     if (currentEmployee && currentEmployee.dashboardToken) {
       secureScriptRun.withFailureHandler(function() {}).revokeDashboardSession(currentEmployee.dashboardToken);
       delete currentEmployee.dashboardToken;
@@ -557,9 +568,8 @@
       }
     });
 
-    initializeLogin();
-
     const hasSession = localStorage.getItem("ys_pos_session");
+    if (!hasSession || document.body.dataset.dashboardEnabled !== 'true') initializeLogin();
 
     if (hasSession) {
       restoreSession();
@@ -577,6 +587,8 @@
        - user is using a contenteditable element
     ======================================================== */
 
+    // Touch users choose when to open the keyboard by tapping the scan field.
+    if (window.matchMedia('(pointer: coarse)').matches) return;
     setInterval(() => {
 
       const loginOverlay = document.getElementById("loginOverlay");

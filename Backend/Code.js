@@ -17,13 +17,34 @@ function doGet() {
 }
 
 function getYourStyleAppTitle_() {
+  return isDevelopmentSpreadsheet_() ? "YourStyle UAT" : "YourStyle";
+}
+
+function isDevelopmentSpreadsheet_() {
   try {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    return spreadsheet && spreadsheet.getId() === DEVELOPMENT_SPREADSHEET_ID
-      ? "YourStyle UAT"
-      : "YourStyle";
+    return !!spreadsheet && spreadsheet.getId() === DEVELOPMENT_SPREADSHEET_ID;
   } catch (error) {
-    return "YourStyle";
+    return false;
+  }
+}
+
+function getDeviceCacheScope_() {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    return spreadsheet ? spreadsheet.getId() : "unknown";
+  } catch (error) {
+    return "unknown";
+  }
+}
+
+function isDashboardEnabled_() {
+  if (isDevelopmentSpreadsheet_()) return true;
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    return !!spreadsheet && spreadsheet.getId() === PRODUCTION_SPREADSHEET_ID;
+  } catch (error) {
+    return false;
   }
 }
 

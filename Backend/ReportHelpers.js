@@ -506,6 +506,10 @@ function collectSalesMetrics(
     return String(row[SALES_IDX.STATUS] || '').trim().toUpperCase() === 'COMPLETED';
   }
 
+  function countedUnits(qty, reason) {
+    return reason !== 'EXCHANGE RETURN' && qty > 0 ? qty : 0;
+  }
+
   /*
    * Find the replacement date and cashier for each exchange.
    * Both sides of that exchange belong to this reporting date.
@@ -558,6 +562,20 @@ function collectSalesMetrics(
     const reportingCashier = anchor
       ? anchor.cashier
       : String(row[2] || 'Unknown').trim();
+
+    if (options.totalsWindow) {
+      const [start, end] = options.totalsWindow;
+      if (reportingTimestamp >= start && reportingTimestamp < end &&
+          (!cashierName || reportingCashier === cashierName)) {
+        if (receiptId) receiptIds.add(receiptId);
+        metrics.totalSales += Number(row[12]) || 0;
+        metrics.itemsCount += countedUnits(parseInt(row[7], 10) || 0, reason);
+      }
+      continue;
+    }
+
+    if (options.reportingWindow &&
+        (reportingTimestamp < options.reportingWindow[0] || reportingTimestamp >= options.reportingWindow[1])) continue;
 
     const reportingDate = Utilities.formatDate(
       reportingTimestamp,
@@ -662,13 +680,13 @@ function collectSalesMetrics(
     metrics.totalCashReceived += Number(row[SALES_IDX.CASH_RECEIVED]) || 0;
     metrics.totalChangeGiven += Number(row[SALES_IDX.CHANGE]) || 0;
 
-    const countedQty =
-      reason !== 'EXCHANGE RETURN' && qty > 0 ? qty : 0;
+    const countedQty = countedUnits(qty, reason);
 
     metrics.itemsCount += countedQty;
     if (options.onIncludedRow) options.onIncludedRow({
       timestamp: reportingTimestamp, date: reportingDate, category: category,
-      name: name, size: size, units: countedQty, sales: netTotal, exchange: exchange
+      code: code, name: name, size: size, units: countedQty, sales: netTotal, exchange: exchange,
+      feeAbsorbed: Number(row[SALES_IDX.FEE_ABSORBED]) || 0
     });
 
     const paymentOneMethod = String(row[SALES_IDX.PAYMENT_1_METHOD] || '').trim();
