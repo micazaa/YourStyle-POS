@@ -356,7 +356,7 @@ function getDashboardSales(request) {
     return {unavailable:'Choose a range of up to 366 days to view sales.'};
   const period = dashboardPeriod_({start, end:effectiveEnd}, employee, today);
   const version = inventoryReadVersion_();
-  const key = inventoryResponseCacheKey_(version, 'dashboard-sales-v2', [
+  const key = inventoryResponseCacheKey_(version, 'dashboard-sales-v3', [
     period.start, period.end, period.days === 1 && period.end === today ? hour : null
   ]);
   const cache = CacheService.getScriptCache();
@@ -431,6 +431,7 @@ function dashboardSalesWindow_(start, end, timezone) {
 
 function dashboardSalesBreakdown_(rows, period, timezone, hours) {
   const categories = ['YOURFINDS', 'PINS', 'OTHERS', 'WHOLESALE'];
+  const categoryTotals = categories.map(category => ({category, units:0, sales:0}));
   const hourly = period.days === 1;
   const count = hourly ? hours : period.days;
   const activity = Array.from({length:count}, (_, index) => ({
@@ -449,6 +450,8 @@ function dashboardSalesBreakdown_(rows, period, timezone, hours) {
       const category = String(normalizeInventoryCategoryValue_(row.category)).toUpperCase();
       const categoryIndex = categories.indexOf(category);
       const index = categoryIndex < 0 ? 2 : categoryIndex;
+      categoryTotals[index].sales += row.sales;
+      categoryTotals[index].units += row.units;
       const bucketIndex = hourly
         ? Number(Utilities.formatDate(row.timestamp, timezone, 'HH'))
         : Math.floor((Date.parse(row.date) - startMs) / 86400000);
@@ -475,6 +478,7 @@ function dashboardSalesBreakdown_(rows, period, timezone, hours) {
   const payments = Object.entries(metrics.payments).map(([method, value]) => ({method, amount:roundToTwo(value.gross)}));
   return {
     period, hourly, activity, payments, absorbedCardFees:roundToTwo(absorbedCardFees),
+    categoryTotals:categoryTotals.map(row => ({...row,sales:roundToTwo(row.sales)})),
     items: Array.from(items.values()).filter(item => item.units > 0).map(item => ({...item,sales:roundToTwo(item.sales)})),
     netSales: metrics.totalSales, units: metrics.itemsCount, transactions: metrics.transactionCount,
   };

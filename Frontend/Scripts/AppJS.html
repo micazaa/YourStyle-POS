@@ -1,6 +1,14 @@
 <script>
 
   var pageReadCache = new Map();
+  function markDashboardReadsStale(prefix) {
+    pageReadCache.forEach((entry, key) => {
+      if (!key.startsWith(prefix)) return;
+      // Replace the entry so an older in-flight response cannot overwrite it.
+      if (entry.data) pageReadCache.set(key, {...entry, pending:false, data:{...entry.data, loadedAt:0}});
+      else pageReadCache.delete(key);
+    });
+  }
   function invalidateDeliveryItemCaches() {
     invalidateBundleDistributionDetails();
     ['standardDeliveryDetails', 'deliveryItems', 'deliveryDetails', 'deliveryLabels', 'exchangeProducts', 'cashierInventory'].forEach(key => pageReadCache.delete(key));
@@ -134,8 +142,7 @@
     const state = workspacePreloadState;
     if (!state || !currentEmployee || state.owner !== currentEmployee.dashboardToken || state.page !== pageId) return;
     state.waiting = false;
-    warmDeliveryCatalog();
-    if (state.started) {preloadHistoryAndReports();return;}
+    if (state.started) return;
     scheduleWorkspacePreload();
   }
 
@@ -146,20 +153,14 @@
     state.timer = setTimeout(() => {
       if (workspacePreloadState !== state || !currentEmployee || state.owner !== currentEmployee.dashboardToken || state.started) return;
       state.started = true;
-      const pages = {
-        posPage: () => {if (currentSessionIsCashier) refreshInventory();},
-        inventoryPage: () => loadInventoryPage(false, true),
-        deliveriesPage: () => loadDeliveriesPage(false, true),
-        supplierReturnsPage: () => loadSupplierReturnsPage()
-      };
-      Object.keys(pages).forEach(page => {if (page !== state.page) pages[page]();});
-      warmDeliveryCatalog();
-    }, 75);
+      // Pages and modal catalogs load on first use. Starting every workspace
+      // here made background reads compete with the page the user selected.
+    }, 1500);
   }
 
   function preloadHistoryAndReports() {
     const delivery = pageReadCache.get('deliveries');
-    if (!currentEmployee || workspaceForegroundLoading() || !inventoryDatasetReady() || inventoryDataset.stale || !inventoryDataset.detailsReady ||
+    if (!currentEmployee || workspaceForegroundLoading() || !inventoryDatasetReady() || inventoryDataset.stale ||
         !delivery || delivery.data === undefined || delivery.owner !== JSON.stringify([currentEmployee, currentCashier])) return;
     warmTransactionHistory();
     warmCashierReport();
@@ -265,14 +266,10 @@
             'voidAndRefundTransactionBackend','completeCustomerExchange','acceptYourStyleDelivery','distributeBulkBundle','splitPhysicalBundle',
             'completeBulkHolder','saveSupplierReturn','acceptYourFindsDelivery','processReservationPayment'].includes(operation)){
             if(typeof clearDeviceInventoryCache==='function')clearDeviceInventoryCache();
-            if(typeof clearDeviceDashboard==='function'){
-              clearDeviceDashboard('overview');
-              clearDeviceDashboard('page');
-            }
-            Array.from(pageReadCache.keys()).filter(key => key.startsWith('dashboardOverview')).forEach(key => pageReadCache.delete(key));
+            markDashboardReadsStale('dashboardOverview:');
             if (['executeCheckoutBackend','voidAndRefundTransactionBackend','completeCustomerExchange','processReservationPayment',
               'saveYourFindsItemDetails','saveProductMaster','deleteUnusedInventoryItem','setInventoryAdministrativeStatus'].includes(operation)) {
-              if(typeof clearDeviceDashboard==='function')clearDeviceDashboard('sales');
+              markDashboardReadsStale('dashboardSales:');
             }
             if (workspacePreloadState?.page === 'dashboardPage') loadDashboardOverview();
             if(typeof handleInventoryMutationResult==='function')handleInventoryMutationResult(parsed);
@@ -470,7 +467,7 @@
 
 
   function clearSession() {
-    clearDashboardState();
+    if (typeof clearDashboardState === 'function') clearDashboardState();
     resetWorkspacePreload();
     posApprovalRequest=null;
     stopAccountSessionMonitor();

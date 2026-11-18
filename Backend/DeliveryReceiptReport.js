@@ -241,6 +241,35 @@ function buildDashboardSummaryHtml_(title, date, metadata, totalCells, lines, gr
     '<tr class="grand-total"><td colspan="2">GRAND TOTAL</td><td class="qty">' + safe(grandTotal) + '</td></tr></tbody></table></body></html>';
 }
 
+function createDashboardNetSalesPdf(request) {
+  const sales = getDashboardSales(request);
+  if (sales.unavailable) return {success:false,message:sales.unavailable};
+  const {start,end} = sales.period;
+  const date = formatDeliveryReceiptDate_(start) + (start === end ? '' : ' – ' + formatDeliveryReceiptDate_(end));
+  const labels = {YOURFINDS:'YourFinds',PINS:'Pins',OTHERS:'Others',WHOLESALE:'Wholesale'};
+  const number = new Intl.NumberFormat('en-PH');
+  const money = new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',minimumFractionDigits:0,maximumFractionDigits:2});
+  const rows = [
+    ...sales.categoryTotals.map(row => [labels[row.category],row.units,row.sales]),
+    ['Grand total',sales.units,sales.netSales],
+  ];
+  const lines = rows.map(([label,units,amount]) => '<tr><th scope="row">' + escapeDeliveryReceiptHtml_(label) +
+    '</th><td>' + number.format(units) + '</td><td>' + money.format(amount) + '</td></tr>').join('');
+  const html = '<!doctype html><html><head><meta charset="utf-8"><style>' +
+    '@page{size:A4;margin:12mm}body{margin:0;color:#381f2c;font:12px Arial,sans-serif}' +
+    'h1{margin:0;color:#b76e79;font-size:20px}p{margin:5px 0 16px;color:#65454b}' +
+    'table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #ead9de;text-align:left}' +
+    'thead th,tr:last-child th,tr:last-child td{background:#faf1f2;font-weight:bold}tbody th{font-weight:normal}' +
+    'th:not(:first-child),td{text-align:right}</style></head><body><h1>NET SALES SUMMARY</h1><p>' +
+    escapeDeliveryReceiptHtml_(date) + '</p><table><thead><tr><th>Category</th><th>Units sold</th><th>Net sales</th></tr></thead>' +
+    '<tbody>' + lines + '</tbody></table></body></html>';
+  const pdf = Utilities.newBlob(html,'text/html','net-sales-summary.html').getAs('application/pdf');
+  return {
+    success:true,fileName:'Net_Sales_Summary_' + start + (start === end ? '' : '_to_' + end) + '.pdf',
+    base64:Utilities.base64Encode(pdf.getBytes()),
+  };
+}
+
 function createDashboardInventoryPdf_(report, date) {
   const safe = escapeDeliveryReceiptHtml_;
   const labels = {YOURFINDS:'TOTAL YF', PINS:'TOTAL PIN', OTHERS:'TOTAL OTHERS', WHOLESALE:'TOTAL WHOLESALE'};

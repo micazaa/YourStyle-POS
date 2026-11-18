@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const script = fs.readFileSync('Frontend/Scripts/DeviceCache.html','utf8').match(/<script>([\s\S]*)<\/script>/)[1];
 function fixture(enabled=true) {
   const storage = new Map();
-  const context = vm.createContext({Intl,Date,document:{body:{dataset:{deviceCacheEnabled:String(enabled)}}},
+  const context = vm.createContext({Intl,Date,document:{body:{dataset:{deviceCacheEnabled:String(enabled),deviceCacheScope:'spreadsheet-1'}}},
     localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},
     currentEmployee:{dashboardToken:'first'},inventoryDataset:null,inventoryDownload:null,inventoryListVersion:'',
     inventoryDatasetReady:()=>!!context.inventoryDataset,refreshInventoryChanges:()=>context.refreshes++});
@@ -24,12 +24,24 @@ test('daily catalog survives account changes and stores display fields without c
   assert.equal(item.stock,10);assert.equal(item.priceSource,'SALE');assert.equal(item.saleReferenceId,'SALE-1');
   c.clearDeviceInventoryCache();assert.equal(storage.size,0);
 });
-test('only dev caches data; expired, malformed and unavailable storage fall back to live loading',()=>{
+test('disabled, expired, malformed and unavailable register storage falls back to live loading',()=>{
   const {context:c,storage}=fixture(false);c.writeDeviceCache('inventory',[{code:'A'}],'v1');assert.equal(storage.size,0);
   c.document.body.dataset.deviceCacheEnabled='true';
   storage.set('ys_uat_daily_v1_inventory',JSON.stringify({day:'2000-01-01',items:[]}));assert.equal(c.readDeviceCache('inventory'),null);
   storage.set('ys_uat_daily_v1_inventory','bad json');assert.equal(c.readDeviceCache('inventory'),null);
   c.localStorage.setItem=()=>{throw Error('quota');};assert.doesNotThrow(()=>c.writeDeviceCache('inventory',[],'v1'));
+});
+test('production register cache is isolated by spreadsheet and employee',()=>{
+  const {context:c,storage}=fixture();
+  c.currentEmployee={dashboardToken:'first',employeeId:'EMP-1'};
+  c.writeDeviceCache('inventory',[{code:'A'}],'v1');
+  assert.equal(c.readDeviceCache('inventory').items[0].code,'A');
+  c.currentEmployee={dashboardToken:'second',employeeId:'EMP-2'};
+  assert.equal(c.readDeviceCache('inventory'),null);
+  c.document.body.dataset.deviceCacheScope='spreadsheet-2';
+  c.currentEmployee={dashboardToken:'third',employeeId:'EMP-1'};
+  assert.equal(c.readDeviceCache('inventory'),null);
+  assert.equal(storage.size,1);
 });
 test('restored inventory belongs to the new session and immediately requests stock changes',()=>{
   const {context:c}=fixture();

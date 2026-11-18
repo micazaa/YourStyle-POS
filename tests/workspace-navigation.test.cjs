@@ -10,7 +10,7 @@ function fixture({cashier=false,manager=false,dev=false,saved}={}) {
   const c=vm.createContext({clearTimeout,currentEmployee:{fullName:'Test User',role:manager?'MANAGER':'CASHIER'},currentSessionIsCashier:cashier,
     currentCashier:'',currentShiftPettyCash:0,currentShiftReportId:'',loginAttempt:0,pageReadCache:new Map(),
     localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},
-    document:{addEventListener(){},removeEventListener(){},body:{dataset:{dashboardEnabled:String(dev)},classList:{toggle(){}}},getElementById:element,querySelector:selector=>selector==='.sidebar-menu'?element('sidebarMenu'):null,querySelectorAll:selector=>selector==='[data-sales-chart-category]'?salesChecks:[]},
+    document:{addEventListener(){},removeEventListener(){},body:{dataset:{dashboardEnabled:String(dev)},classList:{toggle(){},contains(){return false;}}},getElementById:element,querySelector:selector=>selector==='.sidebar-menu'?element('sidebarMenu'):null,querySelectorAll:selector=>selector==='[data-sales-chart-category]'?salesChecks:[]},
     window:{addEventListener(){},matchMedia:()=>({matches:true})},
     hasManagerViewAccess:()=>manager,canAuthorizeManagerActions:()=>manager,
     prioritizeWorkspacePage(){},finishWorkspacePageLoad(){},
@@ -34,6 +34,95 @@ function fixture({cashier=false,manager=false,dev=false,saved}={}) {
 const emptyDashboardOverview={inventory:{stock:0,low:0},delivery:{count:0,incomplete:0},returns:{count:0,items:0}};
 const emptyDashboardSales={activity:[],items:[],payments:[],hourly:true,netSales:0,units:0,transactions:0};
 const packet=(overview=emptyDashboardOverview,sales=emptyDashboardSales)=>({overview,sales});
+
+test('payment donut expands the active method and updates its center without a tooltip',()=>{
+ const f=fixture({dev:true,manager:true});
+ const node=()=>({children:[],attrs:{},events:{},style:{setProperty(){}},textContent:'',append(...items){this.children.push(...items);},replaceChildren(...items){this.children=items;},setAttribute(key,value){this.attrs[key]=String(value);},addEventListener(key,handler){this.events[key]=handler;}});
+ f.c.document.createElement=node;
+ f.c.document.createElementNS=node;
+ f.elements.dashboardPaymentPlot=node();
+ f.elements.dashboardPaymentLegend=node();
+ f.c.renderDashboardSales({...emptyDashboardSales,absorbedCardFees:80,payments:[{method:'Cash',amount:10000},{method:'Credit card',amount:2500},{method:'QR Code',amount:1515}]});
+ const plot=f.element('dashboardPaymentPlot');
+ assert.equal(plot.children.length,1);
+ const [ring,center]=plot.children[0].children;
+ const [amount,label,share,fee]=center.children;
+ assert.equal(amount.textContent,'₱14,015');assert.equal(label.textContent,'Total collected');assert.equal(share.hidden,true);
+ ring.children[1].events.pointerenter();
+ assert.equal(label.textContent,'Credit card');assert.equal(amount.textContent,'₱2,500');
+ assert.match(share.textContent,/of payments/);assert.match(fee.textContent,/₱80.00 \(3.2%\)/);
+ assert.equal(ring.children[1].attrs['data-active'],'true');assert.equal(ring.children[0].attrs['data-active'],'false');
+ ring.children[1].events.pointerleave();assert.equal(label.textContent,'Total collected');assert.equal(fee.hidden,true);
+ const qr=f.element('dashboardPaymentLegend').children[2].children[0];
+ qr.events.focus();assert.equal(label.textContent,'QR Code');assert.match(fee.textContent,/₱0.00 \(1%\)/);
+ qr.events.click();assert.equal(ring.children[2].attrs['aria-pressed'],'true');
+ qr.events.keydown({key:'Escape'});assert.equal(label.textContent,'Total collected');assert.equal(qr.attrs['aria-pressed'],'false');
+});
+
+test('graph interval controls appear for multiple days and hide for a single day',()=>{
+ const f=fixture({dev:true,manager:true});
+ f.c.renderDashboardSales({...emptyDashboardSales,hourly:false});
+ assert.equal(f.element('dashboardGraphGrouping').hidden,false);
+ assert.equal(f.element('dashboardSalesInterval').textContent,'Daily');
+ f.element('dashboardGraphWeekly').checked=true;
+ f.c.renderDashboardSalesChart();
+ assert.equal(f.element('dashboardSalesInterval').textContent,'Weekly');
+ f.c.renderDashboardSales({...emptyDashboardSales,hourly:true});
+ assert.equal(f.element('dashboardGraphGrouping').hidden,true);
+ assert.equal(f.element('dashboardSalesInterval').textContent,'Hourly');
+});
+
+for (const [kind,download,endpoint] of [
+ ['NetSales','downloadDashboardNetSalesSummary','createDashboardNetSalesPdf'],
+ ['Return','downloadDashboardReturnSummary','createDashboardReturnPdf'],
+ ['Delivery','downloadDashboardDeliverySummary','createDashboardDeliveryPdf'],
+ ['Inventory','downloadDashboardInventoryReport','getDashboardInventoryReport'],
+]) test(kind+' report download uses the button loading state and resets after failure and retry',()=>{
+ const f=fixture({dev:true,manager:true}),requests=[];
+ f.c.updateDashboardHeader(new Date('2026-11-18T04:00:00Z'));
+ f.element('dashboardDeliveryTable').hidden=false;
+ f.element('dashboardInventoryTotals').hidden=false;
+ vm.runInContext("dashboardSalesData={period:{start:'2026-11-18',end:'2026-11-18'}};dashboardDeliverySummaryRequest={start:'2026-11-18',end:'2026-11-18'}",f.c);
+ f.c.pageReadCache.set('dashboardOverview',{data:{overview:{returns:{count:1}}}});
+ f.c.secureScriptRun[endpoint]=function(){requests.push({success:this.success,failure:this.failure});};
+ const button=f.element('dashboard'+kind+'Download'),message=f.element('dashboard'+kind+'Message'),attrs={};
+ button.setAttribute=(key,value)=>{attrs[key]=value;};button.removeAttribute=key=>{delete attrs[key];};
+ f.c.downloadSupplierReturnPdf_=()=>{};
+ f.c[download]();assert.equal(button.disabled,true);assert.equal(attrs['aria-busy'],'true');assert.equal(message.textContent,'');
+ f.c[download]();assert.equal(requests.length,1);
+ requests[0].failure(new Error('Try again'));assert.equal(attrs['aria-busy'],undefined);assert.equal(button.disabled,false);assert.equal(message.textContent,'Try again');
+ f.c[download]();requests[1].success({success:true,base64:'PDF'});assert.equal(attrs['aria-busy'],undefined);assert.equal(button.disabled,false);assert.equal(message.textContent,'');
+});
+
+test('net sales summary opens from the cached dashboard and uses its period for actions',()=>{
+ const f=fixture({dev:true,manager:true});
+ const node=()=>({children:[],append(...items){this.children.push(...items);},insertCell(){const cell=node();this.append(cell);return cell;}});
+ const body=f.element('dashboardNetSalesRows');
+ body.rows=[];
+ body.replaceChildren=()=>{body.rows=[];};
+ body.insertRow=()=>{const row=node();body.rows.push(row);return row;};
+ f.c.document.createElement=node;
+ const period={start:'2026-11-10',end:'2026-11-13'};
+ f.c.renderDashboardSales({...emptyDashboardSales,period,units:3,netSales:350,
+  categoryTotals:[{category:'YOURFINDS',units:2,sales:250},{category:'PINS',units:1,sales:100}]});
+ f.c.openDashboardNetSalesSummary();
+ assert.equal(f.element('dashboardNetSalesCard').disabled,false);
+ assert.equal(f.element('dashboardNetSalesSummary').open,true);
+ assert.match(f.element('dashboardNetSalesPeriod').textContent,/November 10\s*–\s*13, 2026/);
+ assert.deepEqual(body.rows[0].children.map(cell=>cell.textContent),['YourFinds','2','₱250']);
+ assert.equal(f.element('dashboardNetSalesTotal').textContent,'₱350');
+ assert.equal(f.dashboardRequests.length,0);
+ let pdfRequests=0;
+ f.c.secureScriptRun.createDashboardNetSalesPdf=function(range){pdfRequests++;assert.deepEqual({...range},period);};
+ f.c.downloadDashboardNetSalesSummary();
+ f.c.downloadDashboardNetSalesSummary();
+ assert.equal(pdfRequests,1);
+ let historyPeriod;
+ f.c.openTransactionHistoryModal=range=>{historyPeriod=range;};
+ f.c.viewDashboardSalesTransactions();
+ assert.equal(f.element('dashboardNetSalesSummary').open,false);
+ assert.deepEqual(historyPeriod,period);
+});
 
 test('sales comparisons follow the selected period and ignore late responses from another date or sign-in',()=>{
  const f=fixture({dev:true,manager:true});
@@ -247,7 +336,7 @@ test('clicking the sidebar Inventory button opens Inventory from Delivery',()=>{
  assert.deepEqual(f.loads,['deliveriesPage','inventoryPage']);
  assert.equal(f.storage.get('ys_pos_active_page'),'inventoryPage');
 });
-test('UAT restores Dashboard first and waits for its totals before other workspace reads',()=>{
+test('UAT restores Dashboard first and leaves other workspace reads demand-loaded',()=>{
  const f=fixture({dev:true,saved:'deliveriesPage'});f.c.currentEmployee.dashboardToken='session';
  const app=script('Scripts/AppJS');
  const queued=[];
@@ -263,7 +352,7 @@ test('UAT restores Dashboard first and waits for its totals before other workspa
  f.dashboardRequests[0].failure();
  assert.equal(queued.length,1);
  queued[0]();
- assert.deepEqual(f.loads,['inventoryPage','deliveriesPage','supplierReturnsPage']);
+ assert.deepEqual(f.loads,[]);
 });
 test('saved Dashboard totals render before the server responds and refresh without blocking navigation',()=>{
  const f=fixture({dev:true});

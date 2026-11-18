@@ -163,7 +163,7 @@ function openInventoryWorkspace(){
       document.getElementById('supplierReturnRows').replaceChildren();
       document.getElementById('deliveriesTableBody').replaceChildren();
       localStorage.removeItem('ys_pos_inventory_tab');
-      ['dashboardPage','inventoryPage','deliveriesPage','supplierReturnsPage'].forEach(id=>document.getElementById(id).style.display='none');
+      ['dashboardPage','inventoryPage','deliveriesPage','supplierReturnsPage'].forEach(id=>{const page=document.getElementById(id);if(page)page.style.display='none';});
       document.getElementById('posPage').style.display='block';
       document.getElementById('inventoryWorkspaceNav').hidden=true;
       yourFindsReprintBusy = false;

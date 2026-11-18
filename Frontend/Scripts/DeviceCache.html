@@ -1,5 +1,6 @@
 <script>
-// Reusable display data for this UAT device. Authentication stays session-scoped.
+// Reusable display data for this register. Authentication stays session-scoped.
+const DEVICE_CACHE_SCHEMA = 2;
 const deviceInventoryFields = ['code','name','size','category','inventoryType','status','stock','price','imageUrl','lowStockAt','productStatus','salePrices','deliveryId','dateDelivered','searchText'];
 const deviceCashierFields = [...deviceInventoryFields,'origPrice','regularPrice','priceSource','variantKey','saleReferenceId','saleEnd','salePrice','saleQuantity','saleRemaining','physicalBundle','bundleKind','estimatedPieces'];
 function deviceCacheEnabled() {
@@ -8,12 +9,17 @@ function deviceCacheEnabled() {
 function deviceCacheDay() {
   return new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 }
+function deviceCacheKey(kind) {
+  const scope=document.body.dataset.deviceCacheScope||'unknown';
+  const employee=currentEmployee&&currentEmployee.employeeId||'unknown';
+  return ['ys_pos_device',DEVICE_CACHE_SCHEMA,scope,employee,kind].join('_');
+}
 function readDeviceCache(kind) {
   if (!deviceCacheEnabled() || !currentEmployee?.dashboardToken) return null;
   try {
-    const entry = JSON.parse(localStorage.getItem('ys_uat_daily_v1_' + kind));
-    if (entry?.day === deviceCacheDay() && Array.isArray(entry.items)) return entry;
-    localStorage.removeItem('ys_uat_daily_v1_' + kind);
+    const key=deviceCacheKey(kind),entry = JSON.parse(localStorage.getItem(key));
+    if (entry?.schema===DEVICE_CACHE_SCHEMA&&entry.day === deviceCacheDay() && Array.isArray(entry.items)) return entry;
+    localStorage.removeItem(key);
   } catch (error) { /* Browser storage can be unavailable or full. */ }
   return null;
 }
@@ -22,13 +28,13 @@ function writeDeviceCache(kind, items, version) {
   const fields = kind === 'cashier' ? deviceCashierFields : deviceInventoryFields;
   const safeItems = items.map(item => Object.fromEntries(fields.filter(field => item[field] !== undefined).map(field => [field,item[field]])));
   try {
-    localStorage.setItem('ys_uat_daily_v1_' + kind, JSON.stringify({day:deviceCacheDay(),version,items:safeItems}));
+    localStorage.setItem(deviceCacheKey(kind), JSON.stringify({schema:DEVICE_CACHE_SCHEMA,day:deviceCacheDay(),version,items:safeItems}));
   } catch (error) { /* Live loading remains available when storage is full. */ }
 }
 function clearDeviceInventoryCache() {
   if (!deviceCacheEnabled()) return;
   try {
-    ['inventory','cashier'].forEach(kind => localStorage.removeItem('ys_uat_daily_v1_' + kind));
+    ['inventory','cashier'].forEach(kind => localStorage.removeItem(deviceCacheKey(kind)));
   } catch (error) { /* Storage may be disabled. */ }
 }
 function restoreDeviceInventory() {
@@ -43,7 +49,7 @@ function restoreDeviceInventory() {
 function deviceOverviewAccount() {
   const employee = currentEmployee;
   if (!deviceCacheEnabled() || !employee?.dashboardToken || !employee.employeeId) return '';
-  return JSON.stringify([employee.employeeId,employee.fullName,employee.role,employee.accessLevel,employee.permissions]);
+  return JSON.stringify([document.body.dataset.deviceCacheScope,employee.employeeId,employee.fullName,employee.role,employee.accessLevel,employee.permissions]);
 }
 function readDeviceDashboard(kind, range) {
   const account = deviceOverviewAccount();

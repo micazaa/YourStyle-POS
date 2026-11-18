@@ -237,10 +237,7 @@ function ensureInventoryPreparation() {
   if(typeof restoreDeviceInventory==='function')restoreDeviceInventory();
   const owner=currentEmployee&&currentEmployee.dashboardToken;if(!owner)return;
   if(inventoryDownload&&inventoryDownload.owner===owner)return;
-  if(inventoryDatasetReady()&&!inventoryDataset.stale){
-    if(!inventoryDataset.detailsReady)preloadInventoryItemDetails();
-    return;
-  }
+  if(inventoryDatasetReady()&&!inventoryDataset.stale)return;
   startInventoryDownload(inventoryListVersion);
 }
 function inventoryDatasetCanAnswer(query) {
@@ -290,8 +287,7 @@ function finishInventoryDownload(job) {
   if(document.getElementById('inventoryPage').style.display!=='none')loadInventoryPage(false,true);
   else if(inventoryLoadingActive)inventoryListBusy(false);
   if(document.getElementById('inventorySummaryModal').style.display==='flex')renderInventorySummary();
-  preloadInventoryItemDetails();
-  warmDeliveryCatalog();
+  // Full item records are loaded only when an item or feature needs them.
 }
 function startInventoryDownload(version='',restarts=0) {
   const owner=currentEmployee&&currentEmployee.dashboardToken;if(!owner)return;
@@ -394,7 +390,6 @@ function applyInventoryPatch(patch) {
     if(item){phase8SelectedItem=item;if(document.getElementById('inventoryDetailsModal').style.display==='flex')renderInventoryDetails(item);}
     else if(removed.has(code)){phase8SelectedItem=null;closeModal('inventoryDetailsModal');}
   }
-  if(!inventoryDataset.detailsReady)preloadInventoryItemDetails();
   refreshOpenYourFindsReprint();
   if(catalogChanged){invalidateDeliveryCatalog();warmDeliveryCatalog();}
   return true;
@@ -863,7 +858,7 @@ function editInventoryRow(item, requestedStatus) {
   if(inventoryLoadingActive)return;
   if (!inventoryIsManager()) return;
   if(item.listOnly){
-    const request=++inventoryItemOpenRequest,yourFinds=inventoryIsYourFinds(item);
+    const request=++inventoryItemOpenRequest,yourFinds=inventoryIsYourFinds(item)&&requestedStatus!=='ON SALE'&&String(item.productStatus).toUpperCase()!=='ON SALE';
     const modalId=yourFinds?'yourFindsEditorModal':'productEditorModal';
     document.getElementById(yourFinds?'yfEditorTitle':'pmEditorTitle').textContent=yourFinds?'YourFinds Selling Details':'Edit Product';
     document.getElementById(yourFinds?'yfEditorSubtitle':'pmModeLabel').textContent=(item.name||'Item')+' · '+item.code;
@@ -871,14 +866,16 @@ function editInventoryRow(item, requestedStatus) {
     const current=()=>request===inventoryItemOpenRequest&&document.getElementById(modalId).style.display==='flex';
     withInventoryItemDetails(item.code,full=>{
       if(!current())return;
-      setInventoryEditorLoading(modalId,false);editInventoryRow(full,requestedStatus);
+      setInventoryEditorLoading(modalId,false);editInventoryRow(full,requestedStatus||(item.saleVariant==='SALE'?'ON SALE':undefined));
     },error=>{
       if(!current())return;
       closeModal(modalId);setInventoryEditorLoading(modalId,false);showNotificationToast(error.message||'Unable to load item.',true);
     });
     return;
   }
-  if (inventoryIsYourFinds(item)) { phase8SelectedItem = item; openYourFindsEditor(); return; }
+  if (inventoryIsYourFinds(item) && requestedStatus !== 'ON SALE' && String(item.productStatus).toUpperCase() !== 'ON SALE') {
+    phase8SelectedItem = item; openYourFindsEditor(); return;
+  }
   clearProductMasterForm();
   editInventoryProduct(item, requestedStatus);
 }

@@ -13,7 +13,13 @@
       "component": "Dashboard header",
       "direction": "Personal greeting",
       "approved": "2026-11-11",
-      "details": "Use a soft pink header with a time-of-day greeting, the employee’s first name, and one encouraging line. Place the Today, Yesterday, and This week selector above its date label."
+      "details": "Use a soft pink header with a time-of-day greeting, the employee’s first name, and a daily encouraging line. Place the date-range dropdown at the right of the header."
+    },
+    {
+      "component": "Dashboard",
+      "direction": "Approved pink overview and sales layout",
+      "approved": "2026-11-18",
+      "details": "Three overview cards; three sales metrics beside a combined stacked-units chart and thin shadowed white net-sales line. Show Daily/Weekly radios outside the graph filter for multi-day ranges. Put By qty/By amount radios outside the top-selling filter; retain its category dropdown, Pins code grouping and YourFinds size grouping. Five visible ranked rows with photos and medal stars. Payment legend above the donut; hover or focus enlarges a segment and updates the center amount, method, share and actual shop-absorbed fee, without a tooltip. All dashboard PDF buttons replace their download icon with a spinner while busy, without Preparing text. Cache the complete dashboard and use one loader below the header. Enable this dashboard in dev and live production."
     }
   ]
 }

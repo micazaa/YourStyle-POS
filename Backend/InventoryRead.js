@@ -4,6 +4,36 @@ const INVENTORY_CHANGE_LIMIT_ = 1000;
 // Invalidate reads created before the Production-to-Dev data refresh.
 const INVENTORY_READ_EPOCH_ = '20261105-sync';
 let INVENTORY_EXECUTION_INDEX_ = null;
+function inventoryChangeJournalKey_(version) {
+  const parts=String(version||'').split(':');
+  return 'inventory-change-journal:'+parts[0]+':'+parts[parts.length-1];
+}
+function writeInventoryChangeEvent_(version,event,seconds) {
+  try {CacheService.getScriptCache().put('inventory-change:'+version,JSON.stringify(event),seconds);}catch(error){}
+  try {
+    const properties=PropertiesService.getScriptProperties(),key=inventoryChangeJournalKey_(version);
+    properties.setProperty(key,JSON.stringify(event));
+    const id=String(version||'').split(':')[0],indexKey='inventory-change-journal-index:'+id;
+    const keys=JSON.parse(properties.getProperty(indexKey)||'[]').filter(value=>value!==key);keys.push(key);
+    while(keys.length>32)properties.deleteProperty(keys.shift());
+    properties.setProperty(indexKey,JSON.stringify(keys));
+  }catch(error){console.warn('Durable inventory change journal unavailable.');}
+}
+function readInventoryChangeEvent_(version) {
+  try {const raw=CacheService.getScriptCache().get('inventory-change:'+version);if(raw)return JSON.parse(raw);}catch(error){}
+  try {const raw=PropertiesService.getScriptProperties().getProperty(inventoryChangeJournalKey_(version));return raw?JSON.parse(raw):null;}
+  catch(error){return null;}
+}
+function deleteInventoryChangeEvent_(version) {
+  try {CacheService.getScriptCache().remove('inventory-change:'+version);}catch(error){}
+  try {
+    const properties=PropertiesService.getScriptProperties(),key=inventoryChangeJournalKey_(version);
+    properties.deleteProperty(key);
+    const id=String(version||'').split(':')[0],indexKey='inventory-change-journal-index:'+id;
+    const keys=JSON.parse(properties.getProperty(indexKey)||'[]').filter(value=>value!==key);
+    properties.setProperty(indexKey,JSON.stringify(keys));
+  }catch(error){}
+}
 function recordInventoryChangedCodes_(codes) {
   if(!ACCESS_REQUEST_CONTEXT_||!ACCESS_REQUEST_CONTEXT_.inventoryCodes)return;
   (Array.isArray(codes)?codes:[codes]).forEach(value=>{
@@ -15,7 +45,7 @@ function beginInventoryMutation_() {
   try {
     const id=SpreadsheetApp.getActiveSpreadsheet().getId(),fromVersion=inventoryReadVersion_();
     const revision=Utilities.getUuid(),version=inventoryReadVersionFor_(id,revision);
-    try {CacheService.getScriptCache().put('inventory-change:'+version,JSON.stringify({pending:true,fromVersion:fromVersion,startedAt:Date.now()}),3600);}catch(error){}
+    writeInventoryChangeEvent_(version,{pending:true,fromVersion:fromVersion,startedAt:Date.now()},3600);
     PropertiesService.getScriptProperties().setProperty('inventory-read:'+id,revision);INVENTORY_EXECUTION_INDEX_=null;
     return {id:id,fromVersion:fromVersion,version:version};
   }finally{lock.releaseLock();}
@@ -25,10 +55,11 @@ function finishInventoryMutation_(mutation,codes,success) {
   try {
     const current=inventoryReadVersion_(),revision=Utilities.getUuid(),version=inventoryReadVersionFor_(mutation.id,revision);
     const changed=Array.from(new Set(codes));
-    const full=!success||current!==mutation.version||!changed.length||changed.length>INVENTORY_CHANGE_LIMIT_;
+    const full=!success||current!==mutation.version||!changed.length||changed.length>100;
     const event={fromVersion:current===mutation.version?mutation.fromVersion:current,version:version,
       reset:full,codes:full?[]:changed};
-    try {CacheService.getScriptCache().put('inventory-change:'+version,JSON.stringify(event),3600);}catch(error){}
+    deleteInventoryChangeEvent_(mutation.version);
+    writeInventoryChangeEvent_(version,event,3600);
     PropertiesService.getScriptProperties().setProperty('inventory-read:'+mutation.id,revision);INVENTORY_EXECUTION_INDEX_=null;
     return event;
   }finally{lock.releaseLock();}
@@ -81,8 +112,10 @@ function readInventoryListIndex_() {
       lowStockAt:product ? Number(product.lowStockAt)||0 : 0,
       productStatus:product ? product.status : 'ACTIVE',salePrices:product ? product.salePrices : []};
     if(inventoryRowIsSoldYourFinds_(item))item.status='INACTIVE';
-    // Administrative status of a unique item belongs to Inventory, not its shared size definition.
-    if(item.inventoryType==='UNIQUE' || item.status==='INACTIVE')item.productStatus=item.status==='INACTIVE'?'DEACTIVATED':'ACTIVE';
+    // A per-code definition can put a unique YourFinds item on sale. Inventory
+    // still owns its ordinary active/inactive state when no such definition exists.
+    if(item.status==='INACTIVE')item.productStatus='DEACTIVATED';
+    else if(item.inventoryType==='UNIQUE'&&!product)item.productStatus='ACTIVE';
     item.availability=inventoryListStatus_(item);
     item.searchText=[code,item.name,item.category,item.size].join(' ').toLowerCase();
     return item;
@@ -191,7 +224,7 @@ function inventoryListSaleRows_(items) {
       return {...item,stock:quantity,price:Number(tier.price)||0,saleVariant:'SALE',saleTierIndex:index,saleReferenceId:tier.referenceId,saleEnd:tier.end};
     });
     const regular=available>0||item.stock<0?[{...item,stock:item.stock<0?item.stock:available,saleVariant:'REGULAR'}]:[];
-    return regular.concat(saleRows);
+    return regular.concat(saleRows.filter(row=>row.stock>0));
   });
 }
 function inventoryPageSlice_(items,page,size) {
@@ -514,9 +547,9 @@ function getInventoryChanges(request) {
   const fromVersion=String(request&&request.version||''),version=inventoryReadVersion_();
   if(fromVersion===version)return {success:true,fromVersion:fromVersion,version:version,items:[],removedCodes:[]};
   if(!fromVersion)return {success:true,reset:true,version:version};
-  const cache=CacheService.getScriptCache(),codes=new Set();let cursor=version;
+  const codes=new Set();let cursor=version;
   for(let count=0;cursor!==fromVersion&&count<32;count++){
-    let event;try{const raw=cache.get('inventory-change:'+cursor);event=raw?JSON.parse(raw):null;}catch(error){}
+    const event=readInventoryChangeEvent_(cursor);
     if(event&&event.pending)return Date.now()-Number(event.startedAt||0)<120000
       ?{success:true,pending:true,version:version}:{success:true,reset:true,version:version};
     if(!event||event.reset||!Array.isArray(event.codes))return {success:true,reset:true,version:version};

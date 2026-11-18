@@ -500,11 +500,24 @@ test('sales cards, activity, ranking groups and payments match the selected repo
     toProperCase: String,
     normalizeYourFindsSaleSize_: size => size === 'SNE' ? size : 'CUSTOM',
   });
-  for (const file of ['Constants.js','Utils.js','Reservations.js','ReportHelpers.js','Dashboard.js'])
+  for (const file of ['Constants.js','Utils.js','Reservations.js','ReportHelpers.js','Dashboard.js','DeliveryReceiptReport.js'])
     vm.runInContext(fs.readFileSync(path.join(root, 'Backend', file), 'utf8'), c);
 
   const result = c.getDashboardSales(period);
   assert.deepEqual([result.netSales,result.units,result.transactions], [170,4,1]);
+  assert.deepEqual(Array.from(result.categoryTotals, row => [row.category,row.units,row.sales]), [
+    ['YOURFINDS',1,50],['PINS',3,120],['OTHERS',0,0],['WHOLESALE',0,0],
+  ]);
+  let pdfHtml;
+  c.Utilities.newBlob = html => {
+    pdfHtml = html;
+    return {getAs: () => ({getBytes: () => [1]})};
+  };
+  c.Utilities.base64Encode = bytes => Buffer.from(bytes).toString('base64');
+  const pdf = c.createDashboardNetSalesPdf(period);
+  assert.equal(pdf.fileName,'Net_Sales_Summary_2026-09-24.pdf');
+  assert.match(pdfHtml, /Pins<\/th><td>3<\/td><td>₱120/);
+  assert.match(pdfHtml, /Grand total<\/th><td>4<\/td><td>₱170/);
   assert.deepEqual({...result.previous}, {start:'2026-09-23',end:'2026-09-23',netSales:80,units:3,transactions:1});
   assert.deepEqual(Array.from(result.activity[10].units), [1,3,0,0]);
   assert.deepEqual(Array.from(result.activity[10].sales), [50,120,0,0]);
@@ -546,6 +559,7 @@ test('sales cards, activity, ranking groups and payments match the selected repo
   actor.manager = false;
   assert.equal(c.getDashboardSales(period).previous, undefined);
   assert.match(c.getDashboardSales({start:'2026-09-23',end:'2026-09-23'}).unavailable, /managers and OICs/);
+  assert.equal(c.createDashboardNetSalesPdf({start:'2026-09-23',end:'2026-09-23'}).success,false);
   enabled = false;
   assert.throws(() => c.getDashboardSales(period), /unavailable/);
   c.ACCESS_REQUEST_CONTEXT_ = null;
