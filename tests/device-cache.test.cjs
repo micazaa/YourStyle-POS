@@ -51,6 +51,37 @@ test('restored inventory belongs to the new session and immediately requests sto
   assert.equal(c.inventoryDataset.items[0].costPrice,undefined);assert.equal(c.inventoryListVersion,'version-1');assert.equal(c.refreshes,1);
   c.restoreDeviceInventory();assert.equal(c.refreshes,1);
 });
+test('stock filters match fresh and restored inventory when cached rows omit availability',()=>{
+  const {context:c,storage}=fixture();
+  vm.runInContext(fs.readFileSync('Backend/InventoryRead.js','utf8'),c);
+  const base={name:'Pin',category:'PINS',inventoryType:'STOCK',status:'ACTIVE',productStatus:'ACTIVE',lowStockAt:5};
+  const items=[
+    {...base,code:'A',stock:20},
+    {...base,code:'B',stock:20,productStatus:'ON SALE'},
+    {...base,code:'L',stock:2},
+    {...base,code:'Z',stock:0},
+    {...base,code:'N',stock:-2},
+    {...base,code:'I',category:'YOURFINDS',inventoryType:'UNIQUE',status:'INCOMPLETE',stock:1},
+    {...base,code:'R',status:'RETURNED',stock:0},
+  ].map(item=>({...item,availability:c.inventoryListStatus_(item)}));
+  c.writeDeviceCache('inventory',items,'v1');
+  assert.doesNotMatch([...storage.values()][0],/availability/);
+  c.restoreDeviceInventory();
+  for(const [stockStatus,expected] of [
+    [['IN STOCK'],['A','B']],
+    [['LOW STOCK'],['L']],
+    [['SOLD OUT'],['Z','N']],
+    [['INCOMPLETE'],['I']],
+    [['RETURNED'],['R']],
+    [['IN STOCK','LOW STOCK'],['A','B','L']],
+  ]) {
+    const query=c.inventoryListRequest_({status:['ACTIVE','ON SALE'],stockStatus,exclude:[]});
+    const matched=rows=>Array.from(rows.filter(item=>c.inventoryListMatches_(item,query)),item=>item.code);
+    assert.deepEqual(matched(items),expected);
+    assert.deepEqual(matched(c.inventoryDataset.items),expected);
+    assert.equal(c.inventoryListGroups_(c.inventoryDataset.items,query).reduce((sum,group)=>sum+group.itemCount,0),expected.length);
+  }
+});
 test('cashier shows saved products before the live refresh finishes, then replaces them',()=>{
   const {context:c}=fixture();
   c.writeDeviceCache('cashier',[{code:'A',stock:10,price:500}],'v1');

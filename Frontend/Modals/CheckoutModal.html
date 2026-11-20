@@ -1,11 +1,11 @@
 <div id="checkoutModal" class="generic-overlay-blur" style="display:none;">
   <div class="custom-popup-card">
     <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-      <h5 class="fw-bold m-0 text-dark">Process Checkout</h5>
-      <button type="button" class="btn-close" onclick="toggleCheckoutModal(false)"></button>
+      <h2 class="h5 fw-bold m-0 text-dark">Checkout</h2>
+      <button type="button" class="btn-close" aria-label="Close checkout" onclick="toggleCheckoutModal(false)"></button>
     </div>
 
-    <div class="text-center py-3 rounded mb-3" style="background-color: var(--pink-light);">
+    <div class="checkout-total text-center mb-3">
       <span class="small fw-bold text-muted">TOTAL DUE:</span>
       <h2 class="fw-bold m-0 text-dark">₱<span id="modalGrandTotal">0.00</span></h2>
       <div id="checkoutRemainingAmount" class="small text-muted mt-1" role="status" aria-live="polite" hidden></div>
@@ -13,7 +13,7 @@
 
     <div class="mb-3">
       <div id="checkoutReservationNote" class="small text-muted mb-3" hidden></div>
-      <label class="form-label">Payment Method</label>
+      <label class="form-label" for="paymentMethod">Payment method</label>
       <select class="form-select fw-bold" id="paymentMethod" onchange="recalculateModalTotals()">
             <option value="Cash">Cash</option>
             <option value="GCash">GCash</option>
@@ -23,30 +23,31 @@
             <option value="Cash + Credit Card">Cash + Card</option>
             <option value="GCash + Credit Card">GCash + Card</option>
           </select>
+      <p class="ys-payment-help mt-2 mb-0">Choose a payment method above, or use this list for split payments.</p>
     </div>
 
     <div id="splitPaymentFields" style="display:none;">
       <div class="mb-3" id="splitPaymentOneAmountBox">
-        <label class="form-label" id="splitPaymentOneLabel">Payment 1 Amount (₱)</label>
-        <input type="number" class="form-control form-control-lg fw-bold text-end" id="splitPaymentOneAmount" placeholder="0.00" oninput="recalculateModalTotals()">
+        <label class="form-label" id="splitPaymentOneLabel" for="splitPaymentOneAmount">Payment 1 Amount (₱)</label>
+        <input type="number" inputmode="decimal" class="form-control form-control-lg fw-bold text-end" id="splitPaymentOneAmount" placeholder="0.00" oninput="recalculateModalTotals()">
       </div>
       <div class="mb-3" id="splitPaymentOneReferenceBox" style="display:none;">
-        <label class="form-label" id="splitPaymentOneReferenceLabel">Payment 1 Reference <span class="text-danger">*</span></label>
+        <label class="form-label" id="splitPaymentOneReferenceLabel" for="splitPaymentOneReference">Payment 1 Reference <span class="text-danger">*</span></label>
         <input type="text" class="form-control" id="splitPaymentOneReference" placeholder="Enter reference number">
       </div>
       <div class="mb-3" id="splitPaymentTwoAmountBox">
-        <label class="form-label" id="splitPaymentTwoLabel">Payment 2 Amount (₱)</label>
-        <input type="number" class="form-control form-control-lg fw-bold text-end" id="splitPaymentTwoAmount" placeholder="0.00" oninput="recalculateModalTotals()">
+        <label class="form-label" id="splitPaymentTwoLabel" for="splitPaymentTwoAmount">Payment 2 Amount (₱)</label>
+        <input type="number" inputmode="decimal" class="form-control form-control-lg fw-bold text-end" id="splitPaymentTwoAmount" placeholder="0.00" oninput="recalculateModalTotals()">
       </div>
       <div class="mb-3" id="splitPaymentTwoReferenceBox" style="display:none;">
-        <label class="form-label" id="splitPaymentTwoReferenceLabel">Payment 2 Reference <span class="text-danger">*</span></label>
+        <label class="form-label" id="splitPaymentTwoReferenceLabel" for="splitPaymentTwoReference">Payment 2 Reference <span class="text-danger">*</span></label>
         <input type="text" class="form-control" id="splitPaymentTwoReference" placeholder="Enter reference number">
       </div>
     </div>
 
     <div class="mb-3 p-2 bg-light rounded" id="referenceNumberContainer"
       style="display:none; border: 1px solid var(--border-color);">
-      <label class="form-label">Reference / Reference ID <span class="text-danger">*</span></label>
+      <label class="form-label" for="paymentReferenceInput">Payment reference <span class="text-danger">*</span></label>
       <input type="text" class="form-control" id="paymentReferenceInput" placeholder="Enter reference number">
     </div>
 
@@ -58,9 +59,9 @@
     </div>
 
     <div class="mb-3" id="cashReceivedFieldWrapper">
-      <label class="form-label">Cash Received (₱)</label>
+      <label class="form-label" for="customerCashPaid">Cash received (₱)</label>
       <div class="input-group">
-        <input type="number" class="form-control form-control-lg fw-bold text-end" id="customerCashPaid" placeholder="0.00" oninput="calculateChangeValue()">
+        <input type="number" inputmode="decimal" class="form-control form-control-lg fw-bold text-end" id="customerCashPaid" placeholder="0.00" oninput="calculateChangeValue()">
       </div>
     </div>
 
@@ -70,17 +71,21 @@
       <h4 class="m-0 fw-bold text-success">₱<span id="customerChangeDue">0.00</span></h4>
     </div>
 
-    <button type="button" id="completeOrderBtn" class="btn btn-pink w-100 py-3 fw-bold" onclick="checkoutTransaction()">Complete Order</button>
+    <div id="checkoutError" class="ys-modal-feedback" role="alert" hidden></div>
+    <footer class="ys-modal-footer checkout-actions"><button type="button" id="completeOrderBtn" class="btn btn-pink w-100 py-3 fw-bold" onclick="checkoutTransaction()">Complete Order</button></footer>
   </div>
 </div>
 <script>
   var activeCheckoutContext = null;
   var checkoutSubmitting = false;
+  var checkoutDisabledControls = new Map();
   function checkoutBaseTotal() {
     return activeCheckoutContext ? Number(activeCheckoutContext.amountDue) || 0 : calculatedBaseTotalDue;
   }
   function triggerCheckoutConsoleModal(context) {
     if (checkoutSubmitting) return;
+    const error = document.getElementById('checkoutError');
+    error.textContent = '';error.hidden = true;
     if (!context && !cashierCartBundlesReady()) return;
     const reserved = !context && cartReservation();
     if (reserved) context = {kind:'RESERVATION_BALANCE', owner:currentEmployee, originalReceiptId:reserved.reservationReceiptId,
@@ -440,11 +445,22 @@
 
   function setCheckoutLoading(isLoading){
     checkoutSubmitting = isLoading;
+    const modal = document.getElementById('checkoutModal');
+    modal.setAttribute('aria-busy',String(isLoading));
 
     const btn =
         document.getElementById("completeOrderBtn");
 
     btn.disabled = isLoading;
+    if (isLoading) {
+      (modal.querySelectorAll?.('input,select,button') || []).forEach(control => {
+        if (control === btn || checkoutDisabledControls.has(control)) return;
+        checkoutDisabledControls.set(control,control.disabled);control.disabled = true;
+      });
+    } else {
+      checkoutDisabledControls.forEach((disabled,control) => {control.disabled = disabled;});
+      checkoutDisabledControls.clear();
+    }
 
     btn.innerHTML = isLoading ? loadingIndicator("Processing…") : "Complete Order";
 
@@ -453,6 +469,9 @@
 
 
 function handleCheckoutFailure(message) {
+  const feedback = document.getElementById('checkoutError');
+  feedback.textContent = message || 'Payment could not be completed. Review the details and try again.';
+  feedback.hidden = false;
 
   showNotificationToast(
     message ||

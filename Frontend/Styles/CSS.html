@@ -1,13 +1,41 @@
 <style>
   :root {
-    --pink-main: #e8899b;
-    --pink-light: #faf1f2;
-    --pink-hover: #d97488;
-    --bg-main: #faf7f7;
+    --pink-main: #e1bfc5;
+    --pink-light: #fbf1f4;
+    --pink-hover: #dab0b9;
+    --pink-active: #d3a5b0;
+    --pink-soft: #edd7dc;
+    --pink-ink: #642d40;
+    --bg-main: #f8f5f6;
     --card-bg: #ffffff;
-    --text-dark: #33333d;
-    --text-gray: #767a85;
-    --border-color: #ece3e4;
+    --text-dark: #362730;
+    --text-gray: #68616b;
+    --border-color: #e4d8de;
+    --surface-subtle: #faf8f9;
+    --color-success: #176344;
+    --color-success-bg: #e9f5ee;
+    --color-warning: #805400;
+    --color-warning-bg: #fff4d6;
+    --color-danger: #a52d3b;
+    --color-danger-bg: #fbecef;
+    --color-info: #255e9b;
+    --color-info-bg: #edf4fc;
+    --focus-color: #633b92;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --radius-control: 9px;
+    --radius-card: 14px;
+    --radius-dialog: 18px;
+    --shadow-card: 0 2px 6px #36273008;
+    --shadow-overlay: 0 12px 36px #3627301f;
+    --control-height: 44px;
+    --font-body: .9375rem;
+    --font-small: .8125rem;
+    --font-title: clamp(1.25rem, 2.5vw, 1.625rem);
   }
 
   body {
@@ -231,7 +259,7 @@
 
   .btn-outline-pink {
     border: 1px solid var(--pink-main);
-    color: var(--pink-main);
+    color: var(--pink-ink);
     background: transparent;
     font-weight: 600;
     border-radius: 8px;
@@ -239,7 +267,7 @@
 
   .btn-outline-pink:hover {
     background: var(--pink-light);
-    color: var(--pink-main);
+    color: var(--pink-ink);
   }
 
   .btn-dark-custom {
@@ -334,7 +362,7 @@
 
   .badge-cashier {
     background-color: var(--pink-light);
-    color: var(--pink-hover);
+    color: var(--pink-ink);
     font-weight: 600;
     padding: 6px 12px;
     border-radius: 20px;
@@ -921,7 +949,7 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
   --bs-table-accent-bg: var(--pink-light);
 }
 
-.inventory-workspace-nav .active {background:var(--pink-main);color:white;}
+.inventory-workspace-nav .active {background:var(--pink-main);color:var(--pink-ink);}
 
 .inventory-workspace-nav{position:sticky;top:0;z-index:910;text-align:center;padding:12px;background:var(--bg-main);border-bottom:1px solid var(--border-color)}
 .inventory-workspace-nav[hidden]{display:none}
@@ -987,8 +1015,8 @@ body:not(.pos-session-active) #terminalWorkspace {display:none!important;}
 .delivery-items-toolbar .delivery-mode-toggle{justify-self:center}
 .delivery-items-toolbar .delivery-add-item{justify-self:end}
 .delivery-mode-toggle{display:inline-flex;border-radius:8px;overflow:hidden}
-.delivery-mode-toggle .btn{min-width:76px;border-radius:0;color:var(--pink-main);background:#fff;border-color:var(--pink-main)}
-.delivery-mode-toggle .btn.active,.delivery-mode-toggle .btn[aria-pressed="true"]{color:#fff;background:var(--pink-main);border-color:var(--pink-main)}
+.delivery-mode-toggle .btn{min-width:76px;border-radius:0;color: var(--pink-ink);background:#fff;border-color:var(--pink-main)}
+.delivery-mode-toggle .btn.active,.delivery-mode-toggle .btn[aria-pressed="true"]{color:var(--pink-ink);}background:var(--pink-main);border-color:var(--pink-main)}
 .delivery-mode-toggle .btn:first-child{border-radius:8px 0 0 8px}
 .delivery-mode-toggle .btn:last-child{border-radius:0 8px 8px 0;margin-left:-1px}
 .delivery-line-scroll{overflow-x:auto}

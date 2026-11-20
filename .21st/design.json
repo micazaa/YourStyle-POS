@@ -4,6 +4,72 @@
   "tokens": "Frontend/Styles/CSS.html",
   "decisions": [
     {
+      "component": "Sales chart tooltip",
+      "direction": "Compact tooltip above the hovered point",
+      "approved": "2026-11-19",
+      "details": "Apply the approved compact preview: content-fitted width, 10px outer padding, 6px column gaps, 12px regular text, 10px corners, soft shadow and bottom pointer anchored to the hovered point. Use a short date/time header without calendar icon. Show only selected categories with nonzero units or net sales; retain refunds even with zero units. Show whole-peso values while preserving underlying precision. Keep both totals under their respective columns in the pink footer and leave 8px of pink padding after the last amount, aligning the same inset on the sales column. Allow the panel above the plot, clamped to the viewport top rather than flipped below the point. Preserve cached reads, hourly/daily/weekly buckets, filters and navigation. Dev only. The tooltip panel, caret and pink footer backgrounds use their existing theme colors at 85% opacity via color-mix; text retains its normal color."
+    },
+    {
+      "component": "Top selling visible rows",
+      "direction": "Six visible rows with scrolling",
+      "approved": "2026-11-18",
+      "details": "Increase the top-selling scroll box from five to six visible item rows using the existing responsive row-height variable. Keep every ranked result accessible by scrolling; preserve filters, rank order and totals. Dev only."
+    },
+    {
+      "component": "Dashboard filter dismissal",
+      "direction": "Close filters on outside click or tap",
+      "approved": "2026-11-18",
+      "details": "Both Sales & units sold and Top selling items filters close on a pointer outside their own details container. Interactions with category and grouping controls inside keep that filter open; opening another filter closes the previous one. Preserve all filter selections. Dev only."
+    },
+    {
+      "component": "Top selling grouping options",
+      "direction": "Both grouping checkboxes with All categories",
+      "approved": "2026-11-18",
+      "details": "Show Group by code and Group by size even when no specific category is selected (All categories). Apply selected grouping per category: code to Pins and size to YourFinds, preserving other categories. For a specific category keep the relevant option and preserve checkbox choices when switching. Keep ranking, quantities, amounts and existing item images. Dev only."
+    },
+    {
+      "component": "Dashboard date shortcuts",
+      "direction": "Compact presets without Last year",
+      "approved": "2026-11-18",
+      "details": "Remove the Last year shortcut. Arrange remaining seven shortcuts in a compact four-column grid (three columns on narrow phones). Use 34px minimum button height, smaller padding and regular 12px text, preserving 44px touch targets on coarse pointers. Keep existing date-range selection, presets and Apply/Cancel behavior. Dev only."
+    },
+    {
+      "component": "Profile photo preview",
+      "direction": "Matching preview/edit sizes, subtle border and click to view",
+      "approved": "2026-11-18",
+      "details": "Preview and edit avatars share the existing 104px desktop / 72px phone size. Apply a one-pixel muted border using the existing border token to the profile avatar and sidebar avatar. In account preview, clicking a valid photo opens the existing native image viewer using the rendered cached JPEG, without a data fetch. Retain initial avatars when no photo exists and the separate edit-photo button. No sheet/storage changes. Dev only."
+    },
+    {
+      "component": "Expanded stock navigation",
+      "direction": "Direct Inventory, Delivery and Return rows",
+      "approved": "2026-11-18",
+      "details": "Match the supplied screenshot: Stock and receiving heading followed by three peer rows labeled Inventory, Delivery, Return. In the expanded desktop sidebar and mobile drawer, show these direct links and hide the inventory chevron and menu toggle. Only the collapsed desktop rail keeps the Inventory flyout. Highlight the selected page in expanded navigation and the inventory group in the collapsed rail. Preserve Dashboard, Cashier and footer navigation. Dev only."
+    },
+    {
+      "component": "Dashboard sidebar icon",
+      "direction": "Rounded dashboard overview tiles",
+      "approved": "2026-11-18",
+      "details": "Replace the text grid glyph with the approved four rounded overview tiles, matching the layout-dashboard preview. Use the existing nav-icon size, currentColor, 1.8px rounded outline and existing active navigation styling. Preserve expanded/collapsed accessibility labels and navigation. Dev only."
+    },
+    {
+      "component": "Dashboard sales empty state",
+      "direction": "Daily transparent mascot in a compact chart card",
+      "approved": "2026-11-18",
+      "details": "When the loaded date range has no sales activity, show the approved 180px transparent cat mascot in a compact 360px empty state. Do not stretch the card to the sales metrics column. Let the supporting sentence use the full card width, wrapping naturally on narrow screens. Bundle the 20 approved PNGs in the app and inline only the current Manila calendar day artwork into the page; cache it in memory and fetch only the next selection on day rollover. Before noon rotate the daily mascot; from noon through 11:59 PM always use the sad mascot in Asia/Manila time, including the initial server image. Keep time-aware copy, chart restoration, category filters, dates, loading/error behavior and report totals. Dev only."
+    },
+    {
+      "component": "Account profile",
+      "direction": "Approved compact profile preview and editor",
+      "approved": "2026-11-18",
+      "details": "Avatar opens account preview. Personal details and a masked Password row with Change password are on the left. Compact photo, display name and username are on the right, followed by read-only Employee ID, Role and Date hired. Email appears only in personal details. Edit uses paired fields, a photo pencil and Save/Cancel. Full name, display name, email, birthday, contact, address and optional emergency contact are editable profile values. Original login/report names remain unchanged. Separate current/new/confirm password view; successful password change requires sign-in again. Dev code only; matching additive Employees I:V schema in dev and prod. Store photos in the selected EMPLOYEES Drive folder, save a file ID in column V, and display a cached small JPEG through the authenticated app. Preserve the folder sharing chosen by the user."
+    },
+    {
+      "component": "YourStyle retail UI",
+      "direction": "Accessible warm retail system",
+      "approved": "2026-11-18",
+      "details": "Dev-only cohesive application polish: user-supplied #E1BFC5 main pink, with dark rose #642D40 labels for contrast and soft pink surfaces; shared spacing, borders, control heights, focus and status tokens. Keep the approved dashboard. Preserve vanilla JavaScript, Bootstrap, IDs, backend contracts, calculations, permissions and authentication. Phone cashier retains Add items/Cart and sticky checkout; Inventory, Deliveries and Supplier returns use labeled record cards with explicit sort controls. Shared dialog focus handling delegates to existing close handlers. Phone inventory filters apply from a bottom panel. No new production dependency."
+    },
+    {
       "component": "Bundle actions modal",
       "direction": "Action tabs",
       "approved": "2026-11-05",

@@ -4,10 +4,11 @@ const script=path=>html(path).match(/<script>([\s\S]*?)<\/script>/)[1];
 function fixture({cashier=false,manager=false,dev=false,saved}={}) {
   const storage=new Map(),elements={},loads=[],calls=[];
   const dashboardRequests=[],returnDownloads=[],returnResponses=[];
-  const salesChecks=Array.from({length:5},()=>({checked:false,addEventListener(){}}));
+  const salesChecks=['all','YOURFINDS','PINS','OTHERS','WHOLESALE'].map(category=>({checked:false,dataset:{salesChartCategory:category},addEventListener(){}}));
   if(saved)storage.set('ys_pos_active_page',saved);
-  const element=id=>elements[id]||=({style:{display:'none'},tBodies:[],addEventListener(){},contains(){return false;},showModal(){this.open=true;},close(){this.open=false;},replaceChildren(){this.innerHTML='';},value:'',checked:false,disabled:false,setAttribute(){},removeAttribute(){},hasAttribute(){return false;},classList:{toggle(){},remove(){}},querySelectorAll:()=>[]});
-  const c=vm.createContext({clearTimeout,currentEmployee:{fullName:'Test User',role:manager?'MANAGER':'CASHIER'},currentSessionIsCashier:cashier,
+  const element=id=>elements[id]||=({style:{display:'none'},dataset:{},tBodies:[],addEventListener(){},contains(){return false;},showModal(){this.open=true;},close(){this.open=false;},replaceChildren(){this.innerHTML='';},value:'',checked:false,disabled:false,setAttribute(){},removeAttribute(){},hasAttribute(){return false;},classList:{toggle(){},remove(){}},querySelectorAll:()=>[]});
+  const mascotRun={withSuccessHandler(){return this;},withFailureHandler(){return this;},getDashboardMascotArtwork(){}};
+  const c=vm.createContext({google:{script:{run:mascotRun}},clearTimeout,setInterval:()=>1,clearInterval(){},Image:class{},currentEmployee:{fullName:'Test User',role:manager?'MANAGER':'CASHIER'},currentSessionIsCashier:cashier,
     currentCashier:'',currentShiftPettyCash:0,currentShiftReportId:'',loginAttempt:0,pageReadCache:new Map(),
     localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},
     document:{addEventListener(){},removeEventListener(){},body:{dataset:{dashboardEnabled:String(dev)},classList:{toggle(){},contains(){return false;}}},getElementById:element,querySelector:selector=>selector==='.sidebar-menu'?element('sidebarMenu'):null,querySelectorAll:selector=>selector==='[data-sales-chart-category]'?salesChecks:[]},
@@ -26,6 +27,7 @@ function fixture({cashier=false,manager=false,dev=false,saved}={}) {
   vm.runInContext(script('Layout/Sidebar'),c);
   const app=script('Scripts/AppJS');
   vm.runInContext(app.slice(app.indexOf('  function beginPageRead('),app.indexOf('  var workspacePreloadState')),c);
+  vm.runInContext(script('Scripts/DashboardMascot'),c);
   vm.runInContext(script('Pages/DashboardPage'),c);
   c.loadDashboardChartLibrary=()=>null;
   return {c,storage,elements,loads,calls,element,dashboardRequests,returnDownloads,returnResponses};
@@ -487,4 +489,35 @@ test('dashboard reminders open the matching inventory or delivery filter',()=>{
  assert.equal(f.c.dashboardInventoryReminder,'WHOLESALE');
  assert.equal(f.storage.get('ys_pos_active_page'),'inventoryPage');
  assert.equal(f.element('dashboardInventoryReminders').hidden,true);
+});
+
+test('expanded stock rows navigate directly and highlight Delivery or Return rather than Inventory',()=>{
+ const f=fixture({dev:true,manager:true});
+ const pages=['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'];
+ const nodes=Object.fromEntries(pages.map(page=>[page,{attrs:{},active:false,classList:{toggle(key,on){this.active=on;}},setAttribute(key,value){this.attrs[key]=value;},removeAttribute(key){delete this.attrs[key];}}]));
+ const oldQuery=f.c.document.querySelector,oldQueries=f.c.document.querySelectorAll;
+ f.c.document.querySelector=selector=>nodes[selector.match(/data-page="([^"]+)"/)?.[1]]||oldQuery(selector);
+ f.c.document.querySelectorAll=selector=>selector==='.sidebar-item[data-page]'?Object.values(nodes):oldQueries(selector);
+ for(const [page,label] of [['deliveriesPage','Delivery'],['supplierReturnsPage','Return']]){
+  const markup=html('Layout/Sidebar').match(new RegExp('<button[^>]*class="sidebar-item inventory-expanded-item"[^>]*data-page="'+page+'"[^>]*>'))[0];
+  assert(markup.includes('aria-label="'+label+'"'));
+  vm.runInContext(markup.match(/onclick="([^"]+)"/)[1],f.c);
+  assert.equal(f.storage.get('ys_pos_active_page'),page);
+  assert.equal(nodes[page].attrs['aria-current'],'page');
+  assert.equal(nodes.inventoryPage.attrs['aria-current'],undefined);
+  assert(f.loads.includes(page));
+ }
+});
+
+test('stock flyout opens only in the collapsed desktop sidebar',()=>{
+ const f=fixture({dev:true,manager:true});let desktop=true,collapsed=false;
+ f.c.window.matchMedia=()=>({matches:desktop});
+ f.c.document.body.classList.contains=name=>name==='sidebar-collapsed'&&collapsed;
+ const menu=f.element('inventorySidebarFlyout');menu.hidden=true;menu.offsetWidth=200;menu.offsetHeight=150;
+ f.element('inventorySidebarButton').getBoundingClientRect=()=>({top:120,bottom:166});
+ f.element('appSidebar').getBoundingClientRect=()=>({left:0,right:88});
+ f.c.window.innerWidth=1200;f.c.window.innerHeight=800;
+ f.c.openInventoryFlyout();assert.equal(menu.hidden,true);
+ collapsed=true;f.c.openInventoryFlyout();assert.equal(menu.hidden,false);
+ f.c.closeInventoryFlyout();desktop=false;f.c.openInventoryFlyout();assert.equal(menu.hidden,true);
 });

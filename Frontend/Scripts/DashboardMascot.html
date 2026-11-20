@@ -1,0 +1,75 @@
+<script>
+  // Approved source artwork: the user's MASCOT Drive folder. Each file is shared for image display.
+  const dashboardDailyMascots = [{"id":"1DZIkmEWEym2yUuSz3SQVTeVB5RC_y6QC","mood":"happy"},{"id":"1m12gLMUqZpm0qxGFYRa6ESDqeR70PFo_","mood":"excited"},{"id":"1rXtA2BSOMAOgeTCDQsLslOztqLUC4JdR","mood":"confident"},{"id":"1y_9t13eiMlF35zEl4VcgHdEBLWLqFvpc","mood":"surprised"},{"id":"19gvGD0_fzdNHrJcAx8sI-sU3AovxM1nA","mood":"thinking"},{"id":"1LI3Zq8oWGlTtSBQifO5bwo49NXZeib5j","mood":"worried"},{"id":"1YspQq4CF-ZsDs9Rm_ahJmUi0E29_ALwf","mood":"sad"},{"id":"1M8H9C7XI8ba58qyfT9Ze6V2Oo-x13_ro","mood":"sleepy"},{"id":"1kUM3SJnCSqwc1brkdAXkC-FZul5cV96f","mood":"celebrating"},{"id":"1r7aKywZeXR_q1aI0jDzBWAETCl7T3ymH","mood":"angry"},{"id":"181GGtAKegSaiX758xqpXl8Ss9Ubs0QqE","mood":"embarrassed"},{"id":"17_yUJ8zMdTnbynsA4pZH2Sq7b-IjQdhW","mood":"confused"},{"id":"1RWtc1IU-8xCTqOHjOrMYK5GmOATmfhtT","mood":"proud"},{"id":"1gqEn8fbXz95_SQeY4O0TTYeL1a2rLL5B","mood":"relieved"},{"id":"14okIa9E4pu2FB_v-1xPBgw3unZ59KGFC","mood":"focused"},{"id":"1zBULw64n0cqu1Qq4CUnEolRKKRdqSUYV","mood":"curious"},{"id":"1AjVYFAA-upmcCd3Hq_6mrNsl4LvUGjb_","mood":"apologetic"},{"id":"1o55BePCHgWS18KHEL66Fc5LeeFDtA0zD","mood":"grateful"},{"id":"1FH7n53IHK7pmvkAsRqPI9D3L1mwl-nwt","mood":"frustrated"},{"id":"1MpLShUwkHQegvIp6XqMePT4N5d2LYbXP","mood":"determined"}];
+  let dashboardSalesEmptyTimer=null, dashboardSalesEmptyData=null;
+  const dashboardMascotImages=new Map();
+  const dashboardMascotArtwork=new Map();
+  const dashboardMascotRequests=new Map();
+  if(typeof dashboardInitialMascotArtwork!=='undefined')dashboardMascotArtwork.set(dashboardInitialMascotArtwork.id,dashboardInitialMascotArtwork.src);
+  function dashboardSalesMascotForDay(now=new Date()) {
+    const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{
+      timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'
+    }).formatToParts(now).map(part=>[part.type,part.value]));
+    const day=parts.year+'-'+parts.month+'-'+parts.day;
+    const elapsed=Math.round((Date.parse(day+'T00:00:00Z')-Date.UTC(2026,10,18))/86400000);
+    const index=((elapsed%dashboardDailyMascots.length)+dashboardDailyMascots.length)%dashboardDailyMascots.length;
+    const morning=Number(parts.hour)<12;
+    const mascot=morning?dashboardDailyMascots[index]:dashboardDailyMascots.find(item=>item.mood==='sad');
+    return {...mascot,day:day,morning:morning};
+  }
+  function dashboardSalesMascotUrl(mascot) {
+    return dashboardMascotArtwork.get(mascot.id)||'';
+  }
+  function preloadDashboardSalesMascot(now=new Date()) {
+    const mascot=dashboardSalesMascotForDay(now);
+    const src=dashboardSalesMascotUrl(mascot);
+    if(src && !dashboardMascotImages.has(mascot.id)) {
+      const image=new Image();image.referrerPolicy='no-referrer';image.src=dashboardSalesMascotUrl(mascot);
+      dashboardMascotImages.set(mascot.id,image);
+      if(dashboardMascotImages.size>2)dashboardMascotImages.delete(dashboardMascotImages.keys().next().value);
+    }
+    if(!src && !dashboardMascotRequests.has(mascot.id)) {
+      dashboardMascotRequests.set(mascot.id,true);
+      google.script.run.withSuccessHandler(artwork=>{
+        dashboardMascotRequests.delete(mascot.id);
+        if(artwork?.id!==mascot.id || !artwork.src?.startsWith('data:image/png;base64,'))return;
+        dashboardMascotArtwork.set(mascot.id,artwork.src);
+        if(dashboardMascotArtwork.size>2)dashboardMascotArtwork.delete(dashboardMascotArtwork.keys().next().value);
+        if(dashboardSalesEmptyData)renderDashboardSalesEmptyState(dashboardSalesEmptyData,true);
+      }).withFailureHandler(()=>{dashboardMascotRequests.delete(mascot.id);}).getDashboardMascotArtwork(mascot.id);
+    }
+    return mascot;
+  }
+  function renderDashboardSalesEmptyState(data,isEmpty,now=new Date()) {
+    const empty=document.getElementById('dashboardSalesEmpty'),show=!!data && !data.unavailable && isEmpty;
+    empty.hidden=!show;
+    document.getElementById('dashboardSalesPanel').classList.toggle('dashboard-graph-empty',show);
+    document.getElementById('dashboardGraphCaption').hidden=show;
+    if(!show) {
+      clearInterval(dashboardSalesEmptyTimer);dashboardSalesEmptyTimer=null;dashboardSalesEmptyData=null;
+      return;
+    }
+    dashboardSalesEmptyData=data;
+    const mascot=preloadDashboardSalesMascot(now),image=document.getElementById('dashboardSalesMascotImage');
+    const src=dashboardSalesMascotUrl(mascot);
+    if(image.dataset.mascotId!==mascot.id || image.src!==src) {
+      image.hidden=!src;image.dataset.mascotId=mascot.id;
+      image.alt='YourStyle '+mascot.mood+' cat mascot';
+      image.onerror=()=>{image.hidden=true;};
+      if(src)image.src=src;
+    }
+    const today=data.period?.start===mascot.day && data.period?.end===mascot.day;
+    const categories=[...document.querySelectorAll('[data-sales-chart-category]')].filter(input=>input.dataset.salesChartCategory!=='all');
+    const none=categories.length>0 && categories.every(input=>!input.checked);
+    document.getElementById('dashboardSalesEmptyHeading').textContent=none?'Choose a category to get started.':!today?'No sales in this period.':mascot.morning?'Let’s start with a little win.':'It’s a little quiet today…';
+    document.getElementById('dashboardSalesEmptyMessage').textContent=none?'Select at least one category in Filter.':!today?'Try another date range to explore your sales.':mascot.morning?'No sales yet today. The day is just getting started!':'No sales yet. We’re still cheering for your first little win.';
+    document.getElementById('dashboardSalesEmptyHint').textContent=none?'Your category selection is empty.':'The chart will appear once there are sales.';
+    if(dashboardSalesEmptyTimer===null)dashboardSalesEmptyTimer=setInterval(()=>{
+      if(document.hidden || document.getElementById('dashboardPage').style.display==='none' || !dashboardSalesEmptyData)return;
+      renderDashboardSalesEmptyState(dashboardSalesEmptyData,true);
+    },60000);
+  }
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden && dashboardSalesEmptyData)renderDashboardSalesEmptyState(dashboardSalesEmptyData,true);
+  });
+</script>

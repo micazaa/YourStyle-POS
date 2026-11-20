@@ -1,29 +1,45 @@
 <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
 <aside id="appSidebar" class="app-sidebar" style="display:none;" aria-label="Main navigation; press Enter or Space to expand or collapse" tabindex="0" onclick="if(!event.target.closest('button, a, input, select'))toggleSidebar()" onkeydown="if(event.target===this &amp;&amp; (event.key==='Enter'||event.key===' ')){event.preventDefault();toggleSidebar()}">
- <div class="sidebar-header"><div class="sidebar-profile"><button disabled type="button" id="sidebarAvatar" class="sidebar-avatar" title="Dashboard" aria-label="Open dashboard" onclick="navigateSidebar('dashboardPage')">--</button><div class="sidebar-label"><div id="sidebarEmployeeName" class="sidebar-name">Not Logged In</div><div id="sidebarEmployeeRole" class="sidebar-role">Employee</div></div></div></div>
+ <div class="sidebar-header"><div class="sidebar-profile"><button disabled type="button" id="sidebarAvatar" class="sidebar-avatar" title="Your profile" aria-label="Open account preview" onclick="openAccountProfile()">--</button><div class="sidebar-label"><div id="sidebarEmployeeName" class="sidebar-name">Not Logged In</div><div id="sidebarEmployeeRole" class="sidebar-role">Employee</div></div></div></div>
  <nav class="sidebar-menu">
+<div class="sidebar-navigation-label sidebar-label">Workspace</div>
+<button id="dashboardSidebarButton" type="button" class="sidebar-item" data-page="dashboardPage" title="Dashboard" aria-label="Dashboard" onclick="navigateSidebar('dashboardPage')" disabled><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span class="sidebar-label">Dashboard</span></button>
 <button type="button" class="sidebar-item" data-page="posPage" title="Cashier" aria-label="Cashier" onclick="navigateSidebar('posPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 4h2l3 12h11l2-8H6M9 20h1m7 0h1"/></svg><span class="sidebar-label">Cashier</span></button>
+<div class="sidebar-navigation-label sidebar-label">Stock and receiving</div>
 <div id="inventorySidebarGroup" onmouseenter="if(window.matchMedia('(hover: hover)').matches)openInventoryFlyout()" onmouseleave="scheduleInventoryFlyoutClose()" onfocusout="scheduleInventoryFlyoutClose(true)">
+<div class="inventory-nav-row">
 <button id="inventorySidebarButton" type="button" class="sidebar-item" data-page="inventoryPage" aria-label="Inventory navigation" aria-expanded="false" aria-controls="inventorySidebarFlyout" onclick="navigateSidebar('inventoryPage')" onkeydown="if(event.key==='ArrowDown'){event.preventDefault();openInventoryFlyout(true)}"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m3 7 9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/></svg><span class="sidebar-label">Inventory</span><svg class="sidebar-label inventory-flyout-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+<button id="inventoryNavToggle" type="button" class="btn btn-light inventory-nav-toggle" aria-label="Open Inventory, Deliveries and Supplier returns menu" aria-expanded="false" aria-controls="inventorySidebarFlyout" onclick="if(document.getElementById('inventorySidebarFlyout').hidden)openInventoryFlyout(true);else closeInventoryFlyout();">⌄</button></div>
 <nav id="inventorySidebarFlyout" class="inventory-sidebar-flyout" aria-label="Inventory pages" hidden onmouseenter="clearTimeout(inventoryFlyoutCloseTimer)" onfocusin="clearTimeout(inventoryFlyoutCloseTimer)">
  <button type="button" class="sidebar-subitem" data-inventory-tab="inventoryPage" aria-pressed="false" onclick="navigateSidebar('inventoryPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m3 7 9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/></svg>Inventory</button>
- <button type="button" class="sidebar-subitem" data-inventory-tab="deliveriesPage" aria-pressed="false" onclick="navigateSidebar('deliveriesPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h11v12H3zM14 9h4l3 4v4h-7M7 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4M17 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg>Delivery</button>
- <button type="button" class="sidebar-subitem" data-inventory-tab="supplierReturnsPage" aria-pressed="false" onclick="navigateSidebar('supplierReturnsPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 5 3 11l6 6M3 11h11a6 6 0 0 1 6 6v3"/></svg>Return</button>
+ <button type="button" class="sidebar-subitem" data-inventory-tab="deliveriesPage" aria-pressed="false" onclick="navigateSidebar('deliveriesPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h11v12H3zM14 9h4l3 4v4h-7M7 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4M17 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg>Deliveries</button>
+ <button type="button" class="sidebar-subitem" data-inventory-tab="supplierReturnsPage" aria-pressed="false" onclick="navigateSidebar('supplierReturnsPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 5 3 11l6 6M3 11h11a6 6 0 0 1 6 6v3"/></svg>Supplier returns</button>
 </nav></div>
-</nav><div class="mt-auto"><button id="accessManagementNav" hidden type="button" class="sidebar-item" title="Access Management" aria-label="Access Management" onclick="openAccessManagement()"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3l8 4v5c0 5-8 9-8 9s-8-4-8-9V7z"/><path d="M8 12l3 3 5-6"/></svg><span class="sidebar-label">Access Management</span></button><button type="button" class="sidebar-item text-danger" title="Logout" aria-label="Logout" onclick="triggerCleanLogout()"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 3H3v18h6M9 12h12l-4-4M21 12l-4 4"/></svg><span class="sidebar-label">Logout</span></button></div></aside>
+<button type="button" class="sidebar-item inventory-expanded-item" data-page="deliveriesPage" title="Delivery" aria-label="Delivery" onclick="navigateSidebar('deliveriesPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h11v12H3zM14 9h4l3 4v4h-7M7 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4M17 17a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg><span class="sidebar-label">Delivery</span></button>
+<button type="button" class="sidebar-item inventory-expanded-item" data-page="supplierReturnsPage" title="Return" aria-label="Return" onclick="navigateSidebar('supplierReturnsPage')"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5"/></svg><span class="sidebar-label">Return</span></button>
+</nav><div class="mt-auto sidebar-footer-actions"><button id="accessManagementNav" hidden type="button" class="sidebar-item" title="Access Management" aria-label="Access Management" onclick="openAccessManagement()"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3l8 4v5c0 5-8 9-8 9s-8-4-8-9V7z"/><path d="M8 12l3 3 5-6"/></svg><span class="sidebar-label">Access Management</span></button><button type="button" class="sidebar-item" title="Sign out" aria-label="Sign out" onclick="triggerCleanLogout()"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 3H3v18h6M9 12h12l-4-4M21 12l-4 4"/></svg><span class="sidebar-label">Sign out</span></button></div></aside>
+<style>
+ #appSidebar :is(.inventory-nav-toggle,.inventory-flyout-chevron) { display:none; }
+ @media(min-width:992px) {
+   .sidebar-collapsed #appSidebar .inventory-expanded-item { display:none; }
+   .sidebar-collapsed #appSidebar #inventorySidebarButton[data-inventory-active="true"] { color:var(--pink-ink);background:var(--pink-light);font-weight:600;border-color:var(--pink-main); }
+ }
+</style>
 <script>
 var inventoryFlyoutCloseTimer=null;
 function closeInventoryFlyout(){
  clearTimeout(inventoryFlyoutCloseTimer);
  document.getElementById('inventorySidebarFlyout').hidden=true;
  document.getElementById('inventorySidebarButton').setAttribute('aria-expanded','false');
+ document.getElementById('inventoryNavToggle').setAttribute('aria-expanded','false');
 }
 function openInventoryFlyout(focusFirst=false){
- if(!currentEmployee)return;
+ if(!currentEmployee || !window.matchMedia('(min-width: 992px)').matches || !document.body.classList.contains('sidebar-collapsed'))return;
  clearTimeout(inventoryFlyoutCloseTimer);
  const menu=document.getElementById('inventorySidebarFlyout'),button=document.getElementById('inventorySidebarButton');
  const rect=button.getBoundingClientRect(),sidebar=document.getElementById('appSidebar').getBoundingClientRect();
  menu.hidden=false;button.setAttribute('aria-expanded','true');
+ document.getElementById('inventoryNavToggle').setAttribute('aria-expanded','true');
  const desktop=window.matchMedia('(min-width: 992px)').matches;
  menu.style.left=Math.max(12,Math.min(desktop?sidebar.right+8:sidebar.left+12,window.innerWidth-menu.offsetWidth-12))+'px';
  menu.style.top=Math.max(12,Math.min(desktop?rect.top:rect.bottom+6,window.innerHeight-menu.offsetHeight-12))+'px';
@@ -50,12 +66,15 @@ function restoreSidebarLayout(){
 }
 function updateSidebarProfile(employee){
  if(!employee)return;
+ if(typeof preloadAccountProfile==='function')preloadAccountProfile(employee);
  document.getElementById('accessManagementNav').hidden=!canAuthorizeManagerActions(employee);
- document.getElementById('sidebarEmployeeName').textContent=employee.fullName;
+ document.getElementById('sidebarEmployeeName').textContent=employee.displayName || employee.fullName;
  document.getElementById('sidebarEmployeeRole').textContent=employeeIsOic(employee)?(currentSessionIsCashier?'OIC · Cashier':'OIC'):currentSessionIsCashier?(canAuthorizeManagerActions(employee)?'Manager · Cashier':'Cashier shift'):'Staff access';
  const avatar=document.getElementById('sidebarAvatar');
  avatar.textContent=String(employee.fullName||'').split(' ').map(n=>n[0]||'').join('').slice(0,2).toUpperCase();
- avatar.disabled=!dashboardPageIsAvailable();
+ if(typeof renderEmployeeAvatar==='function')renderEmployeeAvatar(avatar,employee.photo,employee.profileFullName || employee.fullName);
+ avatar.disabled=false;
+ document.getElementById('dashboardSidebarButton').disabled=!dashboardPageIsAvailable();
  updateCashierNavigationAvailability();
  updatePettyCashDisplay();
  restoreSidebarLayout();
@@ -84,7 +103,7 @@ function toggleSidebar(show){
    sidebar.classList.toggle('show',open);overlay.classList.toggle('show',open);document.getElementById('menuToggleBtn').setAttribute('aria-expanded',String(open));
  }
 }
-function activateMenu(button){document.querySelectorAll('.sidebar-item[data-page]').forEach(item=>item.classList.toggle('active',item===button));}
+function activateMenu(button){document.querySelectorAll('.sidebar-item[data-page]').forEach(item=>{item.classList.toggle('active',item===button);if(item===button)item.setAttribute('aria-current','page');else item.removeAttribute('aria-current');});}
 function cashierSessionIsActive(){return typeof currentEmployee==='undefined'||!currentEmployee||typeof currentSessionIsCashier==='undefined'||currentSessionIsCashier;}
 function cashierPageIsAvailable(){return !!currentEmployee&&(currentSessionIsCashier||hasManagerViewAccess());}
 function dashboardPageIsAvailable(){return !!currentEmployee&&document.body.dataset?.dashboardEnabled==='true';}
@@ -94,14 +113,15 @@ function showPage(pageId){
  const pages=['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'];if(!pages.includes(pageId)||(pageId==='dashboardPage'&&!dashboardPageIsAvailable()))return;
  if(pageId==='posPage'&&!cashierPageIsAvailable()){showNotificationToast('Start a cashier shift to open the POS.',true);return;}
  const mobileTitle=document.getElementById('mobilePageTitle');
- if(mobileTitle)mobileTitle.textContent={posPage:'Cashier',inventoryPage:'Inventory',deliveriesPage:'Delivery',supplierReturnsPage:'Return',dashboardPage:'Dashboard'}[pageId];
+ if(mobileTitle)mobileTitle.textContent={posPage:'Cashier',inventoryPage:'Inventory',deliveriesPage:'Deliveries',supplierReturnsPage:'Supplier returns',dashboardPage:'Dashboard'}[pageId];
  prioritizeWorkspacePage(pageId);
  pages.forEach(id=>{const page=document.getElementById(id);if(page)page.style.display=id===pageId?'block':'none';});
  localStorage.setItem('ys_pos_active_page',pageId);
  const inventoryWorkspace=pageId==='inventoryPage'||pageId==='deliveriesPage'||pageId==='supplierReturnsPage';
  if(inventoryWorkspace)localStorage.setItem('ys_pos_inventory_tab',pageId);
  document.querySelectorAll('[data-inventory-tab]').forEach(function(button){const active=button.dataset.inventoryTab===pageId;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
- activateMenu(document.querySelector('.sidebar-item[data-page="'+(inventoryWorkspace?'inventoryPage':pageId)+'"]'));
+ activateMenu(document.querySelector('.sidebar-item[data-page="'+pageId+'"]'));
+ document.getElementById('inventorySidebarButton').setAttribute('data-inventory-active',String(inventoryWorkspace));
  document.getElementById('inventoryWorkspaceNav').hidden=!inventoryWorkspace;
  if(pageId==='dashboardPage'){updateDashboardHeader();loadDashboardOverview();}
  if(pageId==='posPage'){updateCashierNavigationAvailability();if(currentSessionIsCashier)refreshInventory();else finishWorkspacePageLoad(pageId);}
@@ -144,6 +164,7 @@ function openInventoryWorkspace(){
       dashboardInventoryReminder='';
       clearSession();
       if(typeof resetAccessManagement==='function')resetAccessManagement();
+      if(typeof resetAccountProfile==='function')resetAccountProfile();
       document.getElementById('accessManagementNav').hidden=true;
       pageReadCache.clear();
       clearTransactionHistoryCache();

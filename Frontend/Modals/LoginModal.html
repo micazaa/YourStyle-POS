@@ -26,7 +26,7 @@
 
       <img
         src="https://drive.google.com/thumbnail?sz=w300&id=1MsTEIjhHkeq0i74lngukOKemXDoq_O7u"
-        alt="Logo"
+        alt="YourStyle"
         class="mb-3"
         style="
           height:64px;
@@ -37,9 +37,9 @@
         "
       >
 
-      <h4 class="fw-bold text-dark mb-1">
+      <h1 class="h4 fw-bold text-dark mb-1">
         Welcome back
-      </h4>
+      </h1>
 
       <p id="loginModeSubtitle" class="text-muted mb-0">
         Sign in to continue.
@@ -121,6 +121,7 @@
           <div class="login-petty-title">
             Petty Cash
           </div>
+          <p class="login-petty-hint mb-0">Confirm the change fund you receive at the start of this shift.</p>
 
         </div>
 
@@ -133,6 +134,7 @@
 
       </div>
 
+      <label class="form-label mt-3" for="startingPettyCashInput">Petty cash received (₱)</label>
       <div class="input-group login-petty-amount">
 
         <span class="input-group-text">
@@ -755,8 +757,8 @@ function unlockTerminalSession() {
     showPage(defaultWorkspacePage());saveSession();
   };
   const runner=secureScriptRun.withSuccessHandler(onLoginSuccess).withFailureHandler(failed);
-  if(cashierMode)runner.loginAndStartShift(name,pin,petty,loginPettyHandover&&loginPettyHandover.version);
-  else runner.verifyEmployee(name,pin);
+  if(cashierMode)runner.loginAndStartShift(name,pin,petty,loginPettyHandover&&loginPettyHandover.version,true);
+  else runner.verifyEmployee(name,pin,'',true);
 }
 
 /* ==========================================================

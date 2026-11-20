@@ -1,7 +1,8 @@
 <div id="posPage">
 
   <div class="container-fluid p-4" id="terminalWorkspace" style="display:none;">
-    <div class="d-flex align-items-center flex-wrap gap-2 flex-shrink-0">
+    <div class="workspace-heading d-flex align-items-center flex-wrap gap-2 flex-shrink-0">
+      <div class="me-auto"><h1 class="mb-1">Cashier</h1><p class="small text-muted mb-0">Scan items, review the cart, then take payment.</p></div>
       <button class="btn btn-outline-secondary btn-sm" onclick="toggleShiftReportModal(true, 'report')">Cashier Shift Report</button>
       <button id="cashierManagerReportBtn" class="btn btn-outline-pink btn-sm" style="display:none;" onclick="openManagerReportModal()">Manager Daily Report</button>
       <div class="cashier-petty-cash ms-auto" title="Petty cash received this shift">
@@ -17,9 +18,9 @@
       <div id="cashierItemsPane" class="col-md-4 h-100 d-flex flex-column">
         <div class="card-pane">
           <div class="pane-header">
-            <h6>Add Items</h6>
+            <h2 class="h6 mb-0">Add items</h2>
             <button id="cashierTransactionHistoryBtn" type="button" class="btn btn-link p-0 ms-1"
-              style="color:var(--pink-main);" aria-label="Open transaction history" title="Transaction history"
+              style="color:var(--pink-ink);" aria-label="Open transaction history" title="Transaction history"
               data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Transaction history"
               onclick="openTransactionHistoryModal()">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
@@ -31,13 +32,14 @@
           <fieldset class="pane-body" data-cashier-controls aria-label="Add items" disabled>
 
 
-            <div class="mb-4">
-              <label class="form-label" for="codeInput">Scan Barcode Here</label>
-              <input type="text" class="form-control" id="codeInput" placeholder="Ready to scan..." autocomplete="off">
+            <div class="mb-4 ys-scanner">
+              <label class="form-label" for="codeInput">Scan barcode</label>
+              <input type="text" class="form-control" id="codeInput" placeholder="Ready to scan…" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="barcodeScanHint">
+              <p id="barcodeScanHint" class="ys-scan-hint mb-0">Scan or enter a code, then press Enter.</p>
             </div>
 
             <div class="mb-4">
-              <label class="form-label" for="manualItemSearch">Or Search Item Manually</label>
+              <label class="form-label" for="manualItemSearch">Find a product</label>
               <div class="item-search-wrapper">
                 <input type="text" class="form-control" id="manualItemSearch" placeholder="Type item name, size, or category..." autocomplete="off" oninput="filterManualItemList()" onfocus="filterManualItemList()" onkeydown="handleManualSearchKeydown(event)">
                 <div id="manualItemResults" class="list-group position-absolute w-100"
@@ -47,12 +49,13 @@
               <button type="button" class="btn btn-dark-custom w-100 mt-2" onclick="addManualItem()">Add to Cart</button>
             </div>
 
-            <div class="p-3 rounded" style="background-color:#fdfafa; border: 1px solid var(--border-color);">
-              <h6 class="fw-bold mb-2" style="font-size:0.85rem; color: var(--pink-hover);">Custom Unlisted Item</h6>
-              <div class="mb-2"><input type="text" class="form-control form-control-sm" id="customName" placeholder="Item Name / Description">
+            <div class="ys-custom-item">
+              <h3>Custom unlisted item</h3>
+              <div class="mb-2"><label class="form-label" for="customName">Item description</label><input type="text" class="form-control form-control-sm" id="customName" placeholder="Item name or description">
               </div>
               <div class="row g-2 mb-2">
                 <div class="col-5">
+                  <label class="form-label" for="customSize">Size</label>
                   <select
                     id="customSize"
                     class="form-select form-select-sm"
@@ -82,7 +85,7 @@
                     hidden
                   >
                 </div>
-                <div class="col-7"><input type="number" class="form-control form-control-sm text-end" id="customPrice" placeholder="Price (₱)" min="0">
+                <div class="col-7"><label class="form-label" for="customPrice">Price (₱)</label><input type="number" class="form-control form-control-sm text-end" id="customPrice" placeholder="0.00" min="0" inputmode="decimal">
                 </div>
               </div>
               <button type="button" class="btn btn-outline-pink btn-sm w-100" onclick="addCustomItem()">Add Custom Item</button>
@@ -98,8 +101,8 @@
       <div id="cashierCartPane" class="col-md-8 h-100">
         <fieldset class="card-pane" data-cashier-controls aria-label="Shopping cart and checkout" disabled>
           <div class="pane-header">
-            <h6>Shopping Cart</h6>
-            <button class="btn btn-sm text-danger border-0 bg-transparent fw-semibold" onclick="clearCart()">Clear All</button>
+            <h2 class="h6 mb-0">Shopping cart</h2>
+            <button type="button" class="btn btn-sm btn-link text-danger" onclick="if(!cart.length||confirm('Clear this cart? All items and discounts in this unsaved sale will be removed.'))clearCart()">Clear cart</button>
           </div>
 
           <div class="pane-body p-0">
@@ -113,13 +116,13 @@
                   <th class="text-end" style="width:100px;">Price</th>
                   <th class="text-center" style="width:140px;">Discount</th>
                   <th class="text-end pe-3" style="width:110px;">Total</th>
-                  <th style="width:40px;"></th>
+                  <th style="width:40px;"><span class="visually-hidden">Remove</span></th>
                 </tr>
               </thead>
               <tbody id="cartRows"></tbody>
             </table>
             <div id="emptyCartMessage" class="text-center py-5 text-muted">
-              <p class="mb-0 small">The cart is currently empty.</p>
+              <p class="mb-1">Your cart is empty</p><p class="mb-0 small">Scan a barcode or find a product to start a sale.</p>
             </div>
           </div>
 
@@ -178,14 +181,12 @@
 
     </div>
   </div>
-  <div id="successModal"
-    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center;">
-    <div
-      style="background: white; padding: 30px; border-radius: 8px; text-align: center; max-width: 400px; width: 90%;">
-      <h2 style="color: #28a745; margin-top: 0;">Transaction Complete!</h2>
+  <div id="successModal" class="generic-overlay-blur" style="display:none;">
+    <div class="custom-popup-card ys-success-card">
+      <h2>Transaction complete</h2>
       <p>Receipt ID: <strong id="successReceiptId"></strong></p>
-      <p id="successChangeContainer" style="display: none; font-size: 1.2em;">Change Due:
-        <strong id="successChangeGiven" style="color: #d9534f;"></strong></p>
+      <p id="successChangeContainer" class="ys-success-change" style="display:none;">Change due:
+        <strong id="successChangeGiven"></strong></p>
       <button
         type="button"
         class="btn btn-pink mt-3 px-4"

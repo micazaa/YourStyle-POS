@@ -1,0 +1,368 @@
+<div id="accountProfileModal" class="generic-overlay-blur" style="display:none;z-index:10006">
+  <style>
+    #accountProfileModal { --ys-surface:var(--card-bg); --ys-soft:var(--pink-light); --ys-text:var(--text-dark); --ys-muted:var(--text-gray); --ys-line:var(--border-color); --ys-pink:var(--pink-main); --ys-ink:var(--pink-ink); font:400 15px/1.5 Arial,sans-serif; color:var(--ys-text); padding:16px; }
+    #accountProfileModal * { box-sizing:border-box; }
+    #accountProfileModal [hidden] { display:none !important; }
+    #accountProfileModal button, #accountProfileModal input, #accountProfileModal textarea { font:inherit; }
+    #accountProfileModal button { color:inherit; }
+    #accountProfileModal .ys-launcher { display:flex; justify-content:flex-end; margin:0 0 16px; padding-right:96px; }
+    #accountProfileModal .ys-avatar-trigger { width:46px; height:46px; border:0; border-radius:50%; background:var(--ys-pink); color:var(--ys-ink); font-size:19px; padding:0; overflow:hidden; }
+    #accountProfileModal .ys-window { background:var(--ys-surface); border:1px solid var(--ys-line); border-radius:24px; box-shadow:0 12px 38px light-dark(#36273012,#00000035); overflow:hidden; }
+    #accountProfileModal .ys-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 22px; }
+    #accountProfileModal h2 { margin:0; font-size:23px; line-height:1.25; font-weight:500; letter-spacing:-.5px; }
+    #accountProfileModal h3 { margin:0; font-size:22px; font-weight:500; overflow-wrap:anywhere; }
+    #accountProfileModal .ys-actions { display:flex; gap:6px; align-items:center; }
+    #accountProfileModal .ys-icon { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; padding:0; border:1px solid var(--ys-line); border-radius:12px; background:var(--ys-surface); flex-shrink:0; }
+    #accountProfileModal .ys-icon svg { width:19px; height:19px; }
+    #accountProfileModal .ys-quiet { border-color:transparent; }
+    #accountProfileModal .ys-body { display:grid; grid-template-columns:1.8fr 1fr; border-top:1px solid var(--ys-line); border-bottom:1px solid var(--ys-line); }
+    #accountProfileModal .ys-fields { padding:22px; display:flex; flex-direction:column; gap:16px; min-width:0; }
+    #accountProfileModal label { display:flex; flex-direction:column; gap:6px; color:var(--ys-muted); }
+    #accountProfileModal input:not([type=file]):not([type=checkbox]), #accountProfileModal textarea { width:100%; min-width:0; min-height:46px; padding:10px 13px; color:var(--ys-text); background:var(--ys-surface); border:1px solid var(--ys-line); border-radius:11px; font-size:16px; box-shadow:0 2px 3px light-dark(#36273004,#00000015); }
+    #accountProfileModal textarea { resize:vertical; }
+    #accountProfileModal input[readonly] { color:var(--ys-muted); background:var(--ys-soft); }
+    #accountProfileModal .ys-account-facts { width:100%; text-align:left; border-top:1px solid var(--ys-line); padding-top:14px; margin-top:16px; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; }
+    #accountProfileModal .ys-section-label { margin:0 0 15px; color:var(--ys-muted); font-size:13px; }
+    #accountProfileModal dl { margin:0; display:grid; gap:16px; }
+    #accountProfileModal dt { color:var(--ys-muted); font-size:13px; margin-bottom:3px; }
+    #accountProfileModal dd { margin:0; overflow-wrap:anywhere; }
+    #accountProfileModal .ys-pair { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; }
+    #accountProfileModal .ys-form-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; }
+    #accountProfileModal .ys-full { grid-column:1/-1; }
+    #accountProfileModal .ys-stack { display:grid; gap:18px; }
+    #accountProfileModal .ys-preview { display:flex; flex-direction:column; align-items:center; text-align:center; justify-content:flex-start; padding:22px 18px; border-left:1px solid var(--ys-line); min-width:0; }
+    #accountProfileModal .ys-photo-wrap { position:relative; margin-bottom:12px; }
+    #accountProfileModal .ys-photo { height:104px; width:104px; padding:0; border:1px solid var(--ys-line); background:var(--ys-pink); color:var(--ys-ink); border-radius:50%; display:flex; justify-content:center; align-items:center; font-size:34px; overflow:hidden; }
+    #accountProfileModal [data-mode="preview"] .ys-photo:enabled { cursor:zoom-in; }
+    #accountProfileModal .ys-photo img, #accountProfileModal .ys-avatar-trigger img { width:100%; height:100%; object-fit:cover; }
+    #accountProfileModal .ys-photo-edit { position:absolute; right:-4px; bottom:0; border-radius:50%; box-shadow:0 2px 6px light-dark(#3627300d,#00000033); }
+    #accountProfileModal .ys-username { margin:4px 0 0; color:var(--ys-muted); overflow-wrap:anywhere; max-width:100%; font-size:13px; }
+    #accountProfileModal .ys-text-button { border:0; background:transparent; padding:10px; color:var(--ys-muted); font-size:13px; text-decoration:underline; }
+    #accountProfileModal .ys-footer { padding:14px 22px; display:flex; justify-content:space-between; align-items:center; gap:16px; }
+    #accountProfileModal .ys-footer-note { color:var(--ys-muted); font-size:13px; margin:0; }
+    #accountProfileModal .ys-button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 17px; border:1px solid var(--ys-line); border-radius:11px; background:var(--ys-surface); white-space:nowrap; }
+    #accountProfileModal .ys-primary { background:var(--ys-pink); color:var(--ys-ink); border-color:var(--ys-pink); }
+    #accountProfileModal .ys-footer-buttons { display:flex; gap:9px; }
+    #accountProfileModal .ys-error { color:light-dark(#a52d42,#ffb4c1); margin:0; font-size:13px; }
+    #accountProfileModal .ys-security { width:100%; border-top:1px solid var(--ys-line); padding-top:14px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    #accountProfileModal .ys-security .ys-button { white-space:normal; }
+    #accountProfileModal .ys-security p { margin:0; }
+    #accountProfileModal .ys-password-mask { letter-spacing:2px; }
+    #accountProfileModal .ys-small { font-size:13px; color:var(--ys-muted); }
+    #accountProfileModal .ys-check { display:flex; flex-direction:row; align-items:center; gap:9px; min-height:44px; color:var(--ys-text); }
+    #accountProfileModal .ys-check input { width:17px; height:17px; accent-color:var(--ys-ink); }
+    #accountProfileModal .ys-emergency { border-top:1px solid var(--ys-line); padding-top:17px; }
+    #accountProfileModal .ys-emergency summary { min-height:36px; color:var(--ys-muted); font-size:13px; }
+    #accountProfileModal .ys-emergency[open] summary { margin-bottom:12px; }
+    @media(max-width:560px) {
+      #accountProfileModal { padding:16px 0; }
+      #accountProfileModal .ys-head { padding:18px; }
+      #accountProfileModal h2 { font-size:21px; }
+      #accountProfileModal .ys-body { grid-template-columns:1fr; }
+      #accountProfileModal .ys-preview { grid-row:1; display:grid; grid-template-columns:72px minmax(0,1fr); align-items:center; text-align:left; gap:4px 16px; border-left:0; border-bottom:1px solid var(--ys-line); padding:18px; }
+      #accountProfileModal .ys-photo { width:72px; height:72px; font-size:26px; }
+      #accountProfileModal .ys-photo-wrap { grid-row:1/3; margin-bottom:0; }
+      #accountProfileModal [data-preview-name] { align-self:end; }
+      #accountProfileModal .ys-username { align-self:start; }
+      #accountProfileModal .ys-account-facts { grid-column:1/-1; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:12px; padding-top:12px; }
+      #accountProfileModal .ys-account-facts .ys-full { grid-column:auto; }
+      #accountProfileModal .ys-text-button { grid-column:1/-1; }
+      #accountProfileModal .ys-fields { padding:18px; gap:16px; }
+      #accountProfileModal .ys-footer { padding:18px; flex-wrap:wrap; }
+      #accountProfileModal .ys-footer-buttons { margin-left:auto; }
+    }
+    @media(max-width:380px) {
+      #accountProfileModal .ys-form-grid { grid-template-columns:minmax(0,1fr); }
+      #accountProfileModal .ys-security { flex-wrap:wrap; }
+    }
+  </style>
+
+<style>
+  #accountProfileModal .ys-window { width:min(800px,96%); max-width:800px; padding:0 !important; display:flex; flex-direction:column; }
+  #accountProfileModal .ys-window > form { overflow:auto; min-height:0; }
+  #accountProfileModal .ys-head, #accountProfileModal .ys-footer { flex-shrink:0; background:var(--card-bg); }
+  #accountProfileModal .ys-footer { position:sticky; bottom:0; z-index:1; }
+  #accountProfileModal .ys-error { color:var(--bs-danger); }
+  #accountProfileModal .ys-loading { padding:28px; text-align:center; }
+  #accountProfileModal .ys-icon:disabled, #accountProfileModal .ys-button:disabled { opacity:.6; }
+  #sidebarAvatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+  #sidebarAvatar { border:1px solid var(--border-color); overflow:hidden; }
+  @media(max-width:767px) { body.ys-retail #accountProfileModal > .ys-window { padding:0 !important; } }
+</style>
+  <section class="ys-window custom-popup-card" aria-label="Account preview">
+    <header class="ys-head">
+      <h2 data-heading>Account preview</h2>
+      <div class="ys-actions">
+        <button class="ys-icon " type="button" data-action="edit" aria-label="Edit your profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m16 3 5 5-13 13H3v-5zM14 5l5 5"/></svg></button>
+        <button class="ys-icon ys-quiet " type="button" data-action="close" aria-label="Close account preview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </div>
+    </header>
+    <div class="ys-loading" data-loading hidden role="status" aria-live="polite"></div>
+    <form data-form novalidate autocomplete="off">
+      <div class="ys-body">
+        <div class="ys-fields">
+          <div data-readonly>
+            <dl class="ys-pair">
+              <div class="ys-full"><dt>Full name</dt><dd data-value="fullName">—</dd></div>
+              <div class="ys-full"><dt>Email</dt><dd data-value="email">—</dd></div>
+              <div><dt>Birthday</dt><dd data-value="birthday">Not added</dd></div>
+              <div><dt>Contact number</dt><dd data-value="contact">Not added</dd></div>
+              <div class="ys-full"><dt>Address</dt><dd data-value="address">Not added</dd></div>
+              <div class="ys-full" data-emergency-value hidden><dt>Emergency contact</dt><dd data-value="emergency"></dd></div>
+            </dl>
+          </div>
+          <div class="ys-form-grid" data-edit-fields hidden>
+            <label>Full name<input name="fullName" maxlength="100" value="" autocomplete="name" required disabled></label>
+            <label>Display name<input name="displayName" maxlength="60" value="" autocomplete="nickname" required disabled></label>
+            <label>Birthday<input name="birthday" type="date" max="2026-11-18" autocomplete="bday" disabled></label>
+            <label>Contact number<input name="contact" type="tel" maxlength="30" autocomplete="tel" placeholder="09XX XXX XXXX" disabled></label>
+            <label class="ys-full">Email (optional)<input name="email" type="email" maxlength="120" value="" autocomplete="email" disabled></label>
+            <label class="ys-full">Address<textarea name="address" rows="2" maxlength="300" autocomplete="street-address" placeholder="Street, barangay, city / municipality, province" disabled></textarea></label>
+            <details class="ys-emergency ys-full">
+              <summary class="">Emergency contact (optional)</summary>
+              <div class="ys-form-grid">
+                <label class="ys-full">Contact name<input name="emergencyName" maxlength="100" autocomplete="off" disabled></label>
+                <label>Relationship<input name="relationship" maxlength="40" placeholder="e.g. Sister" autocomplete="off" disabled></label>
+                <label>Contact number<input name="emergencyPhone" type="tel" maxlength="30" autocomplete="off" disabled></label>
+              </div>
+            </details>
+          </div>
+          <div class="ys-stack" data-password-fields hidden>
+            <p class="ys-section-label">Enter your current password to set a new one.</p>
+            <label>Current password<input name="currentPassword" type="password" autocomplete="current-password" required disabled></label>
+            <label>New password<input name="newPassword" type="password" autocomplete="new-password" minlength="12" aria-describedby="ys-password-hint" required disabled></label>
+            <p id="ys-password-hint" class="ys-section-label" style="margin: -10px 0 0">Use at least 12 characters.</p>
+            <label>Confirm new password<input name="confirmPassword" type="password" autocomplete="new-password" required disabled></label>
+            <label class="ys-check "><input type="checkbox" name="showPassword" disabled>Show passwords</label>
+          </div>
+          <div class="ys-security" data-security>
+            <div><p class="ys-small">Password</p><p class="ys-password-mask" aria-label="Password hidden">••••••••••••</p></div>
+            <button type="button" class="ys-button " data-action="password">Change password</button>
+          </div>
+          <p class="ys-error" role="alert" data-error hidden></p>
+        </div>
+        <aside class="ys-preview" aria-label="Live profile preview">
+          <div class="ys-photo-wrap">
+            <button type="button" class="ys-photo" data-photo data-action="view-photo" aria-label="View profile photo" disabled>SL</button>
+            <button class="ys-icon ys-photo-edit " type="button" data-action="photo" aria-label="Change profile photo" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m16 3 5 5-13 13H3v-5zM14 5l5 5"/></svg></button>
+          </div>
+          <h3 data-preview-name>—</h3>
+          <p class="ys-username" aria-label="Username: —">—</p>
+          <button class="ys-text-button " type="button" data-action="remove-photo" hidden>Remove photo</button>
+          <input type="file" name="photo" accept="image/png,image/jpeg,image/webp" aria-label="Choose profile photo" hidden>
+          <dl class="ys-account-facts" aria-label="Employment and account details" data-account>
+            <div><dt>Employee ID</dt><dd>—</dd></div>
+            <div><dt>Role</dt><dd>—</dd></div>
+            <div class="ys-full"><dt>Date hired</dt><dd><span data-date-hired>Not added</span></dd></div>
+          </dl>
+        </aside>
+      </div>
+      <footer class="ys-footer">
+        <p class="ys-footer-note" aria-live="polite" data-status></p>
+        <div class="ys-footer-buttons" data-edit-actions hidden>
+          <button class="ys-button " type="button" data-action="cancel">Cancel</button>
+          <button class="ys-button ys-primary " type="submit" data-submit>Save changes</button>
+        </div>
+        <button class="ys-button " type="button" data-action="done">Done</button>
+      </footer>
+    </form>
+  </section>
+</div>
+<script>
+  let accountProfileState={owner:'',profile:null,mode:'preview',busy:false,loading:false,photo:'',request:0};
+  const accountProfileRoot=document.getElementById('accountProfileModal');
+  const accountProfileFind=selector=>accountProfileRoot.querySelector(selector);
+  const accountProfileInput=name=>accountProfileFind('[name="'+name+'"]');
+  const accountProfileKeys=['fullName','displayName','email','birthday','contact','address','emergencyName','relationship','emergencyPhone'];
+  const accountPasswordKeys=['currentPassword','newPassword','confirmPassword'];
+  function renderEmployeeAvatar(element,photo,name) {
+    element.replaceChildren();
+    if(photo && /^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/=]+$/.test(photo) && photo.length<=40000) {
+      const image=document.createElement('img');image.alt='';image.src=photo;element.appendChild(image);return;
+    }
+    const words=String(name || '').trim().split(/\s+/).filter(Boolean);
+    element.textContent=(words.length>1?words[0][0]+words.at(-1)[0]:words[0]?.[0] || 'YS').toUpperCase();
+  }
+  function accountProfileDate(value) {
+    if(!value)return 'Not added';
+    const date=new Date(value.length===10?value+'T00:00:00+08:00':value);
+    if(isNaN(date.getTime()))return 'Not added';
+    return new Intl.DateTimeFormat('en-PH',{year:'numeric',month:'long',day:'numeric',timeZone:'Asia/Manila'}).format(date);
+  }
+  function clearAccountPasswords() {
+    accountPasswordKeys.forEach(key=>{accountProfileInput(key).value='';accountProfileInput(key).type='password';});
+    accountProfileInput('showPassword').checked=false;
+  }
+  function accountProfileError(message) {
+    const error=accountProfileFind('[data-error]');error.textContent=message || '';error.hidden=!message;
+  }
+  function fillAccountProfile() {
+    const profile=accountProfileState.profile;
+    if(!profile)return;
+    accountProfileKeys.forEach(key=>accountProfileInput(key).value=profile[key] || '');
+    accountProfileState.photo=profile.photo || '';
+    accountProfileState.photoChanged=false;
+    accountProfileInput('photo').value='';
+  }
+  function syncAccountIdentity(profile) {
+    if(!currentEmployee || currentEmployee.dashboardToken!==accountProfileState.owner)return;
+    currentEmployee.displayName=profile.displayName;
+    currentEmployee.profileFullName=profile.fullName;
+    currentEmployee.photo=profile.photo;
+    updateSidebarProfile(currentEmployee);
+    if(typeof updateDashboardHeader==='function')updateDashboardHeader();
+    // Store the normal session identity only; birthday, address and contact details stay in memory.
+    saveSession();
+  }
+  function renderAccountProfile() {
+    const state=accountProfileState, profile=state.profile, editing=state.mode==='edit', password=state.mode==='password', partial=!!profile?.partial;
+    const card=accountProfileFind('.ys-window');card.dataset.mode=state.mode;
+    const heading=password?'Change password':editing?'Edit your profile':'Account preview';
+    accountProfileFind('[data-heading]').textContent=heading;card.setAttribute('aria-label',heading);
+    const loading=accountProfileFind('[data-loading]');loading.hidden=!state.loading || !!profile;
+    if(state.loading)loading.innerHTML=loadingIndicator('Loading your profile…');
+    accountProfileFind('[data-form]').hidden=state.loading && !profile;
+    accountProfileFind('[data-form]').setAttribute('aria-busy',String(!!state.loading));
+    accountProfileFind('[data-action="edit"]').hidden=state.mode!=='preview' || !profile;
+    if(!profile)return;
+    accountProfileFind('[data-readonly]').hidden=state.mode!=='preview';
+    accountProfileFind('[data-edit-fields]').hidden=!editing;
+    accountProfileFind('[data-password-fields]').hidden=!password;
+    accountProfileFind('[data-security]').hidden=password;
+    accountProfileFind('[data-edit-actions]').hidden=state.mode==='preview';
+    accountProfileFind('[data-action="done"]').hidden=state.mode!=='preview';
+    accountProfileFind('[data-submit]').textContent=state.busy?'Saving…':password?'Update password':'Save changes';
+    accountProfileFind('[data-action="photo"]').hidden=!editing;
+    accountProfileFind('[data-action="remove-photo"]').hidden=!(editing && state.photo);
+    accountProfileFind('[data-preview-name]').textContent=editing?accountProfileInput('displayName').value.trim() || 'Your name':profile.displayName;
+    const username=accountProfileFind('.ys-username');username.textContent=profile.username;username.setAttribute('aria-label','Username: '+profile.username);
+    const facts=accountProfileFind('[data-account]').querySelectorAll('dd');facts[0].textContent=profile.employeeId;facts[1].textContent=profile.role;
+    const pendingValue=state.error?'Unavailable':'Loading…';
+    accountProfileFind('[data-date-hired]').textContent=partial?pendingValue:accountProfileDate(profile.dateHired);
+    for(const key of ['fullName','email','birthday','contact','address'])accountProfileFind('[data-value="'+key+'"]').textContent=partial && key!=='fullName'?pendingValue:key==='birthday'?accountProfileDate(profile[key]):profile[key] || 'Not added';
+    const emergency=[profile.emergencyName,profile.relationship,profile.emergencyPhone].filter(Boolean).join(' · ');
+    accountProfileFind('[data-value="emergency"]').textContent=emergency;accountProfileFind('[data-emergency-value]').hidden=!emergency;
+    accountProfileKeys.forEach(key=>accountProfileInput(key).disabled=!editing || state.busy);
+    [...accountPasswordKeys,'showPassword'].forEach(key=>accountProfileInput(key).disabled=!password || state.busy);
+    accountProfileRoot.querySelectorAll('button').forEach(button=>button.disabled=state.busy || partial && !['close','done'].includes(button.dataset.action));
+    accountProfileInput('photo').disabled=state.busy;
+    accountProfileFind('[data-status]').textContent=partial?(state.error?'Close and reopen to retry.':'Loading personal details…'):profile.updatedAt?'Last updated: '+accountProfileDate(profile.updatedAt):'';
+    const photo=accountProfileFind('[data-photo]');
+    renderEmployeeAvatar(photo,editing?state.photo:profile.photo,editing?accountProfileInput('fullName').value:profile.fullName);
+    photo.disabled=state.busy || state.mode!=='preview' || !photo.querySelector('img');
+    photo.setAttribute('aria-label',photo.disabled?'Profile photo':'View profile photo');
+  }
+  function openAccountProfilePhoto() {
+    if(accountProfileState.mode!=='preview' || accountProfileState.busy || !currentEmployee || currentEmployee.dashboardToken!==accountProfileState.owner)return;
+    const image=accountProfileFind('[data-photo]').querySelector('img');
+    if(!image)return;
+    openInventoryImageViewer({name:accountProfileState.profile.fullName || accountProfileState.profile.displayName,imageUrl:image.src});
+    const viewerImage=document.getElementById('inventoryViewerImage');
+    viewerImage.style.width='min(420px,80vw)';
+    document.getElementById('inventoryImageViewer').addEventListener('close',()=>viewerImage.removeAttribute('src'),{once:true});
+  }
+  function preloadAccountProfile(employee=currentEmployee) {
+    if(!employee || !employee.dashboardToken)return;
+    const prefetched=employee.accountProfile;
+    // Consume before saveSession serializes currentEmployee; personal details remain memory-only.
+    delete employee.accountProfile;
+    const owner=employee.dashboardToken;
+    if(accountProfileState.owner!==owner){resetAccountProfile();accountProfileState.owner=owner;}
+    if(prefetched && String(prefetched.employeeId)===String(employee.employeeId) && prefetched.username===employee.username) {
+      ++accountProfileState.request;
+      accountProfileState.profile=prefetched;accountProfileState.loading=false;accountProfileState.stale=false;accountProfileState.error='';
+      fillAccountProfile();
+      if(accountProfileRoot.style.display!=='none')renderAccountProfile();
+      return;
+    }
+    if(accountProfileState.profile && !accountProfileState.profile.partial || accountProfileState.loading)return;
+    accountProfileState.profile={partial:true,fullName:employee.profileFullName || employee.fullName || '',
+      displayName:employee.displayName || String(employee.fullName || '').trim().split(/\s+/)[0],
+      employeeId:String(employee.employeeId || ''),username:employee.username || '',role:employee.role || '',photo:employee.photo || ''};
+    accountProfileState.loading=true;accountProfileState.error='';
+    const request=++accountProfileState.request;
+    secureScriptRun.withSuccessHandler(result=>{
+      if(request!==accountProfileState.request || currentEmployee?.dashboardToken!==owner)return;
+      accountProfileState.loading=false;accountProfileState.stale=false;accountProfileState.error='';accountProfileState.profile=result.profile;fillAccountProfile();
+      if(accountProfileRoot.style.display!=='none')renderAccountProfile();
+      syncAccountIdentity(result.profile);
+    }).withFailureHandler(error=>{
+      if(request!==accountProfileState.request || currentEmployee?.dashboardToken!==owner)return;
+      accountProfileState.loading=false;accountProfileState.error=error.message || 'Could not load personal details.';
+      if(accountProfileRoot.style.display!=='none'){renderAccountProfile();accountProfileError(accountProfileState.error);}
+    }).getMyProfile();
+  }
+  function openAccountProfile() {
+    if(!currentEmployee)return;
+    preloadAccountProfile(currentEmployee);
+    accountProfileState.mode='preview';clearAccountPasswords();accountProfileError(accountProfileState.error || '');
+    accountProfileRoot.style.display='flex';fillAccountProfile();renderAccountProfile();
+  }
+  function closeAccountProfile() {
+    if(accountProfileState.busy)return;
+    accountProfileState.mode='preview';
+    clearAccountPasswords();fillAccountProfile();accountProfileError('');accountProfileRoot.style.display='none';
+    if(accountProfileState.stale)accountProfileState.profile=null;
+  }
+  function resetAccountProfile() {
+    const request=accountProfileState.request+1;
+    clearAccountPasswords();accountProfileRoot.querySelectorAll('input,textarea').forEach(input=>{if(input.type!=='checkbox')input.value='';});
+    accountProfileRoot.style.display='none';accountProfileFind('[data-photo]').replaceChildren();
+    accountProfileRoot.querySelectorAll('[data-value],[data-preview-name],.ys-username,[data-date-hired]').forEach(element=>element.textContent='');
+    const facts=accountProfileFind('[data-account]').querySelectorAll('dd');facts[0].textContent='';facts[1].textContent='';accountProfileError('');
+    accountProfileState={owner:'',profile:null,mode:'preview',busy:false,loading:false,photo:'',request:request};
+  }
+  accountProfileRoot.addEventListener('click',event=>{
+    const action=event.target.closest('[data-action]')?.dataset.action;
+    if(!action || accountProfileState.busy)return;
+    if(action==='close' || action==='done'){closeAccountProfile();return;}
+    if(action==='edit'){accountProfileState.mode='edit';fillAccountProfile();accountProfileError('');renderAccountProfile();accountProfileInput('fullName').focus();}
+    if(action==='cancel'){accountProfileState.mode='preview';clearAccountPasswords();fillAccountProfile();accountProfileError('');renderAccountProfile();accountProfileFind('[data-action="edit"]').focus();}
+    if(action==='password'){accountProfileState.mode='password';clearAccountPasswords();accountProfileError('');renderAccountProfile();accountProfileInput('currentPassword').focus();}
+    if(action==='photo')accountProfileInput('photo').click();
+    if(action==='view-photo')openAccountProfilePhoto();
+    if(action==='remove-photo'){accountProfileState.photo='';accountProfileState.photoChanged=true;accountProfileInput('photo').value='';renderAccountProfile();}
+  });
+  accountProfileRoot.addEventListener('keydown',event=>{
+    if(event.key==='Escape'){event.preventDefault();closeAccountProfile();}
+  });
+  accountProfileFind('[data-form]').addEventListener('input',event=>{if(event.target.type!=='file')renderAccountProfile();});
+  accountProfileInput('showPassword').addEventListener('change',()=>accountPasswordKeys.forEach(key=>accountProfileInput(key).type=accountProfileInput('showPassword').checked?'text':'password'));
+  accountProfileInput('birthday').max=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  accountProfileInput('photo').addEventListener('change',()=>{
+    const file=accountProfileInput('photo').files?.[0];if(!file)return;
+    if(!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size>5*1024*1024)return accountProfileError('Choose a JPG, PNG or WebP image under 5 MB.');
+    const owner=accountProfileState.owner,request=accountProfileState.request,reader=new FileReader();
+    reader.onload=()=>{
+      const image=new Image();
+      image.onload=()=>{
+        if(accountProfileState.owner!==owner || accountProfileState.request!==request || accountProfileState.mode!=='edit')return;
+        const canvas=document.createElement('canvas');canvas.width=192;canvas.height=192;
+        const context=canvas.getContext('2d'),side=Math.min(image.width,image.height);
+        context.fillStyle='#fff';context.fillRect(0,0,192,192);context.drawImage(image,(image.width-side)/2,(image.height-side)/2,side,side,0,0,192,192);
+        const photo=canvas.toDataURL('image/jpeg',.78);
+        if(photo.length>40000)return accountProfileError('Choose a simpler or smaller profile photo.');
+        accountProfileState.photo=photo;accountProfileState.photoChanged=true;accountProfileError('');renderAccountProfile();
+      };
+      image.onerror=()=>accountProfileError('This photo could not be opened. Try another image.');image.src=reader.result;
+    };
+    reader.onerror=()=>accountProfileError('This photo could not be opened. Try another image.');reader.readAsDataURL(file);
+  });
+  accountProfileFind('[data-form]').addEventListener('submit',event=>{
+    event.preventDefault();const state=accountProfileState;
+    if(state.busy || !state.profile || !currentEmployee || currentEmployee.dashboardToken!==state.owner)return;
+    const password=state.mode==='password';if(!password && state.mode!=='edit')return;
+    const form=accountProfileFind('[data-form]');accountProfileError('');
+    if(!form.reportValidity())return;
+    if(password && accountProfileInput('newPassword').value!==accountProfileInput('confirmPassword').value)return accountProfileError('The new passwords do not match.');
+    const payload=password?Object.fromEntries(accountPasswordKeys.map(key=>[key,accountProfileInput(key).value])):
+      {...Object.fromEntries(accountProfileKeys.map(key=>[key,accountProfileInput(key).value.trim()])),photo:state.photo,photoChanged:!!state.photoChanged,version:state.profile.version};
+    state.busy=true;renderAccountProfile();
+    const runner=secureScriptRun.withSuccessHandler(result=>{
+      state.busy=false;clearAccountPasswords();
+      if(password){resetAccountProfile();completeCleanLogout();showNotificationToast('Password changed. Sign in with your new password.');return;}
+      state.profile=result.profile;state.stale=false;state.mode='preview';fillAccountProfile();renderAccountProfile();syncAccountIdentity(result.profile);showNotificationToast('Profile updated.');
+    }).withFailureHandler(error=>{state.busy=false;state.stale=/profile changed/i.test(error.message || '');clearAccountPasswords();renderAccountProfile();accountProfileError(error.message || 'Unable to save changes.');});
+    if(password)runner.changeMyPassword(payload);else runner.saveMyProfile(payload);
+  });
+</script>

@@ -13,9 +13,7 @@
 
       <div>
 
-        <h4 class="fw-bold mb-1">
-          Inventory Master List
-        </h4>
+        <h1 class="fw-bold mb-1">Inventory</h1>
         <p class="small text-muted mb-0">View products, stock levels, and availability.</p>
 
       </div>
@@ -62,12 +60,14 @@
 
     <div class="card border-0 shadow-sm mb-3">
       <div class="workspace-filters card-body d-flex flex-wrap gap-2">
-        <select id="inventoryCategoryFilter" class="form-select" style="width:180px;" aria-label="Inventory category" onchange="filterInventoryTable()">
-          <option value="">All Category</option><option value="YOURFINDS">YOURFINDS </option><option value="PINS">PINS</option><option value="OTHERS">OTHERS</option><option value="WHOLESALE">Wholesale</option>
+        <div class="ys-filter-field" style="width:180px;"><label for="inventoryCategoryFilter">Category</label><select id="inventoryCategoryFilter" class="form-select" aria-label="Inventory category" onchange="filterInventoryTable()">
+          <option value="">All categories</option><option value="YOURFINDS">YourFinds</option><option value="PINS">Pins</option><option value="OTHERS">Others</option><option value="WHOLESALE">Wholesale</option>
         </select>
-        <div class="dropdown" style="width:200px;">
+        </div>
+        <div class="dropdown ys-filter-field" style="width:200px;">
+          <label for="inventoryFiltersButton">Status and stock</label>
           <button id="inventoryFiltersButton" type="button" class="form-select text-start" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" aria-label="Inventory filters">Filters (2)</button>
-          <div class="dropdown-menu p-3" aria-labelledby="inventoryFiltersButton" style="min-width:260px;max-height:65vh;overflow-y:auto;" onchange="filterInventoryTable()">
+          <div class="dropdown-menu inventory-filter-menu p-3" aria-labelledby="inventoryFiltersButton" style="min-width:260px;max-height:65vh;overflow-y:auto;" onchange="handleInventoryFilterChange()">
             <div class="d-flex justify-content-between align-items-center mb-3"><span class="fw-semibold">Filters</span><button type="button" class="btn btn-link btn-sm p-0" onclick="clearInventoryFilters()">Clear selections</button></div>
             <fieldset id="inventoryStatusFilter" class="m-0 p-0 pb-3 border-0">
               <legend class="small fw-semibold mb-2">Status <span class="fw-normal text-muted">· any if none checked</span></legend>
@@ -83,12 +83,15 @@
               <label class="form-check mb-2"><input type="checkbox" class="form-check-input" data-inventory-stock value="INCOMPLETE"><span class="form-check-label">Incomplete</span></label>
               <label class="form-check mb-0"><input type="checkbox" class="form-check-input" data-inventory-stock value="RETURNED"><span class="form-check-label">Returned</span></label>
             </fieldset>
+            <div class="inventory-filter-footer"><button type="button" class="btn btn-pink" onclick="applyInventoryFilters()">Apply filters</button></div>
           </div>
         </div>
-        <div style="flex:1;min-width:220px;">
+        <div class="ys-filter-field ys-filter-search">
+          <label for="inventorySearch">Search inventory</label>
           <input type="search" id="inventorySearch" class="form-control" aria-label="Search inventory and item details within selected filters" placeholder="Search items, statuses, barcodes, delivery IDs..." oninput="scheduleInventorySearch()">
         </div>
       </div>
+      <p id="inventoryActiveFilters" class="ys-active-filters mb-0" role="status" aria-live="polite"></p>
     </div>
 
     <!-- =====================================================
@@ -202,6 +205,7 @@ var inventoryListPages=new Map(), inventoryListVersion='', inventoryCards={produ
 var inventorySummaryPages=new Map();
 var inventorySummaryPage=1, inventorySummaryPageCount=1, inventorySummaryRequest=0, inventorySummaryResult=null;
 var inventorySearchTimer=null, inventoryLoadingActive=false, inventoryHasLoaded=false, inventoryHeaderDisabled=new Map(), inventoryLoadingFocus=null;
+var inventoryFiltersDirty=false;
 var inventoryDataset=null,inventoryDownload=null,inventoryDataEpoch=0,inventoryDownloadTimer=null,inventoryVersionCheckAt=0;
 var inventoryLocalViews=new Map();
 var inventoryScrollPage=null;
@@ -452,10 +456,21 @@ function resetInventoryListSession() {
 function updateInventoryFilterButton() {
   const count=document.querySelectorAll('[data-inventory-status]:checked,[data-inventory-stock]:checked').length;
   document.getElementById('inventoryFiltersButton').textContent=count?'Filters ('+count+')':'Filters';
+  const names=Array.from(document.querySelectorAll('[data-inventory-status]:checked,[data-inventory-stock]:checked'),input=>({ACTIVE:'Active',DEACTIVATED:'Inactive','ON SALE':'On sale','IN STOCK':'In stock','LOW STOCK':'Low stock','SOLD OUT':'Sold out',INCOMPLETE:'Incomplete',RETURNED:'Returned'}[input.value]||input.value));
+  document.getElementById('inventoryActiveFilters').textContent=names.length?(inventoryFiltersDirty?'Pending: ':'Showing: ')+names.join(' · '):'All statuses and stock levels';
+}
+function handleInventoryFilterChange() {
+  if(window.matchMedia('(max-width:575.98px)').matches){inventoryFiltersDirty=true;updateInventoryFilterButton();return;}
+  filterInventoryTable();
+}
+function applyInventoryFilters() {
+  inventoryFiltersDirty=false;
+  if(typeof bootstrap!=='undefined')bootstrap.Dropdown.getInstance(document.getElementById('inventoryFiltersButton'))?.hide();
+  filterInventoryTable();
 }
 function clearInventoryFilters() {
   document.querySelectorAll('[data-inventory-status],[data-inventory-stock]').forEach(input=>{input.checked=false;});
-  filterInventoryTable();
+  handleInventoryFilterChange();
 }
 function inventoryListQuery() {
   return {search:document.getElementById('inventorySearch').value.trim(),category:document.getElementById('inventoryCategoryFilter').value,
@@ -564,6 +579,7 @@ function scheduleInventorySearch() {
   clearTimeout(inventorySearchTimer);inventorySearchTimer=setTimeout(()=>filterInventoryTable(),200);
 }
 function filterInventoryTable() {
+  inventoryFiltersDirty=false;
   inventoryLocalViews.clear();
   clearTimeout(inventorySearchTimer);inventoryScrollPage=null;inventoryIncompleteOnly=false;inventoryListPage=1;updateInventoryFilterButton();loadInventoryPage(false,true);
   if(document.getElementById('inventorySummaryModal').style.display==='flex'){inventorySummaryPage=1;renderInventorySummary();}

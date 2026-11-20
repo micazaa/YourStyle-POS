@@ -49,7 +49,7 @@ function checkout() {
     finalActiveGrandTotal: 458,
     document: {
       getElementById(id) {
-        return elements[id] || (elements[id] = { value: '', checked: false, style: {}, textContent: '' });
+        return elements[id] || (elements[id] = { value: '', checked: false, style: {}, dataset: {}, textContent: '', appendChild(){}, insertAdjacentElement(_position,element){this.nextElementSibling=element;} });
       }
     }
   });

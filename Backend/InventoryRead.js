@@ -186,9 +186,11 @@ function inventoryListMatches_(item,request) {
   if(request.search){const text=item.searchText||inventoryItemSearchText_(item);if(!request.search.split(/\s+/).every(term=>text.includes(term)))return false;}
   const statuses=Array.isArray(request.status)?request.status:request.status?[request.status]:[];
   const stock=Array.isArray(request.stockStatus)?request.stockStatus:request.stockStatus?[request.stockStatus]:[];
+  // Device snapshots omit this derived field; use stock and item state for both live and cached filters.
+  const availability=inventoryListStatus_(item);
   return (!request.category||item.category===request.category) &&
     (!statuses.length||statuses.includes(item.productStatus)) &&
-    (!stock.length||stock.includes(item.availability)||stock.includes('SOLD OUT')&&item.availability==='NEGATIVE STOCK') &&
+    (!stock.length||stock.includes(availability)||stock.includes('SOLD OUT')&&availability==='NEGATIVE STOCK') &&
     (!request.incompleteOnly||item.category==='YOURFINDS'&&item.status==='INCOMPLETE');
 }
 function inventoryGroupKey_(item) {

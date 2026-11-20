@@ -80,7 +80,7 @@
           <small id="dashboardSalesTransactionsComparison"></small>
         </article>
       </div>
-      <section class="dashboard-overview-card dashboard-sales-panel dashboard-graph-panel" aria-label="Sales and units sold">
+      <section id="dashboardSalesPanel" class="dashboard-overview-card dashboard-sales-panel dashboard-graph-panel" aria-label="Sales and units sold">
         <div class="dashboard-panel-heading">
           <div>
             <h3 class="dashboard-graph-heading">Sales &amp; units sold</h3>
@@ -110,16 +110,32 @@
         <div class="dashboard-chart-frame" id="dashboardSalesFrame">
           <div class="dashboard-sales-scroll" id="dashboardSalesScroll" role="region" aria-label="Sales chart timeline" tabindex="0">
             <div class="dashboard-sales-plot" id="dashboardSalesPlot" hidden>
-              <canvas id="dashboardSalesCanvas" role="img" aria-label="Net sales line and units sold by category"></canvas>
+              <canvas id="dashboardSalesCanvas" role="img" aria-label="Net sales line and units sold by category" aria-describedby="dashboardSalesTooltip"></canvas>
             </div>
           </div>
+          <div id="dashboardSalesTooltip" role="tooltip" hidden>
+            <div class="dashboard-tooltip-date" id="dashboardSalesTooltipDate"></div>
+            <table aria-label="Category units and net sales">
+              <thead><tr><th scope="col">Category</th><th scope="col">Units</th><th scope="col">Net sales</th></tr></thead>
+              <tbody id="dashboardSalesTooltipRows"></tbody>
+              <tfoot><tr><th scope="row">Total</th><td id="dashboardSalesTooltipUnits"></td><td id="dashboardSalesTooltipNet"></td></tr></tfoot>
+            </table>
+          </div>
+        </div>
+        <div id="dashboardSalesEmpty" class="dashboard-sales-empty" hidden>
+          <div class="dashboard-sales-mascot-art"><img id="dashboardSalesMascotImage" width="180" height="180" alt="YourStyle mascot" decoding="async" referrerpolicy="no-referrer"></div>
+          <div class="dashboard-sales-empty-copy" aria-live="polite" aria-atomic="true">
+            <h4 id="dashboardSalesEmptyHeading"></h4>
+            <p id="dashboardSalesEmptyMessage"></p>
+          </div>
+          <p id="dashboardSalesEmptyHint" class="dashboard-sales-empty-hint">The chart will appear once there are sales.</p>
         </div>
         <p id="dashboardGraphStatus" class="small text-muted mb-0" role="status"></p>
         <div class="dashboard-chart-navigation" id="dashboardSalesNavigation" hidden>
           <button type="button" class="btn btn-light btn-sm" id="dashboardSalesEarlier" onclick="scrollDashboardChart(-1)">‹ Earlier</button>
           <button type="button" class="btn btn-light btn-sm" id="dashboardSalesLater" onclick="scrollDashboardChart(1)">Later ›</button>
         </div>
-        <p class="dashboard-graph-caption mb-0">The line shows net sales. Stacked bars show units sold.</p>
+        <p id="dashboardGraphCaption" class="dashboard-graph-caption mb-0">The line shows net sales. Stacked bars show units sold.</p>
       </section>
     </div>
     <div class="dashboard-sales-details">
@@ -144,8 +160,8 @@
                   <option value="WHOLESALE">Wholesale</option>
                 </select>
               </label>
-              <label data-top-group="PINS" hidden><input type="checkbox"> Group by code</label>
-              <label data-top-group="YOURFINDS" hidden><input type="checkbox"> Group by size</label>
+              <label data-top-group="PINS"><input type="checkbox"> Group by code</label>
+              <label data-top-group="YOURFINDS"><input type="checkbox"> Group by size</label>
             </div>
           </details>
           </div>
@@ -281,7 +297,6 @@
       <button type="button" class="btn btn-light" data-preset="year">This year</button>
       <button type="button" class="btn btn-light" data-preset="last-week">Last week</button>
       <button type="button" class="btn btn-light" data-preset="last-month">Last month</button>
-      <button type="button" class="btn btn-light" data-preset="last-year">Last year</button>
     </div>
     <p id="dashboardCalendarSelection" class="visually-hidden" aria-live="polite"></p>
     <form method="dialog" class="d-flex justify-content-end gap-2 mt-3">
@@ -428,7 +443,15 @@
   #dashboardPage :is(.dashboard-sales-scroll,.dashboard-top-scroll)::-webkit-scrollbar { height: 6px; width: 6px; }
   .dashboard-sales-plot { position: relative; flex: 1; min-height: 250px; width: 100%; }
   .dashboard-sales-plot canvas { position: absolute; inset: 0; }
-  .dashboard-graph-panel:has(.dashboard-sales-plot[hidden]) { align-self: start; }
+  .dashboard-graph-panel:has(.dashboard-sales-plot[hidden]):not(.dashboard-graph-empty) { align-self: start; }
+  .dashboard-graph-panel.dashboard-graph-empty { align-self: start; }
+  .dashboard-sales-empty { display: flex; flex: 0 0 auto; min-height: 360px; flex-direction: column; align-items: center; justify-content: center; gap: 15px; padding: 12px 16px; text-align: center; }
+  .dashboard-sales-mascot-art { width: min(180px,100%); aspect-ratio: 1; flex-shrink: 0; }
+  .dashboard-sales-mascot-art img { display: block; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 8px 12px #642d4012); }
+  .dashboard-sales-empty-copy { width: 100%; }
+  .dashboard-sales-empty-copy h4 { margin: 0; font-size: 1.25rem; font-weight: 500; color: var(--text-dark); }
+  .dashboard-sales-empty-copy p { margin: 9px auto 0; color: var(--text-gray); font-size: .875rem; line-height: 1.65; }
+  .dashboard-sales-empty .dashboard-sales-empty-hint { margin: 0; color: var(--text-gray); font-size: .75rem; }
   .dashboard-chart-frame:has(.dashboard-sales-plot[hidden]) { display: none; }
   .dashboard-sales-panel .dashboard-graph-heading { font-size: 1rem; color: #861747; font-weight: 400; }
   .dashboard-chart-navigation { display: flex; justify-content: space-between; }
@@ -439,7 +462,7 @@
   .dashboard-load-status .dashboard-status-loading::before { content: ''; display: inline-block; width: .8em; height: .8em; margin-inline-end: 6px; border: 1.5px solid currentColor; border-inline-end-color: transparent; border-radius: 50%; animation: dashboard-status-spin .8s linear infinite; }
   @keyframes dashboard-status-spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .dashboard-load-status .dashboard-status-loading::before { animation: none; } }
-  .dashboard-top-scroll { --dashboard-rank-height: 45px; max-height: calc(5 * var(--dashboard-rank-height)); overflow-y: auto; scrollbar-gutter: stable; scrollbar-width: thin; }
+  .dashboard-top-scroll { --dashboard-rank-height: 45px; max-height: calc(6 * var(--dashboard-rank-height)); overflow-y: auto; scrollbar-gutter: stable; scrollbar-width: thin; }
   .dashboard-top-scroll:focus-visible { outline: 2px solid var(--pink-hover); outline-offset: 2px; }
   .dashboard-top-items { padding: 0 6px 0 0; margin: 0; list-style: none; }
   .dashboard-top-items li { display: grid; grid-template-columns: 18px 34px minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) 3px; gap: 2px 8px; align-items: center; height: var(--dashboard-rank-height); padding-block: 5px; }
@@ -470,6 +493,19 @@
   .dashboard-chart-tooltip { position: absolute; z-index: 3; width: max-content; max-width: calc(100% - 8px); padding: 8px 10px; border-radius: 8px; background: #392833; color: white; font-size: .75rem; pointer-events: none; }
   .dashboard-chart-tooltip strong { display: block; margin-bottom: 4px; font: inherit; font-weight: 600; }
   .dashboard-chart-tooltip ul { display: grid; gap: 2px; padding: 0; margin: 0; list-style: none; }
+  #dashboardSalesTooltip { position:absolute;z-index:5;pointer-events:none;width:max-content;max-width:calc(100% - 16px);box-sizing:border-box;padding:10px;background:color-mix(in srgb,var(--card-bg) 85%,transparent);color:var(--text-dark);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 5px 16px #4c243d18;font-size:12px; }
+  #dashboardSalesTooltip::after { content:'';position:absolute;bottom:-5px;left:calc(var(--dashboard-tooltip-caret,50%) - 5px);width:9px;height:9px;background:color-mix(in srgb,var(--card-bg) 85%,transparent);border-right:1px solid var(--border-color);border-bottom:1px solid var(--border-color);transform:rotate(45deg); }
+  #dashboardSalesTooltip .dashboard-tooltip-date { display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-gray); }
+  #dashboardSalesTooltip table { width:auto;border-collapse:separate;border-spacing:0;margin:7px 0 0; }
+  #dashboardSalesTooltip :is(th,td) { border:0!important;background:transparent!important;color:inherit!important;padding:5px 0;font-weight:400;text-align:left; }
+  #dashboardSalesTooltip thead th { border-top:1px solid var(--border-color)!important;padding:7px 0 4px;font-size:11px;color:var(--text-gray)!important; }
+  #dashboardSalesTooltip tr > :nth-child(n+2) { text-align:right;white-space:nowrap;padding-left:6px;font-variant-numeric:tabular-nums; }
+  #dashboardSalesTooltip tr > :last-child { padding-right:8px; }
+  #dashboardSalesTooltip .dashboard-tooltip-category { display:inline-flex;align-items:center;gap:6px; }
+  #dashboardSalesTooltip .dashboard-tooltip-dot { width:8px;height:8px;flex:0 0 8px;border-radius:50%; }
+  #dashboardSalesTooltip tfoot :is(th,td) { background:color-mix(in srgb,var(--pink-light) 85%,transparent)!important;color:var(--pink-ink)!important;padding-top:6px;padding-bottom:6px;font-weight:500;border-top:1px solid var(--border-color)!important; }
+  #dashboardSalesTooltip tfoot th { border-radius:8px 0 0 8px;padding-left:8px; }
+  #dashboardSalesTooltip tfoot td:last-child { border-radius:0 8px 8px 0; }
   @container (max-width: 680px) {
     .dashboard-sales-layout, .dashboard-sales-details { grid-template-columns: 1fr; }
     .dashboard-sales-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -477,6 +513,7 @@
   @container (max-width: 420px) {
     .dashboard-overview-grid, .dashboard-sales-metrics { grid-template-columns: 1fr; }
     .dashboard-sales-metrics { grid-auto-rows: auto; }
+    .dashboard-sales-empty { min-height: 360px; padding-inline: 4px; }
   }
   @container (max-width: 475px) {
     .dashboard-top-scroll { --dashboard-rank-height: 58px; }
@@ -541,8 +578,10 @@
   .dashboard-calendar-grid .range-start { border-top-right-radius: 0; border-bottom-right-radius: 0; }
   .dashboard-calendar-grid .range-end { border-top-left-radius: 0; border-bottom-left-radius: 0; }
   .dashboard-calendar-grid button[aria-current="date"] { text-decoration: underline; text-underline-offset: 4px; }
-  .dashboard-calendar-shortcuts { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid #ead9de; margin-top: 12px; padding-top: 12px; }
-  .dashboard-calendar-shortcuts button { font-size: .8rem; }
+  .dashboard-calendar-shortcuts { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; border-top: 1px solid #ead9de; margin-top: 10px; padding-top: 10px; }
+  #dashboardCalendar .dashboard-calendar-shortcuts .btn { min-height: 34px; padding: 6px 8px; font-size: .75rem; font-weight: 400; border-radius: 8px; }
+  @media (pointer: coarse) { #dashboardCalendar .dashboard-calendar-shortcuts .btn { min-height: 44px; } }
+  @media (max-width: 380px) { .dashboard-calendar-shortcuts { grid-template-columns: repeat(3,minmax(0,1fr)); } }
   @media (max-width: 575px) {
     .dashboard-header-period { justify-items: start; }
   }
@@ -557,7 +596,7 @@
     const parts = Object.fromEntries(manila.formatToParts(now).map(({type, value}) => [type, value]));
     const hour = Number(parts.hour);
     const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-    const firstName = String(currentEmployee?.fullName || '').trim().split(/\s+/)[0];
+    const firstName = String(currentEmployee?.displayName || currentEmployee?.fullName || '').trim().split(/\s+/)[0];
     document.getElementById('dashboardGreeting').textContent = firstName ? greeting + ', ' + firstName + '!' : greeting + '!';
 
     const today = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
@@ -582,6 +621,8 @@
   let dashboardReturnPdfRequest = null;
   const dashboardNumberFormat = new Intl.NumberFormat('en-PH');
   const dashboardSalesMoney = new Intl.NumberFormat('en-PH', {style:'currency', currency:'PHP', minimumFractionDigits:0, maximumFractionDigits:2});
+  const dashboardSalesTooltipMoney = new Intl.NumberFormat('en-PH', {style:'currency', currency:'PHP', maximumFractionDigits:0});
+  const dashboardSalesTooltipDate = new Intl.DateTimeFormat('en-US', {timeZone:'UTC', month:'short', day:'numeric'});
   const dashboardSalesCompact = new Intl.NumberFormat('en-PH', {style:'currency', currency:'PHP', notation:'compact', maximumFractionDigits:1});
   const dashboardSalesPercent = new Intl.NumberFormat('en-PH', {style:'percent', maximumFractionDigits:1});
   const dashboardSalesShortDate = new Intl.DateTimeFormat('en-PH', {timeZone:'UTC', month:'short', day:'numeric'});
@@ -802,9 +843,51 @@
       behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
     });
   }
-  dashboardSalesScroll.addEventListener('scroll',updateDashboardSalesNavigation,{passive:true});
+  dashboardSalesScroll.addEventListener('scroll',() => {
+    updateDashboardSalesNavigation();
+    document.getElementById('dashboardSalesTooltip').hidden = true;
+  },{passive:true});
+
+  function renderDashboardSalesTooltip({chart,tooltip}, points, data) {
+    const element = document.getElementById('dashboardSalesTooltip');
+    const point = tooltip?.dataPoints?.length ? points[tooltip.dataPoints[0].dataIndex] : null;
+    const active = dashboardSalesSeries.flatMap((_,index) => dashboardSalesChecks[index + 1].checked ? [index] : []);
+    if (!tooltip?.opacity || !point || !active.length) {element.hidden = true;return;}
+    const date = value => dashboardSalesTooltipDate.format(new Date(value));
+    document.getElementById('dashboardSalesTooltipDate').textContent = data.hourly
+      ? (data.period?.start ? date(data.period.start) + ' · ' : '') + dashboardSalesHour.format(new Date('1970-01-01T' + point.start + ':00Z'))
+      : date(point.start) + (point.end && point.end !== point.start ? ' – ' + date(point.end) : '');
+    const body = document.getElementById('dashboardSalesTooltipRows');
+    body.replaceChildren();
+    let totalUnits = 0, totalSales = 0;
+    active.forEach(index => {
+      const units = Number(point.units[index]) || 0, sales = Number(point.sales[index]) || 0;
+      if (!units && !sales) return;
+      const [,label,color] = dashboardSalesSeries[index];
+      const row = document.createElement('tr'), category = document.createElement('th');
+      category.scope = 'row';
+      const name = document.createElement('span'), dot = document.createElement('span');
+      name.className = 'dashboard-tooltip-category';dot.className = 'dashboard-tooltip-dot';dot.style.backgroundColor = color;dot.setAttribute('aria-hidden','true');
+      name.append(dot,document.createTextNode(label));category.append(name);
+      const qty = document.createElement('td'), amount = document.createElement('td');
+      qty.textContent = dashboardNumberFormat.format(units);amount.textContent = dashboardSalesTooltipMoney.format(sales);
+      row.append(category,qty,amount);body.append(row);totalUnits += units;totalSales += sales;
+    });
+    document.getElementById('dashboardSalesTooltipUnits').textContent = dashboardNumberFormat.format(totalUnits);
+    document.getElementById('dashboardSalesTooltipNet').textContent = dashboardSalesTooltipMoney.format(totalSales);
+    element.hidden = false;
+    const frame = document.getElementById('dashboardSalesFrame').getBoundingClientRect();
+    const canvas = chart.canvas.getBoundingClientRect();
+    const x = canvas.left - frame.left + tooltip.caretX, y = canvas.top - frame.top + tooltip.caretY;
+    const left = Math.max(8,Math.min(Math.max(8,frame.width - element.offsetWidth - 8),x - element.offsetWidth / 2));
+    element.style.left = left + 'px';
+    element.style.setProperty('--dashboard-tooltip-caret',Math.max(12,Math.min(element.offsetWidth - 12,x - left)) + 'px');
+    // Allow the tooltip above the plot instead of forcing it back inside the chart.
+    element.style.top = Math.max(8 - frame.top,y - element.offsetHeight - 12) + 'px';
+  }
 
   function renderDashboardSalesChart(resetScroll = false) {
+    document.getElementById('dashboardSalesTooltip').hidden = true;
     const data = dashboardSalesData;
     const weekly = data && !data.hourly && document.getElementById('dashboardGraphWeekly').checked;
     const period = document.getElementById('dashboardSalesInterval');
@@ -827,6 +910,7 @@
       : (weekly ? 'Weekly' : 'Daily');
 
     const hasSales = points.some(point => point.sales.some(Boolean) || point.units.some(Boolean));
+    renderDashboardSalesEmptyState(data,!hasSales);
     const chartAvailable = typeof globalThis.Chart === 'function';
     canvas.hidden = !data || !hasSales || !chartAvailable;
     dashboardSalesPlot.hidden = canvas.hidden;
@@ -837,7 +921,7 @@
     if (canvas.hidden) {
       dashboardSalesChart?.destroy();
       dashboardSalesChart = null;
-      status.textContent = !data ? '' : !hasSales ? 'No sales in this period.' : 'Couldn’t load the sales graph.';
+      status.textContent = !data || !hasSales ? '' : 'Couldn’t load the sales graph.';
       return;
     }
 
@@ -862,6 +946,7 @@
     };
     if (dashboardSalesChart) {
       dashboardSalesChart.data = chartData;
+      dashboardSalesChart.options.plugins.tooltip.external = context => renderDashboardSalesTooltip(context,points,data);
       chartData.datasets.forEach((dataset,index) => dashboardSalesChart.setDatasetVisibility(index,!dataset.hidden));
       dashboardSalesChart.update();
       return;
@@ -896,14 +981,8 @@
             },
           },
           tooltip:{
-            backgroundColor:'#392833',displayColors:false,padding:10,bodySpacing:4,titleMarginBottom:7,cornerRadius:8,
-            titleFont:{size:13,weight:'500'},bodyFont:{size:12},itemSort:(a,b) => a.datasetIndex - b.datasetIndex,
-            callbacks:{
-              label:ctx => ctx.dataset.label + ' · ' + (ctx.dataset.yAxisID === 'sales'
-                ? dashboardSalesMoney.format(ctx.parsed.y) : ctx.parsed.y + (ctx.parsed.y === 1 ? ' unit' : ' units')),
-              afterBody:items => items.length ? ['Total units sold · ' + items.filter(item => item.dataset.yAxisID === 'units')
-                .reduce((sum,item) => sum + item.parsed.y,0)] : [],
-            },
+            enabled:false,
+            external:context => renderDashboardSalesTooltip(context,points,data),
           },
         },
         scales:{
@@ -920,17 +999,18 @@
   function renderDashboardTopItems() {
     const select = document.getElementById('dashboardTopCategory');
     const rankField = document.getElementById('dashboardTopRankSales').checked ? 'sales' : 'units';
+    const categoryFilter = select.value || 'all';
     const options = [...document.querySelectorAll('[data-top-group]')];
-    options.forEach(label => {label.hidden = label.dataset.topGroup !== select.value;});
-    const grouped = options.find(label => !label.hidden)?.querySelector('input').checked;
+    options.forEach(label => {label.hidden = categoryFilter !== 'all' && label.dataset.topGroup !== categoryFilter;});
     const data = dashboardSalesData;
     const totals = new Map();
     for (const item of data?.items || []) {
-      if (select.value !== 'all' && select.value !== item.category) continue;
+      if (categoryFilter !== 'all' && categoryFilter !== item.category) continue;
+      const grouped = options.some(label => label.dataset.topGroup === item.category && label.querySelector('input').checked);
       const label = grouped ? item.group : item.category === 'YOURFINDS' && item.code ? item.code : item.name;
       const category = dashboardSalesSeries.find(([key]) => key === item.category)[1];
       const key = JSON.stringify([category, label.toUpperCase()]);
-      if (!totals.has(key)) totals.set(key, {label, category, units:0, sales:0, imageUrl:grouped ? '' : item.imageUrl});
+      if (!totals.has(key)) totals.set(key, {label, category, grouped, units:0, sales:0, imageUrl:grouped ? '' : item.imageUrl});
       const row = totals.get(key);
       row.units += item.units;
       row.sales += item.sales || 0;
@@ -951,7 +1031,7 @@
       const photo = document.createElement('span');
       photo.className = 'dashboard-rank-photo';
       photo.setAttribute('aria-hidden','true');
-      const placeholder = grouped ? '▤' : '—';
+      const placeholder = item.grouped ? '▤' : '—';
       photo.textContent = placeholder;
       if (/^https:\/\//i.test(item.imageUrl || '')) {
         const image = document.createElement('img');
@@ -965,13 +1045,13 @@
       const label = document.createElement('span');
       label.className = 'dashboard-rank-label';
       label.textContent = item.label;
-      if (select.value === 'all') {
+      if (categoryFilter === 'all') {
         const category = document.createElement('small');
         category.className = 'ms-2';
         category.textContent = item.category;
         label.append(category);
       }
-      label.title = select.value === 'all' ? item.label + ' · ' + item.category : item.label;
+      label.title = categoryFilter === 'all' ? item.label + ' · ' + item.category : item.label;
       const units = document.createElement('span');
       units.className = 'dashboard-rank-units';
       units.textContent = dashboardNumberFormat.format(item.units) + (item.units === 1 ? ' unit' : ' units');
@@ -1115,10 +1195,17 @@
   }));
   document.getElementById('dashboardTopCategory').addEventListener('change', renderDashboardTopItems);
   document.querySelectorAll('[data-top-group] input').forEach(input => input.addEventListener('change', renderDashboardTopItems));
+  document.addEventListener('pointerdown', dismissDashboardFilters);
   if (typeof ResizeObserver === 'function') {
     const salesResizeObserver = new ResizeObserver(updateDashboardSalesNavigation);
     salesResizeObserver.observe(dashboardSalesScroll);
     salesResizeObserver.observe(dashboardSalesPlot);
+  }
+
+  function dismissDashboardFilters(event) {
+    document.querySelectorAll('#dashboardPage .dashboard-sales-filter[open]').forEach(filter => {
+      if (!filter.contains(event.target)) filter.open = false;
+    });
   }
 
   function toggleDashboardInventoryReminders(open = document.getElementById('dashboardInventoryReminders').hidden) {
@@ -1198,6 +1285,7 @@
     const content = document.getElementById('dashboardContent');
     const displayed = dashboardDisplayedRange === key ? dashboardDisplayedSnapshot : null;
     const saved = read.cached || displayed || readSavedDashboard(range);
+    preloadDashboardSalesMascot();
     const chartReady = loadDashboardChartLibrary();
     const isSelected = () => currentEmployee === owner && pageReadCache.get('dashboardOverview') === selectedEntry;
     const withChart = action => chartReady ? chartReady.then(action) : action();

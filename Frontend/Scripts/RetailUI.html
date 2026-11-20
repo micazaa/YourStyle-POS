@@ -1,0 +1,242 @@
+<script>
+// Presentation only: existing workflow handlers still own data, permissions and submission.
+(function () {
+  'use strict';
+  const ui = {};
+  const focusSelector = 'button:not(:disabled),a[href],input:not(:disabled):not([type="hidden"]),select:not(:disabled),textarea:not(:disabled),summary,[tabindex]:not([tabindex="-1"])';
+  const visible = element => !!element && !element.closest('[hidden],[inert]') && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden';
+  let lastAction = null;
+  const dialogs = [];
+  const states = new Map();
+
+  function focusable(surface) {
+    return [...surface.querySelectorAll(focusSelector)].filter(visible);
+  }
+  function topDialog() {
+    const native = [...document.querySelectorAll('dialog[open]')].filter(visible).at(-1);
+    if (native) return native;
+    return dialogs.filter(visible).sort((a,b) => Number(getComputedStyle(a).zIndex || 0) - Number(getComputedStyle(b).zIndex || 0)).at(-1);
+  }
+  function focusElement(element) {
+    if (!element || !visible(element)) return;
+    element.focus({preventScroll:true});
+  }
+  function syncDialogs() {
+    const opened = [], closed = [];
+    states.forEach((state,dialog) => {
+      const open = visible(dialog);
+      if (open === state.open) return;
+      state.open = open;
+      if (open) {
+        state.opener = lastAction?.isConnected ? lastAction : document.activeElement;
+        if (dialogs.includes(dialog)) dialogs.splice(dialogs.indexOf(dialog),1);
+        dialogs.push(dialog);
+        opened.push(dialog);
+      } else {
+        const index = dialogs.indexOf(dialog);
+        if (index >= 0) dialogs.splice(index,1);
+        closed.push(state);
+      }
+    });
+    const top = topDialog();
+    document.body.classList.toggle('ys-dialog-open',!!top);
+    dialogs.forEach(dialog => {dialog.setAttribute('aria-modal',String(dialog === top));});
+    if (opened.length && top && !top.contains(document.activeElement)) {
+      const target = top.querySelector('[autofocus]') || focusable(top).find(element => element.matches('input,select,textarea')) || focusable(top)[0];
+      focusElement(target);
+    } else if (closed.length && !opened.length) {
+      const opener = closed.at(-1).opener;
+      // Keep focus explicitly restored by checkout, exchange or login handlers.
+      const active = document.activeElement;
+      if (!active || active === document.body || !visible(active)) {
+        focusElement(opener?.isConnected && (!top || top.contains(opener)) ? opener : top ? focusable(top)[0] : null);
+      }
+    }
+  }
+  function prepareDialog(dialog) {
+    if (states.has(dialog)) return;
+    const heading = dialog.querySelector('h1,h2,h3,h4,h5,h6');
+    if (!dialog.hasAttribute('role')) dialog.setAttribute('role','dialog');
+    dialog.setAttribute('aria-modal','true');
+    if (heading && !dialog.hasAttribute('aria-labelledby')) {
+      heading.id ||= dialog.id + 'Heading';
+      dialog.setAttribute('aria-labelledby',heading.id);
+    }
+    dialog.querySelectorAll('.btn-close').forEach(button => {
+      if (!button.hasAttribute('aria-label')) button.setAttribute('aria-label','Close ' + (heading?.textContent.trim() || 'dialog'));
+    });
+    const card = dialog.querySelector('.custom-popup-card');
+    const footer = card?.lastElementChild;
+    if (footer?.matches('div,footer') && footer.querySelector('button') && !footer.querySelector('input,select,textarea,table')) footer.classList.add('ys-modal-footer');
+    else if (footer?.matches('button.btn')) footer.classList.add('ys-sticky-action');
+    states.set(dialog,{open:false,opener:null});
+    new MutationObserver(syncDialogs).observe(dialog,{attributes:true,attributeFilter:['style','class','hidden','open']});
+  }
+  function prepareFields() {
+    document.querySelectorAll('label:not([for])').forEach(label => {
+      if (label.querySelector('input,select,textarea')) return;
+      const next = label.nextElementSibling;
+      const control = next?.matches('input,select,textarea') ? next : next?.querySelector('input:not([type=hidden]),select,textarea');
+      if (control?.id) label.setAttribute('for',control.id);
+    });
+    const names = {
+      managerPinModalInput:'Manager password',startingPettyCashInput:'Petty cash received (₱)',
+      pmDescription:'Product description',pmCode:'Product code',
+      pmSearch:'Search products',pmListCategory:'Category',pmListStatus:'Product status',
+    };
+    Object.entries(names).forEach(([id,name]) => {
+      const control = document.getElementById(id);
+      if (!control || control.labels?.length || document.querySelector('label[for="' + id + '"]') || control.hasAttribute('aria-label')) return;
+      const label = document.createElement('label');
+      label.className = 'form-label'; label.setAttribute('for',id); label.textContent = name;
+      control.before(label);
+    });
+    document.querySelectorAll('input[type=number]').forEach(input => {
+      if (!input.hasAttribute('inputmode')) input.inputMode = /qty|quantity|count/i.test(input.id) ? 'numeric' : 'decimal';
+    });
+    document.querySelectorAll('.denom-input').forEach(input => {
+      const match = input.id.match(/^(pr|mgrd|d)(\d+)$/);
+      if (!match) return;
+      input.setAttribute('aria-label','Count of ₱' + Number(match[2]).toLocaleString('en-PH') + (match[1] === 'pr' ? ' in petty cash' : ' in the cash drawer'));
+      input.inputMode = 'numeric';
+    });
+    ['yfEditorPhoto','pmPhoto'].forEach(id => document.getElementById(id)?.setAttribute('aria-label','Product photo'));
+    document.querySelectorAll('.table thead th').forEach(header => {if (!header.hasAttribute('scope')) header.scope = 'col';});
+    document.querySelectorAll('.table-responsive:not([role])').forEach((region,index) => {
+      region.setAttribute('role','region');region.tabIndex = 0;
+      region.setAttribute('aria-label','Scrollable table ' + (index + 1));
+    });
+  }
+  function prepareRecordTable(bodyId,labels,primaryIndex,sorters) {
+    const body = document.getElementById(bodyId);
+    if (!body) return;
+    const table = body.closest('table');
+    table.classList.add('ys-mobile-records');
+    const enhance = () => {
+      [...body.rows].forEach(row => {
+        if (row.cells.length < 2) return;
+        [...row.cells].forEach((cell,index) => {
+          const label = index === row.cells.length - 1 ? 'Actions' : labels[index];
+          if (cell.dataset.phoneLabel !== label) cell.dataset.phoneLabel = label;
+          if (index === primaryIndex) cell.dataset.recordPrimary = '';
+          if (index === row.cells.length - 1) cell.dataset.recordActions = '';
+        });
+      });
+      const count = document.getElementById(bodyId + 'ResultCount');
+      if (count) {const rows = [...body.rows].filter(row => row.cells.length > 1).length;count.textContent = rows + (rows === 1 ? ' matching record' : ' matching records');}
+    };
+    enhance();
+    new MutationObserver(enhance).observe(body,{childList:true});
+    if (!sorters) return;
+    const wrap = document.createElement('div'),label = document.createElement('label'),select = document.createElement('select'),reverse = document.createElement('button');
+    wrap.className = 'ys-table-sort'; select.className = 'form-select'; select.id = bodyId + 'PhoneSort';
+    label.setAttribute('for',select.id);label.textContent = 'Sort list';
+    sorters.forEach(([name,selector]) => {
+      const option = document.createElement('option');option.textContent = name;option.value = selector;select.append(option);
+    });
+    select.addEventListener('change',() => document.querySelector(select.value)?.click());
+    reverse.type = 'button';reverse.className = 'btn btn-light';reverse.textContent = 'Reverse order';
+    reverse.addEventListener('click',() => document.querySelector(select.value)?.click());
+    wrap.append(label,select,reverse);table.parentElement.before(wrap);
+    const syncSort = () => {
+      const selected = sorters.find(([,selector]) => ['ascending','descending'].includes(document.querySelector(selector)?.closest('th')?.getAttribute('aria-sort')));
+      if (selected) {select.value = selected[1];const order = document.querySelector(select.value).closest('th').getAttribute('aria-sort');reverse.textContent = order === 'ascending' ? 'Ascending ↑' : 'Descending ↓';reverse.setAttribute('aria-label','Change sort direction, currently ' + order);}
+    };
+    table.querySelectorAll('th[aria-sort]').forEach(header => new MutationObserver(syncSort).observe(header,{attributes:true,attributeFilter:['aria-sort']}));
+    syncSort();
+  }
+  function preparePayments() {
+    const select = document.getElementById('paymentMethod');
+    if (!select) return;
+    const group = document.createElement('div');group.className = 'ys-payment-methods';group.setAttribute('role','group');group.setAttribute('aria-label','Choose payment method');
+    const methods = ['Cash','GCash','QR Code','Credit Card'];
+    const buttons = methods.map(method => {
+      const button = document.createElement('button');button.type = 'button';button.className = 'btn btn-light';button.textContent = method;
+      button.addEventListener('click',() => {if (select.disabled) return;select.value = method;select.dispatchEvent(new Event('change',{bubbles:true}));});
+      group.append(button);return button;
+    });
+    select.before(group);
+    const sync = () => buttons.forEach((button,index) => {button.disabled = select.disabled || modal.getAttribute('aria-busy') === 'true';button.setAttribute('aria-pressed',String(select.value === methods[index]));});
+    select.addEventListener('change',sync);
+    const modal = document.getElementById('checkoutModal');
+    new MutationObserver(sync).observe(modal,{attributes:true,attributeFilter:['style','aria-busy']});
+    sync();
+  }
+  function prepareManualSearch() {
+    const input = document.getElementById('manualItemSearch'),results = document.getElementById('manualItemResults');
+    if (!input || !results) return;
+    input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-controls',results.id);
+    results.setAttribute('role','listbox');results.setAttribute('aria-label','Matching products');
+    const sync = () => {
+      input.setAttribute('aria-expanded',String(visible(results)));
+      const options = [...results.querySelectorAll('[data-inventory-index]')];
+      let selected;
+      options.forEach((option,index) => {
+        option.id ||= 'manualProductOption' + index;
+        option.setAttribute('role','option');option.tabIndex = -1;
+        const active = option.classList.contains('active-highlight');
+        if (option.getAttribute('aria-selected') !== String(active)) option.setAttribute('aria-selected',String(active));
+        if (active) selected = option;
+      });
+      if (selected && visible(results)) input.setAttribute('aria-activedescendant',selected.id);
+      else input.removeAttribute('aria-activedescendant');
+    };
+    sync();new MutationObserver(sync).observe(results,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
+  }
+  function updateViewport() {
+    const viewport = window.visualViewport;
+    const height = viewport?.height || window.innerHeight;
+    document.documentElement.style.setProperty('--ys-viewport-height',height + 'px');
+    document.documentElement.style.setProperty('--ys-viewport-top',(viewport?.offsetTop || 0) + 'px');
+    document.body.classList.toggle('ys-keyboard-open',!!viewport && window.innerHeight - height > 140);
+  }
+  function initialize() {
+    prepareFields();
+    document.querySelectorAll('.generic-overlay-blur,dialog').forEach(prepareDialog);
+    document.addEventListener('pointerdown',event => {lastAction = event.target.closest('button,a,summary');},true);
+    document.addEventListener('click',event => {if (event.detail === 0) lastAction = event.target.closest('button,a,summary');},true);
+    document.addEventListener('keydown',event => {
+      const top = topDialog();
+      if (!top || top.tagName === 'DIALOG' || event.defaultPrevented) return;
+      if (event.key === 'Escape') {
+        const close = top.querySelector('.btn-close');
+        if (close && visible(close) && !close.disabled) {event.preventDefault();close.click();}
+      }
+      if (event.key !== 'Tab') return;
+      const controls = focusable(top);
+      if (!controls.length) return;
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !top.contains(document.activeElement))) {event.preventDefault();last.focus();}
+      else if (!event.shiftKey && (document.activeElement === last || !top.contains(document.activeElement))) {event.preventDefault();first.focus();}
+    });
+    document.addEventListener('invalid',event => {
+      const field = event.target;field.setAttribute('aria-invalid','true');
+      const invalid = field.closest('form,[role=dialog]')?.querySelector(':invalid');
+      if (invalid && invalid !== field) return;
+      field.focus();field.scrollIntoView({block:'nearest'});
+    },true);
+    document.addEventListener('input',event => {if (event.target.hasAttribute('aria-invalid') && event.target.validity?.valid) event.target.removeAttribute('aria-invalid');});
+    document.querySelectorAll('.inventory-filter-menu').forEach(menu => menu.closest('.dropdown').addEventListener('hidden.bs.dropdown',() => {
+      if (typeof inventoryFiltersDirty !== 'undefined' && inventoryFiltersDirty) applyInventoryFilters();
+    }));
+    prepareRecordTable('inventoryTableBody',['Image','Code','Product','Category','Size','Selling price','Stock','Stock status','Active / inactive'],2,
+      ['name','code','category','size','price','stock','availability'].map(key => [{name:'Product',code:'Code',category:'Category',size:'Size',price:'Selling price',stock:'Stock',availability:'Stock status'}[key] + ' ↕','[data-inventory-sort="' + key + '"] button']));
+    prepareRecordTable('deliveriesTableBody',['Delivery','Type','Date','Driver / plate','Accepted by','Categories','Quantity','Status'],0,
+      ['deliveryId','deliveryDate','status','totalQty'].map(key => [{deliveryId:'Delivery',deliveryDate:'Date',status:'Status',totalQty:'Quantity'}[key] + ' ↕','[data-delivery-sort="' + key + '"] button']));
+    prepareRecordTable('supplierReturnRows',['Return','Type','Date','Driver / plate','Returned by','Categories','Quantity','Status'],0,
+      ['id','returnDate','quantity','status'].map(key => [{id:'Return',returnDate:'Date',quantity:'Quantity',status:'Status'}[key] + ' ↕','[data-return-sort="' + key + '"] button']));
+    preparePayments();
+    prepareManualSearch();
+    syncDialogs();updateViewport();
+    window.visualViewport?.addEventListener('resize',updateViewport);
+    window.visualViewport?.addEventListener('scroll',updateViewport);
+    window.addEventListener('resize',updateViewport);
+  }
+  ui.focusable = focusable;
+  ui.topDialog = topDialog;
+  ui.syncDialogs = syncDialogs;
+  window.YourStyleUI = ui;
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',initialize,{once:true});
+  else initialize();
+})();
+</script>
