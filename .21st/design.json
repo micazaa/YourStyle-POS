@@ -4,6 +4,18 @@
   "tokens": "Frontend/Styles/CSS.html",
   "decisions": [
     {
+      "component": "Sales summary readability",
+      "direction": "Ascending dates, grouped report columns and preparer signature",
+      "approved": "2026-11-20",
+      "details": "Implement the approved sales-report-clear preview. Dates run from the selected first day to the last in both modal and PDF. Modal collapsed rows are uniformly white; only expanded date rows are pink. Remove visible Expected collection(s) and Expand dates by text, retaining the Payment method / Cashier controls. The PDF uses Date, Payment method (or Cashier), Sales columns with a pink date cell spanning each day, weekday labels, white detail rows, distinct pink daily subtotals and grand total, aligned two-decimal currency. Add one signature line below the grand total with the authenticated account name above Prepared by. Resolve that name at download time from the actor; never accept a caller-provided name or store it in shared sales caches. Preserve calculations, shift grouping, permissions, download spinner and cached reads. Dev only; no sheet changes. Add a visible 2px muted rose divider across all three columns before each subsequent date group, with compact padding. Mark the actual first row of each date so the divider survives PDF conversion and background printing being off. Highlight the report grand total in a pink band matching the table header (#f2dede) with a 2px #e3c6c6 outer border and bold #65454b text and an 18px amount. Retain space above the total and the Prepared by signature below. Use explicit bgcolor attributes and print-color-adjust:exact so the highlight survives PDF conversion and background printing being disabled. Match the reference report table header: #f2dede pink fill, thin #e3c6c6 cell borders, bold #65454b labels, with Date / Payment method or Cashier / Sales unchanged. Match YourStyle to the inventory report title typography: Arial, 20px, 700 weight, #b76e79 rose, with exact print-color retention. Align the entire 60mm Prepared by signature block at the right content edge, keeping the name and role centered under the signature line."
+    },
+    {
+      "component": "Dashboard sales summary",
+      "direction": "Date totals with payment or named cashier expansion",
+      "approved": "2026-11-20",
+      "details": "Use the approved Sales summary modal: Date / Sales (Expected collection), independently expandable date rows, Payment method / Cashier radios, recorded cashier names with real shift times, zero-collection dates, sticky grand total and capped scrolling. Load all details in the cached dashboard sales response. The A4 SALES REPORT SUMMARY includes all dates, selected breakdown, daily subtotals and final grand total regardless of collapsed modal rows. Expected customer collections use recorded split allocations once per payment event, plus charged fees; non-split collections add shop-absorbed and customer-charged fees back to net revenue. No separate customer-fee row. Keep net revenue cards/chart unchanged, original reporting date/cashier attribution, existing cashier privacy, spinner/retry behavior and transaction navigation. Managers/OICs can view cashier details; cashier accounts receive payment totals only. Dev code only; no spreadsheet schema changes."
+    },
+    {
       "component": "Sales chart tooltip",
       "direction": "Compact tooltip above the hovered point",
       "approved": "2026-11-19",

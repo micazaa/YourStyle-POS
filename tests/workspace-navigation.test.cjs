@@ -84,7 +84,7 @@ for (const [kind,download,endpoint] of [
  f.c.updateDashboardHeader(new Date('2026-11-18T04:00:00Z'));
  f.element('dashboardDeliveryTable').hidden=false;
  f.element('dashboardInventoryTotals').hidden=false;
- vm.runInContext("dashboardSalesData={period:{start:'2026-11-18',end:'2026-11-18'}};dashboardDeliverySummaryRequest={start:'2026-11-18',end:'2026-11-18'}",f.c);
+ vm.runInContext("dashboardSalesData={period:{start:'2026-11-18',end:'2026-11-18'},collections:{days:[],total:0}};dashboardDeliverySummaryRequest={start:'2026-11-18',end:'2026-11-18'}",f.c);
  f.c.pageReadCache.set('dashboardOverview',{data:{overview:{returns:{count:1}}}});
  f.c.secureScriptRun[endpoint]=function(){requests.push({success:this.success,failure:this.failure});};
  const button=f.element('dashboard'+kind+'Download'),message=f.element('dashboard'+kind+'Message'),attrs={};
@@ -98,7 +98,7 @@ for (const [kind,download,endpoint] of [
 
 test('net sales summary opens from the cached dashboard and uses its period for actions',()=>{
  const f=fixture({dev:true,manager:true});
- const node=()=>({children:[],append(...items){this.children.push(...items);},insertCell(){const cell=node();this.append(cell);return cell;}});
+ const node=()=>({children:[],attrs:{},events:{},append(...items){this.children.push(...items);},setAttribute(key,value){this.attrs[key]=value;},addEventListener(key,handler){this.events[key]=handler;},insertCell(){const cell=node();this.append(cell);return cell;}});
  const body=f.element('dashboardNetSalesRows');
  body.rows=[];
  body.replaceChildren=()=>{body.rows=[];};
@@ -106,16 +106,26 @@ test('net sales summary opens from the cached dashboard and uses its period for 
  f.c.document.createElement=node;
  const period={start:'2026-11-10',end:'2026-11-13'};
  f.c.renderDashboardSales({...emptyDashboardSales,period,units:3,netSales:350,
-  categoryTotals:[{category:'YOURFINDS',units:2,sales:250},{category:'PINS',units:1,sales:100}]});
+  collections:{canViewCashiers:true,total:350,days:[{date:'2026-11-10',total:350,payments:[{name:'Cash',amount:350}],cashiers:[{name:'Samantha',shift:'9 AM – 3 PM',amount:350}]},{date:'2026-11-11',total:0,payments:[],cashiers:[]}]}});
  f.c.openDashboardNetSalesSummary();
  assert.equal(f.element('dashboardNetSalesCard').disabled,false);
  assert.equal(f.element('dashboardNetSalesSummary').open,true);
  assert.match(f.element('dashboardNetSalesPeriod').textContent,/November 10\s*–\s*13, 2026/);
- assert.deepEqual(body.rows[0].children.map(cell=>cell.textContent),['YourFinds','2','₱250']);
+ const toggle=body.rows[0].children[0].children[0];
+ assert.equal(toggle.textContent,'Nov 10, 2026');
+ assert.equal(toggle.attrs['aria-expanded'],'true');
+ assert.equal(body.rows[1].hidden,false);
+ toggle.events.click();
+ assert.equal(body.rows[1].hidden,true);
+ f.c.setDashboardCollectionMode('cashiers');
+ assert.equal(body.rows[1].children[0].children[0].textContent,'Samantha');
+ assert.equal(body.rows[1].children[0].children[1].textContent,'9 AM – 3 PM');
+ assert.equal(body.rows[1].hidden,true,'Changing breakdown preserves collapsed dates');
+ assert.equal(body.rows[3].children[0].children[0].textContent,'No collections recorded');
  assert.equal(f.element('dashboardNetSalesTotal').textContent,'₱350');
  assert.equal(f.dashboardRequests.length,0);
  let pdfRequests=0;
- f.c.secureScriptRun.createDashboardNetSalesPdf=function(range){pdfRequests++;assert.deepEqual({...range},period);};
+ f.c.secureScriptRun.createDashboardNetSalesPdf=function(range){pdfRequests++;assert.deepEqual({...range},{...period,breakdown:'cashiers'});};
  f.c.downloadDashboardNetSalesSummary();
  f.c.downloadDashboardNetSalesSummary();
  assert.equal(pdfRequests,1);
@@ -124,6 +134,17 @@ test('net sales summary opens from the cached dashboard and uses its period for 
  f.c.viewDashboardSalesTransactions();
  assert.equal(f.element('dashboardNetSalesSummary').open,false);
  assert.deepEqual(historyPeriod,period);
+ const next={start:'2026-11-14',end:'2026-11-14'};
+ f.c.renderDashboardSales({...emptyDashboardSales,period:next,collections:{canViewCashiers:true,total:20,days:[
+  {date:next.start,total:20,payments:[{name:'Cash',amount:20}],cashiers:[{name:'Alex',shift:'3 PM – 9 PM',amount:20}]},
+ ]}});
+ f.c.openDashboardNetSalesSummary();
+ assert.equal(body.rows[0].children[0].children[0].attrs['aria-expanded'],'true','A new date range starts with its first date expanded');
+ assert.equal(f.dashboardRequests.length,0);
+ f.c.clearDashboardState();
+ assert.equal(body.rows.length,0);
+ assert.equal(f.element('dashboardNetSalesSummary').open,false);
+ assert.equal(vm.runInContext('dashboardCollectionMode',f.c),'payments');
 });
 
 test('sales comparisons follow the selected period and ignore late responses from another date or sign-in',()=>{

@@ -681,17 +681,24 @@ function collectSalesMetrics(
     metrics.totalChangeGiven += Number(row[SALES_IDX.CHANGE]) || 0;
 
     const countedQty = countedUnits(qty, reason);
+    const paymentOneMethod = String(row[SALES_IDX.PAYMENT_1_METHOD] || '').trim();
+    const paymentTwoMethod = String(row[SALES_IDX.PAYMENT_2_METHOD] || '').trim();
+    const isSplitPayment = paymentOneMethod && paymentTwoMethod;
 
     metrics.itemsCount += countedQty;
     if (options.onIncludedRow) options.onIncludedRow({
       timestamp: reportingTimestamp, date: reportingDate, category: category,
       code: code, name: name, size: size, units: countedQty, sales: netTotal, exchange: exchange,
-      feeAbsorbed: Number(row[SALES_IDX.FEE_ABSORBED]) || 0
+      feeAbsorbed: Number(row[SALES_IDX.FEE_ABSORBED]) || 0,
+      feeCharged: Number(row[SALES_IDX.FEE_CHARGED]) || 0,
+      cashier: reportingCashier, paymentMethod: paymentMethod,
+      paymentKey: isSplitPayment ? salesPaymentKey_(row) : JSON.stringify([receiptId,reason]),
+      paymentParts: isSplitPayment ? [
+        {method:paymentOneMethod,amount:Number(row[SALES_IDX.PAYMENT_1_AMOUNT]) || 0},
+        {method:paymentTwoMethod,amount:Number(row[SALES_IDX.PAYMENT_2_AMOUNT]) || 0},
+      ] : null
     });
 
-    const paymentOneMethod = String(row[SALES_IDX.PAYMENT_1_METHOD] || '').trim();
-    const paymentTwoMethod = String(row[SALES_IDX.PAYMENT_2_METHOD] || '').trim();
-    const isSplitPayment = paymentOneMethod && paymentTwoMethod;
     if (isSplitPayment) {
       const paymentKey = salesPaymentKey_(row);
       if (!splitPaymentReceipts.has(paymentKey)) {

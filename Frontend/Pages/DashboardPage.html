@@ -182,22 +182,29 @@
   <dialog id="dashboardNetSalesSummary" aria-labelledby="dashboardNetSalesHeading" aria-describedby="dashboardNetSalesPeriod">
     <header class="d-flex justify-content-between align-items-start gap-2 mb-3">
       <div>
-        <h2 id="dashboardNetSalesHeading" class="h4 mb-1">Net sales summary</h2>
+        <h2 id="dashboardNetSalesHeading" class="h4 mb-1">Sales summary</h2>
         <p id="dashboardNetSalesPeriod" class="small text-muted mb-0"></p>
       </div>
-      <form method="dialog"><button class="btn btn-light dashboard-return-icon" aria-label="Close net sales summary">×</button></form>
+      <form method="dialog"><button class="btn btn-light dashboard-return-icon" aria-label="Close sales summary">×</button></form>
     </header>
+    <div class="dashboard-collections-switch">
+      <fieldset class="dashboard-inline-options">
+        <legend class="visually-hidden">Breakdown</legend>
+        <label><input type="radio" name="dashboardCollectionMode" value="payments" checked onchange="setDashboardCollectionMode(this.value)"> Payment method</label>
+        <label id="dashboardCashierBreakdown"><input type="radio" name="dashboardCollectionMode" value="cashiers" onchange="setDashboardCollectionMode(this.value)"> Cashier</label>
+      </fieldset>
+    </div>
     <p id="dashboardNetSalesMessage" class="small text-muted mb-2" role="status" hidden></p>
-    <div class="dashboard-delivery-scroll" tabindex="0" role="region" aria-label="Net sales by category">
+    <div class="dashboard-delivery-scroll" tabindex="0" role="region" aria-label="Sales by date">
       <table id="dashboardNetSalesTable" class="table table-sm mb-0">
-        <thead><tr><th scope="col">Category</th><th scope="col" class="text-end">Units sold</th><th scope="col" class="text-end">Net sales</th></tr></thead>
+        <thead><tr><th scope="col">Date</th><th scope="col" class="text-end">Sales</th></tr></thead>
         <tbody id="dashboardNetSalesRows"></tbody>
-        <tfoot><tr><th scope="row">Grand total</th><td id="dashboardNetSalesUnits" class="text-end"></td><td class="text-end"><strong id="dashboardNetSalesTotal"></strong></td></tr></tfoot>
+        <tfoot><tr><th scope="row">Grand total</th><td class="text-end"><strong id="dashboardNetSalesTotal"></strong></td></tr></tfoot>
       </table>
     </div>
     <footer class="d-flex justify-content-between gap-2 pt-3 mt-2">
       <button id="dashboardNetSalesTransactions" type="button" class="btn btn-light" onclick="viewDashboardSalesTransactions()">View transactions</button>
-      <button id="dashboardNetSalesDownload" type="button" class="btn btn-pink dashboard-return-icon" title="Download PDF" aria-label="Download net sales summary PDF" onclick="downloadDashboardNetSalesSummary()" disabled>
+      <button id="dashboardNetSalesDownload" type="button" class="btn btn-pink dashboard-return-icon" title="Download PDF" aria-label="Download sales report summary PDF" onclick="downloadDashboardNetSalesSummary()" disabled>
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 15v5h14v-5"/></svg>
       </button>
     </footer>
@@ -555,9 +562,25 @@
   #dashboardNetSalesTable { font-size: .875rem; --bs-table-bg: transparent; }
   #dashboardNetSalesTable :is(th,td) { padding: 10px clamp(4px, 2vw, 12px); border-color: #eee6e9; vertical-align: middle; }
   #dashboardNetSalesTable thead th { background: var(--pink-light); color: #88475d; font-size: .75rem; }
+  #dashboardNetSalesTable thead th, #dashboardNetSalesTable tfoot :is(th,td) { position: sticky; z-index: 1; }
+  #dashboardNetSalesTable thead th { top: 0; }
+  #dashboardNetSalesTable tfoot :is(th,td) { bottom: 0; background: var(--card-bg); }
   #dashboardNetSalesTable tbody th { font-weight: 400; }
+  #dashboardNetSalesTable tbody > tr > :is(th,td) { background: var(--card-bg); box-shadow: none; }
   #dashboardNetSalesTable td { font-variant-numeric: tabular-nums; white-space: nowrap; }
   #dashboardNetSalesTable tfoot :is(th,td) { border-top: 2px solid #eee6e9; border-bottom: 0; }
+  #dashboardNetSalesTable .dashboard-collection-day th { padding: 0; }
+  .dashboard-collection-day button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 10px 12px; border: 0; background: transparent; color: inherit; text-align: left; }
+  .dashboard-collection-day button::before { content: '›'; font-size: 1.2rem; line-height: 1; }
+  .dashboard-collection-day button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: -3px; border-radius: 6px; }
+  .dashboard-collection-day button[aria-expanded="true"]::before { transform: rotate(90deg); }
+  #dashboardNetSalesTable .dashboard-collection-day:has([aria-expanded="true"]) > :is(th,td) { background: var(--pink-light); }
+  #dashboardNetSalesTable .dashboard-collection-detail th { padding-inline-start: 35px; color: #736970; overflow-wrap: anywhere; }
+  #dashboardNetSalesTable .dashboard-collection-detail :is(th,td) { padding-block: 7px; font-size: .8125rem; }
+  .dashboard-collection-detail small { display: block; margin-top: 2px; font-size: .6875rem; }
+  .dashboard-collections-switch { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; flex-shrink: 0; }
+  .dashboard-collections-switch .dashboard-inline-options { font-size: .75rem; }
+  .dashboard-collections-switch input { accent-color: var(--pink-hover); }
   #dashboardNetSalesTotal { font-size: clamp(1rem, 3vw, 1.4rem); }
   #dashboardCalendar {
     width: min(390px, calc(100% - 24px));
@@ -634,41 +657,86 @@
   let dashboardSalesData, dashboardDisplayedSnapshot, dashboardDisplayedRange, dashboardChartLibrary;
   let dashboardNetSalesPdfRequest;
 
+  let dashboardCollectionMode = 'payments';
+  let dashboardCollectionRange, dashboardCollectionExpanded = new Set();
+  const dashboardCollectionDate = new Intl.DateTimeFormat('en-PH', {timeZone:'UTC',month:'short',day:'numeric',year:'numeric'});
+
+  function setDashboardCollectionMode(mode) {
+    if (!['payments','cashiers'].includes(mode) || mode === 'cashiers' && !dashboardSalesData?.collections?.canViewCashiers) return;
+    dashboardCollectionMode = mode;
+    renderDashboardNetSalesSummary();
+  }
+
   function renderDashboardNetSalesSummary() {
     const data = dashboardSalesData;
-    const period = data?.period;
+    const period = data?.period, collections = data?.collections;
+    document.getElementById('dashboardCashierBreakdown').hidden = !collections?.canViewCashiers;
+    const range = period ? period.start + ':' + period.end : '';
+    if (range !== dashboardCollectionRange) {
+      dashboardCollectionRange = range;
+      dashboardCollectionExpanded = new Set(collections?.days?.length ? [collections.days[0].date] : []);
+    }
     document.getElementById('dashboardNetSalesPeriod').textContent = period
       ? describeDashboardRange([new Date(period.start),new Date(period.end)]) : '';
     const table = document.getElementById('dashboardNetSalesTable');
-    table.hidden = !period;
+    table.hidden = !collections;
     const message = document.getElementById('dashboardNetSalesMessage');
     if (!dashboardNetSalesPdfRequest) {
-      message.textContent = period ? '' : 'Sales totals are unavailable.';
-      message.hidden = !!period;
+      message.textContent = collections ? '' : 'Sales totals are unavailable. Refresh the dashboard to try again.';
+      message.hidden = !!collections;
     }
-    document.getElementById('dashboardNetSalesDownload').disabled = !period || !!dashboardNetSalesPdfRequest;
+    document.getElementById('dashboardNetSalesDownload').disabled = !collections || !!dashboardNetSalesPdfRequest;
     document.getElementById('dashboardNetSalesTransactions').disabled = !period || currentEmployee?.permissions?.['transactions.view'] === 'deny';
     const body = document.getElementById('dashboardNetSalesRows');
     body.replaceChildren();
-    if (!period) return;
-    dashboardSalesSeries.forEach(([category,label],index) => {
-      const totals = data.categoryTotals?.find(row => row.category === category) || data.activity.reduce((sum,point) => {
-        sum.units += point.units[index];
-        sum.sales += point.sales[index];
-        return sum;
-      },{units:0,sales:0});
+    document.getElementById('dashboardNetSalesTotal').textContent = collections ? dashboardSalesMoney.format(collections.total) : '—';
+    if (!collections) return;
+    collections.days.forEach(day => {
       const row = body.insertRow();
-      const name = document.createElement('th');
-      name.scope = 'row';
-      name.textContent = label === 'Other items' ? 'Others' : label;
-      row.append(name);
-      const units = row.insertCell(), sales = row.insertCell();
-      units.className = sales.className = 'text-end';
-      units.textContent = dashboardNumberFormat.format(totals.units);
-      sales.textContent = dashboardSalesMoney.format(totals.sales);
+      row.className = 'dashboard-collection-day';
+      const heading = document.createElement('th');
+      heading.scope = 'row';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = dashboardCollectionDate.format(new Date(day.date + 'T00:00:00Z'));
+      const open = dashboardCollectionExpanded.has(day.date);
+      button.setAttribute('aria-expanded',String(open));
+      heading.append(button);
+      row.append(heading);
+      const amount = row.insertCell();
+      amount.className = 'text-end';
+      amount.textContent = dashboardSalesMoney.format(day.total);
+      const details = day[dashboardCollectionMode];
+      const detailRows = (details.length ? details : [{name:'No collections recorded',amount:0}]).map((detail,index) => {
+        const entry = body.insertRow();
+        entry.id = 'dashboardCollection-' + day.date + '-' + index;
+        entry.className = 'dashboard-collection-detail';
+        entry.hidden = !open;
+        const name = document.createElement('th');
+        name.scope = 'row';
+        const label = document.createElement('span');
+        label.textContent = detail.name;
+        name.append(label);
+        if (detail.shift) {
+          const time = document.createElement('small');
+          time.textContent = detail.shift;
+          name.append(time);
+        }
+        entry.append(name);
+        const sales = entry.insertCell();
+        sales.className = 'text-end';
+        sales.textContent = dashboardSalesMoney.format(detail.amount);
+        return entry;
+      });
+      button.setAttribute('aria-controls',detailRows.map(entry => entry.id).join(' '));
+      button.addEventListener('click',() => {
+        const expanded = !dashboardCollectionExpanded.has(day.date);
+        if (expanded) dashboardCollectionExpanded.add(day.date);
+        else dashboardCollectionExpanded.delete(day.date);
+        button.setAttribute('aria-expanded',String(expanded));
+        detailRows.forEach(entry => {entry.hidden = !expanded;});
+      });
     });
-    document.getElementById('dashboardNetSalesUnits').textContent = dashboardNumberFormat.format(data.units);
-    document.getElementById('dashboardNetSalesTotal').textContent = dashboardSalesMoney.format(data.netSales);
   }
 
   function openDashboardNetSalesSummary() {
@@ -686,8 +754,8 @@
 
   function downloadDashboardNetSalesSummary() {
     const period = dashboardSalesData?.period;
-    if (!period || dashboardNetSalesPdfRequest) return;
-    const request = {start:period.start,end:period.end};
+    if (!period || !dashboardSalesData.collections || dashboardNetSalesPdfRequest) return;
+    const request = {start:period.start,end:period.end,breakdown:dashboardCollectionMode};
     dashboardNetSalesPdfRequest = request;
     const button = document.getElementById('dashboardNetSalesDownload');
     const message = document.getElementById('dashboardNetSalesMessage');
@@ -699,7 +767,7 @@
       if (dashboardNetSalesPdfRequest !== request) return;
       dashboardNetSalesPdfRequest = null;
       button.removeAttribute('aria-busy');
-      button.disabled = !dashboardSalesData?.period;
+      button.disabled = !dashboardSalesData?.collections;
       message.textContent = error ? error.message || String(error) : '';
       message.hidden = !error;
     };
@@ -1704,6 +1772,10 @@
     Array.from(pageReadCache.keys()).filter(key => key.startsWith('dashboardOverview')).forEach(key => pageReadCache.delete(key));
     dashboardDisplayedRange = dashboardDisplayedSnapshot = null;
     dashboardNetSalesPdfRequest = null;
+    dashboardCollectionRange = null;
+    dashboardCollectionExpanded.clear();
+    dashboardCollectionMode = 'payments';
+    document.querySelectorAll('[name="dashboardCollectionMode"]').forEach(input => {input.checked = input.value === 'payments';});
     document.getElementById('dashboardNetSalesSummary').close();
     document.getElementById('dashboardNetSalesDownload').removeAttribute('aria-busy');
     document.getElementById('dashboardNetSalesMessage').textContent = '';
@@ -1716,6 +1788,7 @@
     document.getElementById('dashboardTopCategory').value = 'all';
     document.querySelectorAll('[data-top-group] input').forEach(input => {input.checked = false;});
     renderDashboardSales();
+    renderDashboardNetSalesSummary();
     document.getElementById('dashboardInventoryReport').close();
     dashboardInventoryPdfRequest = null;
     document.getElementById('dashboardInventoryDownload').disabled = true;
