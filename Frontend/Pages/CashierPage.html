@@ -33,62 +33,34 @@
 
 
             <div class="mb-4 ys-scanner">
-              <label class="form-label" for="codeInput">Scan barcode</label>
-              <input type="text" class="form-control" id="codeInput" placeholder="Ready to scan…" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="barcodeScanHint">
-              <p id="barcodeScanHint" class="ys-scan-hint mb-0">Scan or enter a code, then press Enter.</p>
-            </div>
-
-            <div class="mb-4">
-              <label class="form-label" for="manualItemSearch">Find a product</label>
+              <label class="form-label" for="codeInput">Scan or search a product</label>
               <div class="item-search-wrapper">
-                <input type="text" class="form-control" id="manualItemSearch" placeholder="Type item name, size, or category..." autocomplete="off" oninput="filterManualItemList()" onfocus="filterManualItemList()" onkeydown="handleManualSearchKeydown(event)">
+                <input type="text" class="form-control" id="codeInput" placeholder="Scan barcode or type product name…" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="handleCashierSearchInput(event)" onblur="clearTimeout(cashierBarcodeTimer)" onfocus="if(this.value.trim() && !document.getElementById('manualItemSelect').value)filterManualItemList()" onkeydown="handleCashierSearchKeydown(event)">
                 <div id="manualItemResults" class="list-group position-absolute w-100"
                   style="max-height: 220px; overflow-y: auto; z-index: 1000; display:none; top: 100%; left: 0;"></div>
               </div>
               <input type="hidden" id="manualItemSelect" value="">
-              <button type="button" class="btn btn-dark-custom w-100 mt-2" onclick="addManualItem()">Add to Cart</button>
+              <button id="cashierAddToCart" type="button" class="btn btn-dark-custom w-100 mt-2" onclick="addCashierSearchItem()">Add to Cart</button>
             </div>
 
-            <div class="ys-custom-item">
-              <h3>Custom unlisted item</h3>
-              <div class="mb-2"><label class="form-label" for="customName">Item description</label><input type="text" class="form-control form-control-sm" id="customName" placeholder="Item name or description">
-              </div>
+            <button id="serviceFormToggle" type="button" class="btn btn-link btn-sm p-0 d-block mx-auto" style="color:var(--pink-ink);" aria-expanded="false" aria-controls="serviceForm" onclick="toggleServiceForm()">Add service</button>
+            <div id="serviceForm" class="ys-custom-item mt-2" hidden>
+              <h3>YourStyle services</h3>
               <div class="row g-2 mb-2">
-                <div class="col-5">
-                  <label class="form-label" for="customSize">Size</label>
-                  <select
-                    id="customSize"
-                    class="form-select form-select-sm"
-                    aria-label="Size"
-                    onchange="toggleCustomItemSize()"
-                  >
-                    <option value="SNE">SNE</option>
-                    <option value="MNE">MNE</option>
-                    <option value="LNE">LNE</option>
-                    <option value="XLNE">XLNE</option>
-                    <option value="NO SIZE">NO SIZE</option>
-                    <option value="BNE">BNE</option>
-                    <option value="SE">SE</option>
-                    <option value="ME">ME</option>
-                    <option value="LE">LE</option>
-                    <option value="XLE">XLE</option>
-                    <option value="CUSTOM">Custom </option>
-                  </select>
-
-                  <input
-                    id="customSizeText"
-                    type="text"
-                    class="form-control form-control-sm mt-2"
-                    placeholder="FREE SIZE"
-                    aria-label="Custom size"
-                    maxlength="50"
-                    hidden
-                  >
+                <div class="col-8">
+                  <label class="form-label" for="serviceDescription">Description</label>
+                  <input type="text" id="serviceDescription" class="form-control form-control-sm" list="serviceSuggestions" placeholder="Choose or type a service" maxlength="100" autocomplete="off">
+                  <datalist id="serviceSuggestions">
+                    <option value="Steam"></option>
+                    <option value="Place rent"></option>
+                  </datalist>
                 </div>
-                <div class="col-7"><label class="form-label" for="customPrice">Price (₱)</label><input type="number" class="form-control form-control-sm text-end" id="customPrice" placeholder="0.00" min="0" inputmode="decimal">
+                <div class="col-4">
+                  <label class="form-label" for="customPrice">Price (₱)</label>
+                  <input type="number" class="form-control form-control-sm text-end" id="customPrice" placeholder="0.00" min="0" step="0.01" inputmode="decimal">
                 </div>
               </div>
-              <button type="button" class="btn btn-outline-pink btn-sm w-100" onclick="addCustomItem()">Add Custom Item</button>
+              <button type="button" class="btn btn-outline-pink btn-sm w-100" onclick="addCustomItem()">Add service</button>
             </div>
           </fieldset>
           <fieldset class="cashier-actions-footer" data-cashier-controls aria-label="Void and exchange" disabled>
@@ -200,18 +172,19 @@
 
 <script>
 
-  function toggleCustomItemSize() {
-  const input = document.getElementById('customSizeText');
-  const isCustom = document.getElementById('customSize').value === 'CUSTOM';
-
-  input.hidden = !isCustom;
-
-  if (isCustom) {
-    input.focus();
-  } else {
-    input.value = '';
+  function toggleServiceForm() {
+    const form = document.getElementById('serviceForm');
+    form.hidden = !form.hidden;
+    document.getElementById('serviceFormToggle').setAttribute('aria-expanded', String(!form.hidden));
+    if (!form.hidden) document.getElementById('serviceDescription').focus();
   }
-}
+
+  function resetServiceForm() {
+    document.getElementById('serviceForm').hidden = true;
+    document.getElementById('serviceFormToggle').setAttribute('aria-expanded', 'false');
+    document.getElementById('serviceDescription').value = '';
+    document.getElementById('customPrice').value = '';
+  }
 
 /* ==========================================================
    CART HELPERS
@@ -415,66 +388,79 @@
     );
   }
 
-  // Scanner Input Automation Keydown Listener
-document
-  .getElementById("codeInput")
-  .addEventListener("keydown", function (e) {
-
-    if (e.key !== "Enter") {
+  var cashierBarcodeTimer = null;
+  function handleCashierSearchInput(event) {
+    clearTimeout(cashierBarcodeTimer);
+    document.getElementById('manualItemSelect').value = '';
+    if (!document.getElementById('codeInput').value.trim()) {
+      resetManualItemSearch();
       return;
     }
+    filterManualItemList();
+    if (event?.isComposing) return;
+    const input = document.getElementById('codeInput');
+    const code = input.value.trim(), owner = currentEmployee;
+    cashierBarcodeTimer = setTimeout(function() {
+      if (owner !== currentEmployee || document.activeElement !== input || input.matches(':disabled') ||
+          !input.offsetParent || input.value.trim() !== code) return;
+      if (cashierIndexedInventory !== masterInventory) indexCashierInventory(masterInventory);
+      const exact = cashierBarcodeIndex.get(code) || [];
+      // A registered longer code must finish before its shorter prefix can be added.
+      if (exact.length !== 1 || Array.from(cashierBarcodeIndex.keys()).some(key => key !== code && key.startsWith(code))) return;
+      document.getElementById('cashierAddToCart').click();
+    }, 180);
+  }
 
-    e.preventDefault();
-
-    const scannedCode =
-      this.value.trim();
-
-    if (!scannedCode) {
-      return;
-    }
-
-    if (cashierIndexedInventory !== masterInventory) indexCashierInventory(masterInventory);
-    const matchingItems = cashierBarcodeIndex.get(scannedCode) || [];
-    if (matchingItems.length > 1) {
-      const search = document.getElementById('manualItemSearch');
-      search.value = scannedCode;
-      filterManualItemList();
-      search.focus();
-      showNotificationToast('Choose a price for ' + matchingItems[0].name + '.');
-      this.value = '';
-      return;
-    }
-    const foundItem = matchingItems[0];
-
-
-    if (foundItem) {
-
-      addItemToCart(
-        foundItem,
-        false
-      );
-
-      showNotificationToast(
-        "Added: " + foundItem.name
-      );
-
+  function handleCashierSearchKeydown(event) {
+    clearTimeout(cashierBarcodeTimer);
+    if (event.isComposing) return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      document.getElementById('cashierAddToCart').click();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      document.getElementById('manualItemResults').style.display = 'none';
+      manualSearchHighlightIndex = -1;
     } else {
-
-      showNotificationToast(
-        "Code " +
-        scannedCode +
-        " not found.",
-        true
-      );
-
+      handleManualSearchKeydown(event);
     }
+  }
 
-
-    this.value = "";
-
-    saveSession();
-
-  });
+  function addCashierSearchItem() {
+    clearTimeout(cashierBarcodeTimer);
+    const input = document.getElementById('codeInput');
+    const query = input.value.trim();
+    if (!query) { input.focus(); return; }
+    if (document.getElementById('manualItemSelect').value !== '') {
+      addManualItem();
+      return;
+    }
+    const results = document.getElementById('manualItemResults');
+    const options = Array.from(results.querySelectorAll('[data-inventory-index]'));
+    if (results.style.display !== 'none' && manualSearchHighlightIndex >= 0 && options[manualSearchHighlightIndex]) {
+      selectManualItem(Number(options[manualSearchHighlightIndex].getAttribute('data-inventory-index')));
+      addManualItem();
+      return;
+    }
+    if (cashierIndexedInventory !== masterInventory) indexCashierInventory(masterInventory);
+    const exact = cashierBarcodeIndex.get(query) || [];
+    if (exact.length === 1) {
+      resetManualItemSearch();
+      addItemToCart(exact[0], false);
+      input.focus();
+      return;
+    }
+    filterManualItemList();
+    const matches = Array.from(results.querySelectorAll('[data-inventory-index]'));
+    if (!exact.length && matches.length === 1) {
+      selectManualItem(Number(matches[0].getAttribute('data-inventory-index')));
+      addManualItem();
+      return;
+    }
+    showNotificationToast(exact.length > 1 ? 'Choose a price from the matching products.'
+      : matches.length ? 'Choose a product from the list.' : 'No matching product. Check the code or search by name.', true);
+    input.focus();
+  }
 
   function updateQty(index, val) {
     let qty = parseInt(val) || 1;
@@ -721,7 +707,7 @@ function refreshInventory(callback) {
 
   function populateManualDropdown(items) {
     indexCashierInventory(Array.isArray(items) ? items : masterInventory);
-    document.getElementById("manualItemSearch").value = "";
+    document.getElementById("codeInput").value = "";
     document.getElementById("manualItemSelect").value = "";
     manualSearchHighlightIndex = -1;
     let resultsBox = document.getElementById("manualItemResults");
@@ -732,7 +718,7 @@ function refreshInventory(callback) {
   // Renders the filtered, clickable list under the search box.
   function filterManualItemList() {
     let query = document
-      .getElementById("manualItemSearch")
+      .getElementById("codeInput")
       .value.trim()
       .toLowerCase();
     let resultsBox = document.getElementById("manualItemResults");
@@ -841,7 +827,7 @@ function selectManualItem(index) {
 
 
   document.getElementById(
-    "manualItemSearch"
+    "codeInput"
   ).value =
     `${item.name}` +
     `${item.size ? " (" + item.size + ")" : ""}` +
@@ -868,9 +854,10 @@ function selectManualItem(index) {
   // Close the results dropdown when clicking outside of it.
   document.addEventListener("click", function (e) {
     let wrapper = document
-      .getElementById("manualItemSearch")
+      .getElementById("codeInput")
       .closest(".item-search-wrapper");
-    if (wrapper && !wrapper.contains(e.target)) {
+    const addButton = document.getElementById('cashierAddToCart');
+    if (wrapper && !wrapper.contains(e.target) && !addButton?.contains(e.target)) {
       document.getElementById("manualItemResults").style.display = "none";
     }
   });
@@ -884,7 +871,7 @@ function selectManualItem(index) {
 
   const searchInput =
     document.getElementById(
-      "manualItemSearch"
+      "codeInput"
     );
 
   const resultsBox =
@@ -944,10 +931,11 @@ function selectManualItem(index) {
 }
 
 function resetManualItemSearch() {
+  clearTimeout(cashierBarcodeTimer);
 
   const searchInput =
     document.getElementById(
-      "manualItemSearch"
+      "codeInput"
     );
 
   const selectInput =
@@ -975,43 +963,41 @@ function resetManualItemSearch() {
 
 }
 
+  function generateServiceCode() {
+    let suffix = Date.now() % 100000;
+    const used = new Set(cart.map(item => String(item.code)));
+    while (used.has('CUSTOM-' + String(suffix).padStart(5, '0'))) suffix = (suffix + 1) % 100000;
+    return 'CUSTOM-' + String(suffix).padStart(5, '0');
+  }
+
   function addCustomItem() {
-    let name = document.getElementById("customName").value.trim();
-    const selectedSize = document.getElementById('customSize').value;
-    const sizeInput = selectedSize === 'CUSTOM'
-      ? document.getElementById('customSizeText').value.trim().toUpperCase()
-      : selectedSize;
-
-    if (selectedSize === 'CUSTOM' && !sizeInput) {
-      showNotificationToast('Enter the custom size.', true);
+    if (cartReservation()) {
+      showNotificationToast('Complete or remove the reserved item before adding a service.', true);
       return;
     }
-
-    let size = sizeInput;
-    let price = parseFloat(document.getElementById("customPrice").value);
-    if (!name || isNaN(price) || price < 0) {
-      showNotificationToast(
-        "Please check structural breakdown text parameters.",
-        true,
-      );
+    const name = document.getElementById('serviceDescription').value.trim();
+    if (!name || name.length > 100) {
+      showNotificationToast('Enter a service description (up to 100 characters).', true);
+      document.getElementById('serviceDescription').focus();
       return;
     }
-    let category = sizeInput ? "YourFinds" : "Others";
-    addItemToCart(
-      {
-        code: "CUSTOM-" + Date.now().toString().slice(-5),
-        name: name,
-        size: size,
-        price: price,
-        stock: 999,
-        category: category,
-      },
-      true,
-    );
-    document.getElementById("customName").value = "";
-    document.getElementById("customSize").value = "";
-    toggleCustomItemSize();
-    document.getElementById("customPrice").value = "";
+    const priceInput = document.getElementById('customPrice');
+    const price = Number(priceInput.value);
+    if (!priceInput.value.trim() || !Number.isFinite(price) || price < 0 || !priceInput.checkValidity()) {
+      showNotificationToast('Enter a valid service price.', true);
+      priceInput.focus();
+      return;
+    }
+    addItemToCart({
+      code: generateServiceCode(),
+      name: name,
+      size: '',
+      price: price,
+      stock: 0,
+      category: 'SERVICE',
+    }, true);
+    document.getElementById('serviceDescription').value = '';
+    priceInput.value = '';
   }
 
 function addItemToCart(
@@ -1139,6 +1125,7 @@ function addItemToCart(
 }
 
 function startNewTransaction() {
+  resetServiceForm();
 
   const successModal =
     document.getElementById("successModal");

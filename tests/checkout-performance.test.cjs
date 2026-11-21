@@ -98,11 +98,11 @@ test('fast shift checks preserve account and report ownership requirements',()=>
 test('checkout success is displayed while the catalogue refresh is still pending',()=>{
   const nodes={},calls=[];
   const c=vm.createContext({cart:[{code:'A'}],pageReadCache:new Map(),document:{getElementById:id=>nodes[id]||=( {style:{},value:''})},
-    invalidateDeliveryItemCaches(){},refreshInventory(){calls.push('background refresh');},renderCart(){},saveSession(){}});
+    invalidateDeliveryItemCaches(){},refreshInventory(){calls.push('background refresh');},resetServiceForm(){calls.push('reset services');},renderCart(){},saveSession(){}});
   vm.runInContext(fs.readFileSync('Frontend/Modals/CheckoutModal.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
   c.toggleCheckoutModal=()=>calls.push('close checkout');
   c.handleCheckoutSuccess({success:true},{receiptId:'R-1',changeGiven:25});
   assert.equal(nodes.successModal.style.display,'flex');assert.equal(nodes.successReceiptId.textContent,'R-1');
   assert.equal(nodes.successChangeGiven.textContent,'₱25.00');assert.equal(c.cart.length,0);
-  assert.deepEqual(calls,['background refresh','close checkout']);
+  assert.deepEqual(calls,['background refresh','close checkout','reset services']);
 });

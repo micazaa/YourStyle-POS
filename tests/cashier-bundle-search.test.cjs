@@ -4,14 +4,14 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 
 function search(items) {
-  const nodes={manualItemSearch:{value:''},manualItemResults:{innerHTML:'',style:{}}};
-  const c=vm.createContext({masterInventory:items,document:{getElementById:id=>nodes[id]},
+  const nodes={codeInput:{value:''},manualItemResults:{innerHTML:'',style:{}}};
+  const c=vm.createContext({preloadCashierBundleCodes(){},masterInventory:items,document:{getElementById:id=>nodes[id]},
     escapeInventoryHtml:value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;')});
   const source=fs.readFileSync('Frontend/Pages/CashierPage.html','utf8');
   vm.runInContext(source.slice(source.indexOf('var cashierSearchRows'),source.indexOf('function rememberCashierInventory'))+'\n'+
     source.slice(source.indexOf('function filterManualItemList'),source.indexOf('function handleManualSearchKeydown')),c);
   c.indexCashierInventory(items);
-  return query=>{nodes.manualItemSearch.value=query;c.filterManualItemList();return nodes.manualItemResults.innerHTML;};
+  return query=>{nodes.codeInput.value=query;c.filterManualItemList();return nodes.manualItemResults.innerHTML;};
 }
 
 test('named full and split Wholesale bundles can be found by bundle, product name and code',()=>{

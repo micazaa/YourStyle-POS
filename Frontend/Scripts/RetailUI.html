@@ -163,7 +163,7 @@
     sync();
   }
   function prepareManualSearch() {
-    const input = document.getElementById('manualItemSearch'),results = document.getElementById('manualItemResults');
+    const input = document.getElementById('codeInput'),results = document.getElementById('manualItemResults');
     if (!input || !results) return;
     input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-controls',results.id);
     results.setAttribute('role','listbox');results.setAttribute('aria-label','Matching products');
