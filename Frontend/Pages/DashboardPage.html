@@ -332,7 +332,33 @@
 </div>
 
 <style>
-  #dashboardPage { padding: clamp(12px, 2vw, 20px); background: #f8f5f6; color: #36232d; }
+  #dashboardPage {
+    padding: clamp(12px, 2vw, 20px);
+    min-height: calc(var(--ys-viewport-height, 100dvh) - 24px);
+    color: #36232d;
+  }
+  html:has(#dashboardPage[style*="display: block"]) {
+    --dashboard-background:
+      radial-gradient(ellipse at 23% 22%, #fffbfaf0 0%, #fffbfa00 72%),
+      radial-gradient(ellipse at 55% 58%, #fff7f5de 0%, #fff7f500 67%),
+      linear-gradient(125deg, #fbeef0 0%, #f0d9e1 100%);
+    background-color: #fff7f8;
+    background-image: var(--dashboard-background);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+  }
+  body:has(#dashboardPage[style*="display: block"]) { background: transparent; isolation: isolate; }
+  body:has(#dashboardPage[style*="display: block"])::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: var(--dashboard-background);
+  }
+  #dashboardPage,
+  #appMain:has(> #dashboardPage[style*="display: block"]) { background: transparent; }
+  @media (max-width: 991px) { #dashboardPage { min-height: calc(var(--ys-viewport-height, 100dvh) - 80px); } }
   #dashboardContent { container-type: inline-size; }
   .dashboard-header {
     display: flex;

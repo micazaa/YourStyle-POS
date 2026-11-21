@@ -4,6 +4,12 @@
   "tokens": "Frontend/Styles/CSS.html",
   "decisions": [
     {
+      "component": "Dashboard background",
+      "direction": "Soft cloudy pink with subtle grain",
+      "approved": "2026-11-21",
+      "details": "Match the supplied pink background reference using only CSS radial/linear gradients; no photo, SVG texture or image URL. Use a lighter palette with a broader pale highlight toward the upper left/center and soft pink toward the right/bottom. Paint a fixed, pointer-transparent CSS backdrop behind the active Dashboard through body::before, with the same gradient on the root canvas for scroll edges. Keep body/page/workspace surfaces transparent so the background is independent of their height and stays fixed during scrolling. Restore the ordinary workspace background when Dashboard is hidden. Fill the available viewport during initial loading, accounting for the existing mobile top bar. Preserve the greeting, opaque card/modal surfaces, typography, layout, business logic and other workspace backgrounds. Dev only; no image assets or external requests for the background."
+    },
+    {
       "component": "Dashboard modal system",
       "direction": "Shared native-dialog shell with content and action slots",
       "approved": "2026-11-21",
