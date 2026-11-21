@@ -1,0 +1,37 @@
+# YourStyle services
+
+The Cashier form now uses YourStyle services instead of Custom unlisted item. Staff select Steam, Place rent or Custom; Custom opens a description field. Category is fixed to SERVICE, Size is removed, and Price (₱) is retained following the clarified instruction. Add service uses the existing cart and checkout flow.
+
+Service lines have a blank size, a unique CUSTOM-prefixed code, manual pricing and SERVICE category. Existing backend handling skips inventory creation and stock movement for these custom non-YourFinds lines. No backend, spreadsheet column, payment or report calculation changes. Existing saved cart lines keep their original category and data. Blank/invalid prices and descriptions are rejected; reservation conflicts preserve the form. Zero prices remain allowed as in the previous custom-item flow.
+
+Validation: 18 service, checkout-performance and retail UI checks pass, plus lint, project validation and whitespace checks. The bundle suite has the same 10 failures before and after this change: existing missing dependencies and removed CashierBundleModal fixture. No new failures. Local Chromium checks at 1280px and 390px exercise preset/custom selection, entered prices, validation, cart totals and escaped custom descriptions, with no script errors or horizontal page overflow. Network requests were blocked; no signed-in live checkout was submitted. Reused Bootstrap controls and existing retail tokens. The 21st CLI is unavailable.
+
+Release evidence: /private/tmp/yourstyle-cashier-services-release. Published and verified dev v82, staging only Frontend/Pages/CashierPage over dev v81. All 90 saved and immutable sources match staging. Production sources and deployment records are unchanged. The prior centered footer style remains on dev. Rollback uses dev v81.
+
+## Single description field
+
+The follow-up removes the visible Category control and separate Custom choice/field. Description is now a native text input with Steam and Place rent suggestions through datalist. Staff can type another service in the same field. SERVICE remains hardcoded in the sale payload; blank/overlength descriptions and invalid prices are rejected. Price remains visible. No backend or sheet changes.
+
+All 17 focused service/checkout/retail checks, lint, validation and whitespace checks pass. Local desktop and phone browser checks verify typed descriptions, suggestion association, no Category field, escaped cart text, price validation and unchanged totals. Screenshots reviewed at 1280px and 390px. Native suggestion presentation follows the browser. Release evidence: /private/tmp/yourstyle-service-suggestions-release. Published and verified dev v83 over dev v82. All 90 saved/immutable sources match staging, and production sources/deployments remain unchanged.
+
+## Collapsible services card
+
+The card now starts hidden behind an Add service text button. Click or keyboard activation opens the card and focuses Description; click again closes it while retaining entered values. The toggle uses aria-controls/aria-expanded and inherits disabled cashier controls. Local desktop and phone browser checks cover initial collapse, keyboard opening, pointer closing, retained text and existing cart flow. The same 17 focused tests and project checks pass. Release evidence: /private/tmp/yourstyle-service-toggle-release. Published and verified dev v84 over dev v83. All 90 saved/immutable sources match staging. Production sources and deployment metadata are unchanged.
+
+## Unified product entry
+
+The scanner and manual lookup are combined in Scan or search a product. The shared codeInput retains existing cashier and checkout focus targets. Typed names, codes, sizes and categories use the existing indexed dropdown. Enter adds a unique exact code or a single result; a shared code with multiple prices requires choosing a result. Arrow keys plus Enter select/add; clicking a result and Add to Cart is also supported. Editing clears previous selection. Escape and outside clicks close suggestions. Existing RetailUI combobox setup now targets codeInput. No backend, data fetch or sheet changes.
+
+All 20 service/search/checkout/retail checks pass, plus lint, validation and whitespace. The existing search fixture now supplies the preload dependency and uses the unified input ID. Local actual-page browser checks at 1280px and 390px exercise exact scans, typed names, ambiguous price choice, arrows/Enter, mouse selection/Add to Cart, editing after selection, no-match/Escape/outside clicks, service controls, cart totals and no script errors/overflow. No live sale was submitted. Evidence: /private/tmp/yourstyle-unified-search-release; browser runner /private/tmp/ys-unified-search-ui.cjs. Published and verified dev v85 over dev v84. Only CashierPage and RetailUI were changed in the remote baseline. All 90 saved/immutable sources match staging; production sources and deployments remain unchanged.
+
+## Automatic barcode entry
+
+Remove the scanner subtitle and its ARIA description reference. Enter invokes the same Add to Cart button as a click. After 180ms without further input, a unique exact barcode adds automatically. Known longer-code prefixes and multiple price variants wait for completion or explicit choice. Pending timers stop on subsequent edits, keyboard navigation, reset, add or blur; callback checks account, focus, disabled/hidden state, current value and fresh inventory index. Enter suffixes do not double-add. Keep the price dropdown open when the add button is invoked, including programmatic Enter activation.
+
+All 24 focused barcode/search/service/checkout/retail tests pass. Desktop and phone browser checks exercise automatic adds with no Enter, automatic-then-Enter deduplication, longer prefix protection, multiple prices, normal typed lookup, mouse/keyboard choices, outside close and cart totals; screenshots reviewed. Lint, validation and whitespace pass. No backend, sheet or real sale changes. Evidence: /private/tmp/yourstyle-automatic-barcode-release. Published and verified dev v86 over dev v85. Only CashierPage changed in the remote baseline. All 90 saved/immutable sources match staging; production sources and deployments remain unchanged.
+
+## Compact service fields and checkout reset
+
+Center the Add service text toggle and place Description/Price on one row, with two-thirds width for Description. Successful checkout and New Transaction reset/collapse the card and clear form values. Manual hiding still preserves draft values. Restore the legacy CUSTOM-12345 code shape; increment within the five-digit suffix when the current cart already uses a candidate. Previously saved service codes remain unchanged. SERVICE custom lines skip inventory creation and movements in checkout and manual sales sync; no backend or sheet changes were needed.
+
+All 25 focused service/barcode/search/checkout/retail checks pass. Local desktop/phone browser checks verify field alignment, centered toggle, short codes, suggestions and cart behavior, and collapse/clear after invoking the actual successful-checkout handler with a local fixture. No live checkout submitted. Lint, validation and whitespace pass. Evidence: /private/tmp/yourstyle-service-layout-release. Published and verified dev v87 over dev v86. Only CashierPage and CheckoutModal changed in the remote baseline. All 90 saved/immutable sources match staging; production sources and deployments remain unchanged.
