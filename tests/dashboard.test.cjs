@@ -545,7 +545,7 @@ test('sales cards, activity, ranking groups and payments match the selected repo
   assert.equal(long.activity.at(-1).end,'2026-09-24');
   assert.equal(reads,2,'Selecting any warm range reuses the Sales Log read for that inventory revision');
   const cacheService = c.CacheService.getScriptCache();
-  const source = c.readDashboardCache_(cacheService,'dashboard-sales-rows:v2:v2');
+  const source = c.readDashboardCache_(cacheService,'dashboard-sales-rows:v3:v2');
   assert.equal(source.rows.length,5,'The cached source contains the header and completed sales only');
   assert.equal(typeof source.rows[1][0],'number');
   assert.equal(source.rows[2][30],'','Payment references are excluded from the dashboard cache');

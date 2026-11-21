@@ -112,6 +112,7 @@ function accessRegistry_() {
   "createDashboardReturnPdf": {permission:"inventory.view", handler:createDashboardReturnPdf},
   "createDashboardDeliveryPdf": {permission:"inventory.view", handler:createDashboardDeliveryPdf},
   "createDashboardUnitsPdf": {permission:"dashboard.view", handler:createDashboardUnitsPdf},
+  "createDashboardTransactionsPdf": {permission:"dashboard.view", handler:createDashboardTransactionsPdf},
   "createDashboardNetSalesPdf": {permission:"dashboard.view", handler:createDashboardNetSalesPdf},
   "getDashboardInventoryReport": {permission:"inventory.view", handler:getDashboardInventoryReport},
   "getSupplierReturns": {permission:"inventory.view", handler:getSupplierReturns},

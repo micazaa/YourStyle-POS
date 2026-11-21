@@ -356,7 +356,7 @@ function getDashboardSales(request) {
     return {unavailable:'Choose a range of up to 366 days to view sales.'};
   const period = dashboardPeriod_({start, end:effectiveEnd}, employee, today);
   const version = inventoryReadVersion_();
-  const key = inventoryResponseCacheKey_(version, 'dashboard-sales-v8', [
+  const key = inventoryResponseCacheKey_(version, 'dashboard-sales-v9', [
     period.start, period.end, period.days === 1 && period.end === today ? hour : null
   ]);
   const cache = CacheService.getScriptCache();
@@ -367,6 +367,8 @@ function getDashboardSales(request) {
   const result = dashboardSalesBreakdown_(rows, period, timezone, period.end === today ? hour + 1 : 24, shifts);
   result.collections.canViewCashiers = !!employee.manager;
   if (!employee.manager) result.collections.days.forEach(day => {day.cashiers = [];});
+  result.transactionSummary.canViewCashiers = !!employee.manager;
+  if (!employee.manager) result.transactionSummary.days.forEach(day => {day.cashiers = [];});
   try {
     if (result.items.length) {
       const images = new Map(inventoryListIndex_(version).filter(item => item.code && item.imageUrl)
@@ -394,7 +396,7 @@ function getDashboardSales(request) {
 }
 
 function dashboardSalesRows_(version, cache) {
-  const key = 'dashboard-sales-rows:v2:' + version;
+  const key = 'dashboard-sales-rows:v3:' + version;
   const saved = readDashboardCache_(cache,key);
   if (saved?.rows) {
     configureSalesLogColumnsFromHeaders_(saved.rows[0]);
@@ -410,6 +412,7 @@ function dashboardSalesRows_(version, cache) {
     'TIMESTAMP','RECEIPT_ID','CASHIER','CODE','ITEM_NAME','SIZE','CATEGORY','QUANTITY',
     'PRICE','DISCOUNT','FEE_CHARGED','FEE_ABSORBED','NET_TOTAL','PAYMENT_METHOD','STATUS','REASON',
     'PRICE_SOURCE','PAYMENT_1_METHOD','PAYMENT_1_AMOUNT','PAYMENT_2_METHOD','PAYMENT_2_AMOUNT',
+    'CASH_RECEIVED','CHANGE','ORIGINAL_RECEIPT_ID',
   ].map(field => SALES_IDX[field]);
   const end = Math.max(...fields) + 1;
   const rows = [header];
@@ -454,12 +457,14 @@ function dashboardSalesBreakdown_(rows, period, timezone, hours, shifts = []) {
   const items = new Map();
   const collections = new Map();
   const unitRows = new Map();
+  const transactionRows = new Map();
   const startMs = Date.parse(period.start);
   let absorbedCardFees = 0;
   const metrics = collectSalesMetrics(rows, period.start, null, null, null, {
     endDate: period.end,
     reportingWindow: dashboardSalesWindow_(period.start, period.end, timezone),
     onIncludedRow(row) {
+      dashboardTransactionRow_(transactionRows,row);
       // Split amounts repeat on each item. Keep one payment event, summing only line fees.
       const paymentKey = JSON.stringify([row.date,row.cashier,row.paymentKey]);
       if (!collections.has(paymentKey)) collections.set(paymentKey, {
@@ -516,10 +521,73 @@ function dashboardSalesBreakdown_(rows, period, timezone, hours, shifts = []) {
     period, hourly, activity, payments, absorbedCardFees:roundToTwo(absorbedCardFees),
     collections:dashboardDailyCollections_(collections,period,shifts,timezone),
     unitSummary:dashboardUnitSummary_(unitRows),
+    transactionSummary:dashboardTransactionSummary_(transactionRows,period,timezone,metrics),
     categoryTotals:categoryTotals.map(row => ({...row,sales:roundToTwo(row.sales)})),
     items: Array.from(items.values()).filter(item => item.units > 0).map(item => ({...item,sales:roundToTwo(item.sales)})),
     netSales: metrics.totalSales, units: metrics.itemsCount, transactions: metrics.transactionCount,
   };
+}
+
+function dashboardTransactionRow_(receipts, row) {
+  const key = JSON.stringify([row.date,row.cashier,row.receiptId]);
+  if (!receipts.has(key)) receipts.set(key,{
+    date:row.date,cashier:row.cashier,receiptId:row.receiptId,originalReceiptId:'',
+    timestamp:row.timestamp.getTime(),sales:0,events:new Map(),
+  });
+  const receipt = receipts.get(key);
+  receipt.timestamp = Math.min(receipt.timestamp,row.timestamp.getTime());
+  receipt.sales += row.sales;
+  if (row.originalReceiptId) receipt.originalReceiptId = row.originalReceiptId;
+  if (!receipt.events.has(row.paymentKey)) receipt.events.set(row.paymentKey,{
+    parts:row.paymentParts,methods:new Map(),fees:0,cash:null,change:null,
+  });
+  const event = receipt.events.get(row.paymentKey);
+  event.fees += row.feeCharged;
+  if (row.cashReceived !== null) event.cash = Math.max(event.cash ?? 0,row.cashReceived);
+  if (row.changeGiven !== null) event.change = Math.max(event.change ?? 0,row.changeGiven);
+  if (!event.parts) event.methods.set(row.paymentMethod,
+    (event.methods.get(row.paymentMethod) || 0) + row.sales + row.feeAbsorbed + row.feeCharged);
+}
+
+function dashboardTransactionSummary_(receipts, period, timezone, metrics) {
+  const add = (a,b) => a === null || b === null ? null : roundToTwo(a + b);
+  const stats = items => {
+    const transactions = new Set(items.map(item => item.receiptId).filter(Boolean)).size;
+    const sales = roundToTwo(items.reduce((sum,item) => sum + item.sales,0));
+    return {transactions,sales,average:transactions ? roundToTwo(sales / transactions) : 0,
+      received:items.reduce((sum,item) => add(sum,item.received),0),
+      change:items.reduce((sum,item) => add(sum,item.change),0)};
+  };
+  const items = Array.from(receipts.values()).map(receipt => {
+    let received = 0, change = 0;
+    const methods = new Set();
+    for (const event of receipt.events.values()) {
+      const parts = event.parts || Array.from(event.methods,([method,amount]) => ({method,amount}));
+      const cash = parts.some(part => /^cash$/i.test(part.method.trim()));
+      let digital = 0;
+      for (const part of parts) {
+        methods.add(part.method.trim());
+        if (!/^cash$/i.test(part.method.trim())) digital += part.amount;
+      }
+      if (event.parts && parts.some(part => !/^cash$/i.test(part.method.trim()))) digital += event.fees;
+      received = add(received,cash ? event.cash === null ? null : event.cash + digital : digital);
+      change = add(change,cash ? event.change : 0);
+    }
+    return {receiptId:receipt.receiptId,originalReceiptId:receipt.originalReceiptId,
+      date:receipt.date,cashier:receipt.cashier,timestamp:receipt.timestamp,
+      time:Utilities.formatDate(new Date(receipt.timestamp),timezone,'h:mm a'),
+      paymentMethod:Array.from(methods).join(' / '),sales:roundToTwo(receipt.sales),received,change};
+  }).sort((a,b) => a.timestamp - b.timestamp || a.receiptId.localeCompare(b.receiptId));
+  const days = Array.from({length:period.days},(_,index) => {
+    const date = dashboardDayOffset_(period.start,index), entries = items.filter(item => item.date === date);
+    const cashiers = Array.from(new Set(entries.map(item => item.cashier))).map(name => {
+      const receipts = entries.filter(item => item.cashier === name);
+      return {name,...stats(receipts),receipts:receipts.map(({date,cashier,timestamp,...receipt}) => receipt)};
+    });
+    return {date,...stats(entries),cashiers};
+  });
+  return {days,...stats(items),transactions:metrics.transactionCount,sales:metrics.totalSales,
+    average:metrics.transactionCount ? roundToTwo(metrics.totalSales / metrics.transactionCount) : 0};
 }
 
 function dashboardUnitSummary_(rows) {

@@ -77,6 +77,7 @@ test('graph interval controls appear for multiple days and hide for a single day
 for (const [kind,download,endpoint] of [
  ['NetSales','downloadDashboardNetSalesSummary','createDashboardNetSalesPdf'],
  ['Units','downloadDashboardUnitsSummary','createDashboardUnitsPdf'],
+ ['Transactions','downloadDashboardTransactionsSummary','createDashboardTransactionsPdf'],
  ['Return','downloadDashboardReturnSummary','createDashboardReturnPdf'],
  ['Delivery','downloadDashboardDeliverySummary','createDashboardDeliveryPdf'],
  ['Inventory','downloadDashboardInventoryReport','getDashboardInventoryReport'],
@@ -85,16 +86,19 @@ for (const [kind,download,endpoint] of [
  f.c.updateDashboardHeader(new Date('2026-11-18T04:00:00Z'));
  f.element('dashboardDeliveryTable').hidden=false;
  f.element('dashboardInventoryTotals').hidden=false;
- vm.runInContext("dashboardSalesData={period:{start:'2026-11-18',end:'2026-11-18'},collections:{days:[],total:0},unitSummary:[]};dashboardDeliverySummaryRequest={start:'2026-11-18',end:'2026-11-18'}",f.c);
+ vm.runInContext("dashboardSalesData={period:{start:'2026-11-18',end:'2026-11-18'},collections:{days:[],total:0},unitSummary:[],transactionSummary:{canViewCashiers:true,days:[]}};dashboardDeliverySummaryRequest={start:'2026-11-18',end:'2026-11-18'}",f.c);
  f.c.pageReadCache.set('dashboardOverview',{data:{overview:{returns:{count:1}}}});
  f.c.secureScriptRun[endpoint]=function(){requests.push({success:this.success,failure:this.failure});};
  const button=f.element('dashboard'+kind+'Download'),message=f.element('dashboard'+kind+'Message'),attrs={};
+ const messageAttrs={};message.setAttribute=(key,value)=>{messageAttrs[key]=value;};
  button.setAttribute=(key,value)=>{attrs[key]=value;};button.removeAttribute=key=>{delete attrs[key];};
  f.c.downloadSupplierReturnPdf_=()=>{};
  f.c[download]();assert.equal(button.disabled,true);assert.equal(attrs['aria-busy'],'true');assert.equal(message.textContent,'');
  f.c[download]();assert.equal(requests.length,1);
  requests[0].failure(new Error('Try again'));assert.equal(attrs['aria-busy'],undefined);assert.equal(button.disabled,false);assert.equal(message.textContent,'Try again');
+ assert.equal(messageAttrs.role,'alert');
  f.c[download]();requests[1].success({success:true,base64:'PDF'});assert.equal(attrs['aria-busy'],undefined);assert.equal(button.disabled,false);assert.equal(message.textContent,'');
+ assert.equal(messageAttrs.role,'status');
 });
 
 test('net sales summary opens from the cached dashboard and uses its period for actions',()=>{
@@ -544,6 +548,28 @@ test('stock flyout opens only in the collapsed desktop sidebar',()=>{
  f.c.closeInventoryFlyout();desktop=false;f.c.openInventoryFlyout();assert.equal(menu.hidden,true);
 });
 
+
+test('transactions modal expands only dates from cache, shows weighted averages and discards downloads after logout',()=>{
+ const f=fixture({dev:true,manager:true});
+ const node=()=>({children:[],attrs:{},events:{},append(...items){this.children.push(...items);},setAttribute(k,v){this.attrs[k]=v;},addEventListener(k,v){this.events[k]=v;},insertCell(){const cell=node();this.append(cell);return cell;}});
+ const body=f.element('dashboardTransactionsRows');body.rows=[];body.replaceChildren=()=>{body.rows=[];};body.insertRow=()=>{const row=node();body.rows.push(row);return row;};f.c.document.createElement=node;
+ const period={start:'2026-11-10',end:'2026-11-11'},summary={canViewCashiers:true,transactions:3,sales:132,average:44,days:[{date:'2026-11-10',transactions:3,sales:132,average:44,cashiers:[{name:'Samantha',transactions:1,average:100,sales:100},{name:'Alex',transactions:2,average:16,sales:32}]},{date:'2026-11-11',transactions:0,sales:0,average:0,cashiers:[]}]};
+ f.c.renderDashboardSales({...emptyDashboardSales,period,transactionSummary:summary});f.c.openDashboardTransactionsSummary();
+ assert.equal(f.element('dashboardTransactionsSummary').open,true);assert.equal(f.element('dashboardTransactionsCard').disabled,false);assert.equal(f.dashboardRequests.length,0);
+ assert.deepEqual(body.rows[1].children.map(c=>c.textContent),['Samantha','1','₱100','₱100']);
+ assert.deepEqual(body.rows[2].children.map(c=>c.textContent),['Alex','2','₱16','₱32']);
+ assert.equal(f.element('dashboardTransactionsAverage').textContent,'₱44');assert.equal(f.element('dashboardTransactionsCount').textContent,'3');assert.equal(body.rows.length,4);
+ assert.deepEqual(body.rows[3].children.map(c=>c.textContent),['Nov 11, 2026','No record']);assert.equal(body.rows[3].children[1].colSpan,3);assert.equal(body.rows[3].className,'dashboard-transaction-empty');
+ const toggle=body.rows[0].children[0].children[0];assert.equal(toggle.attrs['aria-expanded'],'true');toggle.events.click();assert.equal(body.rows[1].hidden,true);assert.equal(toggle.attrs['aria-expanded'],'false');
+ f.c.renderDashboardTransactionsSummary();assert.equal(body.rows[1].hidden,true,'Reopening retains the date expansion');
+ const requests=[];f.c.secureScriptRun.createDashboardTransactionsPdf=function(range){requests.push({range,success:this.success});};let downloaded=0;f.c.downloadSupplierReturnPdf_=()=>{downloaded++;};
+ f.c.downloadDashboardTransactionsSummary();f.c.downloadDashboardTransactionsSummary();assert.equal(requests.length,1);assert.deepEqual({...requests[0].range},period);
+ f.c.clearDashboardState();requests[0].success({success:true,base64:'PDF'});assert.equal(downloaded,0);assert.equal(body.rows.length,0);assert.equal(f.element('dashboardTransactionsSummary').open,false);assert.equal(f.element('dashboardTransactionsCard').disabled,true);
+ f.c.renderDashboardSales({...emptyDashboardSales,period,transactionSummary:{...summary,canViewCashiers:false,days:[{...summary.days[0],cashiers:[]}]}});f.c.openDashboardTransactionsSummary();assert.equal(f.element('dashboardTransactionsDownload').disabled,true);assert.equal(body.rows.length,1);
+ f.c.renderDashboardSales({...emptyDashboardSales,period,transactionSummary:{canViewCashiers:true,transactions:0,sales:0,average:0,days:[summary.days[1]]}});f.c.openDashboardTransactionsSummary();
+ assert.equal(body.rows.length,1);assert.equal(body.rows[0].children[1].textContent,'No record');assert.equal(f.element('dashboardTransactionsMessage').hidden,true);
+ f.c.renderDashboardSales({...emptyDashboardSales,period,transactionSummary:{...summary,days:[{...summary.days[0],transactions:1,sales:0,average:0,cashiers:[{name:'Alex',transactions:1,sales:0,average:0}]}]}});f.c.openDashboardTransactionsSummary();assert.equal(body.rows.length,2);assert.notEqual(body.rows[0].className,'dashboard-transaction-empty','Zero-value exchange is still a transaction');
+});
 
 test('units modal renders the cached groups, downloads the selected range and clears private state on logout',()=>{
  const f=fixture({dev:true,manager:true});

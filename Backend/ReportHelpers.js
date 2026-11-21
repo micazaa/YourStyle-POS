@@ -691,6 +691,9 @@ function collectSalesMetrics(
       code: code, name: name, size: size, price: price, units: countedQty, sales: netTotal, exchange: exchange,
       feeAbsorbed: Number(row[SALES_IDX.FEE_ABSORBED]) || 0,
       feeCharged: Number(row[SALES_IDX.FEE_CHARGED]) || 0,
+      receiptId: receiptId, originalReceiptId: String(row[SALES_IDX.ORIGINAL_RECEIPT_ID] || '').trim(),
+      cashReceived: row[SALES_IDX.CASH_RECEIVED] === '' || row[SALES_IDX.CASH_RECEIVED] == null ? null : Number(row[SALES_IDX.CASH_RECEIVED]) || 0,
+      changeGiven: row[SALES_IDX.CHANGE] === '' || row[SALES_IDX.CHANGE] == null ? null : Number(row[SALES_IDX.CHANGE]) || 0,
       cashier: reportingCashier, paymentMethod: paymentMethod,
       paymentKey: isSplitPayment ? salesPaymentKey_(row) : JSON.stringify([receiptId,reason]),
       paymentParts: isSplitPayment ? [

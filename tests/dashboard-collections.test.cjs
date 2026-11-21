@@ -3,9 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const clean = value => JSON.parse(JSON.stringify(value));
-function sale({date='2026-11-20T02:00:00Z',receipt='R1',cashier='Ana Cashier',net=100,charged=0,absorbed=0,method='Cash',parts=[],reason='',status='COMPLETED',code='PIN1',name='Yellow',size='',category='PINS',qty=1,price=100}={}) {
+function sale({date='2026-11-20T02:00:00Z',receipt='R1',cashier='Ana Cashier',net=100,charged=0,absorbed=0,method='Cash',parts=[],reason='',status='COMPLETED',code='PIN1',name='Yellow',size='',category='PINS',qty=1,price=100,received,change,original}={}) {
   const row=Array(34).fill('');
   Object.assign(row,{0:date,1:receipt,2:cashier,3:code,4:name,5:size,6:category,7:qty,8:price,10:charged,11:absorbed,12:net,13:method,15:status,19:reason});
+  if(received!==undefined)row[16]=received;if(change!==undefined)row[17]=change;if(original!==undefined)row[20]=original;
   parts.forEach((part,index)=>{row[28+index*3]=part[0];row[29+index*3]=part[1];});
   return row;
 }
@@ -36,6 +37,89 @@ function shift(cashier,start,end='') {
   const row=Array(38).fill('');Object.assign(row,{2:'CASHIER SHIFT',4:cashier,6:start,7:end});return row;
 }
 const range={start:'2026-11-19',end:'2026-11-20'};
+
+test('transaction summary counts receipts once, keeps net revenue and deduplicates received/change and split allocations',()=>{
+ const {c,reads}=harness([
+  sale({net:120,received:500,change:300}),sale({net:80,received:500,change:300}),
+  sale({receipt:'SPLIT',net:96.8,absorbed:3.2,received:50,change:10,parts:[['Cash',40],['Credit Card',160]]}),
+  sale({receipt:'SPLIT',net:100,received:50,change:10,parts:[['Cash',40],['Credit Card',160]]}),
+  sale({receipt:'QR',cashier:'Bea',net:100,charged:1,method:'QR Code',received:0,change:0}),
+  sale({receipt:'VOID',status:'VOIDED',net:10000,received:10000,change:0}),
+ ]);
+ const data=c.getDashboardSales(range),summary=clean(data.transactionSummary);
+ assert.equal(summary.transactions,3);assert.equal(summary.sales,data.netSales);assert.equal(summary.average,165.6);
+ assert.deepEqual(summary.days.map(d=>d.date),['2026-11-19','2026-11-20']);assert.equal(summary.days[0].transactions,0);
+ const ana=summary.days[1].cashiers.find(c=>c.name==='Ana Cashier'),bea=summary.days[1].cashiers.find(c=>c.name==='Bea');
+ assert.equal(ana.transactions,2);assert.equal(ana.average,198.4);
+ assert.equal(ana.receipts[0].received,500);assert.equal(ana.receipts[0].change,300);assert.equal(ana.receipts[0].sales,200);
+ assert.equal(ana.receipts[1].received,210);assert.equal(ana.receipts[1].change,10);assert.equal(ana.receipts[1].sales,196.8);
+ assert.equal(bea.receipts[0].received,101);assert.equal(bea.receipts[0].change,0);
+ assert.equal(summary.received,811);assert.equal(summary.change,310);
+ c.getDashboardSales({start:'2026-11-20',end:'2026-11-20'});assert.deepEqual(reads,{sales:1,shifts:1});
+});
+
+test('transaction receipts keep reservation payment events and exchange anchors, including a zero-value exchange',()=>{
+ const {c}=harness([
+  sale({receipt:'RES',reason:'RESERVATION DEPOSIT',net:20,received:20,change:10,parts:[['Cash',10],['GCash',10]]}),
+  sale({receipt:'RES',reason:'RESERVATION BALANCE',net:80,received:30,change:10,parts:[['Cash',20],['GCash',60]]}),
+  sale({receipt:'EX-1',date:'2026-11-18T02:00:00Z',cashier:'Old cashier',reason:'EXCHANGE RETURN',net:-1000,received:0,change:0,original:'YS-OLD',qty:-1}),
+  sale({receipt:'EX-1',date:'2026-11-20T10:00:00Z',cashier:'Bea',reason:'EXCHANGE REPLACEMENT',net:2800,received:2000,change:200,original:'YS-OLD'}),
+  sale({receipt:'EX-2',reason:'EXCHANGE RETURN',net:-100,received:0,change:0,original:'YS-OLD2',qty:-1}),
+  sale({receipt:'EX-2',reason:'EXCHANGE REPLACEMENT',net:100,received:0,change:0,original:'YS-OLD2'}),
+ ]);
+ const data=c.getDashboardSales({start:'2026-11-18',end:'2026-11-20'}),summary=clean(data.transactionSummary);
+ assert.deepEqual(summary.days.map(d=>d.transactions),[0,0,3]);assert.equal(summary.sales,1900);assert.equal(summary.transactions,3);
+ const receipts=summary.days[2].cashiers.flatMap(c=>c.receipts);
+ const res=receipts.find(r=>r.receiptId==='RES');assert.equal(res.received,120);assert.equal(res.change,20);assert.equal(res.sales,100);
+ const exchange=receipts.find(r=>r.receiptId==='EX-1');assert.equal(exchange.originalReceiptId,'YS-OLD');assert.equal(exchange.time,'6:00 PM');assert.equal(exchange.received,2000);assert.equal(exchange.change,200);assert.equal(exchange.sales,1800);
+ assert(summary.days[2].cashiers.find(c=>c.name==='Bea').receipts.includes(exchange));assert(!JSON.stringify(summary).includes('Old cashier'));
+ const even=receipts.find(r=>r.receiptId==='EX-2');assert.equal(even.sales,0);assert.equal(even.received,0);
+});
+
+test('transaction PDF uses cached receipts, merged horizontal cashiers, original subtitle, safe identity and access rules',()=>{
+ const {c,reads}=harness([
+  sale({receipt:'R<1>',cashier:'Ana <script>',net:80,received:100,change:20}),
+  sale({receipt:'R2',cashier:'Ana <script>',net:120,received:200,change:80}),
+  sale({receipt:'EX',cashier:'Bea',reason:'EXCHANGE RETURN',net:-100,received:0,change:0,original:'OLD<img>',qty:-1}),
+  sale({receipt:'EX',cashier:'Bea',reason:'EXCHANGE REPLACEMENT',net:100,received:0,change:0,original:'OLD<img>'}),
+ ]);
+ let html;c.Utilities.newBlob=value=>{html=value;return {getAs:()=>({getBytes:()=>[1]})};};c.Utilities.base64Encode=()=> 'PDF';
+ c.getDashboardSales(range);const result=c.createDashboardTransactionsPdf({...range,preparedBy:'Forged'});
+ assert.equal(result.fileName,'Transactions_Report_Summary_2026-11-19_to_2026-11-20.pdf');
+ assert.match(html,/TRANSACTIONS REPORT SUMMARY/);assert.match(html,/<th>Cashier<\/th><th>Receipt/);assert.match(html,/writing-mode:horizontal-tb/);assert.doesNotMatch(html,/writing-mode:vertical/);
+ assert.match(html,/scope="rowgroup" rowspan="2"><span>Ana &lt;script&gt;<\/span>/);
+ assert.match(html,/EX<small class="original">Original: OLD&lt;img&gt;<\/small>/);
+ assert.match(html,/3 transactions · Average sale ₱66.67 · Sales ₱200/);assert.match(html,/class="date-metrics"/);
+ assert(html.indexOf('Nov 19, 2026')<html.indexOf('Nov 20, 2026'));assert.match(html,/Mia &lt;Manager&gt;/);assert.doesNotMatch(html,/<script>|<img>|Forged|Extra payment|Replacement|Exchange<small/);
+ assert.deepEqual(reads,{sales:1,shifts:1});c.ACCESS_REQUEST_CONTEXT_.actor.name='New preparer';c.createDashboardTransactionsPdf(range);assert.match(html,/New preparer/);
+ c.ACCESS_REQUEST_CONTEXT_.actor.manager=false;const today={start:'2026-11-20',end:'2026-11-20'};
+ const restricted=c.getDashboardSales(today);assert.equal(restricted.transactionSummary.canViewCashiers,false);assert.deepEqual(clean(restricted.transactionSummary.days[0].cashiers),[]);
+ assert(!JSON.stringify(restricted.transactionSummary).includes('Ana'));assert.equal(c.createDashboardTransactionsPdf(today).success,false);
+ assert.equal(c.createDashboardTransactionsPdf(range).success,false);c.ACCESS_REQUEST_CONTEXT_=null;assert.throws(()=>c.createDashboardTransactionsPdf(range),/Sign in/);
+});
+
+test('empty transaction dates contain only a No record date band while zero-value exchanges retain their rows and daily total',()=>{
+ const {c}=harness([
+  sale({receipt:'EVEN',reason:'EXCHANGE RETURN',net:-100,received:0,change:0,original:'OLD',qty:-1}),
+  sale({receipt:'EVEN',reason:'EXCHANGE REPLACEMENT',net:100,received:0,change:0,original:'OLD'}),
+ ]);
+ const data=c.getDashboardSales({start:'2026-11-18',end:'2026-11-20'}),html=c.buildDashboardTransactionsHtml_(data,'Preparer');
+ const days=html.split('<tbody><tr class="date-heading').slice(1);
+ assert.equal(days.length,3);
+ for(const day of days.slice(0,2)){
+  assert.match(day,/class="date-metrics">No record<\/span>/);
+  assert.doesNotMatch(day,/<tr|Daily total|No completed checkouts|0 transactions/);
+ }
+ assert.match(days[2],/has-records/);assert.doesNotMatch(days[2],/No record/);assert.match(days[2],/>EVEN<small class="original">Original: OLD/);
+ assert.equal((html.match(/class="daily-total"/g)||[]).length,1);assert.match(html,/GRAND TOTAL/);
+});
+
+test('legacy missing cash amounts remain unknown while dashboard revenue and zero dates stay intact',()=>{
+ const {c}=harness([sale()]);const data=c.getDashboardSales(range),summary=clean(data.transactionSummary);
+ assert.equal(summary.days[0].average,0);assert.equal(summary.received,null);assert.equal(summary.change,null);
+ assert.equal(summary.days[1].cashiers[0].receipts[0].received,null);
+ const html=c.buildDashboardTransactionsHtml_(data,'Preparer');assert.match(html,/— = amount not recorded/);assert.equal(summary.sales,data.netSales);
+});
 
 test('expected daily collections reconcile by payment and recorded cashier shifts, including split fees and refunds',()=>{
   const {c,reads}=harness([
