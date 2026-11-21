@@ -493,7 +493,7 @@ test('sales cards, activity, ranking groups and payments match the selected repo
       getAll: keys => Object.fromEntries(keys.filter(key => cache.has(key)).map(key => [key,cache.get(key)])),
       putAll: entries => Object.entries(entries).forEach(([key,value]) => cache.set(key,value)),
     })},
-    SpreadsheetApp: {getActiveSpreadsheet: () => ({getSheetByName: () => ({
+    SpreadsheetApp: {getActiveSpreadsheet: () => ({getSheetByName: name => name === 'Cash Report Log' ? null : ({
       getRange: () => ({getDisplayValues: () => [rows[0]]}),
       getDataRange: () => ({getValues() { reads++; return rows; }}),
     })})},
@@ -515,9 +515,9 @@ test('sales cards, activity, ranking groups and payments match the selected repo
   };
   c.Utilities.base64Encode = bytes => Buffer.from(bytes).toString('base64');
   const pdf = c.createDashboardNetSalesPdf(period);
-  assert.equal(pdf.fileName,'Net_Sales_Summary_2026-09-24.pdf');
-  assert.match(pdfHtml, /Pins<\/th><td>3<\/td><td>₱120/);
-  assert.match(pdfHtml, /Grand total<\/th><td>4<\/td><td>₱170/);
+  assert.equal(pdf.fileName,'Sales_Report_Summary_2026-09-24.pdf');
+  assert.match(pdfHtml, /Cash<\/th><td>₱100/);
+  assert.match(pdfHtml, /GRAND TOTAL<\/th><td bgcolor="#f2dede">₱170/);
   assert.deepEqual({...result.previous}, {start:'2026-09-23',end:'2026-09-23',netSales:80,units:3,transactions:1});
   assert.deepEqual(Array.from(result.activity[10].units), [1,3,0,0]);
   assert.deepEqual(Array.from(result.activity[10].sales), [50,120,0,0]);
@@ -545,7 +545,7 @@ test('sales cards, activity, ranking groups and payments match the selected repo
   assert.equal(long.activity.at(-1).end,'2026-09-24');
   assert.equal(reads,2,'Selecting any warm range reuses the Sales Log read for that inventory revision');
   const cacheService = c.CacheService.getScriptCache();
-  const source = c.readDashboardCache_(cacheService,'dashboard-sales-rows:v1:v2');
+  const source = c.readDashboardCache_(cacheService,'dashboard-sales-rows:v3:v2');
   assert.equal(source.rows.length,5,'The cached source contains the header and completed sales only');
   assert.equal(typeof source.rows[1][0],'number');
   assert.equal(source.rows[2][30],'','Payment references are excluded from the dashboard cache');

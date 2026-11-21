@@ -1,0 +1,136 @@
+<style>
+  dialog.dashboard-modal {
+    --dashboard-modal-width: 680px;
+    width: min(var(--dashboard-modal-width), calc(100% - 32px));
+    max-width: none;
+    max-height: min(720px, calc(var(--ys-viewport-height, 100dvh) - 32px));
+    padding: var(--space-5);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-dialog);
+    box-shadow: var(--shadow-overlay);
+    background: var(--card-bg);
+    color: var(--text-dark);
+    overflow: hidden;
+  }
+  dialog.dashboard-modal[open] { display: flex; flex-direction: column; animation: dashboard-modal-enter 140ms ease-out; }
+  dialog.dashboard-modal::backdrop { background: #2f1f2b66; }
+  dialog.dashboard-modal.dashboard-modal-compact { --dashboard-modal-width: 420px; }
+  .dashboard-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-4); flex-shrink: 0; }
+  .dashboard-modal-heading { min-width: 0; }
+  .dashboard-modal-heading h2 { margin: 0; font-size: var(--font-title); font-weight: 600; line-height: 1.25; letter-spacing: -.02em; }
+  .dashboard-modal-heading p { margin: var(--space-1) 0 0; color: var(--text-gray); font-size: var(--font-small); overflow-wrap: anywhere; }
+  .dashboard-modal-heading p:empty { display: none; }
+  .dashboard-modal-close { flex-shrink: 0; width: var(--control-height); min-width: var(--control-height); height: var(--control-height); display: grid; place-items: center; padding: 0; }
+  .dashboard-modal-close::before { content: ''; width: 15px; height: 15px; background: currentColor; clip-path: polygon(9% 0,50% 41%,91% 0,100% 9%,59% 50%,100% 91%,91% 100%,50% 59%,9% 100%,0 91%,41% 50%,0 9%); }
+  .dashboard-modal-body { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--border-color) transparent; }
+  .dashboard-modal-body .dashboard-delivery-scroll { overflow: visible; }
+  .dashboard-modal-body > [role="status"] { margin: 0 0 var(--space-3); font-size: var(--font-small); color: var(--text-gray); }
+  .dashboard-modal-body > [role="status"]:empty { display: none; }
+  .dashboard-modal-body > [role="alert"] { margin: 0 0 var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-danger); border-radius: var(--radius-control); background: var(--color-danger-bg); color: var(--color-danger) !important; font-size: var(--font-small); }
+  .dashboard-modal-body :is(.form-control,.form-select) { min-height: var(--control-height); border-radius: var(--radius-control); border-color: var(--border-color); background-color: var(--card-bg); color: var(--text-dark); }
+  .dashboard-modal-body .form-label { font-size: var(--font-small); font-weight: 500; margin-bottom: var(--space-1); }
+  .dashboard-modal-body input:is([type="checkbox"],[type="radio"]) { accent-color: var(--pink-ink); }
+  .dashboard-modal-body [aria-invalid="true"] { border-color: var(--color-danger); }
+  .dashboard-modal-footer { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; padding-top: var(--space-4); margin-top: var(--space-4); border-top: 1px solid var(--border-color); }
+  .dashboard-modal-footer > :last-child { margin-inline-start: auto; }
+  .dashboard-modal :is(.btn-light,.btn-pink,.btn-danger) { min-height: var(--control-height); border-radius: var(--radius-control); font-size: var(--font-body); }
+  .dashboard-modal .btn-light { background: var(--surface-subtle); color: var(--text-dark); border-color: var(--border-color); }
+  .dashboard-modal .btn-light:hover { background: var(--pink-light); }
+  .dashboard-modal .btn-pink { background: var(--pink-main); color: var(--pink-ink); border-color: var(--pink-ink); }
+  .dashboard-modal .btn-pink:hover { background: var(--pink-hover); }
+  .dashboard-modal .btn-danger { background: var(--color-danger); color: #fff; border-color: var(--color-danger); }
+  .dashboard-modal .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .dashboard-modal .btn:focus-visible { outline: 3px solid var(--focus-color); outline-offset: 2px; box-shadow: none; }
+  .dashboard-modal .dashboard-return-icon { width: var(--control-height); height: var(--control-height); padding: 0; display: grid; place-items: center; }
+  .dashboard-modal .dashboard-return-icon[aria-busy="true"] > svg { display: none; }
+  .dashboard-modal .dashboard-return-icon[aria-busy="true"]::after { content: ''; width: 19px; height: 19px; border: 2px solid currentColor; border-inline-end-color: transparent; border-radius: 50%; animation: dashboard-status-spin .8s linear infinite; }
+  .dashboard-modal .dashboard-modal-total :is(th,td) { position: sticky; bottom: 0; z-index: 1; padding: 12px 10px; border-top: 2px solid var(--border-color); border-bottom: 0; background: var(--pink-light); color: var(--pink-ink); box-shadow: none; font-size: .875rem; font-weight: 500; line-height: 1.4; vertical-align: middle; font-variant-numeric: tabular-nums; }
+  .dashboard-modal .dashboard-modal-total :is(strong,b) { font: inherit; }
+  .dashboard-modal .dashboard-modal-total small { font-size: .75rem; font-weight: 400; color: var(--text-gray); }
+  .dashboard-modal .dashboard-calendar-shortcuts { margin-top: var(--space-3); padding-top: var(--space-3); border-color: var(--border-color); }
+  .dashboard-modal .dashboard-calendar-top { gap: var(--space-2); margin-bottom: var(--space-2); }
+  .dashboard-modal .dashboard-calendar-top strong { font-size: var(--font-body); font-weight: 500; }
+  @keyframes dashboard-modal-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @media (max-width: 575px) {
+    dialog.dashboard-modal { width: calc(100% - 24px); max-height: calc(var(--ys-viewport-height, 100dvh) - 24px); padding: var(--space-4); }
+    .dashboard-modal-heading h2 { font-size: 1.25rem; }
+    .dashboard-modal :is(.form-control,.form-select) { font-size: 16px; }
+    .dashboard-modal .dashboard-modal-total :is(th,td) { padding: 10px 4px; font-size: .8125rem; }
+  }
+  @media (pointer: coarse) { .dashboard-modal .dashboard-calendar-grid button { min-height: var(--control-height); } }
+  @media (prefers-reduced-motion: reduce) {
+    dialog.dashboard-modal[open], .dashboard-modal .dashboard-return-icon[aria-busy="true"]::after { animation: none; }
+  }
+</style>
+<script>
+// One native-dialog shell; each instance supplies its existing heading, content and actions.
+(function () {
+  'use strict';
+  const states = new WeakMap();
+  const focusSelector = 'button:not(:disabled),a[href],input:not(:disabled):not([type="hidden"]),select:not(:disabled),textarea:not(:disabled),summary,[tabindex]:not([tabindex="-1"])';
+  const visible = element => !element.closest('[hidden],[inert]') && element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden';
+  function isBusy(dialog) { return !!dialog.querySelector('[aria-busy="true"]'); }
+  function requestClose(dialog) {
+    const state = states.get(dialog);
+    if (!state || !dialog.open || isBusy(dialog) || state.closing) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !dialog.animate) { dialog.close(); return; }
+    const animation = dialog.animate([{opacity:1,transform:'translateY(0)'},{opacity:0,transform:'translateY(4px)'}],{duration:110,easing:'ease-in',fill:'forwards'});
+    state.closing = animation;
+    animation.finished.then(() => {
+      if (state.closing === animation && dialog.open && !isBusy(dialog)) dialog.close();
+      animation.cancel(); state.closing = null;
+    }).catch(() => {});
+  }
+  function syncBusy(dialog) {
+    const state = states.get(dialog), busy = isBusy(dialog);
+    if (dialog.getAttribute('aria-busy') !== String(busy)) dialog.setAttribute('aria-busy',String(busy));
+    dialog.querySelectorAll('[data-dashboard-modal-close],.dashboard-modal-footer .btn-light').forEach(button => {
+      if (busy && !state.disabled.has(button)) {state.disabled.set(button,button.disabled);button.disabled = true;}
+      else if (!busy && state.disabled.has(button)) {button.disabled = state.disabled.get(button);state.disabled.delete(button);}
+    });
+  }
+  function mount(dialog) {
+    if (states.has(dialog)) return;
+    const heading = dialog.querySelector('[data-dashboard-modal-heading]');
+    const footer = dialog.querySelector('[data-dashboard-modal-footer]');
+    if (!heading || !footer) throw new Error('Dashboard modal slots are missing: ' + dialog.id);
+    const state = {disabled:new Map(),closing:null}; states.set(dialog,state);
+    const header = document.createElement('header'); header.className = 'dashboard-modal-header';
+    heading.className = 'dashboard-modal-heading';
+    const close = document.createElement('button'); close.type = 'button'; close.className = 'btn btn-light dashboard-modal-close';
+    close.dataset.dashboardModalClose = ''; close.autofocus = true;
+    close.setAttribute('aria-label','Close ' + heading.querySelector('h2').textContent.toLowerCase());
+    header.append(heading,close);
+    const body = document.createElement('div'); body.className = 'dashboard-modal-body';
+    Array.from(dialog.childNodes).filter(node => node !== footer).forEach(node => body.append(node));
+    footer.className = 'dashboard-modal-footer';
+    dialog.append(header,body,footer); dialog.setAttribute('aria-modal','true');
+    dialog.addEventListener('cancel',event => {event.preventDefault();requestClose(dialog);});
+    dialog.addEventListener('click',event => {
+      const button = event.target.closest('button');
+      if (!button) return;
+      if (isBusy(dialog)) {event.preventDefault();event.stopImmediatePropagation();return;}
+      if (button.hasAttribute('data-dashboard-modal-close')) {event.preventDefault();requestClose(dialog);}
+    },true);
+    dialog.addEventListener('submit',event => {
+      if (isBusy(dialog)) {event.preventDefault();event.stopImmediatePropagation();return;}
+      if (event.target.method === 'dialog') {event.preventDefault();requestClose(dialog);}
+    },true);
+    dialog.addEventListener('keydown',event => {
+      if (event.key !== 'Tab' || event.defaultPrevented) return;
+      const controls = Array.from(dialog.querySelectorAll(focusSelector)).filter(visible);
+      if (!controls.length) {event.preventDefault();dialog.focus();return;}
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {event.preventDefault();last.focus();}
+      else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {event.preventDefault();first.focus();}
+    });
+    dialog.addEventListener('close',() => {state.closing?.cancel();state.closing = null;});
+    new MutationObserver(() => syncBusy(dialog)).observe(dialog,{attributes:true,subtree:true,attributeFilter:['aria-busy']});
+    syncBusy(dialog);
+  }
+  function mountAll() {document.querySelectorAll('dialog.dashboard-modal').forEach(mount);}
+  window.DashboardModal = {mountAll,requestClose};
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',mountAll,{once:true});
+  else mountAll();
+})();
+</script>

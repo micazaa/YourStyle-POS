@@ -540,6 +540,8 @@
       return;
     }
 
+    toastEl.setAttribute('role',isError ? 'alert' : 'status');
+    toastEl.setAttribute('aria-live',isError ? 'assertive' : 'polite');
     msgEl.textContent = msg;
 
     toastEl.className =

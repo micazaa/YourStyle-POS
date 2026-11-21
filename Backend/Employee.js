@@ -54,7 +54,7 @@ function employeeLoginAccounts_(data) {
   return accounts;
 }
 
-function verifyEmployee(employeeName, pin, cashierReportId) {
+function verifyEmployee(employeeName, pin, cashierReportId, includeProfile) {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("Employees");
@@ -107,6 +107,7 @@ function verifyEmployee(employeeName, pin, cashierReportId) {
         inventoryManagerToken: employeeCanAuthorizeManager_(account)
           ? createInventoryManagerSession_(employeeId, fullName, employeeAuthFingerprint_(account.row)) : ""
       };
+      if(typeof employeeProfileLogin_==='function')Object.assign(verified,employeeProfileLogin_(account,data[0],includeProfile===true));
       if (cashierReportId) {
         try {attachCashierSession_(verified.dashboardToken, String(cashierReportId), fullName);}
         catch (error) {
@@ -384,8 +385,8 @@ function revokeInventoryManagerSession(token) {
   return { success: true };
 }
 
-function loginAndStartShift(name, pin, petty, handoverVersion) {
-  const employee = verifyEmployee(name, pin);
+function loginAndStartShift(name, pin, petty, handoverVersion, includeProfile) {
+  const employee = verifyEmployee(name, pin, '', includeProfile);
   if (!employee || !employee.success) return employee;
   let shift;
   const previous = ACCESS_REQUEST_CONTEXT_;

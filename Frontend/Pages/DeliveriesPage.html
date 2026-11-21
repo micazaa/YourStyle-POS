@@ -21,9 +21,9 @@
 
       <div>
 
-        <h4 class="fw-bold mb-1">
+        <h1 class="fw-bold mb-1">
           Deliveries
-        </h4>
+        </h1>
 
         <div class="small text-muted">
           YourFinds and YourStyle delivery history
@@ -71,11 +71,12 @@
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="workspace-filters card-body d-flex flex-wrap gap-2">
-      <select id="deliveriesCategoryFilter" class="form-select" style="width:180px;" aria-label="Delivery type" onchange="filterDeliveriesPage()"><option value="">All</option><option value="YOURFINDS">YOURFINDS</option><option value="YOURSTYLE">YOURSTYLE</option></select>
-      <input type="search" id="deliveriesSearch" class="form-control" style="flex:1;min-width:220px;" aria-label="Search deliveries" placeholder="Search code, product, category, size..." oninput="filterDeliveriesPage()">
+      <div class="ys-filter-field" style="width:180px;"><label for="deliveriesCategoryFilter">Delivery type</label><select id="deliveriesCategoryFilter" class="form-select" aria-label="Delivery type" onchange="filterDeliveriesPage()"><option value="">All types</option><option value="YOURFINDS">YourFinds</option><option value="YOURSTYLE">YourStyle</option></select></div>
+      <div class="ys-filter-field ys-filter-search"><label for="deliveriesSearch">Search deliveries</label><input type="search" id="deliveriesSearch" class="form-control" aria-label="Search deliveries" placeholder="Code, product, category or size" oninput="filterDeliveriesPage()"></div>
       <label class="form-check align-self-center mb-0"><input type="checkbox" class="form-check-input" id="deliveriesUndistributedFilter" onchange="filterDeliveriesPage()"> Awaiting distribution</label>
     </div>
   </div>
+  <p id="deliveriesTableBodyResultCount" class="small text-muted mb-3" role="status" aria-live="polite"></p>
 
     <!-- =====================================================
          TABLE

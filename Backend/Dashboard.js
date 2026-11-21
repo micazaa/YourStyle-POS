@@ -356,15 +356,19 @@ function getDashboardSales(request) {
     return {unavailable:'Choose a range of up to 366 days to view sales.'};
   const period = dashboardPeriod_({start, end:effectiveEnd}, employee, today);
   const version = inventoryReadVersion_();
-  const key = inventoryResponseCacheKey_(version, 'dashboard-sales-v3', [
+  const key = inventoryResponseCacheKey_(version, 'dashboard-sales-v9', [
     period.start, period.end, period.days === 1 && period.end === today ? hour : null
   ]);
   const cache = CacheService.getScriptCache();
   const cached = readDashboardCache_(cache,key);
   if (cached) return cached;
 
-  const {rows, readAt} = dashboardSalesRows_(version, cache);
-  const result = dashboardSalesBreakdown_(rows, period, timezone, period.end === today ? hour + 1 : 24);
+  const {rows, shifts, readAt} = dashboardSalesRows_(version, cache);
+  const result = dashboardSalesBreakdown_(rows, period, timezone, period.end === today ? hour + 1 : 24, shifts);
+  result.collections.canViewCashiers = !!employee.manager;
+  if (!employee.manager) result.collections.days.forEach(day => {day.cashiers = [];});
+  result.transactionSummary.canViewCashiers = !!employee.manager;
+  if (!employee.manager) result.transactionSummary.days.forEach(day => {day.cashiers = [];});
   try {
     if (result.items.length) {
       const images = new Map(inventoryListIndex_(version).filter(item => item.code && item.imageUrl)
@@ -392,7 +396,7 @@ function getDashboardSales(request) {
 }
 
 function dashboardSalesRows_(version, cache) {
-  const key = 'dashboard-sales-rows:v1:' + version;
+  const key = 'dashboard-sales-rows:v3:' + version;
   const saved = readDashboardCache_(cache,key);
   if (saved?.rows) {
     configureSalesLogColumnsFromHeaders_(saved.rows[0]);
@@ -405,9 +409,10 @@ function dashboardSalesRows_(version, cache) {
   const [header,...source] = sheet.getDataRange().getValues();
   // Keep the live column layout and only the cells used by dashboard reports.
   const fields = [
-    'TIMESTAMP','RECEIPT_ID','CODE','ITEM_NAME','SIZE','CATEGORY','QUANTITY',
-    'PRICE','DISCOUNT','FEE_ABSORBED','NET_TOTAL','PAYMENT_METHOD','STATUS','REASON',
+    'TIMESTAMP','RECEIPT_ID','CASHIER','CODE','ITEM_NAME','SIZE','CATEGORY','QUANTITY',
+    'PRICE','DISCOUNT','FEE_CHARGED','FEE_ABSORBED','NET_TOTAL','PAYMENT_METHOD','STATUS','REASON',
     'PRICE_SOURCE','PAYMENT_1_METHOD','PAYMENT_1_AMOUNT','PAYMENT_2_METHOD','PAYMENT_2_AMOUNT',
+    'CASH_RECEIVED','CHANGE','ORIGINAL_RECEIPT_ID',
   ].map(field => SALES_IDX[field]);
   const end = Math.max(...fields) + 1;
   const rows = [header];
@@ -420,7 +425,16 @@ function dashboardSalesRows_(version, cache) {
     compact[SALES_IDX.TIMESTAMP] = timestamp;
     rows.push(compact);
   }
-  const snapshot = {rows,readAt};
+  const shiftSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.CASH_REPORT_LOG);
+  const shifts = shiftSheet ? shiftSheet.getDataRange().getValues().slice(1).flatMap(row => {
+    if (String(row[CASH_REPORT_IDX.REPORT_TYPE]).trim().toUpperCase() !== 'CASHIER SHIFT') return [];
+    const cashier = String(row[CASH_REPORT_IDX.EMPLOYEE] || '').trim();
+    const start = row[CASH_REPORT_IDX.SHIFT_START] ? new Date(row[CASH_REPORT_IDX.SHIFT_START]).getTime() : NaN;
+    const end = row[CASH_REPORT_IDX.SHIFT_END] ? new Date(row[CASH_REPORT_IDX.SHIFT_END]).getTime() : null;
+    return cashier && Number.isFinite(start) && (end === null || Number.isFinite(end) && end >= start)
+      ? [{cashier,start,end}] : [];
+  }).sort((a,b) => b.start - a.start) : [];
+  const snapshot = {rows,shifts,readAt};
   cacheDashboardResponse_(cache,key,snapshot,version);
   return snapshot;
 }
@@ -429,7 +443,7 @@ function dashboardSalesWindow_(start, end, timezone) {
   return [start, dashboardDayOffset_(end, 1)].map(date => Utilities.parseDate(date, timezone, 'yyyy-MM-dd'));
 }
 
-function dashboardSalesBreakdown_(rows, period, timezone, hours) {
+function dashboardSalesBreakdown_(rows, period, timezone, hours, shifts = []) {
   const categories = ['YOURFINDS', 'PINS', 'OTHERS', 'WHOLESALE'];
   const categoryTotals = categories.map(category => ({category, units:0, sales:0}));
   const hourly = period.days === 1;
@@ -441,15 +455,42 @@ function dashboardSalesBreakdown_(rows, period, timezone, hours) {
     units: [0,0,0,0],
   }));
   const items = new Map();
+  const collections = new Map();
+  const unitRows = new Map();
+  const transactionRows = new Map();
   const startMs = Date.parse(period.start);
   let absorbedCardFees = 0;
   const metrics = collectSalesMetrics(rows, period.start, null, null, null, {
     endDate: period.end,
     reportingWindow: dashboardSalesWindow_(period.start, period.end, timezone),
     onIncludedRow(row) {
+      dashboardTransactionRow_(transactionRows,row);
+      // Split amounts repeat on each item. Keep one payment event, summing only line fees.
+      const paymentKey = JSON.stringify([row.date,row.cashier,row.paymentKey]);
+      if (!collections.has(paymentKey)) collections.set(paymentKey, {
+        date:row.date,timestamp:row.timestamp,cashier:row.cashier,parts:row.paymentParts,fees:0,methods:new Map(),
+      });
+      const collection = collections.get(paymentKey);
+      collection.fees += row.feeCharged;
+      if (!collection.parts) collection.methods.set(row.paymentMethod,
+        (collection.methods.get(row.paymentMethod) || 0) + row.sales + row.feeAbsorbed + row.feeCharged);
       const category = String(normalizeInventoryCategoryValue_(row.category)).toUpperCase();
       const categoryIndex = categories.indexOf(category);
       const index = categoryIndex < 0 ? 2 : categoryIndex;
+      const unitCategory = categories[index];
+      const unitDescription = unitCategory === 'YOURFINDS' ? dashboardYourFindsReturnSize_(row.size)
+        : unitCategory === 'PINS' ? dashboardPinName_(row.name.replace(/ · SALE$/i,''),row.size)
+        : unitCategory === 'OTHERS' ? dashboardOtherItemName_(row.name.replace(/ · SALE$/i,'')) : row.name.replace(/ · SALE$/i,'').trim().toUpperCase();
+      const unitCode = unitCategory === 'YOURFINDS' ? unitDescription : String(row.code || '').trim();
+      const isSale = / · SALE$/i.test(row.name);
+      const unitKey = JSON.stringify([unitCategory,unitCode || unitDescription,isSale]);
+      if (!unitRows.has(unitKey)) unitRows.set(unitKey,{category:unitCategory,description:unitDescription,isSale,priceMin:row.price,priceMax:row.price,codes:new Set(),units:0,sales:0});
+      const unitRow = unitRows.get(unitKey);
+      if (unitCode) unitRow.codes.add(unitCode);
+      unitRow.priceMin = Math.min(unitRow.priceMin,row.price);
+      unitRow.priceMax = Math.max(unitRow.priceMax,row.price);
+      unitRow.units += row.units;
+      unitRow.sales += row.sales;
       categoryTotals[index].sales += row.sales;
       categoryTotals[index].units += row.units;
       const bucketIndex = hourly
@@ -478,10 +519,137 @@ function dashboardSalesBreakdown_(rows, period, timezone, hours) {
   const payments = Object.entries(metrics.payments).map(([method, value]) => ({method, amount:roundToTwo(value.gross)}));
   return {
     period, hourly, activity, payments, absorbedCardFees:roundToTwo(absorbedCardFees),
+    collections:dashboardDailyCollections_(collections,period,shifts,timezone),
+    unitSummary:dashboardUnitSummary_(unitRows),
+    transactionSummary:dashboardTransactionSummary_(transactionRows,period,timezone,metrics),
     categoryTotals:categoryTotals.map(row => ({...row,sales:roundToTwo(row.sales)})),
     items: Array.from(items.values()).filter(item => item.units > 0).map(item => ({...item,sales:roundToTwo(item.sales)})),
     netSales: metrics.totalSales, units: metrics.itemsCount, transactions: metrics.transactionCount,
   };
+}
+
+function dashboardTransactionRow_(receipts, row) {
+  const key = JSON.stringify([row.date,row.cashier,row.receiptId]);
+  if (!receipts.has(key)) receipts.set(key,{
+    date:row.date,cashier:row.cashier,receiptId:row.receiptId,originalReceiptId:'',
+    timestamp:row.timestamp.getTime(),sales:0,events:new Map(),
+  });
+  const receipt = receipts.get(key);
+  receipt.timestamp = Math.min(receipt.timestamp,row.timestamp.getTime());
+  receipt.sales += row.sales;
+  if (row.originalReceiptId) receipt.originalReceiptId = row.originalReceiptId;
+  if (!receipt.events.has(row.paymentKey)) receipt.events.set(row.paymentKey,{
+    parts:row.paymentParts,methods:new Map(),fees:0,cash:null,change:null,
+  });
+  const event = receipt.events.get(row.paymentKey);
+  event.fees += row.feeCharged;
+  if (row.cashReceived !== null) event.cash = Math.max(event.cash ?? 0,row.cashReceived);
+  if (row.changeGiven !== null) event.change = Math.max(event.change ?? 0,row.changeGiven);
+  if (!event.parts) event.methods.set(row.paymentMethod,
+    (event.methods.get(row.paymentMethod) || 0) + row.sales + row.feeAbsorbed + row.feeCharged);
+}
+
+function dashboardTransactionSummary_(receipts, period, timezone, metrics) {
+  const add = (a,b) => a === null || b === null ? null : roundToTwo(a + b);
+  const stats = items => {
+    const transactions = new Set(items.map(item => item.receiptId).filter(Boolean)).size;
+    const sales = roundToTwo(items.reduce((sum,item) => sum + item.sales,0));
+    return {transactions,sales,average:transactions ? roundToTwo(sales / transactions) : 0,
+      received:items.reduce((sum,item) => add(sum,item.received),0),
+      change:items.reduce((sum,item) => add(sum,item.change),0)};
+  };
+  const items = Array.from(receipts.values()).map(receipt => {
+    let received = 0, change = 0;
+    const methods = new Set();
+    for (const event of receipt.events.values()) {
+      const parts = event.parts || Array.from(event.methods,([method,amount]) => ({method,amount}));
+      const cash = parts.some(part => /^cash$/i.test(part.method.trim()));
+      let digital = 0;
+      for (const part of parts) {
+        methods.add(part.method.trim());
+        if (!/^cash$/i.test(part.method.trim())) digital += part.amount;
+      }
+      if (event.parts && parts.some(part => !/^cash$/i.test(part.method.trim()))) digital += event.fees;
+      received = add(received,cash ? event.cash === null ? null : event.cash + digital : digital);
+      change = add(change,cash ? event.change : 0);
+    }
+    return {receiptId:receipt.receiptId,originalReceiptId:receipt.originalReceiptId,
+      date:receipt.date,cashier:receipt.cashier,timestamp:receipt.timestamp,
+      time:Utilities.formatDate(new Date(receipt.timestamp),timezone,'h:mm a'),
+      paymentMethod:Array.from(methods).join(' / '),sales:roundToTwo(receipt.sales),received,change};
+  }).sort((a,b) => a.timestamp - b.timestamp || a.receiptId.localeCompare(b.receiptId));
+  const days = Array.from({length:period.days},(_,index) => {
+    const date = dashboardDayOffset_(period.start,index), entries = items.filter(item => item.date === date);
+    const cashiers = Array.from(new Set(entries.map(item => item.cashier))).map(name => {
+      const receipts = entries.filter(item => item.cashier === name);
+      return {name,...stats(receipts),receipts:receipts.map(({date,cashier,timestamp,...receipt}) => receipt)};
+    });
+    return {date,...stats(entries),cashiers};
+  });
+  return {days,...stats(items),transactions:metrics.transactionCount,sales:metrics.totalSales,
+    average:metrics.transactionCount ? roundToTwo(metrics.totalSales / metrics.transactionCount) : 0};
+}
+
+function dashboardUnitSummary_(rows) {
+  const labels = {YOURFINDS:'YourFinds · Size',PINS:'YourStyle · Pins',OTHERS:'YourStyle · Others',WHOLESALE:'Wholesale'};
+  const comparators = {YOURFINDS:compareDashboardYourFindsSizes_,PINS:compareDashboardPins_,OTHERS:compareDashboardOtherItems_};
+  const groups = Object.entries(labels).map(([category,title]) => {
+    const items = Array.from(rows.values()).filter(row => row.category === category && (row.units || roundToTwo(row.sales)))
+      .map(row => ({code:Array.from(row.codes).sort().join(', '),description:row.description,isSale:row.isSale,priceMin:row.priceMin,priceMax:row.priceMax,units:row.units,sales:roundToTwo(row.sales)}))
+      .sort((a,b) => (comparators[category] || ((x,y) => x.localeCompare(y)))(a.description,b.description) || a.code.localeCompare(b.code,undefined,{numeric:true}) || Number(a.isSale) - Number(b.isSale));
+    return {category,title,rows:items,units:items.reduce((sum,row) => sum + row.units,0),sales:roundToTwo(items.reduce((sum,row) => sum + row.sales,0))};
+  }).filter(group => group.rows.length);
+  return groups;
+}
+
+function dashboardDailyCollections_(events, period, shifts, timezone) {
+  const days = new Map(Array.from({length:period.days}, (_,index) => {
+    const date = dashboardDayOffset_(period.start,index);
+    return [date,{date,total:0,payments:new Map(),cashiers:new Map()}];
+  }));
+  const methodName = method => ({CASH:'Cash',GCASH:'GCash','CREDIT CARD':'Credit card','QR CODE':'QR Code'})[
+    String(method || '').trim().toUpperCase()] || String(method || 'Cash').trim();
+  const [start,end] = dashboardSalesWindow_(period.start,period.end,timezone);
+  const shiftsByCashier = new Map();
+  for (const shift of shifts) {
+    if (shift.start >= end.getTime() || shift.end !== null && shift.end < start.getTime()) continue;
+    const key = shift.cashier.toLowerCase();
+    if (!shiftsByCashier.has(key)) shiftsByCashier.set(key,[]);
+    shiftsByCashier.get(key).push(shift);
+  }
+  for (const event of events.values()) {
+    const day = days.get(event.date);
+    const methods = event.parts ? new Map(event.parts.map(part => [part.method,part.amount])) : event.methods;
+    if (event.parts && event.fees) {
+      const feeMethod = event.parts.find(part => /^(CREDIT CARD|QR CODE)$/i.test(part.method)) || event.parts.at(-1);
+      methods.set(feeMethod.method,methods.get(feeMethod.method) + event.fees);
+    }
+    let amount = 0;
+    for (const [method,value] of methods) {
+      const label = methodName(method), rounded = roundToTwo(value);
+      day.payments.set(label,(day.payments.get(label) || 0) + rounded);
+      amount += rounded;
+    }
+    const shift = (shiftsByCashier.get(event.cashier.toLowerCase()) || []).find(candidate =>
+      candidate.start <= event.timestamp.getTime() && (candidate.end === null || candidate.end >= event.timestamp.getTime()));
+    const key = JSON.stringify([event.cashier,shift?.start ?? null,shift?.end ?? null]);
+    if (!day.cashiers.has(key)) day.cashiers.set(key,{
+      name:event.cashier,shift:shift ? Utilities.formatDate(new Date(shift.start),timezone,'h:mm a') + ' – ' +
+        (shift.end === null ? 'Ongoing' : Utilities.formatDate(new Date(shift.end),timezone,'h:mm a')) : 'Shift not recorded',
+      start:shift?.start ?? null,amount:0,
+    });
+    day.cashiers.get(key).amount += amount;
+    day.total += amount;
+  }
+  const order = ['Cash','GCash','Credit card','QR Code'];
+  const rows = Array.from(days.values()).map(day => ({
+    date:day.date,total:roundToTwo(day.total),
+    payments:Array.from(day.payments,([name,amount]) => ({name,amount:roundToTwo(amount)}))
+      .sort((a,b) => (order.includes(a.name) ? order.indexOf(a.name) : 4) - (order.includes(b.name) ? order.indexOf(b.name) : 4) || a.name.localeCompare(b.name)),
+    cashiers:Array.from(day.cashiers.values()).sort((a,b) => (a.start ?? Infinity) - (b.start ?? Infinity) || a.name.localeCompare(b.name))
+      .map(({name,shift,amount}) => ({name,shift,amount:roundToTwo(amount)})),
+  }));
+  return {days:rows,total:roundToTwo(rows.reduce((sum,day) => sum + day.total,0))};
 }
 
 function dashboardReturnRows_(start, end) {

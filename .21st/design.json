@@ -4,6 +4,108 @@
   "tokens": "Frontend/Styles/CSS.html",
   "decisions": [
     {
+      "component": "Dashboard background",
+      "direction": "Soft cloudy pink with subtle grain",
+      "approved": "2026-11-21",
+      "details": "Match the supplied pink background reference using only CSS radial/linear gradients; no photo, SVG texture or image URL. Use a lighter palette with a broader pale highlight toward the upper left/center and soft pink toward the right/bottom. Paint a fixed, pointer-transparent CSS backdrop behind the active Dashboard through body::before, with the same gradient on the root canvas for scroll edges. Keep body/page/workspace surfaces transparent so the background is independent of their height and stays fixed during scrolling. Restore the ordinary workspace background when Dashboard is hidden. Fill the available viewport during initial loading, accounting for the existing mobile top bar. Preserve the greeting, opaque card/modal surfaces, typography, layout, business logic and other workspace backgrounds. Dev only; no image assets or external requests for the background."
+    },
+    {
+      "component": "Dashboard modal system",
+      "direction": "Shared native-dialog shell with content and action slots",
+      "approved": "2026-11-21",
+      "details": "All seven dashboard dialogs (Inventory, Delivery, Return, Sales, Units sold, Transactions and Date range) use DashboardModal. The component creates one common header and close button, a scrolling body and persistent footer from each instance's existing heading/content/action nodes. Summary width is 680px; date range uses the same shell's 420px compact variant. Reuse app spacing, control, radius, shadow, typography, pink, neutral, danger and focus tokens. Close sits top right with an accessible label and initial focus. Secondary actions stay left, primary stays right; Transactions gains a secondary Close action. Keep native modality and opener restoration plus explicit keyboard focus wrapping, safe Escape and reduced-motion-aware open/close animation. Busy report downloads disable close and secondary actions and block dismissal/navigation until completion; explicit logout cleanup remains possible. Errors use alert semantics and common danger feedback styling, ordinary messages remain neutral. There are no destructive actions in these seven dialogs. All six summary tables use the shared dashboard-modal-total class: pink surface and rose ink, 2px top divider, equal padding, 500 weight and matching label/value typography (14px desktop, 13px phone), with inherited strong text, small neutral unit labels and sticky positioning. Remove the former per-modal total styles and keep column alignment and all quantities/amounts. Keep data, field IDs, radio/date selection, validation, cache, permissions, report generation and navigation handlers. No unrelated dashboard or application redesign; dev only."
+    },
+    {
+      "component": "Dashboard transactions summary",
+      "direction": "Daily totals, cashier expansion and merged receipt report",
+      "approved": "2026-11-21",
+      "details": "Transactions card opens the approved capped modal with Date, Transactions, Average sale and Sales. Ascending dates expand only into cashier totals; no item-category expansion. Use a weighted grand average from total net sales divided by distinct receipts, matching the card. Cache the complete summary and receipt details in the existing dashboard read. The A4 TRANSACTIONS REPORT SUMMARY uses Cashier, Receipt, Time, Payment, Received, Change and Sales. Place daily transaction count, average and sales on the right of each date band. Merge the first-column cashier cells and write names horizontally, with enough width for full names to wrap naturally. Empty dates display No record in the date band only, without a separate message row, zero metrics or daily total. Put an exchange's original receipt as a gray subtitle directly under its receipt number, without an Exchange label or explanatory subtitle. Retain daily totals, pink grand total and authenticated Prepared by signature on the right. In the modal, empty dates use a single pink date row with No record spanning the numeric columns, without zeros, expansion or a separate empty-period message. Compact report rows use 5px vertical padding, 7px date/subtotal padding and 8px gaps before dates, preserving readable text. Deduplicate repeated received/change and split allocations, preserve existing exchange reporting anchors and reservation payment stages; missing historical tender values use an em dash. Preserve manager/OIC detail access, cashier redaction, download spinner/retry/logout guards and cached opens. Dev only; no sheet or financial-write changes."
+    },
+    {
+      "component": "Units sold summary",
+      "direction": "Inventory-style grouped modal and coded report",
+      "approved": "2026-11-20",
+      "details": "Units sold card opens the approved capped scrolling modal with Description, Price, Units sold and Total sales. Pink category bands for YourFinds · Size, YourStyle · Pins, YourStyle · Others and Wholesale; neutral item text, no status colors or item subtitles. Group YourFinds by size and other items by normalized inventory description, combining historical prices into a range and preserving recorded net amounts rather than multiplying quantity by price. Category subtotals and grand totals align under units/sales. The PDF uses Code, Description, Price, Units sold and Total sales with full-width inventory category bands; YF code is size with long size description, other codes are listed. Reuse sales report pink header/total, bold rose YourStyle title, date period and authenticated Prepared by signature on the right. Include in cached dashboard sales payload; no fetch on modal open. Preserve spinner/retry/logout guards, date permissions and transaction navigation. Dev only; no sheet changes. Follow-up: group by category and code, with YourFinds using its size code (all SNE in one row). Same code with different historical descriptions or prices stays one row. Price displays min - max, or a single amount when equal; quantities and recorded sales are summed unchanged. Apply to modal and PDF, retaining existing category order. Keep regular and sale pricing in separate rows for each code/size, with independent min/max ranges. Append · SALE and render the entire sale row red in modal and PDF; regular rows, category bands and totals retain normal colors."
+    },
+    {
+      "component": "Sales summary readability",
+      "direction": "Ascending dates, grouped report columns and preparer signature",
+      "approved": "2026-11-20",
+      "details": "Implement the approved sales-report-clear preview. Dates run from the selected first day to the last in both modal and PDF. Modal collapsed rows are uniformly white; only expanded date rows are pink. Remove visible Expected collection(s) and Expand dates by text, retaining the Payment method / Cashier controls. The PDF uses Date, Payment method (or Cashier), Sales columns with a pink date cell spanning each day, weekday labels, white detail rows, distinct pink daily subtotals and grand total, aligned two-decimal currency. Add one signature line below the grand total with the authenticated account name above Prepared by. Resolve that name at download time from the actor; never accept a caller-provided name or store it in shared sales caches. Preserve calculations, shift grouping, permissions, download spinner and cached reads. Dev only; no sheet changes. Add a visible 2px muted rose divider across all three columns before each subsequent date group, with compact padding. Mark the actual first row of each date so the divider survives PDF conversion and background printing being off. Highlight the report grand total in a pink band matching the table header (#f2dede) with a 2px #e3c6c6 outer border and bold #65454b text and an 18px amount. Retain space above the total and the Prepared by signature below. Use explicit bgcolor attributes and print-color-adjust:exact so the highlight survives PDF conversion and background printing being disabled. Match the reference report table header: #f2dede pink fill, thin #e3c6c6 cell borders, bold #65454b labels, with Date / Payment method or Cashier / Sales unchanged. Match YourStyle to the inventory report title typography: Arial, 20px, 700 weight, #b76e79 rose, with exact print-color retention. Align the entire 60mm Prepared by signature block at the right content edge, keeping the name and role centered under the signature line."
+    },
+    {
+      "component": "Dashboard sales summary",
+      "direction": "Date totals with payment or named cashier expansion",
+      "approved": "2026-11-20",
+      "details": "Use the approved Sales summary modal: Date / Sales (Expected collection), independently expandable date rows, Payment method / Cashier radios, recorded cashier names with real shift times, zero-collection dates, sticky grand total and capped scrolling. Load all details in the cached dashboard sales response. The A4 SALES REPORT SUMMARY includes all dates, selected breakdown, daily subtotals and final grand total regardless of collapsed modal rows. Expected customer collections use recorded split allocations once per payment event, plus charged fees; non-split collections add shop-absorbed and customer-charged fees back to net revenue. No separate customer-fee row. Keep net revenue cards/chart unchanged, original reporting date/cashier attribution, existing cashier privacy, spinner/retry behavior and transaction navigation. Managers/OICs can view cashier details; cashier accounts receive payment totals only. Dev code only; no spreadsheet schema changes."
+    },
+    {
+      "component": "Sales chart tooltip",
+      "direction": "Compact tooltip above the hovered point",
+      "approved": "2026-11-19",
+      "details": "Apply the approved compact preview: content-fitted width, 10px outer padding, 6px column gaps, 12px regular text, 10px corners, soft shadow and bottom pointer anchored to the hovered point. Use a short date/time header without calendar icon. Show only selected categories with nonzero units or net sales; retain refunds even with zero units. Show whole-peso values while preserving underlying precision. Keep both totals under their respective columns in the pink footer and leave 8px of pink padding after the last amount, aligning the same inset on the sales column. Allow the panel above the plot, clamped to the viewport top rather than flipped below the point. Preserve cached reads, hourly/daily/weekly buckets, filters and navigation. Dev only. The tooltip panel, caret and pink footer backgrounds use their existing theme colors at 85% opacity via color-mix; text retains its normal color."
+    },
+    {
+      "component": "Top selling visible rows",
+      "direction": "Six visible rows with scrolling",
+      "approved": "2026-11-18",
+      "details": "Increase the top-selling scroll box from five to six visible item rows using the existing responsive row-height variable. Keep every ranked result accessible by scrolling; preserve filters, rank order and totals. Dev only."
+    },
+    {
+      "component": "Dashboard filter dismissal",
+      "direction": "Close filters on outside click or tap",
+      "approved": "2026-11-18",
+      "details": "Both Sales & units sold and Top selling items filters close on a pointer outside their own details container. Interactions with category and grouping controls inside keep that filter open; opening another filter closes the previous one. Preserve all filter selections. Dev only."
+    },
+    {
+      "component": "Top selling grouping options",
+      "direction": "Both grouping checkboxes with All categories",
+      "approved": "2026-11-18",
+      "details": "Show Group by code and Group by size even when no specific category is selected (All categories). Apply selected grouping per category: code to Pins and size to YourFinds, preserving other categories. For a specific category keep the relevant option and preserve checkbox choices when switching. Keep ranking, quantities, amounts and existing item images. Dev only."
+    },
+    {
+      "component": "Dashboard date shortcuts",
+      "direction": "Compact presets without Last year",
+      "approved": "2026-11-18",
+      "details": "Remove the Last year shortcut. Arrange remaining seven shortcuts in a compact four-column grid (three columns on narrow phones). Use 34px minimum button height, smaller padding and regular 12px text, preserving 44px touch targets on coarse pointers. Keep existing date-range selection, presets and Apply/Cancel behavior. Dev only."
+    },
+    {
+      "component": "Profile photo preview",
+      "direction": "Matching preview/edit sizes, subtle border and click to view",
+      "approved": "2026-11-18",
+      "details": "Preview and edit avatars share the existing 104px desktop / 72px phone size. Apply a one-pixel muted border using the existing border token to the profile avatar and sidebar avatar. In account preview, clicking a valid photo opens the existing native image viewer using the rendered cached JPEG, without a data fetch. Retain initial avatars when no photo exists and the separate edit-photo button. No sheet/storage changes. Dev only."
+    },
+    {
+      "component": "Expanded stock navigation",
+      "direction": "Direct Inventory, Delivery and Return rows",
+      "approved": "2026-11-18",
+      "details": "Match the supplied screenshot: Stock and receiving heading followed by three peer rows labeled Inventory, Delivery, Return. In the expanded desktop sidebar and mobile drawer, show these direct links and hide the inventory chevron and menu toggle. Only the collapsed desktop rail keeps the Inventory flyout. Highlight the selected page in expanded navigation and the inventory group in the collapsed rail. Preserve Dashboard, Cashier and footer navigation. Dev only."
+    },
+    {
+      "component": "Dashboard sidebar icon",
+      "direction": "Rounded dashboard overview tiles",
+      "approved": "2026-11-18",
+      "details": "Replace the text grid glyph with the approved four rounded overview tiles, matching the layout-dashboard preview. Use the existing nav-icon size, currentColor, 1.8px rounded outline and existing active navigation styling. Preserve expanded/collapsed accessibility labels and navigation. Dev only."
+    },
+    {
+      "component": "Dashboard sales empty state",
+      "direction": "Daily transparent mascot in a compact chart card",
+      "approved": "2026-11-18",
+      "details": "When the loaded date range has no sales activity, show the approved 180px transparent cat mascot in a compact 360px empty state. Do not stretch the card to the sales metrics column. Let the supporting sentence use the full card width, wrapping naturally on narrow screens. Bundle the 20 approved PNGs in the app and inline only the current Manila calendar day artwork into the page; cache it in memory and fetch only the next selection on day rollover. Before noon rotate the daily mascot; from noon through 11:59 PM always use the sad mascot in Asia/Manila time, including the initial server image. Keep time-aware copy, chart restoration, category filters, dates, loading/error behavior and report totals. Dev only."
+    },
+    {
+      "component": "Account profile",
+      "direction": "Approved compact profile preview and editor",
+      "approved": "2026-11-18",
+      "details": "Avatar opens account preview. Personal details and a masked Password row with Change password are on the left. Compact photo, display name and username are on the right, followed by read-only Employee ID, Role and Date hired. Email appears only in personal details. Edit uses paired fields, a photo pencil and Save/Cancel. Full name, display name, email, birthday, contact, address and optional emergency contact are editable profile values. Original login/report names remain unchanged. Separate current/new/confirm password view; successful password change requires sign-in again. Dev code only; matching additive Employees I:V schema in dev and prod. Store photos in the selected EMPLOYEES Drive folder, save a file ID in column V, and display a cached small JPEG through the authenticated app. Preserve the folder sharing chosen by the user."
+    },
+    {
+      "component": "YourStyle retail UI",
+      "direction": "Accessible warm retail system",
+      "approved": "2026-11-18",
+      "details": "Dev-only cohesive application polish: user-supplied #E1BFC5 main pink, with dark rose #642D40 labels for contrast and soft pink surfaces; shared spacing, borders, control heights, focus and status tokens. Keep the approved dashboard. Preserve vanilla JavaScript, Bootstrap, IDs, backend contracts, calculations, permissions and authentication. Phone cashier retains Add items/Cart and sticky checkout; Inventory, Deliveries and Supplier returns use labeled record cards with explicit sort controls. Shared dialog focus handling delegates to existing close handlers. Phone inventory filters apply from a bottom panel. No new production dependency."
+    },
+    {
       "component": "Bundle actions modal",
       "direction": "Action tabs",
       "approved": "2026-11-05",

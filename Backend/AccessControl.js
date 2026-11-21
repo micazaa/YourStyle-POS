@@ -27,7 +27,8 @@ const ACCESS_PERMISSION_MODES_ = {
   'actions.approve': ['allow','allow','deny','deny'],
   'approvals.verify': ['allow','allow','allow','allow'],
   'approvals.view': ['allow','allow','deny','deny'],
-  'accounts.manage': ['allow','deny','deny','deny']
+  'accounts.manage': ['allow','deny','deny','deny'],
+  'profile.own': ['allow','allow','allow','allow']
 };
 const ACCESS_ROLE_ORDER_ = ['OWNER','MANAGER','OIC','CASHIER'];
 function employeeRoleKey_(employee) {
@@ -110,6 +111,8 @@ function accessRegistry_() {
   "createSupplierReturnPdf": {permission:"inventory.view", handler:createSupplierReturnPdf},
   "createDashboardReturnPdf": {permission:"inventory.view", handler:createDashboardReturnPdf},
   "createDashboardDeliveryPdf": {permission:"inventory.view", handler:createDashboardDeliveryPdf},
+  "createDashboardUnitsPdf": {permission:"dashboard.view", handler:createDashboardUnitsPdf},
+  "createDashboardTransactionsPdf": {permission:"dashboard.view", handler:createDashboardTransactionsPdf},
   "createDashboardNetSalesPdf": {permission:"dashboard.view", handler:createDashboardNetSalesPdf},
   "getDashboardInventoryReport": {permission:"inventory.view", handler:getDashboardInventoryReport},
   "getSupplierReturns": {permission:"inventory.view", handler:getSupplierReturns},
@@ -141,6 +144,9 @@ function accessRegistry_() {
   "getYourFindsLabelItemsByDeliveryId": {permission:"inventory.view", handler:getYourFindsLabelItemsByDeliveryId},
   "getYourFindsDeliveryById": {permission:"inventory.view", handler:getYourFindsDeliveryById},
   "getManagedAccounts": {permission:"accounts.manage", handler:getManagedAccounts},
+  "getMyProfile": {permission:"profile.own", handler:getMyProfile},
+  "saveMyProfile": {permission:"profile.own", handler:saveMyProfile},
+  "changeMyPassword": {permission:"profile.own", handler:changeMyPassword},
   "saveManagedAccount": {permission:"accounts.manage", handler:saveManagedAccount},
   "getApprovalHistory": {permission:"approvals.view", handler:getApprovalHistory},
   };

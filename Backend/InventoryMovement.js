@@ -1397,7 +1397,7 @@ function deleteUnusedInventoryItem(payload) {
    Inventory Column A is the image source of truth.
 ========================================================== */
 
-const PHASE8_PRODUCT_IMAGES_FOLDER_ID = "1Jm-OdXcmg17KgHW5Ed_NRwwTKvrbpWC3";
+const PHASE8_PRODUCT_IMAGES_FOLDER_ID = "1pu8oqKhPsgNfc4CyCsNHBDwpCUYrnMNY";
 
 function decodeInventoryImage_(dataUrl) {
   dataUrl = String(dataUrl || "").trim();

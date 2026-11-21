@@ -32,7 +32,7 @@
         <h5 id="yfEditorTitle" class="fw-bold mb-1">YourFinds Selling Details</h5>
         <div id="yfEditorSubtitle" class="small text-muted"></div>
       </div>
-      <button class="btn-close" onclick="closeModal('yourFindsEditorModal')"></button>
+      <button class="btn-close" onclick="closeModal('yourFindsEditorModal')" aria-label="Close Inventory Item"></button>
     </div>
 
     <div class="row g-3">
@@ -94,7 +94,7 @@
 
 <div id="stockAdjustmentModal" class="generic-overlay-blur" style="display:none;">
  <div class="custom-popup-card" style="max-width:620px;width:95%;">
-  <div class="d-flex justify-content-between border-bottom pb-3 mb-3"><div><h5 class="fw-bold mb-1">Stock Adjustment</h5><div id="adjustItemLabel" class="small text-muted"></div></div><button class="btn-close" onclick="closeModal('stockAdjustmentModal')"></button></div>
+  <div class="d-flex justify-content-between border-bottom pb-3 mb-3"><div><h5 class="fw-bold mb-1">Stock Adjustment</h5><div id="adjustItemLabel" class="small text-muted"></div></div><button class="btn-close" onclick="closeModal('stockAdjustmentModal')" aria-label="Close Inventory Item"></button></div>
   <div class="border rounded bg-light p-3 mb-3"><div class="small text-muted text-center mb-2">STOCK PREVIEW</div><div class="d-flex justify-content-center align-items-center gap-4"><div class="text-center"><div class="small text-muted">Current</div><div id="adjustCurrentStock" class="fs-3 fw-bold">0</div></div><div class="fs-2 text-muted">→</div><div class="text-center"><div class="small text-muted">After</div><div id="adjustAfterStock" class="fs-3 fw-bold">0</div></div></div><div id="adjustPreviewMessage" class="small text-center mt-2"></div></div>
   <div class="row g-2 mb-3"><div class="col-6"><label class="form-label">Action</label><select id="adjustDirection" class="form-select" onchange="updateStockAdjustmentPreview()"><option value="ADD">+ Add Stock</option><option value="REMOVE">- Remove Stock</option></select></div><div class="col-6"><label class="form-label">Quantity</label><input id="adjustQty" type="number" min="1" step="1" value="1" class="form-control" oninput="updateStockAdjustmentPreview()"></div></div>
   <label class="form-label">Reason</label><select id="adjustReason" class="form-select mb-3"><option>PHYSICAL COUNT CORRECTION</option><option>DAMAGED</option><option>LOST / MISSING</option><option>FOUND STOCK</option><option>DATA CORRECTION</option><option>OTHER</option></select>
@@ -122,7 +122,7 @@
 
 <div id="movementHistoryModal" class="generic-overlay-blur" style="display:none;">
  <div class="custom-popup-card" style="max-width:1050px;width:96%;max-height:92vh;overflow:auto;">
-  <div class="d-flex justify-content-between"><div><h5 class="fw-bold mb-1">Item History</h5><div id="movementHistoryLabel" class="small text-muted"></div></div><button class="btn-close" onclick="closeModal('movementHistoryModal')"></button></div>
+  <div class="d-flex justify-content-between"><div><h5 class="fw-bold mb-1">Item History</h5><div id="movementHistoryLabel" class="small text-muted"></div></div><button class="btn-close" onclick="closeModal('movementHistoryModal')" aria-label="Close Inventory Item"></button></div>
   <div class="table-responsive mt-3"><table class="table table-sm align-middle"><thead class="table-light"><tr><th>Date</th><th class="text-center">Change</th><th class="text-center">Current Stock</th><th>Source</th><th>Reference</th><th>Employee</th><th>Reason / Notes</th></tr></thead><tbody id="movementHistoryBody"></tbody></table></div>
  </div>
 </div>

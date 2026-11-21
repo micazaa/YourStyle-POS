@@ -242,32 +242,168 @@ function buildDashboardSummaryHtml_(title, date, metadata, totalCells, lines, gr
 }
 
 function createDashboardNetSalesPdf(request) {
+  const mode = request.breakdown || 'payments';
+  if (!['payments','cashiers'].includes(mode)) throw new Error('Choose a payment method or cashier breakdown.');
   const sales = getDashboardSales(request);
   if (sales.unavailable) return {success:false,message:sales.unavailable};
+  if (mode === 'cashiers' && !sales.collections.canViewCashiers)
+    return {success:false,message:'Cashier breakdown is available to managers and OICs.'};
   const {start,end} = sales.period;
-  const date = formatDeliveryReceiptDate_(start) + (start === end ? '' : ' – ' + formatDeliveryReceiptDate_(end));
-  const labels = {YOURFINDS:'YourFinds',PINS:'Pins',OTHERS:'Others',WHOLESALE:'Wholesale'};
-  const number = new Intl.NumberFormat('en-PH');
-  const money = new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',minimumFractionDigits:0,maximumFractionDigits:2});
-  const rows = [
-    ...sales.categoryTotals.map(row => [labels[row.category],row.units,row.sales]),
-    ['Grand total',sales.units,sales.netSales],
-  ];
-  const lines = rows.map(([label,units,amount]) => '<tr><th scope="row">' + escapeDeliveryReceiptHtml_(label) +
-    '</th><td>' + number.format(units) + '</td><td>' + money.format(amount) + '</td></tr>').join('');
-  const html = '<!doctype html><html><head><meta charset="utf-8"><style>' +
-    '@page{size:A4;margin:12mm}body{margin:0;color:#381f2c;font:12px Arial,sans-serif}' +
-    'h1{margin:0;color:#b76e79;font-size:20px}p{margin:5px 0 16px;color:#65454b}' +
-    'table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #ead9de;text-align:left}' +
-    'thead th,tr:last-child th,tr:last-child td{background:#faf1f2;font-weight:bold}tbody th{font-weight:normal}' +
-    'th:not(:first-child),td{text-align:right}</style></head><body><h1>NET SALES SUMMARY</h1><p>' +
-    escapeDeliveryReceiptHtml_(date) + '</p><table><thead><tr><th>Category</th><th>Units sold</th><th>Net sales</th></tr></thead>' +
-    '<tbody>' + lines + '</tbody></table></body></html>';
-  const pdf = Utilities.newBlob(html,'text/html','net-sales-summary.html').getAs('application/pdf');
+  const preparedBy = ACCESS_REQUEST_CONTEXT_.actor.name;
+  const pdf = Utilities.newBlob(buildDashboardSalesSummaryHtml_(sales,mode,preparedBy),'text/html','sales-report-summary.html').getAs('application/pdf');
   return {
-    success:true,fileName:'Net_Sales_Summary_' + start + (start === end ? '' : '_to_' + end) + '.pdf',
+    success:true,fileName:'Sales_Report_Summary_' + start + (start === end ? '' : '_to_' + end) + '.pdf',
     base64:Utilities.base64Encode(pdf.getBytes()),
   };
+}
+
+function buildDashboardSalesSummaryHtml_(sales, mode, preparedBy) {
+  const safe = escapeDeliveryReceiptHtml_;
+  const {start,end} = sales.period;
+  const date = formatDeliveryReceiptDate_(start) + (start === end ? '' : ' - ' + formatDeliveryReceiptDate_(end));
+  const money = new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',minimumFractionDigits:2,maximumFractionDigits:2});
+  const label = mode === 'cashiers' ? 'Cashier' : 'Payment method';
+  const shortDate = new Intl.DateTimeFormat('en-US',{timeZone:'UTC',month:'short',day:'numeric'});
+  const weekday = new Intl.DateTimeFormat('en-US',{timeZone:'UTC',weekday:'long'});
+  const lines = sales.collections.days.map((day,dayIndex) => {
+    const entries = day[mode].length ? day[mode] : [{name:'No collections recorded',amount:0}];
+    const dayDate = new Date(day.date + 'T00:00:00Z');
+    const details = entries.map((entry,index) => '<tr class="entry' + (dayIndex > 0 && index === 0 ? ' date-start' : '') + '">' + (index === 0
+      ? '<th class="day" scope="rowgroup" rowspan="' + (entries.length + 1) + '">' + safe(shortDate.format(dayDate)) +
+        '<small>' + safe(weekday.format(dayDate)) + '</small></th>' : '') +
+      '<th class="entry-label" scope="row">' + safe(entry.name) +
+      (entry.shift ? '<small>' + safe(entry.shift) + '</small>' : '') + '</th><td>' + money.format(entry.amount) + '</td></tr>').join('');
+    return '<tbody>' + details +
+      '<tr class="subtotal"><th scope="row">Daily total</th><td>' + money.format(day.total) + '</td></tr></tbody>';
+  }).join('');
+  return '<!doctype html><html><head><meta charset="utf-8"><style>' +
+    '@page{size:A4;margin:12mm}body{margin:0;color:#381f2c;font:12px Arial,sans-serif}' +
+    'header{text-align:center;border-bottom:1px solid #ead9de;padding-bottom:12px;margin-bottom:14px}' +
+    '.brand{font-family:Arial,sans-serif;color:#b76e79;font-size:20px;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}h1{margin:7px 0;font-size:17px}p{margin:4px 0;color:#65454b}' +
+    'table{width:100%;border-collapse:separate;border-spacing:0}th,td{padding:6px 12px;text-align:left}' +
+    '.date-col{width:24%}.money-col{width:28%}thead{display:table-header-group}' +
+    'thead th{background:#f2dede!important;color:#65454b;font-size:12px;font-weight:700;border:1px solid #e3c6c6;padding:8px 12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}thead th+th{border-left:0}' +
+    'tbody,tr{break-inside:avoid;page-break-inside:avoid}tbody th{font-weight:normal}' +
+    '.day{vertical-align:top;background:#fbf1f4;color:#74354c;border-right:1px solid #ead9de;font-weight:bold;padding-top:10px}' +
+    'small{display:block;color:#736970;font-size:11px;margin-top:3px;font-weight:normal}' +
+    'td,thead th:last-child{text-align:right;white-space:nowrap}' +
+    '.entry-label,.entry td{border-bottom:1px solid #ead9de;vertical-align:top;background:white}' +
+    '.date-start>th,.date-start>td{border-top:2px solid #c6a4b3;padding-top:12px}' +
+    '.subtotal th,.subtotal td{background:#fbf1f4;color:#74354c;font-weight:bold}' +
+    '.report-total{page-break-after:avoid}.total-gap td{height:12px;padding:0;border:0;background:white}' +
+    '.grand-total th,.grand-total td{background:#f2dede!important;border-top:2px solid #e3c6c6;border-bottom:2px solid #e3c6c6;color:#65454b;font-weight:bold;padding:13px 12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.grand-total th{border-left:2px solid #e3c6c6;font-size:13px}.grand-total td{border-right:2px solid #e3c6c6;font-size:18px}' +
+    '.prepared-by{width:60mm;margin:10mm 0 0 auto;text-align:center;break-inside:avoid;page-break-inside:avoid;page-break-before:avoid}' +
+    '.sign-space{height:24px;border-bottom:1px solid #bba2ad;margin-bottom:6px}.sign-name{font-weight:bold;overflow-wrap:anywhere}.sign-label{margin-top:3px;color:#736970;font-size:11px}' +
+    '</style></head><body><header><div class="brand">YourStyle</div><h1>SALES REPORT SUMMARY</h1><p>' + safe(date) +
+    '</p><p>' + label + '</p></header>' +
+    '<table><colgroup><col class="date-col"><col><col class="money-col"></colgroup><thead><tr bgcolor="#f2dede"><th bgcolor="#f2dede">Date</th><th bgcolor="#f2dede">' + label + '</th><th bgcolor="#f2dede">Sales</th></tr></thead>' + lines +
+    '<tbody class="report-total"><tr class="total-gap" aria-hidden="true"><td colspan="3"></td></tr>' +
+    '<tr class="grand-total" bgcolor="#f2dede"><th scope="row" colspan="2" bgcolor="#f2dede">GRAND TOTAL</th><td bgcolor="#f2dede">' + money.format(sales.collections.total) +
+    '</td></tr></tbody></table><section class="prepared-by"><div class="sign-space"></div><div class="sign-name">' + safe(preparedBy) +
+    '</div><div class="sign-label">Prepared by</div></section></body></html>';
+}
+
+function createDashboardUnitsPdf(request) {
+  const sales = getDashboardSales(request);
+  if (sales.unavailable) return {success:false,message:sales.unavailable};
+  const pdf = Utilities.newBlob(buildDashboardUnitsHtml_(sales,ACCESS_REQUEST_CONTEXT_.actor.name),'text/html','units-sold-summary.html').getAs('application/pdf');
+  const {start,end} = sales.period;
+  return {success:true,fileName:'Units_Sold_Report_Summary_' + start + (start === end ? '' : '_to_' + end) + '.pdf',base64:Utilities.base64Encode(pdf.getBytes())};
+}
+
+function buildDashboardUnitsHtml_(sales, preparedBy) {
+  const safe = escapeDeliveryReceiptHtml_;
+  const {start,end} = sales.period;
+  const date = formatDeliveryReceiptDate_(start) + (start === end ? '' : ' - ' + formatDeliveryReceiptDate_(end));
+  const money = new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',minimumFractionDigits:2,maximumFractionDigits:2});
+  const number = new Intl.NumberFormat('en-PH');
+  const priceNumber = new Intl.NumberFormat('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const priceRange = item => {
+    const minimum = item.priceMin ?? item.price, maximum = item.priceMax ?? minimum;
+    return money.format(minimum) + (minimum === maximum ? '' : ' - ' + priceNumber.format(maximum));
+  };
+  const sizes = {SE:'Small Electronic',ME:'Medium Electronic',LE:'Large Electronic',XLE:'Extra Large Electronic',
+    SNE:'Small Non-Electronic',MNE:'Medium Non-Electronic',LNE:'Large Non-Electronic',XLNE:'Extra Large Non-Electronic',BNE:'Bulky Non-Electronic',NS:'No Size'};
+  const labels = {YOURFINDS:'YourFinds',PINS:'Pins',OTHERS:'Others',WHOLESALE:'Wholesale'};
+  const rows = sales.unitSummary.map(group => '<tbody><tr class="category" bgcolor="#f2dede"><th colspan="5" bgcolor="#f2dede">' + labels[group.category] + '</th></tr>' +
+    group.rows.map(item => '<tr' + (item.isSale ? ' class="sale" style="color:#a52d3b"' : '') + '><td>' + safe(item.code) + '</td><th scope="row">' +
+      safe((group.category === 'YOURFINDS' ? sizes[item.description] || item.description : item.description) + (item.isSale ? ' · SALE' : '')) +
+      '</th><td class="number price">' + priceRange(item) + '</td><td class="number">' + number.format(item.units) +
+      '</td><td class="number">' + money.format(item.sales) + '</td></tr>').join('') + '</tbody>').join('');
+  return '<!doctype html><html><head><meta charset="utf-8"><style>' +
+    '@page{size:A4;margin:12mm}body{margin:0;color:#362730;font:11.5px Arial,sans-serif}' +
+    'header{text-align:center;border-bottom:1px solid #ead9de;padding-bottom:14px;margin-bottom:16px}' +
+    '.brand{font:700 20px Arial,sans-serif;color:#b76e79;print-color-adjust:exact;-webkit-print-color-adjust:exact}h1{font-size:17px;margin:7px 0}p{color:#65454b;margin:4px 0}' +
+    'table{width:100%;border-collapse:collapse;table-layout:fixed}thead{display:table-header-group}tr{page-break-inside:avoid}' +
+    'th,td{padding:7px;border:1px solid #e3c6c6;text-align:left;overflow-wrap:break-word}tbody th{font-weight:400}' +
+    '.number{text-align:right;white-space:nowrap}.price{white-space:normal}.sale th,.sale td{color:#a52d3b;-webkit-print-color-adjust:exact;print-color-adjust:exact}.category{page-break-after:avoid}thead th,.category th,.total th,.total td{background:#f2dede;color:#65454b;font-weight:bold;print-color-adjust:exact;-webkit-print-color-adjust:exact}' +
+    '.total{page-break-inside:avoid;page-break-after:avoid}.total th,.total td{padding:12px 7px;border-top:2px solid #e3c6c6;border-bottom:2px solid #e3c6c6}.total td{font-size:15px}' +
+    '.prepared-by{width:60mm;margin:10mm 0 0 auto;text-align:center;page-break-inside:avoid;page-break-before:avoid}.sign-space{height:24px;border-bottom:1px solid #bba2ad;margin-bottom:6px}.sign-name{font-weight:bold}.sign-label{color:#736970;font-size:11px;margin-top:3px}' +
+    '</style></head><body><header><div class="brand">YourStyle</div><h1>UNITS SOLD REPORT SUMMARY</h1><p>' + safe(date) + '</p></header>' +
+    '<table><colgroup><col style="width:15%"><col style="width:29%"><col style="width:22%"><col style="width:10%"><col style="width:24%"></colgroup>' +
+    '<thead><tr bgcolor="#f2dede"><th>Code</th><th>Description</th><th class="number">Price</th><th class="number">Units sold</th><th class="number">Total sales</th></tr></thead>' +
+    (rows || '<tbody><tr><td colspan="5">No units sold in this date range.</td></tr></tbody>') +
+    '<tbody><tr class="total" bgcolor="#f2dede"><th colspan="3">GRAND TOTAL</th><td class="number">' + number.format(sales.units) + '</td><td class="number">' + money.format(sales.netSales) + '</td></tr></tbody></table>' +
+    '<div class="prepared-by"><div class="sign-space"></div><div class="sign-name">' + safe(preparedBy) + '</div><div class="sign-label">Prepared by</div></div></body></html>';
+}
+
+function createDashboardTransactionsPdf(request) {
+  const sales = getDashboardSales(request);
+  if (sales.unavailable) return {success:false,message:sales.unavailable};
+  if (!sales.transactionSummary?.canViewCashiers)
+    return {success:false,message:'Cashier and receipt details are available to managers and OICs.'};
+  const pdf = Utilities.newBlob(buildDashboardTransactionsHtml_(sales,ACCESS_REQUEST_CONTEXT_.actor.name),
+    'text/html','transactions-summary.html').getAs('application/pdf');
+  const {start,end} = sales.period;
+  return {success:true,fileName:'Transactions_Report_Summary_' + start + (start === end ? '' : '_to_' + end) + '.pdf',
+    base64:Utilities.base64Encode(pdf.getBytes())};
+}
+
+function buildDashboardTransactionsHtml_(sales, preparedBy) {
+  const safe = escapeDeliveryReceiptHtml_, summary = sales.transactionSummary;
+  const {start,end} = sales.period;
+  const date = formatDeliveryReceiptDate_(start) + (start === end ? '' : ' - ' + formatDeliveryReceiptDate_(end));
+  const currency = new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',minimumFractionDigits:0,maximumFractionDigits:2});
+  const number = new Intl.NumberFormat('en-PH');
+  const money = value => value === null ? '—' : currency.format(value);
+  const dayDate = new Intl.DateTimeFormat('en-US',{timeZone:'UTC',month:'short',day:'numeric',year:'numeric'});
+  const totals = (label,stats,grand = false) => '<tr class="' + (grand ? 'grand-total' : 'daily-total') + '"' + (grand ? ' bgcolor="#f2dede"' : '') +
+    '><th scope="row" colspan="4">' + label + (grand ? '<small>' + number.format(stats.transactions) + ' transactions · Average sale ' + money(stats.average) + '</small>' : '') +
+    '</th><td class="number">' + money(stats.received) + '</td><td class="number">' + money(stats.change) + '</td><td class="number">' + money(stats.sales) + '</td></tr>';
+  const lines = summary.days.map(day => {
+    const hasRecords = day.cashiers.some(cashier => cashier.receipts.length);
+    const banner = '<tbody><tr class="date-heading' + (hasRecords ? ' has-records' : '') + '" bgcolor="#f2dede"><th colspan="7" bgcolor="#f2dede"><span class="date-metrics">' +
+      (hasRecords ? number.format(day.transactions) + ' transactions · Average sale ' + money(day.average) + ' · Sales ' + money(day.sales) : 'No record') + '</span>' +
+      safe(dayDate.format(new Date(day.date + 'T00:00:00Z'))) + '</th></tr></tbody>';
+    if (!hasRecords) return banner;
+    const entries = day.cashiers.map(cashier => '<tbody class="cashier-group">' + cashier.receipts.map((receipt,index) => '<tr>' +
+      (index === 0 ? '<th class="cashier" scope="rowgroup" rowspan="' + cashier.receipts.length + '"><span>' + safe(cashier.name) + '</span></th>' : '') +
+      '<th class="receipt" scope="row">' + safe(receipt.receiptId || '—') + (receipt.originalReceiptId ? '<small class="original">Original: ' + safe(receipt.originalReceiptId) + '</small>' : '') +
+      '</th><td class="time">' + safe(receipt.time) + '</td><td>' + safe(receipt.paymentMethod) + '</td><td class="number">' + money(receipt.received) +
+      '</td><td class="number">' + money(receipt.change) + '</td><td class="number">' + money(receipt.sales) + '</td></tr>').join('') + '</tbody>').join('');
+    return banner + entries + '<tbody>' + totals('Daily total',day) + '</tbody>';
+  }).join('');
+  return '<!doctype html><html><head><meta charset="utf-8"><style>' +
+    '@page{size:A4;margin:12mm}body{margin:0;color:#362730;font:11.5px Arial,sans-serif}' +
+    'header{text-align:center;padding-bottom:14px;margin-bottom:16px}.brand{font:700 20px Arial,sans-serif;color:#b76e79;print-color-adjust:exact;-webkit-print-color-adjust:exact}' +
+    'h1{font-size:17px;margin:7px 0}p{color:#65454b;margin:4px 0}table{width:100%;table-layout:fixed;border-collapse:collapse}thead{display:table-header-group}' +
+    'th,td{padding:5px 7px;border-bottom:1px solid #e3c6c6;text-align:left;vertical-align:middle;overflow-wrap:break-word}tbody th{font-weight:400}tr{page-break-inside:avoid}.cashier-group tr:first-child{page-break-inside:auto;break-inside:auto}' +
+    'thead th{background:#f2dede;color:#65454b;border:1px solid #e3c6c6;font-weight:bold}.number{text-align:right;white-space:nowrap}.time{white-space:nowrap}' +
+    'thead th,.date-heading th,.grand-total th,.grand-total td{print-color-adjust:exact;-webkit-print-color-adjust:exact}' +
+    '.date-heading.has-records{page-break-after:avoid}.date-heading th{border-top:8px solid white;background:#f2dede;color:#65454b;font-weight:bold;padding:7px 7px}' +
+    '.date-metrics{float:right;font-size:10px;font-weight:400}.cashier{background:#fbf1f4;text-align:center;border-right:1px solid #e3c6c6;font-weight:500;print-color-adjust:exact;-webkit-print-color-adjust:exact}' +
+    '.cashier span{display:block;writing-mode:horizontal-tb;white-space:normal}.receipt{text-align:left;overflow-wrap:anywhere}' +
+    'small{display:block;font-size:10px;font-weight:400;margin-top:3px;color:#68616b}.original{padding:2px 4px;background:#efedef;color:#55515a;border-radius:3px;print-color-adjust:exact;-webkit-print-color-adjust:exact}' +
+    '.daily-total th,.daily-total td{color:#65454b;font-weight:bold;padding:7px 7px}.grand-total th,.grand-total td{background:#f2dede;color:#65454b;border-top:2px solid #e3c6c6;border-bottom:2px solid #e3c6c6;padding:10px 7px;font-weight:bold}' +
+    '.grand-total th{border-left:2px solid #e3c6c6}.grand-total td:last-child{border-right:2px solid #e3c6c6}.report-total{page-break-inside:avoid;page-break-after:avoid}' +
+    '.prepared-by{width:60mm;margin:10mm 0 0 auto;text-align:center;page-break-inside:avoid;page-break-before:avoid}.sign-space{height:24px;border-bottom:1px solid #bba2ad;margin-bottom:6px}.sign-name{font-weight:bold;overflow-wrap:anywhere}.sign-label{color:#736970;font-size:11px;margin-top:3px}.missing{font-size:10px;color:#68616b;margin-top:9px}' +
+    '</style></head><body><header><div class="brand">YourStyle</div><h1>TRANSACTIONS REPORT SUMMARY</h1><p>' + safe(date) + '</p></header>' +
+    '<table><colgroup><col style="width:18%"><col style="width:26%"><col style="width:11%"><col style="width:12%"><col style="width:12%"><col style="width:9%"><col style="width:12%"></colgroup>' +
+    '<thead><tr bgcolor="#f2dede"><th>Cashier</th><th>Receipt</th><th>Time</th><th>Payment</th><th class="number">Received</th><th class="number">Change</th><th class="number">Sales</th></tr></thead>' +
+    lines + '<tbody class="report-total">' + totals('GRAND TOTAL',summary,true) + '</tbody></table>' +
+    (summary.received === null || summary.change === null ? '<p class="missing">— = amount not recorded.</p>' : '') +
+    '<div class="prepared-by"><div class="sign-space"></div><div class="sign-name">' + safe(preparedBy) + '</div><div class="sign-label">Prepared by</div></div></body></html>';
 }
 
 function createDashboardInventoryPdf_(report, date) {
