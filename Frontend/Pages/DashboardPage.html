@@ -67,12 +67,12 @@
           <span>After discounts &amp; returns</span>
           <small id="dashboardSalesNetComparison"></small>
         </button>
-        <article class="dashboard-overview-card">
-          <h3 class="dashboard-card-title">Units sold</h3>
+        <button id="dashboardUnitsCard" type="button" class="dashboard-overview-card" aria-haspopup="dialog" aria-controls="dashboardUnitsSummary" onclick="openDashboardUnitsSummary()" disabled>
+          <span class="dashboard-card-title">Units sold</span>
           <strong id="dashboardSalesUnits">—</strong>
           <span id="dashboardSalesUnitsSubtitle">Items sold in this period</span>
           <small id="dashboardSalesUnitsComparison"></small>
-        </article>
+        </button>
         <article class="dashboard-overview-card">
           <h3 class="dashboard-card-title">Transactions</h3>
           <strong id="dashboardSalesTransactions">—</strong>
@@ -205,6 +205,29 @@
     <footer class="d-flex justify-content-between gap-2 pt-3 mt-2">
       <button id="dashboardNetSalesTransactions" type="button" class="btn btn-light" onclick="viewDashboardSalesTransactions()">View transactions</button>
       <button id="dashboardNetSalesDownload" type="button" class="btn btn-pink dashboard-return-icon" title="Download PDF" aria-label="Download sales report summary PDF" onclick="downloadDashboardNetSalesSummary()" disabled>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 15v5h14v-5"/></svg>
+      </button>
+    </footer>
+  </dialog>
+  <dialog id="dashboardUnitsSummary" aria-labelledby="dashboardUnitsHeading" aria-describedby="dashboardUnitsPeriod">
+    <header class="d-flex justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h2 id="dashboardUnitsHeading" class="h4 mb-1">Units sold summary</h2>
+        <p id="dashboardUnitsPeriod" class="small text-muted mb-0"></p>
+      </div>
+      <form method="dialog"><button class="btn btn-light dashboard-return-icon" aria-label="Close units sold summary">×</button></form>
+    </header>
+    <p id="dashboardUnitsMessage" class="small text-muted mb-2" role="status" hidden></p>
+    <div class="dashboard-delivery-scroll" tabindex="0" role="region" aria-label="Units sold by category and price">
+      <table id="dashboardUnitsTable" class="table table-sm mb-0">
+        <thead><tr><th scope="col">Description</th><th scope="col" class="text-end">Price</th><th scope="col" class="text-end">Units sold</th><th scope="col" class="text-end">Total sales</th></tr></thead>
+        <tbody id="dashboardUnitsRows"></tbody>
+        <tfoot><tr><th scope="row" colspan="2">Grand total</th><td id="dashboardUnitsCount" class="text-end"></td><td class="text-end"><strong id="dashboardUnitsTotal"></strong></td></tr></tfoot>
+      </table>
+    </div>
+    <footer class="d-flex justify-content-between gap-2 pt-3 mt-2">
+      <button id="dashboardUnitsTransactions" type="button" class="btn btn-light" onclick="viewDashboardUnitTransactions()">View transactions</button>
+      <button id="dashboardUnitsDownload" type="button" class="btn btn-pink dashboard-return-icon" title="Download PDF" aria-label="Download units sold report summary PDF" onclick="downloadDashboardUnitsSummary()" disabled>
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 15v5h14v-5"/></svg>
       </button>
     </footer>
@@ -530,7 +553,7 @@
   @media (pointer: coarse) {
     .dashboard-sales-filter :is(summary,label), .dashboard-top-options label:not([hidden]), .dashboard-panel-heading select, .dashboard-inline-options label, .dashboard-payment-legend button { min-height: 44px; }
   }
-  :is(#dashboardReturnSummary, #dashboardDeliverySummary, #dashboardInventoryReport, #dashboardNetSalesSummary) {
+  :is(#dashboardReturnSummary, #dashboardDeliverySummary, #dashboardInventoryReport, #dashboardNetSalesSummary, #dashboardUnitsSummary) {
     width: min(580px, calc(100% - 24px));
     max-height: calc(100% - 24px);
     padding: clamp(14px, 4vw, 24px);
@@ -538,9 +561,9 @@
     border-radius: 18px;
     color: #381f2c;
   }
-  :is(#dashboardReturnSummary, #dashboardDeliverySummary, #dashboardInventoryReport, #dashboardNetSalesSummary)::backdrop { background: #25131e55; }
-  :is(#dashboardDeliverySummary, #dashboardInventoryReport, #dashboardNetSalesSummary)[open] { display: flex; flex-direction: column; max-height: min(680px, 80vh); overflow: hidden; }
-  :is(#dashboardDeliverySummary, #dashboardInventoryReport, #dashboardNetSalesSummary) > :is(header, footer) { flex-shrink: 0; }
+  :is(#dashboardReturnSummary, #dashboardDeliverySummary, #dashboardInventoryReport, #dashboardNetSalesSummary, #dashboardUnitsSummary)::backdrop { background: #25131e55; }
+  :is(#dashboardDeliverySummary, #dashboardInventoryReport, #dashboardNetSalesSummary, #dashboardUnitsSummary)[open] { display: flex; flex-direction: column; max-height: min(680px, 80vh); overflow: hidden; }
+  :is(#dashboardDeliverySummary, #dashboardInventoryReport, #dashboardNetSalesSummary, #dashboardUnitsSummary) > :is(header, footer) { flex-shrink: 0; }
   .dashboard-delivery-scroll { min-height: 0; overflow: auto; }
   .dashboard-return-icon { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; font-size: 1.35rem; }
   .dashboard-return-icon[aria-busy="true"] > svg { display: none; }
@@ -582,6 +605,19 @@
   .dashboard-collections-switch .dashboard-inline-options { font-size: .75rem; }
   .dashboard-collections-switch input { accent-color: var(--pink-hover); }
   #dashboardNetSalesTotal { font-size: clamp(1rem, 3vw, 1.4rem); }
+  #dashboardUnitsSummary { width: min(680px,calc(100% - 24px)); }
+  #dashboardUnitsTable { font-size: .8125rem; --bs-table-bg: transparent; table-layout: fixed; }
+  #dashboardUnitsTable :is(th,td) { padding: 10px 8px; border-color: var(--border-color); background: var(--card-bg); color: var(--text-dark); box-shadow: none; vertical-align: middle; }
+  #dashboardUnitsTable th { font-weight: 400; overflow-wrap: anywhere; }
+  #dashboardUnitsTable thead th { position: sticky; top: 0; z-index: 1; background: var(--pink-light); color: var(--pink-ink); font-size: .75rem; }
+  #dashboardUnitsTable th:first-child { width: 35%; }
+  #dashboardUnitsTable th:nth-child(2) { width: 26%; }
+  #dashboardUnitsTable td:nth-child(2) { white-space: normal; }
+  #dashboardUnitsTable td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #dashboardUnitsTable .dashboard-unit-group :is(th,td) { background: var(--pink-light); color: var(--pink-ink); font-weight: 500; border-top: 9px solid var(--card-bg); }
+  #dashboardUnitsTable .dashboard-unit-sale :is(th,td) { color: var(--color-danger); }
+  #dashboardUnitsTable tfoot :is(th,td) { position: sticky; bottom: 0; z-index: 1; border-top: 2px solid var(--border-color); font-weight: 500; }
+  @media(max-width:480px) { #dashboardUnitsTable :is(th,td) { padding: 9px 4px; font-size: .6875rem; } #dashboardUnitsTable th:first-child { width: 33%; } }
   #dashboardCalendar {
     width: min(390px, calc(100% - 24px));
     max-height: calc(100% - 24px);
@@ -656,6 +692,7 @@
   ];
   let dashboardSalesData, dashboardDisplayedSnapshot, dashboardDisplayedRange, dashboardChartLibrary;
   let dashboardNetSalesPdfRequest;
+  let dashboardUnitsPdfRequest;
 
   let dashboardCollectionMode = 'payments';
   let dashboardCollectionRange, dashboardCollectionExpanded = new Set();
@@ -781,6 +818,81 @@
     }).withFailureHandler(finish).createDashboardNetSalesPdf(request);
   }
 
+  function dashboardUnitPriceRange(item) {
+    const minimum = item.priceMin ?? item.price, maximum = item.priceMax ?? minimum;
+    return dashboardSalesMoney.format(minimum) + (minimum === maximum ? '' : ' - ' + dashboardNumberFormat.format(maximum));
+  }
+
+  function renderDashboardUnitsSummary() {
+    const data = dashboardSalesData, period = data?.period, groups = data?.unitSummary;
+    document.getElementById('dashboardUnitsPeriod').textContent = period ? describeDashboardRange([new Date(period.start),new Date(period.end)]) : '';
+    document.getElementById('dashboardUnitsTable').hidden = !groups;
+    document.getElementById('dashboardUnitsDownload').disabled = !groups || !!dashboardUnitsPdfRequest;
+    document.getElementById('dashboardUnitsTransactions').disabled = !period || currentEmployee?.permissions?.['transactions.view'] === 'deny';
+    const message = document.getElementById('dashboardUnitsMessage');
+    if (!dashboardUnitsPdfRequest) {
+      message.textContent = !groups ? 'Units sold are unavailable. Refresh the dashboard to try again.' : !groups.length ? 'No units sold in this date range.' : '';
+      message.hidden = !message.textContent;
+    }
+    const body = document.getElementById('dashboardUnitsRows');
+    body.replaceChildren();
+    (groups || []).forEach(group => {
+      const heading = body.insertRow();
+      heading.className = 'dashboard-unit-group';
+      const label = document.createElement('th');
+      label.scope = 'rowgroup'; label.colSpan = 2; label.textContent = group.title;
+      heading.append(label);
+      [dashboardNumberFormat.format(group.units),dashboardSalesMoney.format(group.sales)].forEach(value => {
+        const cell = heading.insertCell(); cell.className = 'text-end'; cell.textContent = value;
+      });
+      group.rows.forEach(item => {
+        const row = body.insertRow(), description = document.createElement('th');
+        if (item.isSale) row.className = 'dashboard-unit-sale';
+        description.scope = 'row'; description.textContent = item.description + (item.isSale ? ' · SALE' : ''); row.append(description);
+        [dashboardUnitPriceRange(item),dashboardNumberFormat.format(item.units),dashboardSalesMoney.format(item.sales)].forEach(value => {
+          const cell = row.insertCell(); cell.className = 'text-end'; cell.textContent = value;
+        });
+      });
+    });
+    document.getElementById('dashboardUnitsCount').textContent = groups ? dashboardNumberFormat.format(data.units) : '—';
+    document.getElementById('dashboardUnitsTotal').textContent = groups ? dashboardSalesMoney.format(data.netSales) : '—';
+  }
+
+  function openDashboardUnitsSummary() {
+    if (!dashboardSalesData?.unitSummary) return;
+    renderDashboardUnitsSummary();
+    document.getElementById('dashboardUnitsSummary').showModal();
+  }
+
+  function viewDashboardUnitTransactions() {
+    const period = dashboardSalesData?.period;
+    if (!period || currentEmployee?.permissions?.['transactions.view'] === 'deny') return;
+    document.getElementById('dashboardUnitsSummary').close();
+    openTransactionHistoryModal(period);
+  }
+
+  function downloadDashboardUnitsSummary() {
+    const period = dashboardSalesData?.period;
+    if (!period || !dashboardSalesData?.unitSummary || dashboardUnitsPdfRequest) return;
+    const request = {start:period.start,end:period.end};
+    dashboardUnitsPdfRequest = request;
+    const button = document.getElementById('dashboardUnitsDownload'), message = document.getElementById('dashboardUnitsMessage');
+    button.disabled = true; button.setAttribute('aria-busy','true'); message.textContent = ''; message.hidden = true;
+    const finish = error => {
+      if (dashboardUnitsPdfRequest !== request) return;
+      dashboardUnitsPdfRequest = null; button.removeAttribute('aria-busy');
+      button.disabled = !dashboardSalesData?.unitSummary;
+      message.textContent = error ? error.message || String(error) : ''; message.hidden = !error;
+    };
+    secureScriptRun.withSuccessHandler(result => {
+      if (dashboardUnitsPdfRequest !== request) return;
+      try {
+        if (!result?.success) throw new Error(result?.message || 'Couldn’t prepare the units sold summary.');
+        downloadSupplierReturnPdf_(result); finish();
+      } catch (error) { finish(error); }
+    }).withFailureHandler(finish).createDashboardUnitsPdf(request);
+  }
+
   function loadDashboardChartLibrary() {
     if (typeof globalThis.Chart === 'function') return null;
     if (dashboardChartLibrary) return dashboardChartLibrary;
@@ -808,6 +920,8 @@
     dashboardSalesData = data?.unavailable ? null : data;
     document.getElementById('dashboardSalesUnitsSubtitle').textContent = dashboardSalesData?.hourly ? 'Items sold that day' : 'Items sold in this period';
     document.getElementById('dashboardNetSalesCard').disabled = !dashboardSalesData?.period;
+    document.getElementById('dashboardUnitsCard').disabled = !dashboardSalesData?.unitSummary;
+    if (document.getElementById('dashboardUnitsSummary').open) renderDashboardUnitsSummary();
     if (document.getElementById('dashboardNetSalesSummary').open) renderDashboardNetSalesSummary();
     document.getElementById('dashboardSalesStatus').textContent = data?.unavailable || '';
     document.querySelectorAll('.dashboard-sales-layout, .dashboard-sales-details')
@@ -1789,6 +1903,10 @@
     document.querySelectorAll('[data-top-group] input').forEach(input => {input.checked = false;});
     renderDashboardSales();
     renderDashboardNetSalesSummary();
+    dashboardUnitsPdfRequest = null;
+    document.getElementById('dashboardUnitsSummary').close();
+    document.getElementById('dashboardUnitsDownload').removeAttribute('aria-busy');
+    renderDashboardUnitsSummary();
     document.getElementById('dashboardInventoryReport').close();
     dashboardInventoryPdfRequest = null;
     document.getElementById('dashboardInventoryDownload').disabled = true;

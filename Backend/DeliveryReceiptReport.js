@@ -304,6 +304,50 @@ function buildDashboardSalesSummaryHtml_(sales, mode, preparedBy) {
     '</div><div class="sign-label">Prepared by</div></section></body></html>';
 }
 
+function createDashboardUnitsPdf(request) {
+  const sales = getDashboardSales(request);
+  if (sales.unavailable) return {success:false,message:sales.unavailable};
+  const pdf = Utilities.newBlob(buildDashboardUnitsHtml_(sales,ACCESS_REQUEST_CONTEXT_.actor.name),'text/html','units-sold-summary.html').getAs('application/pdf');
+  const {start,end} = sales.period;
+  return {success:true,fileName:'Units_Sold_Report_Summary_' + start + (start === end ? '' : '_to_' + end) + '.pdf',base64:Utilities.base64Encode(pdf.getBytes())};
+}
+
+function buildDashboardUnitsHtml_(sales, preparedBy) {
+  const safe = escapeDeliveryReceiptHtml_;
+  const {start,end} = sales.period;
+  const date = formatDeliveryReceiptDate_(start) + (start === end ? '' : ' - ' + formatDeliveryReceiptDate_(end));
+  const money = new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',minimumFractionDigits:2,maximumFractionDigits:2});
+  const number = new Intl.NumberFormat('en-PH');
+  const priceNumber = new Intl.NumberFormat('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const priceRange = item => {
+    const minimum = item.priceMin ?? item.price, maximum = item.priceMax ?? minimum;
+    return money.format(minimum) + (minimum === maximum ? '' : ' - ' + priceNumber.format(maximum));
+  };
+  const sizes = {SE:'Small Electronic',ME:'Medium Electronic',LE:'Large Electronic',XLE:'Extra Large Electronic',
+    SNE:'Small Non-Electronic',MNE:'Medium Non-Electronic',LNE:'Large Non-Electronic',XLNE:'Extra Large Non-Electronic',BNE:'Bulky Non-Electronic',NS:'No Size'};
+  const labels = {YOURFINDS:'YourFinds',PINS:'Pins',OTHERS:'Others',WHOLESALE:'Wholesale'};
+  const rows = sales.unitSummary.map(group => '<tbody><tr class="category" bgcolor="#f2dede"><th colspan="5" bgcolor="#f2dede">' + labels[group.category] + '</th></tr>' +
+    group.rows.map(item => '<tr' + (item.isSale ? ' class="sale" style="color:#a52d3b"' : '') + '><td>' + safe(item.code) + '</td><th scope="row">' +
+      safe((group.category === 'YOURFINDS' ? sizes[item.description] || item.description : item.description) + (item.isSale ? ' · SALE' : '')) +
+      '</th><td class="number price">' + priceRange(item) + '</td><td class="number">' + number.format(item.units) +
+      '</td><td class="number">' + money.format(item.sales) + '</td></tr>').join('') + '</tbody>').join('');
+  return '<!doctype html><html><head><meta charset="utf-8"><style>' +
+    '@page{size:A4;margin:12mm}body{margin:0;color:#362730;font:11.5px Arial,sans-serif}' +
+    'header{text-align:center;border-bottom:1px solid #ead9de;padding-bottom:14px;margin-bottom:16px}' +
+    '.brand{font:700 20px Arial,sans-serif;color:#b76e79;print-color-adjust:exact;-webkit-print-color-adjust:exact}h1{font-size:17px;margin:7px 0}p{color:#65454b;margin:4px 0}' +
+    'table{width:100%;border-collapse:collapse;table-layout:fixed}thead{display:table-header-group}tr{page-break-inside:avoid}' +
+    'th,td{padding:7px;border:1px solid #e3c6c6;text-align:left;overflow-wrap:break-word}tbody th{font-weight:400}' +
+    '.number{text-align:right;white-space:nowrap}.price{white-space:normal}.sale th,.sale td{color:#a52d3b;-webkit-print-color-adjust:exact;print-color-adjust:exact}.category{page-break-after:avoid}thead th,.category th,.total th,.total td{background:#f2dede;color:#65454b;font-weight:bold;print-color-adjust:exact;-webkit-print-color-adjust:exact}' +
+    '.total{page-break-inside:avoid;page-break-after:avoid}.total th,.total td{padding:12px 7px;border-top:2px solid #e3c6c6;border-bottom:2px solid #e3c6c6}.total td{font-size:15px}' +
+    '.prepared-by{width:60mm;margin:10mm 0 0 auto;text-align:center;page-break-inside:avoid;page-break-before:avoid}.sign-space{height:24px;border-bottom:1px solid #bba2ad;margin-bottom:6px}.sign-name{font-weight:bold}.sign-label{color:#736970;font-size:11px;margin-top:3px}' +
+    '</style></head><body><header><div class="brand">YourStyle</div><h1>UNITS SOLD REPORT SUMMARY</h1><p>' + safe(date) + '</p></header>' +
+    '<table><colgroup><col style="width:15%"><col style="width:29%"><col style="width:22%"><col style="width:10%"><col style="width:24%"></colgroup>' +
+    '<thead><tr bgcolor="#f2dede"><th>Code</th><th>Description</th><th class="number">Price</th><th class="number">Units sold</th><th class="number">Total sales</th></tr></thead>' +
+    (rows || '<tbody><tr><td colspan="5">No units sold in this date range.</td></tr></tbody>') +
+    '<tbody><tr class="total" bgcolor="#f2dede"><th colspan="3">GRAND TOTAL</th><td class="number">' + number.format(sales.units) + '</td><td class="number">' + money.format(sales.netSales) + '</td></tr></tbody></table>' +
+    '<div class="prepared-by"><div class="sign-space"></div><div class="sign-name">' + safe(preparedBy) + '</div><div class="sign-label">Prepared by</div></div></body></html>';
+}
+
 function createDashboardInventoryPdf_(report, date) {
   const safe = escapeDeliveryReceiptHtml_;
   const labels = {YOURFINDS:'TOTAL YF', PINS:'TOTAL PIN', OTHERS:'TOTAL OTHERS', WHOLESALE:'TOTAL WHOLESALE'};

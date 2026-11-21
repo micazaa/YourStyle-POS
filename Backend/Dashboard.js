@@ -356,7 +356,7 @@ function getDashboardSales(request) {
     return {unavailable:'Choose a range of up to 366 days to view sales.'};
   const period = dashboardPeriod_({start, end:effectiveEnd}, employee, today);
   const version = inventoryReadVersion_();
-  const key = inventoryResponseCacheKey_(version, 'dashboard-sales-v5', [
+  const key = inventoryResponseCacheKey_(version, 'dashboard-sales-v8', [
     period.start, period.end, period.days === 1 && period.end === today ? hour : null
   ]);
   const cache = CacheService.getScriptCache();
@@ -453,6 +453,7 @@ function dashboardSalesBreakdown_(rows, period, timezone, hours, shifts = []) {
   }));
   const items = new Map();
   const collections = new Map();
+  const unitRows = new Map();
   const startMs = Date.parse(period.start);
   let absorbedCardFees = 0;
   const metrics = collectSalesMetrics(rows, period.start, null, null, null, {
@@ -471,6 +472,20 @@ function dashboardSalesBreakdown_(rows, period, timezone, hours, shifts = []) {
       const category = String(normalizeInventoryCategoryValue_(row.category)).toUpperCase();
       const categoryIndex = categories.indexOf(category);
       const index = categoryIndex < 0 ? 2 : categoryIndex;
+      const unitCategory = categories[index];
+      const unitDescription = unitCategory === 'YOURFINDS' ? dashboardYourFindsReturnSize_(row.size)
+        : unitCategory === 'PINS' ? dashboardPinName_(row.name.replace(/ · SALE$/i,''),row.size)
+        : unitCategory === 'OTHERS' ? dashboardOtherItemName_(row.name.replace(/ · SALE$/i,'')) : row.name.replace(/ · SALE$/i,'').trim().toUpperCase();
+      const unitCode = unitCategory === 'YOURFINDS' ? unitDescription : String(row.code || '').trim();
+      const isSale = / · SALE$/i.test(row.name);
+      const unitKey = JSON.stringify([unitCategory,unitCode || unitDescription,isSale]);
+      if (!unitRows.has(unitKey)) unitRows.set(unitKey,{category:unitCategory,description:unitDescription,isSale,priceMin:row.price,priceMax:row.price,codes:new Set(),units:0,sales:0});
+      const unitRow = unitRows.get(unitKey);
+      if (unitCode) unitRow.codes.add(unitCode);
+      unitRow.priceMin = Math.min(unitRow.priceMin,row.price);
+      unitRow.priceMax = Math.max(unitRow.priceMax,row.price);
+      unitRow.units += row.units;
+      unitRow.sales += row.sales;
       categoryTotals[index].sales += row.sales;
       categoryTotals[index].units += row.units;
       const bucketIndex = hourly
@@ -500,10 +515,23 @@ function dashboardSalesBreakdown_(rows, period, timezone, hours, shifts = []) {
   return {
     period, hourly, activity, payments, absorbedCardFees:roundToTwo(absorbedCardFees),
     collections:dashboardDailyCollections_(collections,period,shifts,timezone),
+    unitSummary:dashboardUnitSummary_(unitRows),
     categoryTotals:categoryTotals.map(row => ({...row,sales:roundToTwo(row.sales)})),
     items: Array.from(items.values()).filter(item => item.units > 0).map(item => ({...item,sales:roundToTwo(item.sales)})),
     netSales: metrics.totalSales, units: metrics.itemsCount, transactions: metrics.transactionCount,
   };
+}
+
+function dashboardUnitSummary_(rows) {
+  const labels = {YOURFINDS:'YourFinds · Size',PINS:'YourStyle · Pins',OTHERS:'YourStyle · Others',WHOLESALE:'Wholesale'};
+  const comparators = {YOURFINDS:compareDashboardYourFindsSizes_,PINS:compareDashboardPins_,OTHERS:compareDashboardOtherItems_};
+  const groups = Object.entries(labels).map(([category,title]) => {
+    const items = Array.from(rows.values()).filter(row => row.category === category && (row.units || roundToTwo(row.sales)))
+      .map(row => ({code:Array.from(row.codes).sort().join(', '),description:row.description,isSale:row.isSale,priceMin:row.priceMin,priceMax:row.priceMax,units:row.units,sales:roundToTwo(row.sales)}))
+      .sort((a,b) => (comparators[category] || ((x,y) => x.localeCompare(y)))(a.description,b.description) || a.code.localeCompare(b.code,undefined,{numeric:true}) || Number(a.isSale) - Number(b.isSale));
+    return {category,title,rows:items,units:items.reduce((sum,row) => sum + row.units,0),sales:roundToTwo(items.reduce((sum,row) => sum + row.sales,0))};
+  }).filter(group => group.rows.length);
+  return groups;
 }
 
 function dashboardDailyCollections_(events, period, shifts, timezone) {

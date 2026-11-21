@@ -76,6 +76,7 @@ test('graph interval controls appear for multiple days and hide for a single day
 
 for (const [kind,download,endpoint] of [
  ['NetSales','downloadDashboardNetSalesSummary','createDashboardNetSalesPdf'],
+ ['Units','downloadDashboardUnitsSummary','createDashboardUnitsPdf'],
  ['Return','downloadDashboardReturnSummary','createDashboardReturnPdf'],
  ['Delivery','downloadDashboardDeliverySummary','createDashboardDeliveryPdf'],
  ['Inventory','downloadDashboardInventoryReport','getDashboardInventoryReport'],
@@ -84,7 +85,7 @@ for (const [kind,download,endpoint] of [
  f.c.updateDashboardHeader(new Date('2026-11-18T04:00:00Z'));
  f.element('dashboardDeliveryTable').hidden=false;
  f.element('dashboardInventoryTotals').hidden=false;
- vm.runInContext("dashboardSalesData={period:{start:'2026-11-18',end:'2026-11-18'},collections:{days:[],total:0}};dashboardDeliverySummaryRequest={start:'2026-11-18',end:'2026-11-18'}",f.c);
+ vm.runInContext("dashboardSalesData={period:{start:'2026-11-18',end:'2026-11-18'},collections:{days:[],total:0},unitSummary:[]};dashboardDeliverySummaryRequest={start:'2026-11-18',end:'2026-11-18'}",f.c);
  f.c.pageReadCache.set('dashboardOverview',{data:{overview:{returns:{count:1}}}});
  f.c.secureScriptRun[endpoint]=function(){requests.push({success:this.success,failure:this.failure});};
  const button=f.element('dashboard'+kind+'Download'),message=f.element('dashboard'+kind+'Message'),attrs={};
@@ -541,4 +542,20 @@ test('stock flyout opens only in the collapsed desktop sidebar',()=>{
  f.c.openInventoryFlyout();assert.equal(menu.hidden,true);
  collapsed=true;f.c.openInventoryFlyout();assert.equal(menu.hidden,false);
  f.c.closeInventoryFlyout();desktop=false;f.c.openInventoryFlyout();assert.equal(menu.hidden,true);
+});
+
+
+test('units modal renders the cached groups, downloads the selected range and clears private state on logout',()=>{
+ const f=fixture({dev:true,manager:true});
+ const node=()=>({children:[],append(...items){this.children.push(...items);},insertCell(){const cell=node();this.append(cell);return cell;}});
+ const body=f.element('dashboardUnitsRows');body.rows=[];body.replaceChildren=()=>{body.rows=[];};body.insertRow=()=>{const row=node();body.rows.push(row);return row;};f.c.document.createElement=node;
+ const period={start:'2026-11-10',end:'2026-11-13'},data={...emptyDashboardSales,period,units:3,netSales:350,unitSummary:[{category:'YOURFINDS',title:'YourFinds · Size',units:3,sales:350,rows:[{code:'SE',description:'SE',isSale:true,priceMin:150,priceMax:300,units:3,sales:350}]}]};
+ f.c.renderDashboardSales(data);f.c.openDashboardUnitsSummary();
+ assert.equal(f.element('dashboardUnitsSummary').open,true);assert.equal(f.element('dashboardUnitsCard').disabled,false);
+ assert.deepEqual(body.rows[1].children.map(cell=>cell.textContent),['SE · SALE','₱150 - 300','3','₱350']);
+ assert.equal(f.element('dashboardUnitsCount').textContent,'3');assert.equal(f.element('dashboardUnitsTotal').textContent,'₱350');assert.equal(f.dashboardRequests.length,0);
+ const requests=[];f.c.secureScriptRun.createDashboardUnitsPdf=function(range){requests.push({range,success:this.success});};
+ let downloaded=0;f.c.downloadSupplierReturnPdf_=()=>{downloaded++;};f.c.downloadDashboardUnitsSummary();f.c.downloadDashboardUnitsSummary();assert.equal(requests.length,1);assert.deepEqual({...requests[0].range},period);
+ let selected;f.c.openTransactionHistoryModal=range=>{selected=range;};f.c.viewDashboardUnitTransactions();assert.deepEqual(selected,period);assert.equal(f.element('dashboardUnitsSummary').open,false);
+ f.c.openDashboardUnitsSummary();f.c.clearDashboardState();requests[0].success({success:true,base64:'PDF'});assert.equal(downloaded,0);assert.equal(body.rows.length,0);assert.equal(f.element('dashboardUnitsCard').disabled,true);
 });

@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const clean = value => JSON.parse(JSON.stringify(value));
-function sale({date='2026-11-20T02:00:00Z',receipt='R1',cashier='Ana Cashier',net=100,charged=0,absorbed=0,method='Cash',parts=[],reason='',status='COMPLETED'}={}) {
+function sale({date='2026-11-20T02:00:00Z',receipt='R1',cashier='Ana Cashier',net=100,charged=0,absorbed=0,method='Cash',parts=[],reason='',status='COMPLETED',code='PIN1',name='Yellow',size='',category='PINS',qty=1,price=100}={}) {
   const row=Array(34).fill('');
-  Object.assign(row,{0:date,1:receipt,2:cashier,3:'PIN1',4:'Yellow',6:'PINS',7:1,8:100,10:charged,11:absorbed,12:net,13:method,15:status,19:reason});
+  Object.assign(row,{0:date,1:receipt,2:cashier,3:code,4:name,5:size,6:category,7:qty,8:price,10:charged,11:absorbed,12:net,13:method,15:status,19:reason});
   parts.forEach((part,index)=>{row[28+index*3]=part[0];row[29+index*3]=part[1];});
   return row;
 }
@@ -28,7 +28,7 @@ function harness(rows,shifts=[]) {
     SpreadsheetApp:{getActiveSpreadsheet:()=>({getSheetByName:name=>({
       getRange:()=>({getDisplayValues:()=>[header]}),
       getDataRange:()=>({getValues(){if(name==='Cash Report Log'){reads.shifts++;return [[],...shifts];}reads.sales++;return [header,...rows];}})
-    })})},toProperCase:String});
+    })})},toProperCase:String,normalizeYourFindsSaleSize_:size=>String(size).toUpperCase()});
   for(const file of ['Constants','Utils','Reservations','ReportHelpers','Dashboard','DeliveryReceiptReport'])vm.runInContext(fs.readFileSync('Backend/'+file+'.js','utf8'),c);
   return {c,cache,reads};
 }
@@ -114,4 +114,76 @@ test('download includes all dates and the requested details, escapes names and r
   assert.equal(c.createDashboardNetSalesPdf({...today,breakdown:'cashiers'}).success,false);
   assert.equal(c.createDashboardNetSalesPdf(today).success,true);
   c.ACCESS_REQUEST_CONTEXT_=null;assert.throws(()=>c.createDashboardNetSalesPdf(range),/Sign in/);
+});
+
+
+test('units summary groups by code and size with price ranges, preserving reconciled amounts',()=>{
+  const {c,reads}=harness([
+    sale({code:'YF1',category:'YOURFINDS',size:'SNE',name:'TOP',net:180,price:200,qty:1}),
+    sale({receipt:'YF2',code:'YF2',category:'YOURFINDS',size:'SNE',name:'TOY',net:190,price:700,qty:1}),
+    sale({receipt:'YF3',code:'YF3',category:'YOURFINDS',size:'SE',net:300,price:300}),
+    sale({receipt:'GREEN',name:'GREEN',code:'100007',price:180,net:180}),
+    sale({receipt:'YELLOW',name:'YELLOW',code:'100001',price:150,net:140}),
+    sale({receipt:'YELLOW-SALE',name:'YELLOW · SALE',code:'120001',price:120,net:120}),
+    sale({receipt:'YELLOW2',name:'OLD LABEL',code:'100001',price:300,net:280}),
+    sale({receipt:'RETURN',name:'YELLOW',code:'100001',price:150,net:-20,qty:-1,reason:'EXCHANGE RETURN'}),
+    sale({receipt:'OTHER',category:'OTHERS',name:'BAGS',code:'200002',price:230,net:230}),
+    sale({receipt:'WS',category:'WHOLESALE',name:'PURE TOPS (BOX)',code:'WS1',price:6000,net:6000}),
+  ]);
+  const data=c.getDashboardSales(range),groups=clean(data.unitSummary);
+  assert.deepEqual(groups.map(group=>group.category),['YOURFINDS','PINS','OTHERS','WHOLESALE']);
+  assert.deepEqual(groups[0].rows.map(row=>[row.code,row.description,row.units,row.sales]),[['SE','SE',1,300],['SNE','SNE',2,370]]);
+  assert.equal(groups[0].rows[1].priceMin,200);assert.equal(groups[0].rows[1].priceMax,700);
+  assert.equal(groups[0].rows.filter(row=>row.code==='SNE').length,1);
+  assert.equal(groups[1].rows.find(row=>row.code==='100001').priceMax,300);
+  assert.deepEqual(groups[1].rows.map(row=>[row.description,row.priceMin,row.sales]),[['GREEN',180,180],['YELLOW',150,400],['YELLOW',120,120]]);
+  assert.equal(groups[1].rows[1].code,'100001');
+  assert.equal(groups[1].rows[1].priceMax,300);
+  assert.equal(groups[1].rows[1].units,2);
+  assert.equal(groups.reduce((sum,group)=>sum+group.units,0),data.units);
+  assert.equal(groups.reduce((sum,group)=>sum+group.sales,0),data.netSales);
+  const html=[];c.Utilities.newBlob=value=>{html.push(value);return {getAs:()=>({getBytes:()=>[1]})};};c.Utilities.base64Encode=()=> 'PDF';
+  const pdf=c.createDashboardUnitsPdf({...range,preparedBy:'Fake'});
+  assert.equal(pdf.fileName,'Units_Sold_Report_Summary_2026-11-19_to_2026-11-20.pdf');
+  assert.match(html[0],/UNITS SOLD REPORT SUMMARY/);assert.match(html[0],/>Code<\/th>/);
+  assert.match(html[0],/<td>SNE<\/td><th scope="row">Small Non-Electronic/);
+  assert.match(html[0],/₱200.00 - 700.00/);
+  assert.match(html[0],/<td>100007<\/td><th scope="row">GREEN/);
+  assert.match(html[0],/Mia &lt;Manager&gt;/);assert.doesNotMatch(html[0],/Fake|Incomplete|Low stock/);
+  assert.deepEqual(reads,{sales:1,shifts:1},'Download reuses the dashboard snapshot');
+  c.ACCESS_REQUEST_CONTEXT_.actor.manager=false;assert.equal(c.createDashboardUnitsPdf(range).success,false);
+  c.ACCESS_REQUEST_CONTEXT_=null;assert.throws(()=>c.createDashboardUnitsPdf(range),/Sign in/);
+});
+
+test('units PDF uses cached data, codes, category bands and the authenticated preparer; keeps discounts and zero-unit adjustments',()=>{
+ const {c,reads}=harness([
+  sale({category:'YOURFINDS',code:'YF1',size:'SE',name:'ELECTRONIC',net:85,price:100}),
+  sale({receipt:'R2',category:'OTHERS',name:'<BAG>',code:'000007',net:30,price:50,qty:1}),
+  sale({receipt:'ADJ',name:'YELLOW',net:-5,price:100,qty:0}),
+ ]);
+ const data=c.getDashboardSales(range);let html;
+ c.Utilities.newBlob=value=>{html=value;return {getAs:()=>({getBytes:()=>[1]})};};c.Utilities.base64Encode=()=> 'PDF';
+ const result=c.createDashboardUnitsPdf({...range,preparedBy:'Forged'});
+ assert.equal(result.fileName,'Units_Sold_Report_Summary_2026-11-19_to_2026-11-20.pdf');
+ assert.match(html,/UNITS SOLD REPORT SUMMARY/);assert.match(html,/<th>Code<\/th>/);
+ assert.match(html,/<td>SE<\/td><th scope="row">Small Electronic/);assert.match(html,/<td>000007<\/td><th scope="row">BAG/);
+ assert.match(html,/Mia &lt;Manager&gt;/);assert.doesNotMatch(html,/Forged/);
+ const sums=data.unitSummary.reduce((sum,group)=>({units:sum.units+group.units,sales:sum.sales+group.sales}),{units:0,sales:0});
+ assert.equal(sums.units,data.units);assert.equal(sums.sales,data.netSales);assert.equal(data.netSales,110);
+ assert.deepEqual(reads,{sales:1,shifts:1});
+ c.ACCESS_REQUEST_CONTEXT_.actor.manager=false;assert.equal(c.createDashboardUnitsPdf(range).success,false);
+ c.ACCESS_REQUEST_CONTEXT_=null;assert.throws(()=>c.createDashboardUnitsPdf(range),/Sign in/);
+});
+
+
+test('regular and sale rows remain separate per code, with independent price ranges and red SALE label in PDF',()=>{
+ const {c}=harness([
+  sale({receipt:'REG',code:'100002',name:'BLACK',price:200,net:200}),
+  sale({receipt:'SALE1',code:'100002',name:'BLACK · SALE',price:159,qty:8,net:1272}),
+  sale({receipt:'SALE2',code:'100002',name:'BLACK · SALE',price:149,qty:2,net:298}),
+  sale({receipt:'REG2',code:'100002',name:'BLACK',price:250,net:250}),
+ ]);
+ const data=c.getDashboardSales(range),rows=data.unitSummary[0].rows;
+ assert.equal(rows.length,2);assert.deepEqual(clean(rows.map(row=>[row.isSale,row.priceMin,row.priceMax,row.units,row.sales])),[[false,200,250,2,450],[true,149,159,10,1570]]);
+ const html=c.buildDashboardUnitsHtml_(data,'Mia');assert.match(html,/class="sale" style="color:#a52d3b"/);assert.match(html,/BLACK · SALE/);assert.match(html,/₱149.00 - 159.00/);assert.equal(data.units,12);assert.equal(data.netSales,2020);
 });

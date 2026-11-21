@@ -4,6 +4,12 @@
   "tokens": "Frontend/Styles/CSS.html",
   "decisions": [
     {
+      "component": "Units sold summary",
+      "direction": "Inventory-style grouped modal and coded report",
+      "approved": "2026-11-20",
+      "details": "Units sold card opens the approved capped scrolling modal with Description, Price, Units sold and Total sales. Pink category bands for YourFinds · Size, YourStyle · Pins, YourStyle · Others and Wholesale; neutral item text, no status colors or item subtitles. Group YourFinds by size and other items by normalized inventory description, combining historical prices into a range and preserving recorded net amounts rather than multiplying quantity by price. Category subtotals and grand totals align under units/sales. The PDF uses Code, Description, Price, Units sold and Total sales with full-width inventory category bands; YF code is size with long size description, other codes are listed. Reuse sales report pink header/total, bold rose YourStyle title, date period and authenticated Prepared by signature on the right. Include in cached dashboard sales payload; no fetch on modal open. Preserve spinner/retry/logout guards, date permissions and transaction navigation. Dev only; no sheet changes. Follow-up: group by category and code, with YourFinds using its size code (all SNE in one row). Same code with different historical descriptions or prices stays one row. Price displays min - max, or a single amount when equal; quantities and recorded sales are summed unchanged. Apply to modal and PDF, retaining existing category order. Keep regular and sale pricing in separate rows for each code/size, with independent min/max ranges. Append · SALE and render the entire sale row red in modal and PDF; regular rows, category bands and totals retain normal colors."
+    },
+    {
       "component": "Sales summary readability",
       "direction": "Ascending dates, grouped report columns and preparer signature",
       "approved": "2026-11-20",

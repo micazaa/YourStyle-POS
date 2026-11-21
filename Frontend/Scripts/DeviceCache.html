@@ -55,7 +55,7 @@ function readDeviceDashboard(kind, range) {
   const account = deviceOverviewAccount();
   if (!account) return null;
   try {
-    const saved = JSON.parse(localStorage.getItem('ys_uat_daily_' + kind + '_v3_' + account));
+    const saved = JSON.parse(localStorage.getItem('ys_uat_daily_' + kind + '_v6_' + account));
     if (saved?.day !== deviceCacheDay()) return null;
     return saved.ranges?.[range.start + ':' + range.end] ||
       (saved.start === range.start && saved.end === range.end ? saved.overview : null);
@@ -66,7 +66,7 @@ function writeDeviceDashboard(kind, range, data) {
   const account = deviceOverviewAccount();
   if (!account) return;
   try {
-    const key = 'ys_uat_daily_' + kind + '_v3_' + account;
+    const key = 'ys_uat_daily_' + kind + '_v6_' + account;
     const previous = JSON.parse(localStorage.getItem(key));
     const ranges = previous?.day === deviceCacheDay() ? {...previous.ranges} : {};
     const rangeKey = range.start + ':' + range.end;
@@ -86,7 +86,7 @@ function writeDeviceOverview(range, data) { writeDeviceDashboard('overview', ran
 function clearDeviceDashboard(kind) {
   const account = deviceOverviewAccount();
   if (!account) return;
-  try { localStorage.removeItem('ys_uat_daily_' + kind + '_v3_' + account); }
+  try { localStorage.removeItem('ys_uat_daily_' + kind + '_v6_' + account); }
   catch (error) { /* Live loading remains available when storage is disabled. */ }
 }
 </script>

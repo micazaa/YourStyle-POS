@@ -688,7 +688,7 @@ function collectSalesMetrics(
     metrics.itemsCount += countedQty;
     if (options.onIncludedRow) options.onIncludedRow({
       timestamp: reportingTimestamp, date: reportingDate, category: category,
-      code: code, name: name, size: size, units: countedQty, sales: netTotal, exchange: exchange,
+      code: code, name: name, size: size, price: price, units: countedQty, sales: netTotal, exchange: exchange,
       feeAbsorbed: Number(row[SALES_IDX.FEE_ABSORBED]) || 0,
       feeCharged: Number(row[SALES_IDX.FEE_CHARGED]) || 0,
       cashier: reportingCashier, paymentMethod: paymentMethod,
