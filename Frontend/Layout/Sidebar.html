@@ -129,7 +129,14 @@ function showPage(pageId){
  if(pageId==='deliveriesPage')loadDeliveriesPage();
  if(pageId==='supplierReturnsPage')loadSupplierReturnsPage();
 }
-function restoreActivePage(){restoreSidebarLayout();if(dashboardPageIsAvailable()){showPage('dashboardPage');return;}const saved=localStorage.getItem('ys_pos_active_page');const pages=['posPage','inventoryPage','deliveriesPage','supplierReturnsPage'];const allowed=pages.includes(saved)?saved:defaultWorkspacePage();showPage(!currentSessionIsCashier&&allowed==='posPage'?'inventoryPage':allowed);}
+function restoreActivePage(){
+ restoreSidebarLayout();
+ const saved=localStorage.getItem('ys_pos_active_page');
+ const pages=['dashboardPage','posPage','inventoryPage','deliveriesPage','supplierReturnsPage'];
+ let allowed=pages.includes(saved)?saved:defaultWorkspacePage();
+ if((allowed==='dashboardPage'&&!dashboardPageIsAvailable())||(allowed==='posPage'&&!cashierPageIsAvailable()))allowed=defaultWorkspacePage();
+ showPage(allowed);
+}
 function updatePettyCashDisplay(){
  const amount='₱'+(Number(currentShiftPettyCash)||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
  const display=document.getElementById('cashierPettyCash');

@@ -158,6 +158,12 @@
       "direction": "One scan or search field",
       "approved": "2026-11-21",
       "details": "Combine barcode scanning and manual product lookup in the existing scanner surface. Label Scan or search a product, preserve codeInput for cashier/checkout focus, reuse the indexed product search dropdown and Add to Cart button. Typing filters by code, name, size or category. Enter adds a unique exact code or single match; multiple price variants require explicit choice. Arrow keys plus Enter choose and add a match, mouse selection uses Add to Cart, Escape/outside click close suggestions, and editing invalidates the selected product. Keep shared combobox ARIA behavior, existing barcode index/cache, bundle/cart logic and service toggle. Dev only. Remove the redundant scanner subtitle. Enter invokes the actual Add to Cart button. A unique exact barcode adds automatically after a 180ms input pause, without needing a scanner Enter suffix; cancel pending adds on edits, key navigation, blur, reset and explicit adds. Reject automatic matches while composing, unfocused, hidden, disabled or after account changes. Multiple prices require selection and known longer-code prefixes wait for completion or Enter. Keep price choices open when the add button is invoked and avoid duplicate adds from scanner Enter suffixes."
+    },
+    {
+      "component": "Transaction history filters",
+      "direction": "Single-row filters with role-aware date controls",
+      "approved": "2026-11-24",
+      "details": "Place From–To, Search and Payment Method in one responsive desktop row using the existing Bootstrap grid and retail controls. Reuse the Dashboard date-range dialog; hide its shortcut presets for cashier accounts while retaining them for managers. Do not show an additional cashier date-visibility note. A stalled background history warm-up must fall back to the visible modal request after 1.5 seconds so loading always progresses. Preserve date permissions, search, sorting, payment filtering, summaries and responsive stacking. Dev only."
     }
   ]
 }

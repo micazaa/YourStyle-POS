@@ -359,7 +359,7 @@ function receiptVisibleToActor_(receiptId, actor) {
   const sheet = getSalesLogSheet_();
   if (!sheet) throw new Error('Sales Log sheet not found.');
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  const minimum = dashboardDayOffset_(today, -6), shared = dashboardDayOffset_(today, -1);
+  const minimum = dashboardDayOffset_(today, -7), shared = dashboardDayOffset_(today, -5);
   const eligible = readExchangeReceiptRows_(sheet, SALES_COL.RECEIPT_ID, String(receiptId || '').trim().toUpperCase()).some(entry => {
     const date = Utilities.formatDate(new Date(entry.row[SALES_IDX.TIMESTAMP]), Session.getScriptTimeZone(), 'yyyy-MM-dd');
     return date <= today && date >= minimum && (date >= shared || String(entry.row[SALES_IDX.CASHIER]) === actor.name);

@@ -3,9 +3,11 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 
-function backend(rows, notes={}) {
+function backend(rows, notes={}, useCache=false) {
   const reads=[];
   let formats=0;
+  let version='v1';
+  const cache=new Map();
   const sheet={getLastRow:()=>rows.length+1,getRange(row,col,count=1,width=1){
     return {
       getValues(){reads.push({kind:'values',row,col,count,width});return rows.slice(row-2,row-2+count).map(line=>line.slice(col-1,col-1+width));},
@@ -13,6 +15,8 @@ function backend(rows, notes={}) {
     };
   }};
   const c=vm.createContext({
+    assertAppRequest_(){},
+    readReservations_:()=>[],reservationForClient_:value=>value,
     SpreadsheetApp:{getActiveSpreadsheet:()=>({getSheetByName:()=>sheet})},
     Session:{getScriptTimeZone:()=> 'Asia/Manila'},
     Utilities:{
@@ -20,9 +24,13 @@ function backend(rows, notes={}) {
       formatDate(value,_zone,pattern){formats++;const local=new Date(new Date(value).getTime()+8*3600000);if(pattern==='yyyy-MM-dd')return local.toISOString().slice(0,10);if(pattern==='h:mm a')return local.toISOString().slice(11,16);return 'Oct 30, 2026';}
     },roundToTwo:n=>Math.round(n*100)/100
   });
+  if(useCache){
+    c.CacheService={getScriptCache:()=>({get:key=>cache.get(key)||null,put:(key,value)=>cache.set(key,value)})};
+    c.inventoryReadVersion_=()=>version;
+  }
   vm.runInContext(fs.readFileSync('Backend/Constants.js','utf8'),c);
   vm.runInContext(fs.readFileSync('Backend/Sales.js','utf8'),c);
-  return {c,reads,formats:()=>formats};
+  return {c,reads,formats:()=>formats,setVersion:value=>{version=value;}};
 }
 function line(receipt,code,time='2026-10-30T12:00:00+08:00',extra={}) {
   const row=Array(28).fill('');
@@ -57,6 +65,17 @@ test('history reads one timestamp column then only required fields in date span'
   assert.ok(h.formats()<210,'date formatting must not run for all historical rows');
 });
 
+test('history reuses a mutation-versioned server result instead of scanning the sheet again',()=>{
+  const h=backend([line('R1','A'),line('R2','B')],{},true);
+  assert.equal(h.c.getTransactionHistory('Cashier A','2026-10-30','2026-10-30',true).transactions.length,2);
+  const firstReadCount=h.reads.length;
+  assert.equal(h.c.getTransactionHistory('Cashier A','2026-10-30','2026-10-30',true).transactions.length,2);
+  assert.equal(h.reads.length,firstReadCount);
+  h.setVersion('v2');
+  h.c.getTransactionHistory('Cashier A','2026-10-30','2026-10-30',true);
+  assert.ok(h.reads.length>firstReadCount,'a sales mutation version must invalidate the history cache');
+});
+
 test('date span handles unsorted manual entries and store midnight boundaries',()=>{
   const h=backend([
     line('BEFORE','A','2026-10-29T23:59:59+08:00'),
@@ -70,19 +89,21 @@ test('date span handles unsorted manual entries and store midnight boundaries',(
 });
 
 function frontend() {
-  const elements={},calls=[];
-  const c=vm.createContext({currentEmployee:{accessLevel:1},currentCashier:'A',console:{error(){}},
-    document:{getElementById(id){return elements[id]||(elements[id]={value:'',style:{},innerHTML:'',appendChild(){}});},createElement(){return {}; }},
-    showNotificationToast(){},google:{script:{get run(){const call={};calls.push(call);return {
-      withSuccessHandler(fn){call.success=fn;return this;},withFailureHandler(fn){call.failure=fn;return this;},getTransactionHistory(){}
-    };}}}
+  const elements={},calls=[],timers=[];
+  const secureScriptRun={active:null,withSuccessHandler(fn){this.active={success:fn};calls.push(this.active);return this;},
+    withFailureHandler(fn){this.active.failure=fn;return this;},getTransactionHistory(){}};
+  const c=vm.createContext({currentEmployee:{accessLevel:1,dashboardToken:'TOKEN'},currentCashier:'A',console:{error(){}},secureScriptRun,
+    hasManagerViewAccess:()=>false,
+    window:{setTimeout(fn){timers.push(fn);return timers.length;},clearTimeout(){}},
+    document:{activeElement:null,elementFromPoint(){return null;},getElementById(id){return elements[id]||(elements[id]={value:'',style:{},innerHTML:'',appendChild(){},contains(){return false;},querySelector(){return null;},showModal(){this.open=true;},close(){this.open=false;},removeAttribute(name){delete this[name];}});},createElement(){return {}; }},
+    showNotificationToast(){},google:{script:{run:secureScriptRun}}
   });
   vm.runInContext(fs.readFileSync('Frontend/Scripts/AppJS.html','utf8').split('let masterInventory')[0].replace('<script>',''),c);
   vm.runInContext(fs.readFileSync('Frontend/Modals/TransactionHistoryModal.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
   c.renderTransactionHistory=rows=>{c.visible=rows;};
   c.document.getElementById('transactionHistoryFromDate').value='2026-10-30';
   c.document.getElementById('transactionHistoryToDate').value='2026-10-30';
-  return {c,calls,elements};
+  return {c,calls,elements,timers};
 }
 
 test('barcode search uses cached receipt data and composes with payment filter',()=>{
@@ -110,13 +131,90 @@ test('history retries failed reads and ignores stale or signed-out responses',()
   assert.equal(c.transactionHistoryData.length,0);
 });
 
-test('cashier history stays within seven store dates and filters out other cashiers',()=>{
+test('cashier history shares days zero through five, limits days six and seven to self, and blocks day eight',()=>{
   const today=new Date(Date.now()+8*3600000).toISOString().slice(0,10);
-  const h=backend([line('MINE','001',today+'T12:00:00+08:00'),line('OTHER','002',today+'T12:00:00+08:00',{2:'Cashier B'})]);
-  assert.deepEqual(Array.from(h.c.getTransactionHistory('Cashier A',today,today,false).transactions,tx=>tx.receiptId),['MINE']);
+  const day=offset=>new Date(new Date(today+'T00:00:00Z').getTime()+offset*86400000).toISOString().slice(0,10);
+  const rows=[];
+  for(const age of [0,5,6,7,8]){
+    rows.push(line('MINE-'+age,'M'+age,day(-age)+'T12:00:00+08:00'));
+    rows.push(line('OTHER-'+age,'O'+age,day(-age)+'T12:00:00+08:00',{2:'Cashier B'}));
+  }
+  const h=backend(rows);
+  const visible=Array.from(h.c.getTransactionHistory('Cashier A',day(-7),today,false).transactions,tx=>tx.receiptId).sort();
+  assert.deepEqual(visible,['MINE-0','MINE-5','MINE-6','MINE-7','OTHER-0','OTHER-5']);
   const before=h.reads.length;
-  assert.equal(h.c.getTransactionHistory('Cashier A','2020-01-01',today,false).success,false);
+  assert.equal(h.c.getTransactionHistory('Cashier A',day(-8),today,false).success,false);
   assert.equal(h.reads.length,before);
+});
+
+test('direct receipt access applies the same cashier date boundaries while managers retain older access',()=>{
+  const today=new Date(Date.now()+8*3600000).toISOString().slice(0,10);
+  const day=offset=>new Date(new Date(today+'T00:00:00Z').getTime()+offset*86400000).toISOString().slice(0,10);
+  const receipts=new Map([
+    ['OTHER-5',line('OTHER-5','A',day(-5)+'T12:00:00+08:00',{2:'Cashier B'})],
+    ['OTHER-6',line('OTHER-6','A',day(-6)+'T12:00:00+08:00',{2:'Cashier B'})],
+    ['MINE-7',line('MINE-7','A',day(-7)+'T12:00:00+08:00')],
+    ['MINE-8',line('MINE-8','A',day(-8)+'T12:00:00+08:00')]
+  ]);
+  const c=vm.createContext({SALES_COL:{RECEIPT_ID:2},SALES_IDX:{TIMESTAMP:0,CASHIER:2},getSalesLogSheet_:()=>({}),
+    readExchangeReceiptRows_:(_sheet,_column,id)=>receipts.has(id)?[{row:receipts.get(id)}]:[],
+    Session:{getScriptTimeZone:()=>'Asia/Manila'},Utilities:{formatDate(value){return new Date(new Date(value).getTime()+8*3600000).toISOString().slice(0,10);}},
+    dashboardDayOffset_:(date,days)=>new Date(new Date(date+'T00:00:00Z').getTime()+days*86400000).toISOString().slice(0,10)});
+  const source=fs.readFileSync('Backend/AccessControl.js','utf8');
+  vm.runInContext(source.slice(source.indexOf('function receiptVisibleToActor_'),source.indexOf('function bindAccessArguments_')),c);
+  assert.doesNotThrow(()=>c.receiptVisibleToActor_('OTHER-5',{name:'Cashier A',manager:false}));
+  assert.throws(()=>c.receiptVisibleToActor_('OTHER-6',{name:'Cashier A',manager:false}),/outside your account/);
+  assert.doesNotThrow(()=>c.receiptVisibleToActor_('MINE-7',{name:'Cashier A',manager:false}));
+  assert.throws(()=>c.receiptVisibleToActor_('MINE-8',{name:'Cashier A',manager:false}),/outside your account/);
+  assert.doesNotThrow(()=>c.receiptVisibleToActor_('MINE-8',{name:'Manager',manager:true}));
+  assert.match(source,/\['getTransactionDetails','getCustomerExchangeData','getReservationForCheckout','voidAndRefundTransactionBackend'\]/);
+});
+
+test('cashier date controls expose the eight permitted store dates and receipt search waits 300ms',()=>{
+  const source=fs.readFileSync('Frontend/Modals/TransactionHistoryModal.html','utf8');
+  assert.match(source,/accessibleStart\.setDate\(accessibleStart\.getDate\(\) - 7\)/);
+  assert.doesNotMatch(source,/Transactions from 6–7 days ago show only sales processed by you\./);
+  assert.match(source,/window\.setTimeout\(function\(\) \{[\s\S]*?\}, 300\)/);
+  assert.match(source,/id="transactionDateFilterBox"\s*class="col-lg-4"/);
+  assert.match(source,/<!-- SEARCH -->\s*<div class="col-lg-5">/);
+  assert.match(source,/<!-- PAYMENT METHOD -->\s*<div class="col-lg-3">/);
+  assert.match(source,/id="transactionHistoryCalendar"/);
+});
+
+test('transaction filters share one row and the dashboard calendar hides cashier shortcuts',()=>{
+  const {c,elements}=frontend();
+  const from=c.document.getElementById('transactionHistoryFromDate');
+  const to=c.document.getElementById('transactionHistoryToDate');
+  from.value='2026-10-28';from.min='2026-10-23';to.value='2026-10-30';to.max='2026-10-30';
+  c.renderTransactionHistoryDateRangeLabel();
+  assert.match(elements.transactionHistoryDateRangeLabel.textContent,/October/);
+  c.openTransactionHistoryCalendar();
+  assert.equal(elements.transactionHistoryCalendar.open,true);
+  assert.equal(elements.transactionHistoryCalendarShortcuts.hidden,true);
+  assert.match(elements.transactionHistoryCalendarDays.innerHTML,/disabled/);
+  c.hasManagerViewAccess=()=>true;c.openTransactionHistoryCalendar();
+  assert.equal(elements.transactionHistoryCalendarShortcuts.hidden,false);
+  let loaded=0;c.loadTransactionHistory=()=>{loaded++;};
+  c.transactionHistoryCalendarDraft=[c.transactionHistoryUtcDate(2026,9,24),c.transactionHistoryUtcDate(2026,9,29)];
+  c.applyTransactionHistoryCalendar();
+  assert.equal(from.value,'2026-10-24');assert.equal(to.value,'2026-10-29');
+  assert.equal(elements.transactionHistoryCalendar.open,false);assert.equal(loaded,1);
+});
+
+test('a stalled background warm-up falls back to an interactive history request',()=>{
+  const {c,calls,elements,timers}=frontend();
+  const today=c.getTransactionHistoryToday();
+  c.document.getElementById('transactionHistoryFromDate').value=today;
+  c.document.getElementById('transactionHistoryToDate').value=today;
+  c.document.getElementById('transactionHistoryModal').style.display='flex';
+  c.warmTransactionHistory();
+  c.loadTransactionHistory();
+  assert.equal(calls.length,1);assert.equal(elements.transactionHistoryLoading.style.display,'block');
+  timers.at(-1)();
+  assert.equal(calls.length,2,'the visible modal must not wait forever for a background request');
+  calls[1].success({success:true,transactions:[]});
+  assert.equal(elements.transactionHistoryLoading.style.display,'none');
+  assert.equal(elements.transactionHistoryContent.style.display,'block');
 });
 
 test('history expires cached reads and sorts across dates by timestamp',()=>{

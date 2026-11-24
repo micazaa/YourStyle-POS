@@ -920,27 +920,56 @@ function readTransactionHistoryRows_(sheet, fromTime, untilTime) {
   };
 }
 
+const TRANSACTION_HISTORY_CACHE_SECONDS_ = 120;
+
+function transactionHistoryCacheKey_(cashierName, fromDate, toDate, isManager) {
+  let version = "live";
+  try {
+    if (typeof inventoryReadVersion_ === "function") version = inventoryReadVersion_();
+  } catch (error) {}
+  const identity = isManager ? "manager" : "cashier-" + String(cashierName || "").trim().toLowerCase();
+  return "transaction-history:v3:" + [version.slice(-110), fromDate, toDate, identity.slice(0, 80)]
+    .map(encodeURIComponent).join(":");
+}
+
+function readTransactionHistoryCache_(key) {
+  try {
+    if (typeof CacheService === "undefined") return null;
+    const cache = CacheService.getScriptCache();
+    if (typeof readDashboardCache_ === "function") return readDashboardCache_(cache, key);
+    const raw = cache.get(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function writeTransactionHistoryCache_(key, response) {
+  try {
+    if (typeof CacheService === "undefined") return;
+    const cache = CacheService.getScriptCache();
+    if (typeof cacheDashboardResponse_ === "function") {
+      cacheDashboardResponse_(cache, key, response, inventoryReadVersion_(), TRANSACTION_HISTORY_CACHE_SECONDS_);
+      return;
+    }
+    const raw = JSON.stringify(response);
+    if (raw.length < 90000) cache.put(key, raw, TRANSACTION_HISTORY_CACHE_SECONDS_);
+  } catch (error) {
+    console.warn("Transaction history cache write unavailable.");
+  }
+}
+
 function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
   assertAppRequest_();
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    const sheet = getSalesLogSheet_(ss);
-
-    if (!sheet) {
-      return {
-        success: false,
-        message: "Sales Log sheet not found.",
-      };
-    }
-
     const tz = Session.getScriptTimeZone();
 
     /* ======================================================
        CASHIER DATE SECURITY
 
-       Cashiers can read their own sales for seven store dates, and everyone's
-       sales for today and yesterday.
+       Cashiers can read all store sales from today through five days ago,
+       and only their own sales from exactly six or seven days ago.
     ====================================================== */
 
     const now =
@@ -948,10 +977,10 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
 
     const today = Utilities.formatDate(now, tz, "yyyy-MM-dd");
     const cashierStartDate = new Date(today + "T00:00:00Z");
-    cashierStartDate.setUTCDate(cashierStartDate.getUTCDate() - 6);
+    cashierStartDate.setUTCDate(cashierStartDate.getUTCDate() - 7);
     const cashierFromDate = cashierStartDate.toISOString().split("T")[0];
     const sharedStartDate = new Date(today + "T00:00:00Z");
-    sharedStartDate.setUTCDate(sharedStartDate.getUTCDate() - 1);
+    sharedStartDate.setUTCDate(sharedStartDate.getUTCDate() - 5);
     const sharedFromTime = Utilities.parseDate(sharedStartDate.toISOString().slice(0, 10), tz, "yyyy-MM-dd").getTime();
 
     const selectedFromDate = String(fromDate || (isManager ? today : cashierFromDate));
@@ -965,7 +994,7 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
       (selectedFromDate < cashierFromDate || selectedToDate > today)) {
       return {
         success: false,
-        message: "Cashier history is limited to the latest 7 days.",
+        message: "Cashier history is limited to today through 7 days ago.",
       };
     }
 
@@ -985,6 +1014,16 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
     const nextDate = new Date(selectedToDate + "T00:00:00Z");
     nextDate.setUTCDate(nextDate.getUTCDate() + 1);
     const untilTime = Utilities.parseDate(nextDate.toISOString().slice(0, 10), tz, "yyyy-MM-dd").getTime();
+    const cacheKey = transactionHistoryCacheKey_(cashierName, selectedFromDate, selectedToDate, isManager);
+    const cached = readTransactionHistoryCache_(cacheKey);
+    if (cached && cached.success === true) return cached;
+    const sheet = getSalesLogSheet_(ss);
+    if (!sheet) {
+      return {
+        success: false,
+        message: "Sales Log sheet not found.",
+      };
+    }
     const snapshot = readTransactionHistoryRows_(sheet, fromTime, untilTime);
     const data = snapshot.data, statusNotes = snapshot.notes;
 
@@ -1086,8 +1125,10 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
        ARRAY
     ====================================================== */
 
-    const reservations = new Map(readReservations_().map(item => [item.receiptId, item]));
     const transactions = Object.values(receiptMap);
+    const reservations = transactions.length
+      ? new Map(readReservations_().map(item => [item.receiptId, item]))
+      : new Map();
 
     transactions.forEach(function (tx) {
       tx.total = roundToTwo(tx.total);
@@ -1126,7 +1167,7 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
       delete tx.timestamp;
     });
 
-    return {
+    const response = {
       success: true,
 
       fromDate: selectedFromDate,
@@ -1134,6 +1175,8 @@ function getTransactionHistory(cashierName, fromDate, toDate, isManager) {
 
       transactions: transactions,
     };
+    writeTransactionHistoryCache_(cacheKey, response);
+    return response;
   } catch (err) {
     return {
       success: false,

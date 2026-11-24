@@ -455,6 +455,7 @@
     document.getElementById("appSidebar").style.display = "block";
 
     restoreActivePage();
+    if (typeof scheduleTransactionHistoryWarmup === "function") scheduleTransactionHistoryWarmup();
 
     if (currentSessionIsCashier && document.getElementById('posPage').style.display !== 'none') refreshInventory(function () {
       renderCart();

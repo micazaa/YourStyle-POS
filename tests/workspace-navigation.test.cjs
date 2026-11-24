@@ -364,23 +364,22 @@ test('clicking the sidebar Inventory button opens Inventory from Delivery',()=>{
  assert.deepEqual(f.loads,['deliveriesPage','inventoryPage']);
  assert.equal(f.storage.get('ys_pos_active_page'),'inventoryPage');
 });
-test('UAT restores Dashboard first and leaves other workspace reads demand-loaded',()=>{
+test('UAT restores the remembered workspace page and keeps other reads demand-loaded',()=>{
  const f=fixture({dev:true,saved:'deliveriesPage'});f.c.currentEmployee.dashboardToken='session';
  const app=script('Scripts/AppJS');
  const queued=[];
  Object.assign(f.c,{workspacePreloadState:null,resetWorkspacePreload(){},setTimeout:run=>queued.push(run),warmDeliveryCatalog(){}});
  vm.runInContext(app.slice(app.indexOf('  function prioritizeWorkspacePage('),app.indexOf('  function preloadHistoryAndReports(')),f.c);
  f.c.restoreActivePage();
- assert.equal(f.storage.get('ys_pos_active_page'),'dashboardPage');
- assert.equal(queued.length,0);
- assert.deepEqual(f.loads,[]);
- assert.equal(f.dashboardRequests.length,1);
+ assert.equal(f.storage.get('ys_pos_active_page'),'deliveriesPage');
+ assert.deepEqual(f.loads,['deliveriesPage']);
+ assert.equal(f.dashboardRequests.length,0);
  f.c.showPage('dashboardPage');
  assert.equal(f.dashboardRequests.length,1);
  f.dashboardRequests[0].failure();
- assert.equal(queued.length,1);
- queued[0]();
- assert.deepEqual(f.loads,[]);
+ assert.equal(queued.length,2);
+ queued.at(-1)();
+ assert.deepEqual(f.loads,['deliveriesPage']);
 });
 test('saved Dashboard totals render before the server responds and refresh without blocking navigation',()=>{
  const f=fixture({dev:true});
@@ -468,8 +467,11 @@ test('staff cannot restore a POS page without cashier access; valid inventory wo
   const f=fixture({saved});f.c.restoreActivePage();assert.equal(f.storage.get('ys_pos_active_page'),saved);
  }
  const manager=fixture({manager:true,saved:'posPage'});manager.c.restoreActivePage();
- assert.equal(manager.storage.get('ys_pos_active_page'),'inventoryPage');
- manager.c.showPage('posPage');assert.equal(manager.storage.get('ys_pos_active_page'),'posPage','managers can still choose the cashier reports page');
+ assert.equal(manager.storage.get('ys_pos_active_page'),'posPage','managers keep the cashier reports page after reload');
+ const cashier=fixture({cashier:true,dev:true,saved:'posPage'});cashier.c.restoreActivePage();
+ assert.equal(cashier.storage.get('ys_pos_active_page'),'posPage','cashiers keep the Cashier page even when Dashboard is available');
+ const dashboard=fixture({cashier:true,dev:true,saved:'dashboardPage'});dashboard.c.restoreActivePage();
+ assert.equal(dashboard.storage.get('ys_pos_active_page'),'dashboardPage','an explicitly selected Dashboard still restores');
 });
 test('UAT sign-in lands on Dashboard for staff and cashiers, with existing defaults elsewhere',()=>{
  for(const dev of [false,true])for(const manager of [false,true])for(const cashier of [false,true]){

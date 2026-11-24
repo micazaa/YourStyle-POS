@@ -50,6 +50,18 @@
   .dashboard-modal .dashboard-calendar-shortcuts { margin-top: var(--space-3); padding-top: var(--space-3); border-color: var(--border-color); }
   .dashboard-modal .dashboard-calendar-top { gap: var(--space-2); margin-bottom: var(--space-2); }
   .dashboard-modal .dashboard-calendar-top strong { font-size: var(--font-body); font-weight: 500; }
+  .dashboard-calendar-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .dashboard-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
+  .dashboard-calendar-grid button { min-height: 40px; padding: 0; border: 0; background: transparent; color: inherit; }
+  .dashboard-calendar-days { touch-action: none; user-select: none; }
+  .dashboard-calendar-grid button:hover:not(:disabled), .dashboard-calendar-grid .in-range { background: var(--pink-light); }
+  .dashboard-calendar-grid .range-edge { background: var(--pink-main); border-radius: 20px; font-weight: 700; }
+  .dashboard-calendar-grid .range-start { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .dashboard-calendar-grid .range-end { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+  .dashboard-calendar-grid button[aria-current="date"] { text-decoration: underline; text-underline-offset: 4px; }
+  .dashboard-calendar-grid button:disabled { color: var(--text-gray); opacity: .38; cursor: not-allowed; }
+  .dashboard-calendar-shortcuts { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; border-top: 1px solid var(--border-color); margin-top: 10px; padding-top: 10px; }
+  .dashboard-modal .dashboard-calendar-shortcuts .btn { min-height: 34px; padding: 6px 8px; font-size: .75rem; font-weight: 400; border-radius: 8px; }
   @keyframes dashboard-modal-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   @media (max-width: 575px) {
     dialog.dashboard-modal { width: calc(100% - 24px); max-height: calc(var(--ys-viewport-height, 100dvh) - 24px); padding: var(--space-4); }
@@ -57,7 +69,9 @@
     .dashboard-modal :is(.form-control,.form-select) { font-size: 16px; }
     .dashboard-modal .dashboard-modal-total :is(th,td) { padding: 10px 4px; font-size: .8125rem; }
   }
+  @media (max-width: 380px) { .dashboard-calendar-shortcuts { grid-template-columns: repeat(3,minmax(0,1fr)); } }
   @media (pointer: coarse) { .dashboard-modal .dashboard-calendar-grid button { min-height: var(--control-height); } }
+  @media (pointer: coarse) { .dashboard-modal .dashboard-calendar-shortcuts .btn { min-height: 44px; } }
   @media (prefers-reduced-motion: reduce) {
     dialog.dashboard-modal[open], .dashboard-modal .dashboard-return-icon[aria-busy="true"]::after { animation: none; }
   }

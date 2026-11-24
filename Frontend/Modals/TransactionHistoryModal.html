@@ -57,49 +57,44 @@
       class="row g-2 mb-3"
     >
 
-      <!-- DATE - MANAGER ONLY -->
+      <!-- DATE RANGE -->
 
       <div
         id="transactionDateFilterBox"
-        class="col-md-2"
+        class="col-lg-4"
         style="display:none;"
       >
 
-        <label class="form-label small">
-          From
+        <label for="transactionHistoryDateRangeButton" class="form-label small">
+          From – To
         </label>
 
         <input
-          type="date"
+          type="hidden"
           id="transactionHistoryFromDate"
-          class="form-control"
-          onchange="loadTransactionHistory()"
         >
-
-      </div>
-
-      <div
-        id="transactionToDateFilterBox"
-        class="col-md-2"
-        style="display:none;"
-      >
-
-        <label class="form-label small">
-          To
-        </label>
-
         <input
-          type="date"
+          type="hidden"
           id="transactionHistoryToDate"
-          class="form-control"
-          onchange="loadTransactionHistory()"
         >
+
+        <button
+          type="button"
+          id="transactionHistoryDateRangeButton"
+          class="btn btn-light border w-100 d-flex align-items-center justify-content-between text-start"
+          aria-haspopup="dialog"
+          aria-controls="transactionHistoryCalendar"
+          onclick="openTransactionHistoryCalendar()"
+        >
+          <span id="transactionHistoryDateRangeLabel">Select a date range</span>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"/></svg>
+        </button>
 
       </div>
 
       <!-- SEARCH -->
 
-      <div class="col">
+      <div class="col-lg-5">
 
         <label class="form-label small">
           Search
@@ -118,7 +113,7 @@
 
       <!-- PAYMENT METHOD -->
 
-      <div class="col-md-3">
+      <div class="col-lg-3">
 
         <label class="form-label small">
           Payment Method
@@ -314,13 +309,56 @@
 
 </div>
 
+<dialog class="dashboard-modal dashboard-modal-compact" id="transactionHistoryCalendar" aria-labelledby="transactionHistoryCalendarHeading" aria-describedby="transactionHistoryCalendarDescription">
+  <div data-dashboard-modal-heading>
+    <h2 id="transactionHistoryCalendarHeading">Date range</h2>
+    <p id="transactionHistoryCalendarDescription">Select a day or drag to choose a range.</p>
+  </div>
+  <div class="dashboard-calendar-top">
+    <button type="button" class="btn btn-light" aria-label="Previous month" onclick="moveTransactionHistoryMonth(-1)">‹</button>
+    <strong id="transactionHistoryCalendarMonth" aria-live="polite"></strong>
+    <button type="button" class="btn btn-light" aria-label="Next month" onclick="moveTransactionHistoryMonth(1)">›</button>
+  </div>
+  <div class="dashboard-calendar-grid text-muted" aria-hidden="true">
+    <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+  </div>
+  <div id="transactionHistoryCalendarDays" class="dashboard-calendar-grid dashboard-calendar-days" aria-label="Days"
+    onpointerdown="startTransactionHistoryDrag(event)" onpointermove="moveTransactionHistoryDrag(event)"
+    onpointerup="finishTransactionHistoryDrag(event)" onlostpointercapture="cancelTransactionHistoryDrag(event)"
+    onclick="if (event.detail === 0) selectTransactionHistoryDay(event)"></div>
+  <div id="transactionHistoryCalendarShortcuts" class="dashboard-calendar-shortcuts" onclick="selectTransactionHistoryShortcut(event)">
+    <button type="button" class="btn btn-light" data-preset="today">Today</button>
+    <button type="button" class="btn btn-light" data-preset="yesterday">Yesterday</button>
+    <button type="button" class="btn btn-light" data-preset="week">This week</button>
+    <button type="button" class="btn btn-light" data-preset="month">This month</button>
+    <button type="button" class="btn btn-light" data-preset="year">This year</button>
+    <button type="button" class="btn btn-light" data-preset="last-week">Last week</button>
+    <button type="button" class="btn btn-light" data-preset="last-month">Last month</button>
+  </div>
+  <p id="transactionHistoryCalendarSelection" class="visually-hidden" aria-live="polite"></p>
+  <footer data-dashboard-modal-footer>
+    <button type="button" class="btn btn-light" data-dashboard-modal-close>Cancel</button>
+    <button type="button" class="btn btn-pink" onclick="applyTransactionHistoryCalendar()">Apply</button>
+  </footer>
+</dialog>
+
 
 <script>
 
 var transactionHistoryData = [];
 var transactionHistoryFilterTimer = null;
+var transactionHistoryWarmTimer = null;
 var transactionHistoryLoadedAt = 0;
 var transactionHistoryWarmCache = null;
+var transactionHistoryCalendarMonth = null;
+var transactionHistoryCalendarDraft = [];
+var transactionHistoryCalendarDrag = null;
+var transactionHistoryCalendarMin = null;
+var transactionHistoryCalendarMax = null;
+var transactionHistoryCalendarToday = null;
+var transactionHistoryDateFormat = new Intl.DateTimeFormat("en-US", {timeZone: "UTC", month: "long", day: "numeric", year: "numeric"});
+var transactionHistoryMonthFormat = new Intl.DateTimeFormat("en-US", {timeZone: "UTC", month: "long", year: "numeric"});
+var transactionHistoryWarmWaitMs = 1500;
 var transactionHistorySort = {
   key: "time",
   direction: "desc"
@@ -358,7 +396,7 @@ function openTransactionHistoryModal(period) {
       .split("T")[0];
 
   const accessibleStart = new Date(now);
-  accessibleStart.setDate(accessibleStart.getDate() - 6);
+  accessibleStart.setDate(accessibleStart.getDate() - 7);
   const accessibleStartDate = new Date(
     accessibleStart.getTime() -
     accessibleStart.getTimezoneOffset() * 60000
@@ -412,16 +450,16 @@ if (paymentFilter) {
 
   const isManager = hasManagerViewAccess();
 
+  if (toDateInput.value > today) toDateInput.value = today;
+  if (!isManager && fromDateInput.value < accessibleStartDate) fromDateInput.value = accessibleStartDate;
+  if (!isManager && toDateInput.value < accessibleStartDate) toDateInput.value = accessibleStartDate;
+  if (fromDateInput.value > toDateInput.value) fromDateInput.value = toDateInput.value;
+
 
   /* ================= DATE PICKER ================= */
 
   document.getElementById(
     "transactionDateFilterBox"
-  ).style.display =
-    "block";
-
-  document.getElementById(
-    "transactionToDateFilterBox"
   ).style.display =
     "block";
 
@@ -432,6 +470,7 @@ if (paymentFilter) {
     fromDateInput.min = accessibleStartDate;
     toDateInput.min = accessibleStartDate;
   }
+  renderTransactionHistoryDateRangeLabel();
 
   /* ================= SUMMARY ================= */
 
@@ -463,12 +502,220 @@ if (managerSummary) {
 
 }
 
+function transactionHistoryUtcDate(year, month, day) {
+  return new Date(Date.UTC(year, month, day));
+}
+
+function parseTransactionHistoryDate(value) {
+  const parts = String(value || "").split("-").map(Number);
+  return parts.length === 3 && parts.every(Number.isFinite)
+    ? transactionHistoryUtcDate(parts[0], parts[1] - 1, parts[2])
+    : null;
+}
+
+function formatTransactionHistoryDate(date) {
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function describeTransactionHistoryRange(range) {
+  const start = range[0];
+  const end = range[1] || start;
+  if (+start === +end) return transactionHistoryDateFormat.format(start);
+  return typeof transactionHistoryDateFormat.formatRange === "function"
+    ? transactionHistoryDateFormat.formatRange(start, end)
+    : transactionHistoryDateFormat.format(start) + " – " + transactionHistoryDateFormat.format(end);
+}
+
+function renderTransactionHistoryDateRangeLabel() {
+  const start = parseTransactionHistoryDate(document.getElementById("transactionHistoryFromDate").value);
+  const end = parseTransactionHistoryDate(document.getElementById("transactionHistoryToDate").value);
+  document.getElementById("transactionHistoryDateRangeLabel").textContent = start && end
+    ? describeTransactionHistoryRange([start, end])
+    : "Select a date range";
+}
+
+function clampTransactionHistoryDate(date) {
+  if (transactionHistoryCalendarMin && date < transactionHistoryCalendarMin) return transactionHistoryCalendarMin;
+  if (transactionHistoryCalendarMax && date > transactionHistoryCalendarMax) return transactionHistoryCalendarMax;
+  return date;
+}
+
+function normalizeTransactionHistoryRange(range) {
+  const normalized = range.map(clampTransactionHistoryDate).sort(function(a, b) { return a - b; });
+  return +normalized[0] === +normalized[normalized.length - 1]
+    ? [normalized[0]]
+    : [normalized[0], normalized[normalized.length - 1]];
+}
+
+function openTransactionHistoryCalendar() {
+  const from = document.getElementById("transactionHistoryFromDate");
+  const to = document.getElementById("transactionHistoryToDate");
+  transactionHistoryCalendarToday = parseTransactionHistoryDate(getTransactionHistoryToday());
+  transactionHistoryCalendarMin = parseTransactionHistoryDate(from.min);
+  transactionHistoryCalendarMax = parseTransactionHistoryDate(to.max) || transactionHistoryCalendarToday;
+  const start = parseTransactionHistoryDate(from.value) || transactionHistoryCalendarToday;
+  const end = parseTransactionHistoryDate(to.value) || start;
+  transactionHistoryCalendarDraft = normalizeTransactionHistoryRange([start, end]);
+  transactionHistoryCalendarMonth = transactionHistoryUtcDate(start.getUTCFullYear(), start.getUTCMonth(), 1);
+  const shortcuts = document.getElementById("transactionHistoryCalendarShortcuts");
+  shortcuts.hidden = !hasManagerViewAccess();
+  shortcuts.style.display = shortcuts.hidden ? "none" : "";
+  renderTransactionHistoryCalendar();
+  document.getElementById("transactionHistoryCalendar").showModal();
+}
+
+function moveTransactionHistoryMonth(offset) {
+  transactionHistoryCalendarMonth = transactionHistoryUtcDate(
+    transactionHistoryCalendarMonth.getUTCFullYear(),
+    transactionHistoryCalendarMonth.getUTCMonth() + offset,
+    1
+  );
+  renderTransactionHistoryCalendar();
+}
+
+function renderTransactionHistoryCalendar() {
+  const year = transactionHistoryCalendarMonth.getUTCFullYear();
+  const month = transactionHistoryCalendarMonth.getUTCMonth();
+  const count = transactionHistoryUtcDate(year, month + 1, 0).getUTCDate();
+  const start = transactionHistoryCalendarDraft[0];
+  const end = transactionHistoryCalendarDraft[1] || start;
+  document.getElementById("transactionHistoryCalendarMonth").textContent = transactionHistoryMonthFormat.format(transactionHistoryCalendarMonth);
+  const days = document.getElementById("transactionHistoryCalendarDays");
+  const focusedDay = days.contains(document.activeElement) ? document.activeElement.dataset.day : "";
+  let markup = "<span></span>".repeat(transactionHistoryCalendarMonth.getUTCDay());
+  for (let day = 1; day <= count; day++) {
+    const date = transactionHistoryUtcDate(year, month, day);
+    const disabled = transactionHistoryCalendarMin && date < transactionHistoryCalendarMin || transactionHistoryCalendarMax && date > transactionHistoryCalendarMax;
+    const inRange = date >= start && date <= end;
+    const edge = +date === +start || +date === +end;
+    let selectionClass = edge ? "range-edge" : inRange ? "in-range" : "";
+    if (+date === +start && start < end && date.getUTCDay() !== 6 && day < count) selectionClass += " range-start";
+    if (+date === +end && start < end && date.getUTCDay() !== 0 && day > 1) selectionClass += " range-end";
+    const current = +date === +transactionHistoryCalendarToday ? ' aria-current="date"' : "";
+    markup += '<button type="button" data-day="' + day + '" aria-label="' + transactionHistoryDateFormat.format(date) +
+      '" aria-pressed="' + inRange + '" class="' + selectionClass + '"' + current + (disabled ? " disabled" : "") + ">" + day + "</button>";
+  }
+  days.innerHTML = markup;
+  if (focusedDay) days.querySelector('[data-day="' + focusedDay + '"]:not(:disabled)')?.focus();
+  document.getElementById("transactionHistoryCalendarSelection").textContent = transactionHistoryCalendarDraft.length === 1
+    ? "Start: " + transactionHistoryDateFormat.format(start) + " · Choose an end date"
+    : describeTransactionHistoryRange(transactionHistoryCalendarDraft);
+}
+
+function selectTransactionHistoryDay(event) {
+  const day = Number(event.target.dataset.day);
+  if (!day || event.target.disabled) return;
+  const date = transactionHistoryUtcDate(
+    transactionHistoryCalendarMonth.getUTCFullYear(),
+    transactionHistoryCalendarMonth.getUTCMonth(),
+    day
+  );
+  transactionHistoryCalendarDraft = transactionHistoryCalendarDraft.length === 1
+    ? normalizeTransactionHistoryRange(transactionHistoryCalendarDraft.concat(date))
+    : [date];
+  renderTransactionHistoryCalendar();
+}
+
+function startTransactionHistoryDrag(event) {
+  const day = Number(event.target.dataset.day);
+  if (!day || event.target.disabled || event.button !== 0 || transactionHistoryCalendarDrag) return;
+  event.currentTarget.setPointerCapture(event.pointerId);
+  transactionHistoryCalendarDrag = {
+    pointerId: event.pointerId,
+    startDay: day,
+    lastDay: day,
+    previousDraft: transactionHistoryCalendarDraft,
+    moved: false
+  };
+}
+
+function moveTransactionHistoryDrag(event) {
+  if (transactionHistoryCalendarDrag?.pointerId !== event.pointerId) return;
+  const target = document.elementFromPoint(event.clientX, event.clientY);
+  if (!target || !event.currentTarget.contains(target) || target.disabled) return;
+  const day = Number(target.dataset.day);
+  if (!day || day === transactionHistoryCalendarDrag.lastDay) return;
+  transactionHistoryCalendarDrag.lastDay = day;
+  transactionHistoryCalendarDrag.moved = true;
+  const year = transactionHistoryCalendarMonth.getUTCFullYear();
+  const month = transactionHistoryCalendarMonth.getUTCMonth();
+  transactionHistoryCalendarDraft = normalizeTransactionHistoryRange([
+    transactionHistoryUtcDate(year, month, transactionHistoryCalendarDrag.startDay),
+    transactionHistoryUtcDate(year, month, day)
+  ]);
+  renderTransactionHistoryCalendar();
+}
+
+function finishTransactionHistoryDrag(event) {
+  if (transactionHistoryCalendarDrag?.pointerId !== event.pointerId) return;
+  moveTransactionHistoryDrag(event);
+  const startDay = transactionHistoryCalendarDrag.startDay;
+  const moved = transactionHistoryCalendarDrag.moved;
+  transactionHistoryCalendarDrag = null;
+  if (!moved) selectTransactionHistoryDay({target: {dataset: {day: startDay}, disabled: false}});
+}
+
+function cancelTransactionHistoryDrag(event) {
+  if (transactionHistoryCalendarDrag?.pointerId !== event.pointerId) return;
+  transactionHistoryCalendarDraft = transactionHistoryCalendarDrag.previousDraft;
+  transactionHistoryCalendarDrag = null;
+  renderTransactionHistoryCalendar();
+}
+
+function transactionHistoryPresetRange(preset) {
+  const today = transactionHistoryCalendarToday;
+  const year = today.getUTCFullYear();
+  const month = today.getUTCMonth();
+  const day = today.getUTCDate();
+  const offset = preset.startsWith("last-") ? -1 : 0;
+  switch (preset.replace("last-", "")) {
+    case "week": {
+      const monday = day - (today.getUTCDay() + 6) % 7 + offset * 7;
+      return [transactionHistoryUtcDate(year, month, monday), transactionHistoryUtcDate(year, month, monday + 6)];
+    }
+    case "month":
+      return [transactionHistoryUtcDate(year, month + offset, 1), transactionHistoryUtcDate(year, month + offset + 1, 0)];
+    case "year":
+      return [transactionHistoryUtcDate(year + offset, 0, 1), transactionHistoryUtcDate(year + offset, 11, 31)];
+    default: {
+      const date = preset === "yesterday" ? transactionHistoryUtcDate(year, month, day - 1) : today;
+      return [date, date];
+    }
+  }
+}
+
+function selectTransactionHistoryShortcut(event) {
+  const preset = event.target.dataset.preset;
+  if (!preset) return;
+  transactionHistoryCalendarDraft = normalizeTransactionHistoryRange(transactionHistoryPresetRange(preset));
+  const visibleDate = transactionHistoryCalendarDraft[1] || transactionHistoryCalendarDraft[0];
+  transactionHistoryCalendarMonth = transactionHistoryUtcDate(visibleDate.getUTCFullYear(), visibleDate.getUTCMonth(), 1);
+  renderTransactionHistoryCalendar();
+}
+
+function applyTransactionHistoryCalendar() {
+  const start = transactionHistoryCalendarDraft[0];
+  const end = transactionHistoryCalendarDraft[1] || start;
+  document.getElementById("transactionHistoryFromDate").value = formatTransactionHistoryDate(start);
+  document.getElementById("transactionHistoryToDate").value = formatTransactionHistoryDate(end);
+  renderTransactionHistoryDateRangeLabel();
+  document.getElementById("transactionHistoryCalendar").close();
+  loadTransactionHistory();
+}
+
 
 /* ==========================================================
    CLOSE
 ========================================================== */
 
 function closeTransactionHistoryModal() {
+
+  const calendar = document.getElementById("transactionHistoryCalendar");
+  if (calendar && calendar.open) calendar.close();
 
   document.getElementById(
     "transactionHistoryModal"
@@ -481,7 +728,7 @@ function scheduleTransactionHistoryFilter() {
   window.clearTimeout(transactionHistoryFilterTimer);
   transactionHistoryFilterTimer = window.setTimeout(function() {
     filterTransactionHistoryTable();
-  }, 180);
+  }, 300);
 }
 
 function setTransactionHistoryLoading(isLoading) {
@@ -540,11 +787,12 @@ function warmTransactionHistory() {
   const cached = transactionHistoryWarmCache;
   if (cached && cached.owner === owner && cached.key === key && (cached.pending || cached.data !== null && Date.now() - cached.loadedAt <= 60000)) return;
 
-  const read = {owner: owner, key: key, pending: true, data: null, loadedAt: 0};
+  const read = {owner: owner, key: key, pending: true, data: null, loadedAt: 0, startedAt: Date.now(), fallbackTimer: null};
   transactionHistoryWarmCache = read;
   const current = () => transactionHistoryWarmCache === read && currentEmployee && currentEmployee.dashboardToken === owner && currentCashier === cashier;
   read.promise = new Promise(resolve => secureScriptRun
     .withSuccessHandler(function(result) {
+      window.clearTimeout(read.fallbackTimer);
       if (current()) {
         if (result && result.success === true) {
           read.data = prepareTransactionHistoryData(result.transactions);
@@ -555,13 +803,25 @@ function warmTransactionHistory() {
       resolve();
     })
     .withFailureHandler(function() {
+      window.clearTimeout(read.fallbackTimer);
       if (current()) transactionHistoryWarmCache = null;
       resolve();
     })
     .getTransactionHistory(cashier, today, today, isManager));
 }
 
+function scheduleTransactionHistoryWarmup(delay) {
+  window.clearTimeout(transactionHistoryWarmTimer);
+  if (!currentEmployee || !currentCashier) return;
+  const owner = currentEmployee.dashboardToken;
+  transactionHistoryWarmTimer = window.setTimeout(function() {
+    if (typeof secureScriptRun !== "undefined" && currentEmployee && currentEmployee.dashboardToken === owner) warmTransactionHistory();
+  }, Number.isFinite(delay) ? delay : 750);
+}
+
 function clearTransactionHistoryCache() {
+  window.clearTimeout(transactionHistoryWarmTimer);
+  if (transactionHistoryWarmCache) window.clearTimeout(transactionHistoryWarmCache.fallbackTimer);
   transactionHistoryWarmCache = null;
   transactionHistoryLoadedAt = 0;
   if (typeof pageReadCache !== "undefined") pageReadCache.delete("transactions");
@@ -613,12 +873,23 @@ function loadTransactionHistory(forceRefresh) {
   const warm = transactionHistoryWarmCache;
   const owner = currentEmployee.dashboardToken;
   if (forceRefresh !== true && warm && warm.owner === owner && warm.key === cacheKey && warm.pending) {
-    setTransactionHistoryLoading(true);
-    warm.promise.then(() => {
-      if (currentEmployee && currentEmployee.dashboardToken === owner && document.getElementById('transactionHistoryModal').style.display !== 'none' &&
-          document.getElementById('transactionHistoryFromDate').value === fromDate && document.getElementById('transactionHistoryToDate').value === toDate) loadTransactionHistory();
-    });
-    return;
+    const remainingWait = transactionHistoryWarmWaitMs - (Date.now() - warm.startedAt);
+    if (remainingWait > 0) {
+      setTransactionHistoryLoading(true);
+      if (!warm.fallbackTimer) warm.fallbackTimer = window.setTimeout(function() {
+        if (transactionHistoryWarmCache !== warm || !warm.pending) return;
+        transactionHistoryWarmCache = null;
+        if (currentEmployee && currentEmployee.dashboardToken === owner && document.getElementById('transactionHistoryModal').style.display !== 'none' &&
+            document.getElementById('transactionHistoryFromDate').value === fromDate && document.getElementById('transactionHistoryToDate').value === toDate) loadTransactionHistory();
+      }, remainingWait);
+      warm.promise.then(() => {
+        if (currentEmployee && currentEmployee.dashboardToken === owner && document.getElementById('transactionHistoryModal').style.display !== 'none' &&
+            document.getElementById('transactionHistoryFromDate').value === fromDate && document.getElementById('transactionHistoryToDate').value === toDate) loadTransactionHistory();
+      });
+      return;
+    }
+    window.clearTimeout(warm.fallbackTimer);
+    transactionHistoryWarmCache = null;
   }
   if (
     forceRefresh !== true &&

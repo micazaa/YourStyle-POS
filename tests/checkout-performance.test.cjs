@@ -106,3 +106,23 @@ test('checkout success is displayed while the catalogue refresh is still pending
   assert.equal(c.cart.length,0);
   assert.deepEqual(calls,['background refresh','close checkout','reset services','show success']);
 });
+
+test('successful checkout opens its confirmation with one-shot reduced-motion-safe confetti',()=>{
+  const node=()=>{const styles={};return {style:{setProperty:(name,value)=>styles[name]=value},styles,children:[],hidden:false,
+    replaceChildren(){this.children=[];},appendChild(child){this.children.push(child);},append(...children){this.children.push(...children);}};};
+  const ids=['successModal','successReceiptId','successTotalPaid','successPaymentRows','successChangeContainer','successChangeGiven','successConfetti'];
+  const nodes=Object.fromEntries(ids.map(id=>[id,node()])),timers=[];
+  const c=vm.createContext({document:{getElementById:id=>nodes[id],createElement:()=>node()},matchMedia:()=>({matches:false}),
+    clearTimeout(){},setTimeout(callback,delay){timers.push({callback,delay});return timers.length;}});
+  vm.runInContext(fs.readFileSync('Frontend/Modals/CheckoutModal.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
+  const start=c.startCheckoutConfetti;let launches=0;c.startCheckoutConfetti=()=>launches++;
+  c.showCheckoutSuccess({receiptId:'R-1',totalDue:120,paymentCollections:[],changeGiven:0});
+  assert.equal(nodes.successModal.style.display,'flex');assert.equal(launches,1);
+  c.startCheckoutConfetti=start;c.startCheckoutConfetti();
+  assert.equal(nodes.successConfetti.children.length,42);assert.equal(timers.at(-1).delay,2300);
+  assert.equal(nodes.successConfetti.children[0].className,'success-confetti-piece');
+  c.stopCheckoutConfetti();assert.equal(nodes.successConfetti.children.length,0);
+  c.matchMedia=()=>({matches:true});c.startCheckoutConfetti();assert.equal(nodes.successConfetti.children.length,0);
+  assert.match(fs.readFileSync('Frontend/Pages/CashierPage.html','utf8'),/id="successConfetti"[^>]*aria-hidden="true"/);
+  assert.match(fs.readFileSync('Frontend/Styles/Retail.html','utf8'),/@keyframes checkout-confetti-fall/);
+});

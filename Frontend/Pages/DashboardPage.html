@@ -310,7 +310,7 @@
     <div class="dashboard-calendar-grid text-muted" aria-hidden="true">
       <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
     </div>
-    <div id="dashboardCalendarDays" class="dashboard-calendar-grid" aria-label="Days"
+    <div id="dashboardCalendarDays" class="dashboard-calendar-grid dashboard-calendar-days" aria-label="Days"
       onpointerdown="startDashboardDrag(event)" onpointermove="moveDashboardDrag(event)"
       onpointerup="finishDashboardDrag(event)" onlostpointercapture="cancelDashboardDrag(event)"
       onclick="if (event.detail === 0) selectDashboardDay(event)"></div>
@@ -632,19 +632,6 @@
   #dashboardUnitsTable .dashboard-unit-group :is(th,td) { background: var(--pink-light); color: var(--pink-ink); font-weight: 500; border-top: 9px solid var(--card-bg); }
   #dashboardUnitsTable .dashboard-unit-sale :is(th,td) { color: var(--color-danger); }
   @media(max-width:480px) { #dashboardUnitsTable :is(thead,tbody) :is(th,td) { padding: 9px 4px; font-size: .6875rem; } #dashboardUnitsTable th:first-child { width: 33%; } }
-  .dashboard-calendar-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  .dashboard-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
-  .dashboard-calendar-grid button { min-height: 40px; padding: 0; border: 0; background: transparent; color: inherit; }
-  #dashboardCalendarDays { touch-action: none; user-select: none; }
-  .dashboard-calendar-grid button:hover, .dashboard-calendar-grid .in-range { background: var(--pink-light); }
-  .dashboard-calendar-grid .range-edge { background: var(--pink-main); border-radius: 20px; font-weight: 700; }
-  .dashboard-calendar-grid .range-start { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-  .dashboard-calendar-grid .range-end { border-top-left-radius: 0; border-bottom-left-radius: 0; }
-  .dashboard-calendar-grid button[aria-current="date"] { text-decoration: underline; text-underline-offset: 4px; }
-  .dashboard-calendar-shortcuts { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; border-top: 1px solid #ead9de; margin-top: 10px; padding-top: 10px; }
-  #dashboardCalendar .dashboard-calendar-shortcuts .btn { min-height: 34px; padding: 6px 8px; font-size: .75rem; font-weight: 400; border-radius: 8px; }
-  @media (pointer: coarse) { #dashboardCalendar .dashboard-calendar-shortcuts .btn { min-height: 44px; } }
-  @media (max-width: 380px) { .dashboard-calendar-shortcuts { grid-template-columns: repeat(3,minmax(0,1fr)); } }
   @media (max-width: 575px) {
     .dashboard-header-period { justify-items: start; }
   }

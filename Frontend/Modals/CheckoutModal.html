@@ -39,6 +39,7 @@
   var checkoutSubmitting = false;
   var checkoutDisabledControls = new Map();
   var checkoutSingleMethod = 'Cash';
+  var checkoutConfettiTimer = 0;
   const checkoutMethods = ['Cash','GCash','QR Code','Credit Card'];
   function checkoutNode(id) { return document.getElementById(id); }
   function checkoutRound(value) { return Math.round((Number(value) + Number.EPSILON) * 100) / 100; }
@@ -359,6 +360,32 @@ function handleCheckoutFailure(message) {
   showCheckoutSuccess(payload);
 }
 
+  function stopCheckoutConfetti() {
+    clearTimeout(checkoutConfettiTimer);
+    checkoutConfettiTimer=0;
+    checkoutNode('successConfetti')?.replaceChildren();
+  }
+
+  function startCheckoutConfetti() {
+    const layer=checkoutNode('successConfetti');
+    if(!layer)return;
+    stopCheckoutConfetti();
+    if(typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+    const colors=['var(--pink-main)','var(--pink-ink)','var(--color-success)','var(--color-warning)','var(--color-info)'];
+    for(let index=0;index<42;index++){
+      const piece=document.createElement('i');
+      piece.className='success-confetti-piece';
+      piece.style.setProperty('--confetti-x',(4+(index*37)%92)+'%');
+      piece.style.setProperty('--confetti-drift',((index*29)%180-90)+'px');
+      piece.style.setProperty('--confetti-delay',((index%7)*35)+'ms');
+      piece.style.setProperty('--confetti-duration',(1450+(index%6)*90)+'ms');
+      piece.style.setProperty('--confetti-spin',(360+(index%5)*180)+'deg');
+      piece.style.setProperty('--confetti-color',colors[index%colors.length]);
+      layer.appendChild(piece);
+    }
+    checkoutConfettiTimer=setTimeout(stopCheckoutConfetti,2300);
+  }
+
   function showCheckoutSuccess(payload) {
     const modal=checkoutNode('successModal');
     checkoutNode('successReceiptId').textContent=payload.receiptId;
@@ -377,5 +404,6 @@ function handleCheckoutFailure(message) {
     checkoutNode('successChangeContainer').hidden=!parts.some(part=>part.method==='Cash');
     checkoutNode('successChangeGiven').textContent=checkoutMoney(payload.changeGiven||0);
     modal.style.display='flex';
+    startCheckoutConfetti();
   }
 </script>
