@@ -101,8 +101,8 @@ test('checkout success is displayed while the catalogue refresh is still pending
     invalidateDeliveryItemCaches(){},refreshInventory(){calls.push('background refresh');},resetServiceForm(){calls.push('reset services');},renderCart(){},saveSession(){}});
   vm.runInContext(fs.readFileSync('Frontend/Modals/CheckoutModal.html','utf8').match(/<script>([\s\S]*?)<\/script>/)[1],c);
   c.toggleCheckoutModal=()=>calls.push('close checkout');
+  c.showCheckoutSuccess=payload=>{calls.push('show success');assert.equal(payload.receiptId,'R-1');};
   c.handleCheckoutSuccess({success:true},{receiptId:'R-1',changeGiven:25});
-  assert.equal(nodes.successModal.style.display,'flex');assert.equal(nodes.successReceiptId.textContent,'R-1');
-  assert.equal(nodes.successChangeGiven.textContent,'₱25.00');assert.equal(c.cart.length,0);
-  assert.deepEqual(calls,['background refresh','close checkout','reset services']);
+  assert.equal(c.cart.length,0);
+  assert.deepEqual(calls,['background refresh','close checkout','reset services','show success']);
 });

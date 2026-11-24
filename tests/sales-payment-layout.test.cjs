@@ -122,3 +122,63 @@ test('SYNC stays outside payment columns and expands space for its AJ anchor',()
   c.createOrRepairSalesSyncButton_();
   assert.equal(columns,38);assert.ok(anchor);
 });
+
+test('regular sales persist independently charged and shop-absorbed fees for every single and split payment',()=>{
+  const methods=['Cash','GCash','QR Code','Credit Card'];
+  const pairs=methods.map(method=>[method]).concat(methods.flatMap(first=>methods.filter(second=>second!==first).map(second=>[first,second])));
+  for(const grouped of [false,true])for(const pair of pairs)for(const card of [false,true])for(const qr of [false,true]) {
+    const {c,rows}=context(grouped);
+    const parts=pair.map((method,index)=>({method,amount:pair.length===1?1000:index?600:400,reference:method==='Cash'?'':'2:30 PM - AB12'}));
+    const response=JSON.parse(c.executeCheckoutBackend([{code:'CUSTOM-10001',name:'Steam',category:'SERVICE',quantity:1,price:1000,isCustom:true}],pair.join(' + '),parts.length===1?parts[0].reference:'','YS-MATRIX','percentage',0,'Cashier',pair.includes('Cash')?1100:0,pair.includes('Cash')?1100-parts.find(part=>part.method==='Cash').amount:0,card,parts,qr));
+    assert.equal(response.success,true,response.message);
+    const field=name=>rows[1][rows[0].indexOf(name)];
+    let charged=0,absorbed=0;
+    for(const part of parts){const rate=part.method==='Credit Card'?.032:part.method==='QR Code'?.01:0,fee=Math.round(part.amount*rate*100)/100;
+      if(part.method==='Credit Card'?card:part.method==='QR Code'&&qr)charged+=fee;else absorbed+=fee;}
+    assert.equal(field('Fee Charged to Customer'),Math.round(charged*100)/100);
+    assert.equal(field('Fee Absorbed by Merchant'),Math.round(absorbed*100)/100);
+    assert.equal(field('Net Total'),Math.round((1000-absorbed)*100)/100);
+    assert.equal(field('Payment 1 Amount'),parts[0].amount);assert.equal(field('Payment 2 Amount'),parts[1]?.amount??'');
+    assert.equal(field('Payment Method'),pair.join(' + '));
+  }
+});
+
+test('reservation payments apply the same QR and card fee flags without changing cash change',()=>{
+  const {c}=context(true);
+  const payload={paymentMethod:'QR Code + Credit Card',paymentParts:[{method:'QR Code',amount:400,reference:'2:30 PM - QR12'},{method:'Credit Card',amount:600,reference:'2:31 PM - CC12'}],applyCardFee:true,applyQrFee:false};
+  const payment=c.reservationPayment_(payload,1000);
+  assert.equal(payment.charged,19.2);assert.equal(payment.absorbed,4);assert.equal(payment.received,0);assert.equal(payment.change,0);
+  const cash=c.reservationPayment_({paymentMethod:'Cash + QR Code',paymentParts:[{method:'Cash',amount:400},{method:'QR Code',amount:600,reference:'2:30 PM - QR12'}],cashReceived:500,applyQrFee:false},1000);
+  assert.equal(cash.change,100);assert.equal(cash.absorbed,6);assert.equal(cash.charged,0);
+  assert.throws(()=>c.reservationPayment_({...payload,paymentParts:[{method:'QR Code',amount:400},{method:'Credit Card',amount:600,reference:'X'}]},1000),/Reference/);
+});
+
+test('exchange payments save the new fee choice and retain zero-due and cash-change behavior',()=>{
+  for(const qrFee of [false,true])for(const method of ['QR Code','Cash + QR Code','QR Code + Credit Card','Cash']) {
+    const {c,rows}=context(true);vm.runInContext(fs.readFileSync('Backend/Exchange.js','utf8'),c);
+    const inventory=[{code:'OLD',name:'Old',category:'PINS',status:'ACTIVE',stock:0},{code:'NEW',name:'New',category:'PINS',status:'ACTIVE',stock:1,price:1100}];
+    c.requireManager_=()=>({managerName:'Manager'});c.getExchangeableReceipt=()=>({success:true,receipt:{},items:[{...inventory[0],exchangeableQty:1,originalUnitExchangeValue:100}]});
+    c.getFullInventory=()=>inventory;c.generateExchangeId=()=> 'EX-TEST';c.isYourFindsUnique_=()=>false;c.changeInventoryStockBatch_=()=>{};
+    const oldSheet=c.SpreadsheetApp.getActiveSpreadsheet();c.SpreadsheetApp.getActiveSpreadsheet=()=>({getSheetByName:name=>name==='Inventory Movement Log'?{getLastRow:()=>1}:oldSheet.getSheetByName(name)});
+    const parts=method.split(' + ').map((method,index,all)=>({method,amount:all.length===1?1000:index?600:400,reference:method==='Cash'?'':'2:30 PM - REF1'}));
+    const result=c.completeCustomerExchange({originalReceiptId:'OLD-RECEIPT',employee:'Cashier',items:[{returnCode:'OLD',replacementCode:'NEW',returnQty:1,replacementQty:1}],paymentMethod:method,paymentParts:parts,paymentReference:'2:30 PM - REF1',cashReceived:1100,applyQrFee:qrFee,applyCardFee:true,expectedAmountDue:1000});
+    assert.equal(result.success,true,result.message);
+    const expected=parts.reduce((sum,part)=>sum+(part.method==='QR Code'&&qrFee?part.amount*.01:part.method==='Credit Card'?part.amount*.032:0),0);
+    assert.equal(result.totalDue,1000+expected);assert.equal(result.changeGiven,parts.some(p=>p.method==='Cash')?1100-parts.find(p=>p.method==='Cash').amount:0);
+    const idx=rows[0].indexOf('Fee Absorbed by Merchant');assert.equal(rows.slice(1).reduce((sum,row)=>sum+row[idx],0),qrFee?0:parts.reduce((sum,part)=>sum+(part.method==='QR Code'?part.amount*.01:0),0));
+  }
+});
+
+test('a 120-peso Yellow sale saves an unequal 100 cash and 20 GCash split in either Sales Log layout',()=>{
+  for(const grouped of [false,true]){
+    const {c,rows}=context(grouped);
+    const response=JSON.parse(c.executeCheckoutBackend([{code:'100001',name:'YELLOW',category:'PINS',quantity:1,price:120}],
+      'Cash + GCash','','YS-UNEQUAL','percentage',0,'Cashier',100,0,false,
+      [{method:'Cash',amount:100,reference:''},{method:'GCash',amount:20,reference:'2:30 PM - GC12'}],false));
+    assert.equal(response.success,true,response.message);
+    const field=name=>rows[1][rows[0].indexOf(name)];
+    assert.equal(field('Payment 1 Amount'),100);assert.equal(field('Payment 2 Amount'),20);
+    assert.equal(field('Cash Received'),100);assert.equal(field('Change Given'),0);assert.equal(field('Net Total'),120);
+    assert.equal(field('Payment 2 Reference'),'2:30 PM - GC12');
+  }
+});

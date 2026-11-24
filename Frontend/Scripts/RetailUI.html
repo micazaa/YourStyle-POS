@@ -147,7 +147,7 @@
   }
   function preparePayments() {
     const select = document.getElementById('paymentMethod');
-    if (!select) return;
+    if (!select || document.querySelector('[data-checkout-method]')) return;
     const group = document.createElement('div');group.className = 'ys-payment-methods';group.setAttribute('role','group');group.setAttribute('aria-label','Choose payment method');
     const methods = ['Cash','GCash','QR Code','Credit Card'];
     const buttons = methods.map(method => {

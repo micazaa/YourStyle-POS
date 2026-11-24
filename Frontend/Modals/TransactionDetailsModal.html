@@ -208,6 +208,15 @@
       </div>
 
 
+      <div
+        id="transactionDetailsAbsorbedFeeRow"
+        class="d-flex justify-content-between mb-2"
+        style="display:none !important;"
+      >
+        <span class="text-muted">Shop-absorbed fee</span>
+        <strong id="transactionDetailsAbsorbedFee">₱0.00</strong>
+      </div>
+
       <hr>
 
 
@@ -363,6 +372,8 @@ function openTransactionDetails(
   receiptId
 ) {
 
+  document.getElementById('transactionDetailsAbsorbedFeeRow').style.setProperty('display','none','important');
+  document.getElementById('transactionDetailsAbsorbedFee').textContent = '₱0.00';
   document.getElementById('transactionReservationInfo').hidden = true;
   document.getElementById('transactionReservationCompleteBtn').style.display = 'none';
   document.getElementById('transactionExchangeBtn').style.display = 'none';
@@ -670,6 +681,16 @@ function renderTransactionDetails(tx) {
 
   }
 
+
+  // Stored fees are already apportioned per Sales Log row, not per unit.
+  // Match the transaction total by excluding fully voided rows.
+  const absorbedFee = Number(tx.items.reduce((sum,item) => {
+    if (String(item.status || '').trim().toUpperCase() === 'VOIDED') return sum;
+    const fee = Number(item.feeAbsorbed);
+    return sum + (Number.isFinite(fee) ? fee : 0);
+  },0).toFixed(2));
+  document.getElementById('transactionDetailsAbsorbedFeeRow').style.setProperty('display',absorbedFee !== 0 ? 'flex' : 'none','important');
+  document.getElementById('transactionDetailsAbsorbedFee').textContent = '₱' + absorbedFee.toFixed(2);
 
   document.getElementById(
     "transactionDetailsTotal"

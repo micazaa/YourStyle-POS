@@ -154,18 +154,18 @@
     </div>
   </div>
   <div id="successModal" class="generic-overlay-blur" style="display:none;">
-    <div class="custom-popup-card ys-success-card">
-      <h2>Transaction complete</h2>
-      <p>Receipt ID: <strong id="successReceiptId"></strong></p>
-      <p id="successChangeContainer" class="ys-success-change" style="display:none;">Change due:
-        <strong id="successChangeGiven"></strong></p>
-      <button
-        type="button"
-        class="btn btn-pink mt-3 px-4"
-        onclick="startNewTransaction()"
-      >
-        New Transaction
-      </button>
+    <div class="custom-popup-card ys-success-card" role="dialog" aria-labelledby="successHeading">
+      <div class="d-flex justify-content-end"><button type="button" class="btn-close" aria-label="Close success confirmation" onclick="startNewTransaction()"></button></div>
+      <div class="success-heading">
+        <div class="success-check" aria-hidden="true">✓</div>
+        <h2 id="successHeading">Transaction complete!</h2>
+        <p class="text-muted">Payment recorded successfully.</p>
+      </div>
+      <div class="success-payment-row success-receipt"><span class="text-muted">Receipt no.</span><span id="successReceiptId"></span></div>
+      <div class="success-total"><span class="text-muted">Total paid</span><strong id="successTotalPaid"></strong></div>
+      <div id="successPaymentRows"></div>
+      <div id="successChangeContainer" class="success-payment-row" hidden><span>Change given</span><span id="successChangeGiven"></span></div>
+      <footer class="success-footer"><button type="button" class="btn btn-pink w-100" onclick="startNewTransaction()">New transaction</button></footer>
     </div>
   </div>
 </div>
@@ -1163,7 +1163,7 @@ function startNewTransaction() {
     );
 
   if (changeContainer) {
-    changeContainer.style.display = "none";
+    changeContainer.hidden = true;
   }
 
 

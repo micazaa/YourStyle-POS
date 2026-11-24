@@ -254,7 +254,7 @@ function submitCustomerExchangeCheckout(payment,context) {
     }).withFailureHandler(error=>{if(currentEmployee===owner){setCheckoutLoading(false);showNotificationToast(error.message||String(error),true);}})
       .completeCustomerExchange({originalReceiptId:context.originalReceiptId,items:context.items,notes:context.notes,employee:exchangeEmployee(),expectedAmountDue:context.amountDue,
         paymentMethod:payment.paymentMethod,paymentReference:payment.referenceNumber,cashReceived:payment.cashReceived,
-        applyCardFee:payment.applyCardFee,paymentParts:payment.paymentParts,sessionToken:context.sessionToken,...auth});
+        applyCardFee:payment.applyCardFee,applyQrFee:payment.applyQrFee,paymentParts:payment.paymentParts,sessionToken:context.sessionToken,...auth});
   });
 }
 function resetCustomerExchangeSession() {

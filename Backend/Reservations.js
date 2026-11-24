@@ -105,10 +105,8 @@ function reservationPayment_(payload, amount) {
       else throw new Error('Payment reference is required for ' + part.method + '.');
     }
   });
-  const card = parts.filter(part => part.method === 'Credit Card');
-  const charged = roundToTwo(parts.reduce((sum, part) => sum + (part.method === 'QR Code' ? part.amount * .01 : 0), 0)
-    + (payload.applyCardFee ? card.reduce((sum, part) => sum + (part.receivedAmount === undefined ? part.amount : part.receivedAmount) * .032, 0) : 0));
-  const absorbed = payload.applyCardFee ? 0 : roundToTwo(card.reduce((sum, part) => sum + part.amount * .032, 0));
+  const fees = checkoutPaymentFees_(parts, payload.applyCardFee, payload.applyQrFee);
+  const charged = fees.charged, absorbed = fees.absorbed;
   const cash = parts.find(part => part.method === 'Cash');
   const received = Number(payload.cashReceived || 0);
   if (!Number.isFinite(received) || received < 0 || (cash && received < cash.amount)) throw new Error('Cash received is less than the amount due.');

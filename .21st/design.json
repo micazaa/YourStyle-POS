@@ -4,6 +4,30 @@
   "tokens": "Frontend/Styles/CSS.html",
   "decisions": [
     {
+      "component": "Transaction details absorbed fee",
+      "direction": "Recorded shop fee in the payment summary",
+      "approved": "2026-11-21",
+      "details": "Display Shop-absorbed fee with its saved peso amount after the payment reference and before the Transaction Total separator. Sum the existing per-item feeAbsorbed values once per Sales Log row, excluding fully VOIDED rows in line with the existing total. Include adjusted rows and reservation stages without multiplying by quantity or recalculating current fee rates. Hide the row for zero or missing fees and clear it before a new receipt fetch to prevent stale display. Reuse the existing payment panel typography, alignment and colors. Preserve saved totals, permissions, fetches, fields and actions. Dev only; no backend or sheet changes."
+    },
+    {
+      "component": "Compact split checkout",
+      "direction": "Separate compact payment cards with the standard centered total",
+      "approved": "2026-11-21",
+      "details": "Use the approved compact-split-checkout preview. Split payments show two individually bordered cards, with the method and received amount on the same row, shorter reference labels, compact spacing, the standard centered Total due label, larger amount and remaining-balance subtitle, plus a compact change bar. Use Cash plus GCash as both the initial markup and per-open split defaults. Leave received fields blank and preserve independent unequal amounts. Compact styling is scoped to split mode; turning split off restores the existing centered total, four payment buttons and normal cash/digital fields. Keep fees off by default, references, calculations, success screen, scrollable content, accessible close/action areas, retry and focus behavior unchanged. Reuse current controls and design tokens. Dev only; no backend or sheet changes. Follow-up: keep the supplied centered pink Total due format in split mode too; remove the split-only horizontal/size overrides. The remaining balance stays centered under the amount and hides when covered."
+    },
+    {
+      "component": "Unequal split payments",
+      "direction": "One actual received amount per method",
+      "approved": "2026-11-21",
+      "details": "Remove Sale amount fields and their equal half default. Split methods occupy full width; each payment has a single Cash received or Amount received field. Both start blank and editing either never fills or changes the other. Accept arbitrary positive portions that cover the sale, including 100 Cash plus 20 GCash on a 120 Yellow item, in either method order. Treat extra cash as change. Digital amounts include any customer-paid fee; keep existing flags and convert received amounts into sale portions for the existing backend. Fee switches adjust only their own received amount to retain its sale portion. Preserve time/reference fields, fee-off defaults, remaining balance, gray/green change bar, scrolling content, retry/busy/focus controls and confirmation. Dev only; no sheet or backend changes required."
+    },
+    {
+      "component": "Checkout and transaction success",
+      "direction": "Single payment buttons, optional split payments and compact confirmation",
+      "approved": "2026-11-21",
+      "details": "Implement the approved checkout previews in existing Apps Script/Bootstrap components. Split payment and customer fee switches default off; QR fee is 1% and card fee is 3.2%, applied only to each allocated sale portion. Four single methods and distinct two-method combinations share time plus four alphanumeric reference fields. Keep remaining cash due below the total only while unpaid, gray/green Change due, fixed close/action areas with scrolling content, and one full-width Complete order action. Confirmation restores centered check, title and subtitle; receipt, Total paid, actual Cash received and digital amounts/references, plain Change given row, and full-width New transaction. Preserve authorization, busy locking, retry data, stock writes, exchange and reservation handlers. Existing callers omitting the optional QR flag retain their previous fee behavior. Dev only."
+    },
+    {
       "component": "Dashboard background",
       "direction": "Soft cloudy pink with subtle grain",
       "approved": "2026-11-21",
@@ -25,7 +49,7 @@
       "component": "Units sold summary",
       "direction": "Inventory-style grouped modal and coded report",
       "approved": "2026-11-20",
-      "details": "Units sold card opens the approved capped scrolling modal with Description, Price, Units sold and Total sales. Pink category bands for YourFinds \u00b7 Size, YourStyle \u00b7 Pins, YourStyle \u00b7 Others and Wholesale; neutral item text, no status colors or item subtitles. Group YourFinds by size and other items by normalized inventory description, combining historical prices into a range and preserving recorded net amounts rather than multiplying quantity by price. Category subtotals and grand totals align under units/sales. The PDF uses Code, Description, Price, Units sold and Total sales with full-width inventory category bands; YF code is size with long size description, other codes are listed. Reuse sales report pink header/total, bold rose YourStyle title, date period and authenticated Prepared by signature on the right. Include in cached dashboard sales payload; no fetch on modal open. Preserve spinner/retry/logout guards, date permissions and transaction navigation. Dev only; no sheet changes. Follow-up: group by category and code, with YourFinds using its size code (all SNE in one row). Same code with different historical descriptions or prices stays one row. Price displays min - max, or a single amount when equal; quantities and recorded sales are summed unchanged. Apply to modal and PDF, retaining existing category order. Keep regular and sale pricing in separate rows for each code/size, with independent min/max ranges. Append \u00b7 SALE and render the entire sale row red in modal and PDF; regular rows, category bands and totals retain normal colors."
+      "details": "Units sold card opens the approved capped scrolling modal with Description, Price, Units sold and Total sales. Pink category bands for YourFinds · Size, YourStyle · Pins, YourStyle · Others and Wholesale; neutral item text, no status colors or item subtitles. Group YourFinds by size and other items by normalized inventory description, combining historical prices into a range and preserving recorded net amounts rather than multiplying quantity by price. Category subtotals and grand totals align under units/sales. The PDF uses Code, Description, Price, Units sold and Total sales with full-width inventory category bands; YF code is size with long size description, other codes are listed. Reuse sales report pink header/total, bold rose YourStyle title, date period and authenticated Prepared by signature on the right. Include in cached dashboard sales payload; no fetch on modal open. Preserve spinner/retry/logout guards, date permissions and transaction navigation. Dev only; no sheet changes. Follow-up: group by category and code, with YourFinds using its size code (all SNE in one row). Same code with different historical descriptions or prices stays one row. Price displays min - max, or a single amount when equal; quantities and recorded sales are summed unchanged. Apply to modal and PDF, retaining existing category order. Keep regular and sale pricing in separate rows for each code/size, with independent min/max ranges. Append · SALE and render the entire sale row red in modal and PDF; regular rows, category bands and totals retain normal colors."
     },
     {
       "component": "Sales summary readability",
@@ -115,7 +139,7 @@
       "component": "Dashboard header",
       "direction": "Personal greeting",
       "approved": "2026-11-11",
-      "details": "Use a soft pink header with a time-of-day greeting, the employee\u2019s first name, and a daily encouraging line. Place the date-range dropdown at the right of the header."
+      "details": "Use a soft pink header with a time-of-day greeting, the employee’s first name, and a daily encouraging line. Place the date-range dropdown at the right of the header."
     },
     {
       "component": "Dashboard",
@@ -127,7 +151,7 @@
       "component": "Cashier services",
       "direction": "YourStyle services form using existing cashier controls",
       "approved": "2026-11-21",
-      "details": "YourStyle services uses a single editable Description input with native Steam and Place rent suggestions; staff can type any service directly in the same field, up to 100 characters. Do not show Category or a separate Custom field. Set SERVICE in the sale payload automatically. Keep Price (\u20b1) and Add service with existing retail tokens, validation, manual custom-sale handling, inventory bypass and checkout behavior. Dev only. Hide the services card initially behind a small Add service text button. It toggles the card without clearing entered values, exposes aria-expanded/aria-controls and focuses Description when opened. Keep the toggle within the existing disabled cashier fieldset. Center the Add service toggle. Put Description and Price in one row (8/4 Bootstrap columns), including phone layouts. Reset and collapse the service form after successful checkout and New Transaction; retain it on cancellation/failure. Restore CUSTOM- plus five digits, avoiding codes already in the current cart. SERVICE custom sales and sales-sync paths skip inventory creation and movement."
+      "details": "YourStyle services uses a single editable Description input with native Steam and Place rent suggestions; staff can type any service directly in the same field, up to 100 characters. Do not show Category or a separate Custom field. Set SERVICE in the sale payload automatically. Keep Price (₱) and Add service with existing retail tokens, validation, manual custom-sale handling, inventory bypass and checkout behavior. Dev only. Hide the services card initially behind a small Add service text button. It toggles the card without clearing entered values, exposes aria-expanded/aria-controls and focuses Description when opened. Keep the toggle within the existing disabled cashier fieldset. Center the Add service toggle. Put Description and Price in one row (8/4 Bootstrap columns), including phone layouts. Reset and collapse the service form after successful checkout and New Transaction; retain it on cancellation/failure. Restore CUSTOM- plus five digits, avoiding codes already in the current cart. SERVICE custom sales and sales-sync paths skip inventory creation and movement."
     },
     {
       "component": "Cashier product entry",

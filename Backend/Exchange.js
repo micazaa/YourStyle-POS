@@ -199,10 +199,7 @@ function completeCustomerExchange(payload) {
       throw new Error("Exchange values changed. Review the original receipt and replacements again.");
     }
     const paymentMethod = String(payload.paymentMethod || "Cash").trim();
-    const allowed = {Cash:["Cash"],GCash:["GCash"],"QR Code":["QR Code"],"Credit Card":["Credit Card"],
-      "Cash + GCash":["Cash","GCash"],"Cash + Credit Card":["Cash","Credit Card"],"GCash + Credit Card":["GCash","Credit Card"]};
-    const methods = allowed[paymentMethod];
-    if (!methods) throw new Error("Select a valid payment method.");
+    const methods = checkoutPaymentMethods_(paymentMethod);
     const reference = String(payload.paymentReference || "").trim();
     let parts;
     if (methods.length === 2 && amountDue > 0) {
@@ -213,11 +210,8 @@ function completeCustomerExchange(payload) {
       parts = [{method:amountDue > 0 ? paymentMethod : "Cash",amount:amountDue,reference:reference}];
     }
     if (parts.some(part=>!Number.isFinite(part.amount) || part.amount < 0)) throw new Error("Invalid payment amount.");
-    const cardBase = parts.reduce((sum,part)=>sum+(part.method === "Credit Card" ? part.amount : 0),0);
-    const chargedCardBase = parts.reduce((sum,part)=>sum+(part.method === "Credit Card" ? (part.receivedAmount === undefined ? part.amount : part.receivedAmount) : 0),0);
-    const qrBase = parts.reduce((sum,part)=>sum+(part.method === "QR Code" ? part.amount : 0),0);
-    const feeCharged = roundToTwo(qrBase * .01 + (payload.applyCardFee ? chargedCardBase * .032 : 0));
-    const feeAbsorbed = payload.applyCardFee ? 0 : roundToTwo(cardBase * .032);
+    const fees = checkoutPaymentFees_(parts, payload.applyCardFee, payload.applyQrFee);
+    const feeCharged = fees.charged, feeAbsorbed = fees.absorbed;
     const cashReceived = Number(payload.cashReceived) || 0;
     const cashPart = parts.find(part=>part.method === "Cash");
     const cashDue = cashPart ? cashPart.amount : 0;

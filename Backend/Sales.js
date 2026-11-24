@@ -26,7 +26,7 @@ function ensureSalesLogSplitPaymentColumns_(sheet, rowCount) {
   if (existing.some((value,index) => String(value || '').trim() !== values[index])) {
     sheet.getRange(1, firstColumn, 1, values.length).setValues([values]);
   }
-  const allowedPaymentMethods = ["Cash", "GCash", "QR Code", "Credit Card", "Cash + GCash", "Cash + Credit Card", "GCash + Credit Card"];
+  const allowedPaymentMethods = checkoutPaymentMethodNames_();
   const paymentRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(allowedPaymentMethods, true)
     .setAllowInvalid(false)
@@ -38,15 +38,34 @@ function ensureSalesLogSplitPaymentColumns_(sheet, rowCount) {
   sheet.getRange(startRow, SALES_COL.PAYMENT_METHOD, dataRows, 1).setDataValidation(paymentRule);
 }
 
+function checkoutPaymentMethodNames_() {
+  const single = ['Cash', 'GCash', 'QR Code', 'Credit Card'];
+  return single.concat(single.flatMap(first => single.filter(second => second !== first).map(second => first + ' + ' + second)));
+}
+
+function checkoutPaymentMethods_(method) {
+  const value = String(method || 'Cash').trim();
+  if (!checkoutPaymentMethodNames_().includes(value)) throw new Error('Select a valid payment method.');
+  return value.split(' + ');
+}
+
+function checkoutPaymentFees_(parts, applyCardFee, applyQrFee) {
+  let charged = 0, absorbed = 0;
+  parts.forEach(function(part) {
+    const card = part.method === 'Credit Card', qr = part.method === 'QR Code';
+    if (!card && !qr) return;
+    const charge = card ? applyCardFee === true : applyQrFee !== false;
+    if (part.receivedAmount !== undefined && !charge) throw new Error('Card fee changed. Review payment again.');
+    const base = charge && part.receivedAmount !== undefined ? part.receivedAmount : part.amount;
+    const fee = roundToTwo(base * (card ? .032 : .01));
+    if (charge) charged += fee; else absorbed += fee;
+  });
+  return {charged:roundToTwo(charged), absorbed:roundToTwo(absorbed)};
+}
+
 function normalizeCheckoutPaymentParts_(paymentMethod, paymentParts, baseTotal) {
   const method = String(paymentMethod || "Cash").trim();
-  const splitMethods = {
-    "Cash + GCash": ["Cash", "GCash"],
-    "Cash + Credit Card": ["Cash", "Credit Card"],
-    "GCash + Credit Card": ["GCash", "Credit Card"]
-  };
-  const methods = splitMethods[method] || (["Cash", "GCash", "QR Code", "Credit Card"].includes(method) ? [method] : null);
-  if (!methods) throw new Error("Select a valid payment method.");
+  const methods = checkoutPaymentMethods_(method);
   if (!Array.isArray(paymentParts) || !paymentParts.length) {
     if (methods.length === 2) throw new Error("Enter two valid split payments.");
     return [{ method: method, amount: roundToTwo(baseTotal), reference: "" }];
@@ -103,7 +122,8 @@ function executeCheckoutBackend(
   cashReceived,
   changeGiven,
   applyCardFee,
-  paymentParts
+  paymentParts,
+  applyQrFee
 ) {
   assertAppRequest_();
   const checkoutLock = LockService.getScriptLock();
@@ -190,22 +210,10 @@ function executeCheckoutBackend(
       l.lineNet = roundToTwo(l.lineRaw - l.totalDiscount); // net of all discounts, before fee split
     });
 
-    // 3) Fee split — mirrors the checkout modal's own logic:
-    //    QR: always 1% charged to the customer (no toggle in the UI).
-    //    Credit Card: 3.2% charged to customer if applyCardFee is true,
-    //                 otherwise merchant absorbs the 3.2% instead.
-    //    Cash / GCash: no fee.
-    let feeRateCharged = 0;
-    let feeRateAbsorbed = 0;
-    const cardBase = normalizedPaymentParts.filter(function(part) { return part.method.toUpperCase() === "CREDIT CARD"; }).reduce(function(total, part) { return total + part.amount; }, 0);
-    const chargedCardBase = normalizedPaymentParts.filter(function(part) { return part.method.toUpperCase() === "CREDIT CARD"; }).reduce(function(total, part) { return total + (part.receivedAmount === undefined ? part.amount : part.receivedAmount); }, 0);
-    const qrBase = normalizedPaymentParts.filter(function(part) { return part.method.toUpperCase() === "QR CODE"; }).reduce(function(total, part) { return total + part.amount; }, 0);
-    if (cardBase) {
-      if (applyCardFee) feeRateCharged = 0.032;
-      else feeRateAbsorbed = 0.032;
-    }
-    const totalFeeCharged = roundToTwo(qrBase * 0.01 + chargedCardBase * feeRateCharged);
-    const totalFeeAbsorbed = roundToTwo(cardBase * feeRateAbsorbed);
+    // Omitted QR flag preserves the previous API behavior for older clients.
+    const fees = checkoutPaymentFees_(normalizedPaymentParts, applyCardFee, applyQrFee);
+    const totalFeeCharged = fees.charged;
+    const totalFeeAbsorbed = fees.absorbed;
 
     const sumLineNet = lines.reduce((s, l) => s + l.lineNet, 0) || 1;
     lines.forEach((l) => {
